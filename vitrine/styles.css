@@ -1,41 +1,58 @@
 /*
-   Site vitrine de l'éditeur (ED-5).
+   Site vitrine de Fluvia (ED-5, ED-10).
 
    TOKENS REPRIS DE `frontend/src/styles.css`, volontairement à l'identique. La vitrine et le produit
    doivent se ressembler : un prospect qui signe doit retrouver, une fois dans l'application, les
    couleurs et les formes qu'il a vues sur la page de vente. Copiés plutôt qu'importés parce que ce
-   site n'entre pas dans la chaîne Vite du produit — voir le commentaire d'en-tête de index.html.
+   site n'entre pas dans la chaîne Vite du produit.
+
+   ⚠ ET CETTE PHRASE ÉTAIT DEVENUE FAUSSE. Elle affirmait « à l'identique » pendant que le produit
+   passait à la charte Fluvia — navy, cyan, indigo, violet — et que ce fichier gardait son turquoise.
+   Deux surfaces divergentes, sous un commentaire qui jurait le contraire : c'est le pire des deux,
+   parce que la phrase dispensait de vérifier. Réalignée le 04/09 sur les valeurs du produit, sans
+   en réarbitrer aucune.
 
    LARGEUR : deux régimes, pas un plafond unique. Les bandeaux occupent la page ; le texte reste dans
    une mesure de 68 caractères. Un plafond unique produit les deux défauts à la fois — du vide sur
-   les côtés et des lignes trop longues à lire — constat de claude-H sur le back-office (1240 px sur
-   un écran de 1897 : 440 px perdus, et la grille étranglée à cinq tuiles au lieu de huit).
+   les côtés et des lignes trop longues à lire.
 
    THÈME : la vitrine suit le thème du système, et c'est une décision, pas un héritage. Un visiteur
    qui arrive de nuit sur une page blanche éclatante s'en souvient ; et rien ici ne justifie
    d'imposer un thème à quelqu'un qui n'est pas encore client.
 */
 
-/* ⚠ CINQ TEINTES ONT ETE CORRIGEES LE 01/09, ET CE N'ETAIT PAS UN CHOIX ESTHETIQUE.
-   Cette palette est l'ANCETRE de celle du produit : elle portait encore les valeurs d'avant
-   l'arbitrage de Maxime du 31/08 sur les contrastes. Cinq paires rendaient moins de 4,5:1 --
-   jusqu'a 2,95:1 sur le badge « bon » -- et AUCUN garde-fou ne les mesurait : le controle ne
-   lisait que `frontend/src/styles.css`. Signale par `allaccess-8e`.
+/* ── Couche 1 : la marque ────────────────────────────────────────────────────────────────────────
 
-   Les valeurs posees sont celles du produit, portees a l'identique. On n'a rien invente : arbitrer
-   une seconde fois, differemment, la meme question aurait fait diverger les deux surfaces.
-
-   ⚠ `--accent` N'EST PLUS LA COULEUR DE MARQUE, ET C'EST DELIBERE. `#0d7d88` (manifeste PWA,
-   `--side-active`) rend 4,33:1 sur ce fond : bonne comme FOND, insuffisante comme ENCRE. Le texte
-   utilise donc `#0d7983`. Si l'identite tranche autrement, elle devra nommer cette scission --
-   sans quoi quelqu'un « rectifiera » cette valeur en croyant reparer une faute de frappe.
-*/
+   Les cinq arrêts du dégradé, tels que les donne `frontend/public/marque/README.txt`. Ce sont des
+   CONSTANTES d'identité : elles ne changent pas avec le thème, et rien ne s'écrit dessus sans avoir
+   été mesuré. La couche 2 en dérive les jetons d'interface, qui, eux, dépendent du thème. */
 :root {
-  --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
-  --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
-  --accent: #0d7983; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
+  --marque-navy: #050914;
+  --marque-cyan: #27d9d0;
+  --marque-bleu: #168ceb;
+  --marque-indigo: #3755e8;
+  --marque-violet: #7a2ee6;
+
+  --marque-nuit: var(--marque-navy);
+
+  --marque-degrade: linear-gradient(135deg,
+    var(--marque-cyan) 0%, var(--marque-bleu) 45%, var(--marque-indigo) 75%, var(--marque-violet) 100%);
+
+  --sur-accent: #ffffff;
+}
+
+/* ── Couche 2 : l'interface ──────────────────────────────────────────────────────────────────────
+
+   ⚠ INDIGO EN CLAIR, CYAN EN SOMBRE — et ce n'est pas une préférence, c'est une mesure reprise du
+   produit. Le cyan rend 1,76:1 sur du blanc et 11,29:1 sur le navy ; l'indigo l'inverse. Aucun arrêt
+   du dégradé ne passe le seuil sur les deux fonds : un accent unique pour les deux thèmes est
+   impossible, pas seulement inélégant. */
+:root {
+  --bg: #f4f6fc; --panel: #ffffff; --panel-2: #f1f4fb; --line: #dde3f0;
+  --ink: #0b1020; --ink-soft: #4b5675; --ink-faint: #5e6884;
+  --accent: #3755e8; --accent-2: #2b3fb8; --accent-soft: #e8ecfd;
   --warm: #b85b22; --good: #247b51; --good-bg: #e4f3ea;
-  --shadow: 0 1px 2px rgba(18, 34, 41, .05), 0 8px 24px rgba(18, 34, 41, .06);
+  --shadow: 0 1px 2px rgba(5, 9, 20, .05), 0 8px 24px rgba(5, 9, 20, .07);
   --radius: 12px;
 
   --mesure: 68ch;
@@ -44,9 +61,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
-    --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
+    --bg: #070c1a; --panel: #0f1626; --panel-2: #16203a; --line: #232e4a;
+    --ink: #e7ecf7; --ink-soft: #a3aec8; --ink-faint: #8b96b2;
+    --accent: #27d9d0; --accent-2: #5fe6dd; --accent-soft: #10312f;
+    /* ⚠ LE BLANC NE TIENT PAS SUR CE CYAN — 2,49:1, la moitié du seuil, sur les boutons primaires.
+       On écrit donc le fond de marque, qui rend 6,06:1. Même correction que dans le produit. */
+    --sur-accent: var(--marque-nuit);
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
   }
@@ -135,10 +155,13 @@ em { font-style: normal; color: var(--accent-2); }
   text-decoration: none;
   cursor: pointer;
 }
-.btn-primaire { background: var(--accent); color: #fff; }
+/* ⚠ `--sur-accent`, PAS `#fff`. En thème sombre l'accent est le cyan de la marque, et du blanc
+   dessus rend 2,49:1 — la moitié du seuil, sur le bouton le plus cliqué de la page. Le produit a dû
+   nommer cette scission ; l'écrire en dur ici la refaisait à l'aveugle. */
+.btn-primaire { background: var(--accent); color: var(--sur-accent); }
 .btn-primaire:hover { background: var(--accent-2); }
-.entete nav a.btn-primaire { color: #fff; }
-.entete nav a.btn-primaire:hover { background: var(--accent-2); color: #fff; }
+.entete nav a.btn-primaire { color: var(--sur-accent); }
+.entete nav a.btn-primaire:hover { background: var(--accent-2); color: var(--sur-accent); }
 .btn-fantome { border-color: var(--line); color: var(--ink); background: var(--panel); }
 .btn-grand { padding: 14px 24px; font-size: 16px; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
@@ -304,3 +327,100 @@ input:focus-visible {
   .entete nav a:not(.btn) { display: none; }
   .tunnel fieldset { padding: 14px 14px; }
 }
+
+/* ── La marque à l'écran ─────────────────────────────────────────────────────────────────────────
+
+   ⚠ LE DÉGRADÉ NE PORTE JAMAIS DE TEXTE, ET C'EST MESURÉ, PAS PRUDENT. Son arrêt le plus clair est
+   le cyan : du blanc dessus rend 1,76:1, soit le tiers du seuil. Il sert donc de SURFACE — un filet,
+   une pastille, le logo — jamais de fond de lecture. C'est la même scission que le produit a dû
+   nommer pour ses boutons, et la refaire ici aurait été la refaire à l'aveugle.
+
+   Tout ce qui porte du texte reste sur les paires que `verifier-contrastes.mjs` mesure. */
+
+.marque-logo { width: 26px; height: 26px; display: block; }
+.marque { gap: 10px; font-size: 17px; letter-spacing: -.01em; }
+
+/* Le filet de marque : trois pixels de dégradé en haut de page. Décoratif au sens strict — il ne
+   porte aucune information, donc son contraste n'a rien à prouver. */
+.entete { border-top: 3px solid transparent; border-image: var(--marque-degrade) 1; }
+
+/* ── Le bandeau d'ouverture ──────────────────────────────────────────────────────────────────── */
+
+.hero {
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+.hero h1 {
+  font-size: clamp(30px, 4.4vw, 46px);
+  line-height: 1.12;
+  letter-spacing: -.025em;
+  margin-bottom: 18px;
+}
+/* Le trait sous le titre : le dégradé, encore comme surface. */
+.hero h1::after {
+  content: '';
+  display: block;
+  width: 72px; height: 4px;
+  margin-top: 20px;
+  border-radius: 2px;
+  background: var(--marque-degrade);
+}
+
+/* ── Les cartes ─────────────────────────────────────────────────────────────────────────────── */
+
+.carte { transition: border-color .15s, transform .15s; }
+.carte:hover { border-color: var(--accent); transform: translateY(-2px); }
+.carte h3 a, .carte h2 a { color: var(--ink); text-decoration: none; }
+.carte h3 a:hover, .carte h2 a:hover { color: var(--accent); }
+
+/* ── Les pages de modules ───────────────────────────────────────────────────────────────────── */
+
+.fil { font-size: 14px; color: var(--ink-faint); margin: 0 0 18px; }
+.fil a { color: var(--ink-soft); }
+
+.rubrique-titre {
+  margin: 36px 0 4px;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.module-entete { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.module-categorie {
+  font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent-2); background: var(--accent-soft);
+  padding: 4px 10px; border-radius: 999px;
+}
+
+.module-liste { list-style: none; padding: 0; margin: 16px 0 0; }
+.module-liste li { padding: 10px 0 10px 24px; position: relative; border-bottom: 1px solid var(--line); }
+.module-liste li:last-child { border-bottom: none; }
+.module-liste li::before {
+  content: '';
+  position: absolute; left: 0; top: 18px;
+  width: 8px; height: 8px; border-radius: 2px;
+  background: var(--marque-degrade);
+}
+
+/* Le corps rédigé d'un module ou d'un article : la seule zone où du HTML saisi est rendu. */
+.corps-article h2 { font-size: 24px; margin-top: 32px; }
+.corps-article h3 { font-size: 19px; margin-top: 24px; }
+.corps-article p, .corps-article li { color: var(--ink-soft); }
+.corps-article img { max-width: 100%; height: auto; border-radius: var(--radius); }
+.corps-article blockquote {
+  margin: 24px 0; padding: 4px 0 4px 18px;
+  border-left: 3px solid var(--accent); color: var(--ink-soft);
+}
+.corps-article pre {
+  background: var(--panel-2); padding: 14px; border-radius: var(--radius);
+  overflow-x: auto; border: 1px solid var(--line);
+}
+
+/* ── Les questions fréquentes ───────────────────────────────────────────────────────────────────
+
+   Une question, une réponse qui tient seule. C'est la forme que les moteurs et les assistants
+   citent : un paragraphe qui répond sans exiger le reste de la page. */
+.faq { margin: 24px 0 0; }
+.faq dt { font-weight: 600; margin-top: 20px; }
+.faq dd { margin: 6px 0 0; color: var(--ink-soft); }

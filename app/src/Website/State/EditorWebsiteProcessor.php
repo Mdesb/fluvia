@@ -94,6 +94,7 @@ final class EditorWebsiteProcessor implements ProcessorInterface
                 $vue->type = $ligne['type'];
                 $vue->label = $ligne['label'];
                 $vue->help = $ligne['help'];
+                $vue->groupe = $ligne['groupe'];
                 $vue->value = $ligne['value'];
                 break;
             }

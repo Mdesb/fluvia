@@ -1,0 +1,18 @@
+{#-
+  `robots.txt`, servi par l'application (ED-11).
+
+  ⚠ UN SEUL INTERRUPTEUR : `WEBSITE_INDEXABLE`. Il commande ce fichier ET la balise `robots` de
+  chaque page. La consigne vivait auparavant dans le vhost nginx, en deux endroits distincts, dont le
+  commentaire prévenait déjà que « retirer l'un sans l'autre ne suffit pas ».
+-#}
+{% if indexable -%}
+User-agent: *
+Allow: /
+
+Sitemap: {{ sitemap }}
+{%- else -%}
+# Site en préparation : aucune page ne doit être indexée pour l'instant.
+# Un seul geste l'ouvre : WEBSITE_INDEXABLE=1 côté serveur.
+User-agent: *
+Disallow: /
+{%- endif %}

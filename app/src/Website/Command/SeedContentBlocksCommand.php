@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Website\Command;
 
 use App\Website\Entity\ContentBlock;
-use App\Website\Service\HomeBlocks;
+use App\Website\Service\SiteBlocks;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,7 +19,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * **Pourquoi une commande et pas une migration.** Une migration de données recopierait ce texte dans
  * un fichier daté que personne ne relit, et le jour où l'on ajoute un bloc au gabarit, il faudrait
- * une seconde migration. Ici, ajouter un bloc à {@see HomeBlocks} et relancer la commande suffit.
+ * une seconde migration. Ici, ajouter un bloc à {@see SiteBlocks} et relancer la commande suffit.
  *
  * ⚠ **ELLE NE TOUCHE JAMAIS UN BLOC DÉJÀ RENSEIGNÉ.** C'est la seule propriété qui compte : sans
  * elle, un déploiement écraserait le texte que quelqu'un vient d'écrire par celui qui dort dans le
@@ -55,7 +55,7 @@ final class SeedContentBlocksCommand extends Command
         $poses = 0;
         $gardes = 0;
 
-        foreach (HomeBlocks::all() as $declare) {
+        foreach (SiteBlocks::all() as $declare) {
             $existant = $this->em->getRepository(ContentBlock::class)->find($declare['key']);
 
             if (null !== $existant && !$force) {

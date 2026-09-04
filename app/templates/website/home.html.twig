@@ -127,6 +127,23 @@
     </div>
   </section>
 
+  {#
+    LES QUESTIONS SONT AFFICHÉES, PAS SEULEMENT BALISÉES. Un `FAQPage` dont les réponses ne sont pas
+    visibles est du contenu caché — la faute la plus courante de ce format, et elle est sanctionnée.
+    Le gabarit et le balisage lisent la même liste, `SiteFaq`.
+  #}
+  <section class="bande" id="questions">
+    <div class="mesure">
+      <h2>Questions fréquentes</h2>
+      <dl class="faq">
+        {% for q in questions %}
+          <dt>{{ q.question }}</dt>
+          <dd>{{ q.reponse }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+  </section>
+
   {% if derniers|length > 0 %}
     <section class="bande" id="blog">
       <div class="mesure">

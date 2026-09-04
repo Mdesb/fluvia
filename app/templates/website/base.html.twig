@@ -7,12 +7,14 @@
 
   POURQUOI CE SITE EST RENDU PAR LE SERVEUR, alors que la vitrine était statique. Un blog qu'un robot
   ne peut pas lire sans exécuter de JavaScript est un blog qu'on écrit pour personne — et c'est
-  exactement ce que la version statique évitait pour la page de vente. Le rendu serveur garde cette
-  propriété ET permet d'écrire depuis un écran.
+  exactement ce que la version statique évitait pour la page de vente.
 
-  ⚠ CE QUI RESTE STATIQUE, ET QUI EST SERVI PAR NGINX SANS TOUCHER PHP : `styles.css`, `tarifs.js`,
-  `tunnel.js`, `confirmation.html`. Le vhost sert un fichier s'il existe et n'appelle l'application
-  que sinon (`try_files $uri @application`).
+  ⚠ UN SEUL INTERRUPTEUR D'INDEXATION, ET IL EST ICI. `site_indexable` vient de `WEBSITE_INDEXABLE`
+  (Twig global). Il commande la balise `robots` de CHAQUE page et le `robots.txt` servi par
+  `WebsiteController`. Avant le 04/09 la consigne vivait dans le vhost nginx, en deux endroits
+  distincts — l'en-tête et le fichier — et le commentaire prévenait déjà que « retirer l'un sans
+  l'autre ne suffit pas ». Deux interrupteurs pour une décision, c'est un site à moitié indexé le
+  jour où quelqu'un n'en trouve qu'un.
 #}
 <!DOCTYPE html>
 <html lang="fr">
@@ -21,6 +23,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Fluvia{% endblock %}</title>
 <meta name="description" content="{% block description %}{% endblock %}">
+{% if not site_indexable %}<meta name="robots" content="noindex, nofollow">{% endif %}
 {% block canonical %}{% endblock %}
 
 <meta property="og:type" content="{% block og_type %}website{% endblock %}">
@@ -28,11 +31,31 @@
 <meta property="og:title" content="{{ block('title') }}">
 <meta property="og:description" content="{{ block('description') }}">
 <meta property="og:locale" content="fr_FR">
-{% block og_image %}{% endblock %}
+{% block og_image %}<meta property="og:image" content="{{ absolute_url('/marque/FLUVIA_Logo_Color.svg') }}">{% endblock %}
 <meta name="twitter:card" content="summary">
 
+<link rel="icon" href="/marque/FLUVIA_Icon_Color.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/marque/FLUVIA_Favicon_512.png">
 <link rel="stylesheet" href="/styles.css">
 <link rel="alternate" type="application/rss+xml" title="Le blog de Fluvia" href="/blog/rss.xml">
+
+{#
+  LES DONNÉES STRUCTURÉES, FABRIQUÉES EN PHP ET IMPRIMÉES ICI.
+
+  ⚠ `|raw` SUR DU JSON QUI PORTE DES TITRES SAISIS, C'EST UNE ÉVASION DE BALISE EN ATTENTE. Un titre
+  d'article contenant `</script>` fermerait le bloc et rendrait le reste comme du HTML. L'échappement
+  vit donc dans {@see \App\Website\Service\StructuredData}, qui encode avec `JSON_HEX_TAG` — un
+  drapeau qui n'a pas d'équivalent dans un gabarit, et qu'on n'oublie pas puisqu'il n'y a qu'un
+  endroit où l'écrire.
+
+  ⚠ ELLES NE DISENT QUE CE QUE LA PAGE MONTRE. Un balisage qui annonce un prix, une note ou un avis
+  absents de la page est une déclaration fausse — les moteurs la sanctionnent et les assistants la
+  citent. D'où l'absence délibérée d'`Offer` et d'`aggregateRating` : les prix vivent dans le
+  catalogue et changent, la note n'existe pas.
+#}
+{% for bloc in jsonld|default([]) %}
+<script type="application/ld+json">{{ bloc|raw }}</script>
+{% endfor %}
 </head>
 <body>
 
@@ -41,14 +64,14 @@
 <header class="entete">
   <div class="bande bande-etroite entete-corps">
     <a class="marque" href="/">
-      <span class="marque-point" aria-hidden="true"></span>
+      <img class="marque-logo" src="/marque/FLUVIA_Icon_Color.svg" alt="" width="26" height="26">
       <span>Fluvia</span>
     </a>
     <nav aria-label="Navigation principale">
-      <a href="/#modules">Modules</a>
+      <a href="{{ path('website_modules') }}">Modules</a>
       <a href="/#metiers">Métiers</a>
       <a href="/#tarifs">Tarifs</a>
-      <a href="/blog">Blog</a>
+      <a href="{{ path('website_blog_index') }}">Blog</a>
       <a class="btn btn-primaire" href="/#souscrire">Essayer 14 jours</a>
     </nav>
   </div>
@@ -61,6 +84,11 @@
 <footer class="bande pied">
   <div class="mesure">
     {% block footer %}{% endblock %}
+    <p>
+      <a href="{{ path('website_modules') }}">Tous les modules</a> ·
+      <a href="{{ path('website_blog_index') }}">Blog</a> ·
+      <a href="/blog/rss.xml">RSS</a>
+    </p>
   </div>
 </footer>
 

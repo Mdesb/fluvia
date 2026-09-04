@@ -39,4 +39,17 @@ enum BlockType: string
      * troisième, c'est un type de plus, pas un champ optionnel que la moitié des cartes ignore.
      */
     case Cards = 'cards';
+
+    /**
+     * Un texte long, en HTML, pour le corps d'une page de module (ED-11).
+     *
+     * ⚠ **C'EST LE SEUL TYPE QUI ACCEPTE DES BALISES, ET IL EST ASSAINI À L'ÉCRITURE** par le même
+     * {@see \App\Website\Service\BodySanitizer} que le corps d'un article. La règle « pas de HTML
+     * libre » posée plus haut vaut pour les blocs de la page d'accueil — un titre, un chapô, une
+     * liste — où des balises n'ajouteraient rien et ouvriraient un chemin d'assainissement de plus.
+     *
+     * Une page de module, elle, doit pouvoir porter des sous-titres et des listes : sans eux, vingt
+     * pages de deux paragraphes se ressemblent, et un moteur appelle ça du contenu mince.
+     */
+    case Rich = 'rich';
 }
