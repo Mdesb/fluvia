@@ -455,7 +455,7 @@ function BassinModal({ open, onClose, onCree }) {
               </p>
             </div>
 
-            <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+            <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
               <div className="field" style={{ flex: 1 }}>
                 <label htmlFor="ba-lignes">Lignes d’eau *</label>
                 <input id="ba-lignes" className="input" type="number" min="1" value={lignes}

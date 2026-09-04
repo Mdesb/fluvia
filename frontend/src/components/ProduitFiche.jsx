@@ -1148,7 +1148,7 @@ export default function ProduitFiche({
 
       {edition.carte && (
         <Section titre="Carte multi-entrées" aide="Combien d'entrées la carte donne, et pour combien on la paie.">
-          <div className="row" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
+          <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
             <div className="field" style={{ flex: '1 1 10rem' }}>
               <label htmlFor="ca-paye">Entrées payées</label>
               <input

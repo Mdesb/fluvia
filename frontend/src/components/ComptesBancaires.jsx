@@ -201,7 +201,7 @@ function FormulaireCompte({ compte, etabActif, comptesComptables, onAnnuler, onE
           </select>
         </div>
         {creation && (
-          <div className="row" style={{ gap: 'var(--esp-large)' }}>
+          <div className="row row-champs" style={{ gap: 'var(--esp-large)' }}>
             <div className="field" style={{ flex: 1 }}>
               <label htmlFor="ba-solde">Solde d’ouverture</label>
               <input id="ba-solde" className="input" value={solde} onChange={(e) => setSolde(e.target.value)} inputMode="decimal" placeholder="0.00" />

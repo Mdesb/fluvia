@@ -410,7 +410,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
       <section className="card">
         <div className="card-b">
-          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+          <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
             <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
               <label htmlFor="cl-q">Rechercher</label>
               <input

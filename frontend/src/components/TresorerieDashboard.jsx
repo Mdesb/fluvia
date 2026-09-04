@@ -155,7 +155,7 @@ function Echeancier() {
       </div>
       <div className="card-b">
         {erreur && <div className="banner banner-error">{erreur}</div>}
-        <div className="row" style={{ gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: 1, minWidth: '10rem', marginBottom: 0 }}>
             <label htmlFor="ech-from">Du</label>
             <input id="ech-from" className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />

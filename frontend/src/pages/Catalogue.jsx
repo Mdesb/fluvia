@@ -341,7 +341,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
 
       <section className="card" style={{ marginBottom: 16 }}>
         <div className="card-b">
-          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
               <label htmlFor="cat-q">Rechercher un produit</label>
               <input

@@ -456,7 +456,7 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
           </div>
         )}
 
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 240px' }}>
             <label htmlFor="sf-fourn">Fournisseur *</label>
             <select id="sf-fourn" className="input" value={fournisseur} onChange={(e) => setFournisseur(e.target.value)}>
@@ -482,7 +482,7 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
           </div>
         </div>
 
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 200px' }}>
             <label htmlFor="sf-date">Date de la facture *</label>
             <input id="sf-date" className="input" type="date" value={dateFacture} onChange={(e) => setDateFacture(e.target.value)} />
@@ -515,7 +515,7 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
                 onChange={(e) => majLigne(i, 'description', e.target.value)}
               />
             </div>
-            <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+            <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
               <div className="field" style={{ margin: 0, flex: '0 1 110px' }}>
                 <label htmlFor={`sf-qte-${i}`}>Quantité *</label>
                 <input id={`sf-qte-${i}`} className="input" type="number" step="0.001" min="0"
