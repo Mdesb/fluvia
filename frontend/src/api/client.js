@@ -1069,6 +1069,19 @@ export const api = {
   supprimerIndisponibilite: (id) =>
     request(`/api/reservation_indisponibilites/${id}`, { method: 'DELETE' }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
+  // CREER ET CORRIGER UNE ACTIVITE — les deux routes existaient, aucun ecran ne les appelait.
+  //
+  // ⚠ LE NOM EST DELIBEREMENT LONG : `creerActivite` existe deja et designe une ACTIVITE
+  // COMMERCIALE du CRM (un appel, une relance). Deux objets sans rapport sous le meme mot — le
+  // piege qui m'a deja coute deux mesures fausses aujourd'hui.
+  //
+  // ⚠ `produitTarifReference` s'ecrit en IRI, et `null` DETACHE. Un champ absent laisserait la
+  // valeur precedente : sans le `null` explicite, on ne pourrait jamais retirer un produit pose
+  // par erreur.
+  creerActiviteReservation: (corps) =>
+    request('/api/reservation_activites', { method: 'POST', body: corps, ld: true }),
+  majActiviteReservation: (id, corps) =>
+    request(`/api/reservation_activites/${id}`, { method: 'PATCH', body: corps }),
   // PLACEMENT LIBRE : les debuts ou un rendez-vous TIENDRAIT, un jour donne.
   //
   // Sans `ressource`, on interroge tous les praticiens capables -- le mode << avec qui est
