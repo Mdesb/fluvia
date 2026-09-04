@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
 import ClientPicker from './ClientPicker.jsx'
 import { api, membres, ApiError } from '../api/client.js'
+import { idDe } from '../api/iri'
 
 // LE DEVIS SE FAIT DEPUIS LA FICHE DU CLIENT, PAS SEULEMENT DEPUIS L'ÉCRAN DE FACTURATION.
 //
@@ -712,8 +713,3 @@ function RepriseCatalogue({ info, tauxChoisi, onPrix, onTaux }) {
   )
 }
 
-function idDe(v) {
-  if (!v) return ''
-  if (typeof v === 'string') return v.split('/').pop()
-  return v.id || String(v['@id'] || '').split('/').pop()
-}

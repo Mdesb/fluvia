@@ -5,6 +5,7 @@ import { dateFr, dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { allerA, useEtatUrl } from '../api/url.js'
+import { idDe } from '../api/iri'
 
 // LE DROIT À L'EFFACEMENT — une obligation légale qui n'avait aucun chemin.
 //
@@ -379,11 +380,15 @@ const ETAT = { recue: 'reçue', en_cours: 'en cours', realisee: 'traitée', refu
 
 // La relation muette rend soit un IRI nu, soit un objet réduit à son `@id`. Les deux formes se
 // présentent selon l'opération : on lit l'une et l'autre plutôt que de parier.
+/**
+ * L'identifiant du client d'une demande.
+ *
+ * ⚠ SIGNATURE DIFFERENTE des seize autres : elle prend la DEMANDE, pas la reference. C'est pour ça
+ * qu'elle reste ici plutot que de rejoindre `api/iri` — seule la resolution de la reference est
+ * partagee, pas le fait d'aller la chercher dans `.client`.
+ */
 function idDeClient(demande) {
-  const c = demande?.client
-  if (!c) return null
-  if (typeof c === 'string') return c.split('/').pop()
-  return c.id || String(c['@id'] || '').split('/').pop() || null
+  return idDe(demande?.client)
 }
 
 // Une fiche anonymisée n'a plus de nom, et c'est le résultat attendu — pas une erreur de lecture.

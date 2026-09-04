@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { idDe } from '../api/iri'
 
 /**
  * PUBLICATION SOCIALE — écrire une fois, publier sur plusieurs comptes, **et savoir lequel a échoué**.
@@ -67,11 +68,6 @@ function quand(v) {
   if (!v) return null
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? null : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function idDe(v) {
-  if (!v) return null
-  return typeof v === 'string' ? v.split('/').pop() : v.id || null
 }
 
 // UNE ARROBASE, PAS DEUX.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { centimes as afficherCentimes } from '../api/produit.js'
+import { idDe } from '../api/iri'
 
 // SAISIR UNE ÉCRITURE MANUELLE — la seconde moitié de T28, et la plus contrainte.
 //
@@ -383,12 +384,6 @@ function aujourdHui() {
 
 // Une relation arrive tantôt en IRI nue, tantôt en objet, selon les groupes qui la portent. On
 // n'accède jamais à une sous-propriété : c'est ce qui rend un rapprochement silencieusement vide.
-function idDe(reference) {
-  if (!reference) return null
-  if (typeof reference === 'string') return reference.split('/').pop()
-  if (typeof reference['@id'] === 'string') return reference['@id'].split('/').pop()
-  return reference.id ?? null
-}
 
 /**
  * ⚠ CE `centimes()` CONVERTIT, IL N'AFFICHE PAS — et un homonyme partage fait l'inverse.
@@ -407,7 +402,6 @@ function centimes(valeur) {
   const n = Number.parseFloat(String(valeur).replace(',', '.'))
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0
 }
-
 
 function dateFr(valeur) {
   const s = String(valeur).slice(0, 10)

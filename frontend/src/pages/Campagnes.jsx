@@ -6,6 +6,7 @@ import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
 import { jourLocal } from '../components/Liste.jsx'
 import { euros } from '../api/produit.js'
+import { idDe } from '../api/iri'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -460,7 +461,6 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
   const aucunCritere = Object.entries(valeurs)
     .filter(([, v]) => v !== '' && v !== null && v !== undefined).length === 0
 
-
   async function enregistrer() {
     setBusy(true)
     onErreur(null)
@@ -564,11 +564,6 @@ const CANAUX = [['email', 'Courriel'], ['sms', 'SMS']]
 // Doit rester le miroir de `MessageVariables::CONNUES` côté serveur. Deux listes qui divergent
 // donneraient un bouton qui insère une variable refusée à l'enregistrement.
 const VARIABLES = [['prenom', 'Prénom'], ['nom', 'Nom'], ['civilite', 'Civilité']]
-
-function idDe(ref) {
-  if (!ref) return null
-  return typeof ref === 'string' ? ref.split('/').pop() : ref.id
-}
 
 /**
  * LA LISTE DES CAMPAGNES — et surtout, ce qu'on peut encore en faire.

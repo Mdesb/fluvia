@@ -8,15 +8,9 @@ import Tabs from '../components/Tabs.jsx'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
 import NoShowSection from '../components/NoShowSection.jsx'
+import { idDe as idDepuisIri } from '../api/iri'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
-
-function idDepuisIri(v) {
-  if (!v) return null
-  if (typeof v === 'object') return v.id || idDepuisIri(v['@id'])
-  const parts = String(v).split('/')
-  return parts[parts.length - 1] || null
-}
 
 function court(id) {
   return id ? String(id).slice(0, 8) : '—'

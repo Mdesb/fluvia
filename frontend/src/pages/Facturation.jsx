@@ -10,6 +10,7 @@ import DevisModal from '../components/DevisModal.jsx'
 import FactureRendu from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { idDe } from '../api/iri'
 
 const NATURE_BADGE = { quote: 'info', sales_order: 'warn', delivery_note: 'mut' }
 const STATUT_BADGE = {
@@ -38,12 +39,6 @@ const DROIT_GESTE = {
   reject: 'facturation.gerer',
   derive: 'facturation.gerer',
   invoice: 'facturation.emettre_directe',
-}
-
-
-const idDe = (ressource) => {
-  const brut = ressource?.id || ''
-  return String(brut).includes('/') ? String(brut).split('/').pop() : String(brut)
 }
 
 // FACTURATION — L'ÉCRAN NE MONTRAIT PAS DE FACTURES.

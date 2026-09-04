@@ -21,6 +21,7 @@ import {
   duree,
   signeDeVie,
 } from '../api/acces.js'
+import { idDe } from '../api/iri'
 
 // TOPOLOGIE & PASSAGES — CONFIGURER LE CONTRÔLE D'ACCÈS, ET RELIRE CE QU'IL A FAIT.
 //
@@ -102,11 +103,6 @@ const ONGLETS = [
 // sérialisation : `Controleur.espace` est un objet dans `controleur:read`, mais la même relation vue
 // depuis un équipement n'est qu'une IRI, parce que `EspaceAcces` ne déclare rien dans
 // `equipement:read`. Comparer des `id` plutôt que des formes, c'est ce qui rend ce croisement sûr.
-function idDe(v) {
-  if (!v) return null
-  if (typeof v === 'object') return v.id || (v['@id'] ? v['@id'].split('/').pop() : null)
-  return String(v).split('/').pop()
-}
 
 // Les zones qu'un contrôleur dessert EN PLUS de son emplacement. La collection arrive en objets
 // (`EspaceAcces` expose son libellé dans `controleur:read`), mais on croise quand même par
@@ -1075,7 +1071,6 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
       )}
 
       {onglet === 'terminaux' && <TerminauxAcces etabActif={etabActif} peutGerer={peutGerer} />}
-
 
       {edition && (
         <FormulaireTopologie

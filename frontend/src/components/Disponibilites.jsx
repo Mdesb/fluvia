@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { idDe } from '../api/iri'
 
 /**
  * LES HORAIRES D'UNE RESSOURCE, ET SES ABSENCES.
@@ -64,11 +65,6 @@ function jourEtHeure(v) {
   return Number.isNaN(d.getTime())
     ? '—'
     : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function idDe(v) {
-  if (!v) return null
-  return typeof v === 'string' ? v.split('/').pop() : v.id || null
 }
 
 export default function Disponibilites({ droits = [] }) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { idDe } from '../api/iri'
 
 // LES CORRESPONDANCES COMPTABLES — CE QUI DÉCIDE DU COMPTE DE PRODUIT, ET QUI N'AVAIT PAS D'ÉCRAN.
 //
@@ -105,8 +106,6 @@ export default function CorrespondancesComptables({ etabActif, droits = [] }) {
   useEffect(() => {
     charger()
   }, [etabActif, charger])
-
-  const idDe = (v) => (typeof v === 'object' && v ? v.id : v ? String(v).split('/').pop() : null)
 
   const lignes = useMemo(() => {
     const parCategorie = new Map(mappings.map((m) => [String(m.categorie), m]))
