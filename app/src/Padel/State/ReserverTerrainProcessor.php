@@ -183,6 +183,11 @@ final class ReserverTerrainProcessor implements ProcessorInterface
                 $organisateur->getClient()?->getId(),
                 'Réservation terrain ' . (string) $creneau->getId(),
                 $produitRef,
+                // ⚠ PAS D'ACTIVITÉ, ET ON N'EN INVENTE PAS : un créneau de padel n'en porte aucune.
+                // C'est la RESSOURCE qui mène au sport, via `TerrainPadel::$sport`. Sans elle, tout
+                // le padel serait invisible dans les recettes — exactement la question posée.
+                null,
+                $ressource->getId(),
             );
             $reservation->setVenteRattachee($vente);
         }

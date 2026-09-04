@@ -102,6 +102,8 @@ final class ConfirmerReservationProcessor implements ProcessorInterface
                 $data->getOrganisateur()?->getClient()?->getId(),
                 'Confirmation réservation ' . (string) $data->getId(),
                 $produitRef,
+                $data->getCreneau()?->getActivite()?->getId(),
+                $data->getCreneau()?->getRessource()?->getId(),
             );
             $data->setVenteRattachee($vente);
         }

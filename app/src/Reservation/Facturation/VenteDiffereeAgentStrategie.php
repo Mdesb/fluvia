@@ -66,6 +66,8 @@ final class VenteDiffereeAgentStrategie implements StrategieFacturationNoShow
             $clientRef,
             'No-show / annulation tardive — réservation ' . (string) $reservation?->getId(),
             $produitRef,
+            $reservation?->getCreneau()?->getActivite()?->getId(),
+            $reservation?->getCreneau()?->getRessource()?->getId(),
         );
 
         $facturation->setVenteRattachee($vente);

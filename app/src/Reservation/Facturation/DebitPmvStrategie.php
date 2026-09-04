@@ -68,6 +68,8 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
             $clientRef,
             'No-show (débit PMV automatique) — réservation ' . (string) $reservation->getId(),
             $produitRef,
+            $reservation->getCreneau()?->getActivite()?->getId(),
+            $reservation->getCreneau()?->getRessource()?->getId(),
         );
 
         try {

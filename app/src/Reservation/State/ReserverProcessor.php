@@ -212,7 +212,18 @@ final class ReserverProcessor implements ProcessorInterface
                     ));
                 }
 
-                $vente = $this->venteHandler->creerVente($session, $tarif, $clientRef, 'Réservation ' . (string) $creneau->getId(), $produitRef);
+                $vente = $this->venteHandler->creerVente(
+                    $session,
+                    $tarif,
+                    $clientRef,
+                    'Réservation ' . (string) $creneau->getId(),
+                    $produitRef,
+                    // ⚠ L'ORIGINE DE LA RECETTE (§8.12) : sans elle, « combien la visite guidée
+                    // a-t-elle rapporté » reste sans réponse — la ventilation ne voit que la
+                    // catégorie comptable du produit.
+                    $activite?->getId(),
+                    $creneau->getRessource()?->getId(),
+                );
                 $reservation->setModeDecompte(ModeDecompteReservation::VenteUnite);
                 $reservation->setVenteRattachee($vente);
                 $reservation->setMontantDu($tarif);

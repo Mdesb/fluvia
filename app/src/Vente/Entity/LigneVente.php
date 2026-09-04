@@ -45,6 +45,35 @@ class LigneVente
     private ?Uuid $saison = null;
 
     /**
+     * Réf. logique Activite (M5) — QUELLE PRESTATION a été vendue.
+     *
+     * ⚠ D'OÙ VIENT LA RECETTE, ET POURQUOI LE PRODUIT NE SUFFISAIT PAS. La ventilation comptable
+     * s'appuie sur la CATÉGORIE du produit, pas sur le produit : multiplier les produits ne changeait
+     * rien à la comptabilité, seulement à ce qu'on pouvait lire. Et rien sur cette ligne ne disait
+     * d'où venait la vente — « combien la visite guidée a-t-elle rapporté » était sans réponse.
+     *
+     * `null` pour toute vente qui ne vient pas d'une réservation : une entrée au guichet n'a pas
+     * d'activité, et lui en inventer une serait pire que le silence.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['vente:read'])]
+    private ?Uuid $activite = null;
+
+    /**
+     * Réf. logique Ressource (M5) — QUEL ÉQUIPEMENT a été occupé.
+     *
+     * ⚠ ELLE NE FAIT PAS DOUBLON AVEC `activite`, ET C'EST MESURÉ. `ReserverTerrainProcessor` pose
+     * une ressource et JAMAIS d'activité : en préproduction, 5 créneaux, 4 sans activité, 5 avec
+     * ressource. L'activité seule laisserait 80 % des créneaux — et tout le padel — sans réponse.
+     *
+     * Et c'est elle qui mène au sport : `TerrainPadel::$sport`, posé le 04/09, se résout depuis la
+     * ressource du terrain.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['vente:read'])]
+    private ?Uuid $ressource = null;
+
+    /**
      * Le nom que portait le produit **le jour de la vente**.
      *
      * ⚠ **Ce libellé est une copie datée, pas une référence.** Un ticket dit ce que le produit
@@ -347,6 +376,30 @@ class LigneVente
     public function setMontantLigne(string $montantLigne): self
     {
         $this->montantLigne = $montantLigne;
+
+        return $this;
+    }
+
+    public function getActivite(): ?Uuid
+    {
+        return $this->activite;
+    }
+
+    public function setActivite(?Uuid $activite): self
+    {
+        $this->activite = $activite;
+
+        return $this;
+    }
+
+    public function getRessource(): ?Uuid
+    {
+        return $this->ressource;
+    }
+
+    public function setRessource(?Uuid $ressource): self
+    {
+        $this->ressource = $ressource;
 
         return $this;
     }

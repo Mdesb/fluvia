@@ -841,6 +841,38 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ⚠ 8.13 — Le garde-fou des références libres indexe par NOM COURT, et confond les homonymes
+
+Trouvé le 04/09 en ajoutant deux références libres à `LigneVente` : le compte de propriétés
+surveillées est passé de **71 à 72** alors que j'en ajoutais **deux**. Une seule était vue.
+
+**La cause**, `bin/garde-fou-references-libres.php` lignes 65 et 124 :
+
+    @return array<string, string> nom de propriété => fichier qui la déclare
+
+L'inventaire est indexé par **nom de propriété seul, à travers tout le dépôt**. `Creneau::$activite`
+(une relation) et `LigneVente::$activite` (une référence libre) occupent donc la **même case**, et
+seule la dernière parcourue survit — avec sa classification. Mes deux champs sont classés
+« relation » et **ne sont pas protégés** par ce contrôle.
+
+⚠ **C'EST EXACTEMENT LE DÉFAUT DU PROTOTYPE DU n°34** (T22) : « il indexait les processeurs par leur
+nom court, et neuf classes du dépôt s'appellent `EstablishmentStampProcessor` — elles s'écrasaient
+l'une l'autre ». Le même piège, dans un autre garde-fou, trouvé le même jour.
+
+⚠ **Et le fichier fait DÉJÀ bien à un autre endroit** : ses *trouvailles* sont clefées
+`fichier:propriete:forme` (ligne 412). C'est l'inventaire qui est en cause, pas la logique.
+
+**Ampleur, mesurée** : 192 noms de propriété distincts dans `app/src`, dont **44 déclarés sur
+plusieurs entités**. Tous ne sont pas dans le périmètre du contrôle (il ne regarde que les `?Uuid`
+et les relations), mais deux au moins le sont, démontrés.
+
+**Le remède** : clefer l'inventaire par `fichier:propriete`, comme les trouvailles. ⚠ Ça fera
+apparaître des cas jusque-là masqués : il faudra les trier — geler ceux qui sont légitimes AVEC leur
+raison écrite, corriger les autres — et surtout **ne pas régénérer la ligne de base en bloc**, ce qui
+gèlerait la dérive au lieu de la montrer.
+
+---
+
 ### ⚠ 8.12 — La préproduction n'a AUCUN produit à vendre pour un terrain de padel
 
 Constaté le 04/09, en posant la garde « produit obligatoire » (§8.8 c). Les trois activités de la

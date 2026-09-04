@@ -64,6 +64,19 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
         $lignes = $vente->getLignes()->toArray();
         self::assertCount(1, $lignes, 'une réservation de terrain, une ligne');
 
+        // ⚠ L'ORIGINE DE LA RECETTE (§8.12). Sans la ressource, « combien le padel a-t-il rapporté »
+        // reste sans réponse : la ventilation comptable ne voit que la catégorie du produit, et un
+        // créneau de padel ne porte AUCUNE activité — c'est la ressource qui mène au sport, via
+        // `TerrainPadel::$sport`.
+        $terrain = $em->getRepository(\App\Padel\Entity\TerrainPadel::class)->find($this->idTerrain());
+        self::assertNotNull($terrain, 'témoin : le terrain existe');
+        self::assertSame(
+            (string) $terrain->getRessource()?->getId(),
+            (string) $lignes[0]->getRessource(),
+            'la ligne doit dire QUEL ÉQUIPEMENT a été occupé — sinon le padel est invisible dans '
+            . 'les recettes, et la question ne pourra plus jamais être posée sur ces ventes',
+        );
+
         self::assertSame(
             (string) $produitTerrain,
             (string) $lignes[0]->getProduit(),

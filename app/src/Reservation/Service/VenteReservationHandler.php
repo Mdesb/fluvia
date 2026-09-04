@@ -39,7 +39,15 @@ final class VenteReservationHandler
      * premier malchanceux. Le type oblige CHAQUE appelant a decider quoi dire quand il n'a pas de
      * produit, et le prochain appelant ecrit ne pourra pas passer `null` sans le voir.
      */
-    public function creerVente(SessionCaisse $session, string $montant, ?Uuid $clientRef, string $libelle, Uuid $produitRef): Vente
+    public function creerVente(
+        SessionCaisse $session,
+        string $montant,
+        ?Uuid $clientRef,
+        string $libelle,
+        Uuid $produitRef,
+        ?Uuid $activiteRef = null,
+        ?Uuid $ressourceRef = null,
+    ): Vente
     {
         $vente = new Vente();
         $vente->setSession($session)
@@ -57,6 +65,11 @@ final class VenteReservationHandler
         $ligne->setPrixForce(true);
         $ligne->setMontantLigne($montant);
         $ligne->setNote($libelle);
+        // ⚠ D'OÙ VIENT LA RECETTE (§8.12). Sans ces deux références, rien sur la ligne ne disait de
+        // quelle prestation ni de quel équipement elle venait : la comptabilité voyait « Locations »
+        // et personne ne pouvait répondre à « combien le padel a-t-il rapporté ».
+        $ligne->setActivite($activiteRef);
+        $ligne->setRessource($ressourceRef);
 
         $vente->addLigne($ligne);
         $this->calculateur->recalculerVente($vente);
