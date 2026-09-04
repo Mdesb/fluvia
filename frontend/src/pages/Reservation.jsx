@@ -673,6 +673,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
       ) : vue === 'semaine' ? (
         <PlanningSemaine
           creneaux={creneaux || []}
+          nonLu={creneaux === null}
           occupation={occupation}
           ressources={ressources || []}
           onCreneau={(cr) => {

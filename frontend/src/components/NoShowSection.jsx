@@ -52,7 +52,9 @@ const MODES = {
 }
 
 export default function NoShowSection({ etabActif, droits = [], session }) {
-  const [lignes, setLignes] = useState([])
+  // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
+  const [lignesLues, setLignesLues] = useState(null)
+  const lignes = lignesLues || []
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -66,9 +68,10 @@ export default function NoShowSection({ etabActif, droits = [], session }) {
     setChargement(true)
     setErreur(null)
     try {
-      setLignes(membres(await api.facturationsNoShow()))
+      setLignesLues(membres(await api.facturationsNoShow()))
     } catch (e) {
       setErreur(e.message)
+      setLignesLues(null)
     } finally {
       setChargement(false)
     }
@@ -137,8 +140,17 @@ export default function NoShowSection({ etabActif, droits = [], session }) {
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
         ) : lignes.length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
-            Aucune absence non prévenue à traiter. Elles apparaîtront ici automatiquement lorsqu'un
-            client ne se présente pas à un créneau réservé.
+            {lignesLues === null ? (
+              <b>
+                La liste des absences n’a pas pu être lue : elle est vide parce que la lecture a
+                échoué, pas parce qu’aucune absence n’est à traiter.
+              </b>
+            ) : (
+              <>
+                Aucune absence non prévenue à traiter. Elles apparaîtront ici automatiquement
+                lorsqu&rsquo;un client ne se présente pas à un créneau réservé.
+              </>
+            )}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

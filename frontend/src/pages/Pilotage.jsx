@@ -5,8 +5,16 @@ import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
-function GrapheJauges({ jauges }) {
-  if (!jauges.length) return <div className="empty">Aucune jauge à représenter.</div>
+function GrapheJauges({ jauges, nonLu }) {
+  if (!jauges.length) {
+    return (
+      <div className="empty">
+        {nonLu
+          ? 'Les jauges n’ont pas pu être lues : ce graphe est vide parce que la lecture a échoué, pas parce qu’aucun espace n’est suivi.'
+          : 'Aucune jauge à représenter.'}
+      </div>
+    )
+  }
   const W = 520
   const rowH = 34
   const padL = 150
@@ -118,7 +126,11 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
   }
 
   // Source des jauges + fréquentation : dashboard si dispo, sinon repli supervision.
-  const jauges = dash?.jaugesFmi || repli?.jauges || []
+  // ⚠ `|| []` ecrasait la difference entre « aucune jauge » et « on n'a pas pu lire ». Les deux
+  // sources viennent de `/reporting`, hors du prefixe `/api` — c'est pour ca que la premiere sonde
+  // ne l'avait pas vu.
+  const jaugesLues = dash?.jaugesFmi || repli?.jauges || null
+  const jauges = jaugesLues || []
   const fmiMax = jauges.reduce((m, j) => Math.max(m, j.valeurCourante || 0), 0)
   const frequentation = dash?.entreesJour ?? jauges.reduce((s, j) => s + (j.cumulJour || 0), 0)
   const enAlerte = jauges.filter((j) => j.seuil > 0 && j.valeurCourante >= j.seuil).length
@@ -189,7 +201,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
         {/* Graphe occupation FMI */}
         <section className="card">
           <div className="card-h"><h3>Occupation FMI par espace</h3></div>
-          <div className="card-b"><GrapheJauges jauges={jauges} /></div>
+          <div className="card-b"><GrapheJauges jauges={jauges} nonLu={jaugesLues === null} /></div>
         </section>
 
         {/* Détail jauges */}
@@ -214,7 +226,13 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
                     </tr>
                   )
                 })}
-                {jauges.length === 0 && <tr><td colSpan={5} className="empty">Aucune jauge.</td></tr>}
+                {jauges.length === 0 && (
+                  <tr><td colSpan={5} className="empty">
+                    {jaugesLues === null
+                      ? 'Les jauges n’ont pas pu être lues : ce tableau est vide parce que la lecture a échoué, pas parce qu’aucun espace n’est suivi.'
+                      : 'Aucune jauge.'}
+                  </td></tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -47,7 +47,11 @@ export default function Stock({ etabActif, droits }) {
   // qui vous previent avant la rupture. >> Elle s'affichait quand la lecture avait ECHOUE, c'est-a-dire
   // exactement quand le filet n'etait pas pose. On ne rassure pas au nom d'un controle qui n'a pas eu lieu.
   const [alertes, setAlertes] = useState(null)
-  const [mouvements, setMouvements] = useState([])
+  // ⚠ `null` = PAS LU. Le `catch` voisin retenait deja l'echec pour les articles
+  // (`setArticles(null)`) mais pas pour le journal : le meme refus rendait un tableau honnete et
+  // un tableau menteur, cote a cote.
+  const [mouvementsLus, setMouvementsLus] = useState(null)
+  const mouvements = mouvementsLus || []
   // ⚠ `null` DISAIT DEUX CHOSES : << aucun seuil configure >> ET << pas lu >>. Le second etat a
   // son propre drapeau, parce que le bloc en tire une AFFIRMATION en rouge : << aucun ecart
   // d'inventaire n'est considere comme significatif, la validation par un responsable ne se
@@ -84,10 +88,11 @@ export default function Stock({ etabActif, droits }) {
       // Le serveur annonce combien de lots existent ; si on n'en a pas reçu autant, toute somme
       // calculée dessus est fausse — et rien à l'écran ne le montrerait.
       setLotsTronques(annonces > lus.length)
-      setMouvements(membres(m))
+      setMouvementsLus(membres(m))
     } catch (e) {
       setErreur(e.message)
       setArticles(null)
+      setMouvementsLus(null)
     } finally {
       setChargement(false)
     }
@@ -208,7 +213,7 @@ export default function Stock({ etabActif, droits }) {
 
           {/* ⚠ `articles || []` et non `articles` : la liste vaut `null` tant que la lecture
               n'a pas abouti, et le journal doit rendre une colonne vide plutôt que tomber. */}
-          <JournalSection mouvements={mouvements} articles={articles || []} />
+          <JournalSection mouvements={mouvements} articles={articles || []} nonLu={mouvementsLus === null} />
         </>
       )}
 
@@ -861,7 +866,7 @@ function RegleEcart({ parametrage, lu, droits }) {
 // --------------------------------------------------------------------------------------------
 // Une correction sans trace visible est ce qui rend les corrections effrayantes. Le journal est donc
 // sur le même écran que le bouton qui les crée, et non dans un module de rapports.
-function JournalSection({ mouvements, articles = [] }) {
+function JournalSection({ mouvements, articles = [], nonLu }) {
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -871,10 +876,13 @@ function JournalSection({ mouvements, articles = [] }) {
       <div className="card-b">
         {mouvements.length === 0 ? (
           <div className="empty">
+            {nonLu ? <b>Le journal des mouvements n’a pas pu être lu : il est vide
+            parce que la lecture a échoué, pas parce qu’aucun mouvement n’a eu lieu.</b> : <>
             Aucun mouvement. Chaque entrée, sortie, correction ou perte laisse une ligne ici, avec sa
             raison. Un journal vide peut aussi vouloir dire que vos articles ne sont rattachés à aucun
             produit : dans ce cas les ventes ne les touchent pas, et c'est la colonne « suivi des
             ventes » ci-dessus qui le dit.
+            </>}
           </div>
         ) : (
           <table className="tbl">

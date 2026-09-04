@@ -167,7 +167,7 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
             surface, donc deux fois le poids lu. Meme module, deux cellules vides a droite. */}
       <div className="grid g4" style={{ marginBottom: 16 }}>
         <Kpi label="Fond de caisse théorique" valeur={dash ? euros(dash.fondDeCaisse) : 'n/d'} />
-        <Kpi label="Espaces suivis (FMI)" valeur={jauges.length} />
+        <Kpi label="Espaces suivis (FMI)" valeur={dash ? jauges.length : 'n/d'} />
       </div>
 
       <div className="resa-grid">

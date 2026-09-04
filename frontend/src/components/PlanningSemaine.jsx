@@ -49,7 +49,10 @@ function hhmm(d) {
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
-export default function PlanningSemaine({ creneaux, occupation, ressources, onCreneau }) {
+// ⚠ `nonLu` VOYAGE A COTE DE LA LISTE, ET PAS DEDANS. L'appelant aplatit deja (`creneaux || []`),
+// donc ce composant ne peut pas distinguer « vide » de « pas lu » — et faire voyager un `null` a
+// sa place casserait tout ce qui le parcourt.
+export default function PlanningSemaine({ creneaux, occupation, ressources, onCreneau, nonLu }) {
   const [depart, setDepart] = useState(() => lundiDe(new Date()))
   const [ressourceId, setRessourceId] = useState('')
 
@@ -130,7 +133,9 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
           état vide qu'il faut chercher ne sert pas. */}
       {visibles.length === 0 && (
         <div className="empty">
-          Aucun créneau cette semaine{ressourceId ? ' pour cette ressource' : ''}.
+          {nonLu
+            ? 'Le planning n’a pas pu être lu : cette semaine est vide parce que la lecture a échoué, pas parce qu’aucun créneau n’est ouvert.'
+            : `Aucun créneau cette semaine${ressourceId ? ' pour cette ressource' : ''}.`}
         </div>
       )}
       <div style={{ overflowX: 'auto' }}>

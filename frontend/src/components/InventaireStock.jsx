@@ -25,7 +25,9 @@ import { aUnDesDroits } from '../api/droits.js'
 // parent — pas un appel de plus, et le nom vaut mieux qu'un identifiant.
 
 export default function InventaireStock({ articles, droits, etabActif, onErreur, onFait }) {
-  const [inventaires, setInventaires] = useState([])
+  // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
+  const [inventairesLus, setInventairesLus] = useState(null)
+  const inventaires = inventairesLus || []
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [lancement, setLancement] = useState(false)
@@ -37,10 +39,11 @@ export default function InventaireStock({ articles, droits, etabActif, onErreur,
     setChargement(true)
     try {
       const [i, l] = await Promise.all([api.stockInventaires(), api.stockLignesInventaire()])
-      setInventaires(membres(i))
+      setInventairesLus(membres(i))
       setLignes(membres(l))
     } catch (e) {
       onErreur(e.message)
+      setInventairesLus(null)
     } finally {
       setChargement(false)
     }
@@ -93,9 +96,12 @@ export default function InventaireStock({ articles, droits, etabActif, onErreur,
       <div className="card-b">
         {!enCours ? (
           <div className="empty">
+            {inventairesLus === null ? <b>La liste des inventaires n’a pas pu être lue : ne concluez
+              pas qu’aucun inventaire n’est en cours, la lecture a échoué.</b> : <>
             Aucun inventaire en cours. Un inventaire fige ce que le logiciel croit avoir, vous laisse
             compter ce qu'il y a vraiment, et corrige la différence ligne par ligne — chaque
             correction laissant sa trace dans le journal.
+            </>}
             {inventaires.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 Dernier inventaire clôturé le {dateHeureFr(inventaires[0]?.dateCloture)}.
