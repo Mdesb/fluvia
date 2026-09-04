@@ -62,3 +62,51 @@ rien changer ailleurs.
     route annoncée par le marqueur        → silence
     route standard sans `ld: true`        → REFUS   ⟵ le vrai positif, toujours armé
     arbre réel                            → silence
+
+---
+
+## `verifier-formats.mjs` couvre enfin les routes sur mesure — sept écritures étaient cassées
+
+*(claude-C0, 04/09, commit `8b8fdc55`, déjà sur `main` et en préprod)*
+
+Le contrôle n°11 sautait **en bloc** les routes à `uriTemplate` sur mesure, au motif écrit dans son
+propre message d'aide qu'« elles portent `input: false` ». C'est vrai de 222 d'entre elles, faux des
+autres. Cette famille était donc le seul endroit du client que rien ne surveillait, et **sept
+écritures y partaient en `application/json` sur des opérations qui n'acceptent que `ld+json`** :
+elles rendaient 415, toujours, depuis leur écriture.
+
+**Trois de ces sept sont dans vos modules — vos écrans de création n'ont jamais rien créé :**
+
+| module | appel | écran concerné |
+|---|---|---|
+| stock | `stockRattacherProduit` | rattacher un article à un produit vendu |
+| padel | `creerTerrainPadel`, `padelLouerMateriel` | créer un terrain, louer du matériel |
+| musée | `museeCreerVisite`, `museeCreerDossierGroupe` | créer une visite guidée, un dossier de groupe |
+
+Pour le padel et le musée, un commentaire au-dessus des appels affirmait « `input: false`, pas de
+`ld: true` » : vrai des *confirmations* qu'il surplombait aussi, faux des créations. Une règle écrite
+pour un groupe d'appels et appliquée au voisin.
+
+Les deux dernières bloquaient la création d'une formule d'abonnement, donc le tunnel de souscription
+du site vitrine — le symptôme que Maxime a signalé, trois écrans plus loin.
+
+### Ce que le contrôle vaut maintenant, mesuré et non supposé
+
+En interrogeant le registre d'API Platform (noyau démarré) plutôt qu'en réimplémentant sa règle par
+un grep : **540 opérations d'écriture sur mesure, dont 296 exigent `ld+json` et 244 ne contrôlent pas
+le type**. Confronté à ce verdict sur un client privé de *tous* ses `ld: true`, le contrôle voit
+désormais tout ce que l'autorité signale. Les deux écarts qu'a révélés cette confrontation étaient
+deux défauts du contrôle, corrigés ici : il ne connaissait qu'un des deux idiomes de « ne désérialise
+pas » (`deserialize: false` existe aussi, 4 fichiers), et il refusait de trancher quand un chemin
+correspondait à plusieurs déclarations — `/marketing/fidelite/{id}` masquait ainsi
+`/marketing/fidelite/mouvements`. La plus spécifique l'emporte désormais, comme dans le routeur.
+
+> ⚠ **Une affirmation fausse dans un garde-fou se recopie.** Le fichier soutenait en quatre endroits
+> qu'une opération sans corps *refuse* `ld+json` en 415. Elle ne refuse rien : elle ne contrôle pas
+> le type du tout (vérifié par requête — `/calendar/ics-subscription/regenerate` rend 404 pour les
+> deux types). Deux de ces quatre phrases venaient d'être recopiées des deux autres, dont une par
+> moi une heure plus tôt. Les quatre sont corrigées, ainsi que la même croyance au cœur de
+> `request()` dans `client.js`, qui annonçait que « les autres écritures acceptent JSON simple ».
+
+**Ce que ça vous demande :** rien à corriger, c'est fait. Mais si l'un de vous a un jour contourné un
+échec de création en concluant à un défaut serveur, la cause était ici.
