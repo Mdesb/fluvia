@@ -137,6 +137,9 @@ fi
 [ -f "$RACINE/bin/garde-fou-entite-rattachable-hors-liste.php" ] && { lancer_gf garde-fou-entite-rattachable-hors-liste.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
+# Une collection ecrivable dont `PropertyAccessor` ne trouve pas le couple add/remove est SAUTEE
+# en silence : la requete repond 200 et rien n'est ecrit (n°47).
+[ -f "$RACINE/bin/garde-fou-collections-muettes.php" ] && { lancer_gf garde-fou-collections-muettes.php || ECHEC=1; }
 
 # Appels du frontal dans le vide (n°33) : un chemin qu'aucune route ne sert rend un 404, que le
 # `catch` de l'ecran transforme en liste vide. Le defaut ne se voit JAMAIS a l'ecran.

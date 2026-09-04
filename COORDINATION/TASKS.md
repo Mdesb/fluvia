@@ -373,7 +373,7 @@ reprendre.
 
 | ce qui a été mesuré | comment le revoir | pourquoi ça compte |
 |---|---|---|
-| **Aucun `trusted_hosts` déclaré.** L'`Host` vient de l'appelant. La résolution par hôte (D104) n'est pas concernée — elle échoue fermée — mais **tout ce qui fabrique une URL depuis la requête** l'est : liens de courriel, redirections | `grep -rn trusted config/packages/` rend zéro | Un lien de réinitialisation de mot de passe pointant vers un hôte choisi par l'appelant |
+| ~~**Aucun `trusted_hosts` déclaré**~~ — **vérifié le 04/09, et l'inverse est vrai.** Rien ne fabrique d'URL depuis la requête : les deux mailiers lisent `FRONT_BASE_URL`, les `getHost()` du module Social portent sur l'entité `SocialAccount` (l'instance Mastodon), et le seul lecteur du `Host` HTTP est `CurrentStorefrontProvider`, qui échoue fermé (D104). `trusted_hosts` reste non déclaré **volontairement** : zéro exposition mesurée, et une liste d'hôtes fausse casse le service | Le déclencheur qui rendrait ce contrôle nécessaire : du code neuf qui construit une URL absolue depuis la requête (`getSchemeAndHttpHost`, `ABSOLUTE_URL`). Le vérifier en cherchant ces deux appels, jamais le mot `trusted` | ⚠ **Ce que la vérification a réellement trouvé** : `FRONT_BASE_URL` n'était déclarée nulle part en préproduction, donc `http://localhost:5173` — tous les liens de mot de passe oublié et d'invitation pointaient dans le vide. Invisible parce que `MAILER_DSN=null://null` avale tout : deux défauts qui s'annulaient. Corrigé, et `deploy-preprod.sh` le contrôle désormais à chaque déploiement, en changeant de ton selon l'état du transport |
 | **La validation s'exécute AVANT les processeurs**, et deux sessions s'y sont cassées le même jour. Chez moi : `EstablishmentStampProcessor` pose le slug d'une vitrine *après* la validation — un établissement nommé « Pro » aurait traversé l'`Assert` sans être vu. Chez `8e` : un `Assert\NotNull` sur un champ posé par un processeur refusait la requête avant qu'il puisse le compléter (création de région impossible, 422, sur un écran qui dit « créez-en une avant votre premier établissement ») | — | Le correctif est juste, invisible, et **vert nulle part**. Garde-fou n°34 à écrire : toute propriété écrite par un processeur ET porteuse d'une contrainte de non-vacuité |
 | **`/tmp` est partagé entre les sessions.** J'ai écrasé mon propre message de commit avec celui d'une autre session, en écrivant dans `/tmp/msg2.txt` | — | Préfixe tes fichiers de travail par ton nom : `/tmp/<session>-…` |
 
@@ -606,24 +606,65 @@ et ne retombe jamais sur son adder français. **API Platform saute alors le cham
 ⚠ Le contraste est ce qui rend le diagnostic sûr : `etablissements`, sur la MÊME entité et dans le
 MÊME groupe, s'écrit très bien.
 
-**Balayage fait le 03/09, tout le dépôt :**
+**Balayage du 03/09 — et ⚠ IL ÉTAIT INCOMPLET, parce que sa recette devinait la règle.**
 
-    Produit::$categories          en écriture   ->  CORRIGÉ
+    Produit::$categories          en écriture   ->  CORRIGÉ le 03/09
     TicketSupport::$articlesLies  `ticket:read` ->  sain (non écrivable)
 
-**La recette, pour la prochaine fois** — une propriété de collection dont le nom finit par `-ies`,
-`-aux` ou `-eux` et qui figure dans un groupe d'écriture :
+La recette d'alors cherchait `private Collection $x(ies|aux|eux);` : **une règle de langue devinée,
+à la place de celle qui décide vraiment**. En interrogeant `EnglishInflector::singularize()` lui-même,
+propriété par propriété, le 04/09 en a trouvé **trois de plus**, toutes en `-es` ou `-us` :
 
-    grep -rnE 'private Collection \$[A-Za-z]+(ies|aux|eux);' app/src
+    ProfilExploitant::$etablissementsRattaches  `profil:write`                CORRIGÉ le 04/09
+    DossierGroupeScolaire::$guidesAffectes      `dossier:write`               CORRIGÉ le 04/09
+    Formule::$servicesInclus                    `produit:write`/`formule:write`  CORRIGÉ le 04/09
+
+⚠ **Le mécanisme n'était pas celui décrit non plus.** Ce n'est pas `ies → y` : l'inflecteur
+singularise mécaniquement la FIN de la chaîne camelCase, quand l'auteur a écrit le singulier français
+sur *les deux mots*.
+
+    l'entité offrait                Symfony cherchait
+    addEtablissementRattache        addEtablissementsRattache
+    addGuideAffecte                 addGuidesAffecte
+    addServiceInclus                addServicesInclu
+
+⚠ **Et deux des trois n'avaient AUCUN remover** : `PropertyAccessor` exige la paire. Même un adder
+correctement nommé n'aurait pas suffi — c'est la famille des « 200 menteurs ».
+
+⚠ **Le plus grave était le premier** : `etablissementsRattaches` est un champ de **périmètre
+d'accès**, lu par `PerimetreFinanceExtension` et `PerimetreFacturationExtension`. Accorder ou retirer
+un établissement à un profil répondait 200 et ne changeait rien.
+
+⚠ **Cas particulier du troisième** : `Formule::$servicesInclus` est un `OneToMany` avec
+`orphanRemoval: true` — un service retiré est SUPPRIMÉ, pas délié. L'écriture muette protégeait donc
+quelque chose. Le setter est posé quand même, parce que `ServiceInclus` n'a pas d'`#[ApiResource]` :
+sa formule est la seule porte, et sans lui aucun moyen de définir les services d'une formule.
 
 Le remède est un setter explicite : il prend le pas sur la recherche d'adder/remover et ne dépend
 d'aucune règle de langue. ⚠ Il doit remplacer le CONTENU sans changer d'instance de collection —
 Doctrine suit les ajouts et retraits de celle-ci, et lui en substituer une autre lui fait perdre le
 fil.
 
-**Un garde-fou serait possible** (comparer chaque collection écrivable à son adder après
-singularisation) et n'a pas été posé : le balayage ne laisse aucun cas ouvert, et un garde-fou pour
-zéro occurrence coûte trois listes à câbler. À reprendre le jour où un deuxième cas apparaît.
+~~**Un garde-fou serait possible et n'a pas été posé**~~ — **il l'est, le 04/09** :
+`bin/garde-fou-collections-muettes.php`, n°47, câblé dans les trois listes. Le seuil que cette fiche
+s'était fixé (« à reprendre le jour où un deuxième cas apparaît ») a été franchi trois fois d'un coup.
+
+Il **n'imite pas la règle, il interroge l'inflecteur** — c'est toute la leçon de la recette précédente.
+Il exige la PAIRE add/remove, il épargne les setters explicites, et il porte cinq témoins dont deux
+prouvent ce qu'il épargne. ⚠ Il refuse aussi de conclure sur zéro collection lue.
+
+⚠ **Il ne tourne pas en `pre-receive`** : la lecture des attributs et la singularisation exigent
+`vendor/`, absent de cet arbre — comme pour « Appels du frontal dans le vide ». Il s'y annonce NON
+EXÉCUTÉ plutôt que de rendre un vert qui n'a rien mesuré, et tourne dans `./bin/garde-fous.sh` et en
+pre-commit.
+
+**Ce qu'il ne prouve pas, et qui est prouvé ailleurs** : que le sérialiseur APPELLE le setter. C'est
+une propriété d'API Platform, pas du dépôt — `PerimetreProfilEcritTest` la prouve en exécutant, par
+un aller-retour vide → rempli → vide.
+
+⚠ Ce test a d'ailleurs commencé faux : séparé en « rattacher » et « retirer », le premier était vert
+**avec ou sans le défaut**, parce que la fixture rattache déjà l'établissement A. Vu seulement en
+cassant le correctif pour regarder le filet attraper.
 
 ### 8.8 — R15 : le créneau de padel devient une écriture, et trois trous restent nommés
 

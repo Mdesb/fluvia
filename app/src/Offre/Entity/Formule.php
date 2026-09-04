@@ -98,6 +98,52 @@ class Formule
         return $this->servicesInclus;
     }
 
+    /**
+     * Remplace la liste des services inclus.
+     *
+     * ⚠ CE CAS N'EST PAS COMME LES DEUX AUTRES DE LA MÊME FAMILLE. C'est un `OneToMany` avec
+     * `orphanRemoval: true` : un service retiré de la liste est **supprimé en base**, pas seulement
+     * délié. L'écriture muette protégeait donc quelque chose, et un setter naïf aurait été
+     * destructeur par surprise.
+     *
+     * On le pose quand même, pour une raison mesurée : `ServiceInclus` n'est **pas** une ressource
+     * API — aucun `#[ApiResource]`, et ses champs vivent dans `produit:write` / `formule:write`.
+     * Sa formule est donc la SEULE porte. Sans ce setter, il n'existe aucun moyen de définir les
+     * services d'une formule, ni à la création ni à la modification.
+     *
+     * ⚠ IL DÉLÈGUE AUX add/remove EXISTANTS, et ce n'est pas de la politesse : `addServiceInclus`
+     * pose la rétro-référence `$service->setFormule($this)`. Un setter qui l'oublierait créerait des
+     * services orphelins qu'`orphanRemoval` supprimerait au flush suivant.
+     *
+     * ⚠ COMPARAISON PAR IDENTITÉ, ET NON PAR IDENTIFIANT. Les services arrivent en objets
+     * **embarqués**, souvent neufs ; les collections voisines arrivent par IRI, donc en entités déjà
+     * gérées. Comparer des identifiants ici confondrait deux services neufs.
+     *
+     * Un `PATCH` qui ne mentionne pas `servicesInclus` n'appelle pas ce setter : seule une liste
+     * fournie remplace la liste existante.
+     *
+     * @param iterable<ServiceInclus> $services
+     */
+    public function setServicesInclus(iterable $services): self
+    {
+        $voulus = [];
+        foreach ($services as $service) {
+            $voulus[] = $service;
+        }
+
+        foreach ($this->servicesInclus->toArray() as $present) {
+            if (!\in_array($present, $voulus, true)) {
+                $this->removeServiceInclus($present);
+            }
+        }
+
+        foreach ($voulus as $service) {
+            $this->addServiceInclus($service);
+        }
+
+        return $this;
+    }
+
     public function addServiceInclus(ServiceInclus $service): self
     {
         if (!$this->servicesInclus->contains($service)) {
