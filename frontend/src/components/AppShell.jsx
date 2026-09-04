@@ -162,6 +162,16 @@ const NAV = [
       // bloques, celui-ci relance par courriel apres un no-show, une annulation ou un paiement
       // refuse.
       { id: 'relance_recettes', ic: 'settlements', label: 'Relance des recettes', perms: ['revenue_recovery.read', 'revenue_recovery.configure', 'revenue_recovery.manage'] },
+      // Ouvert le 05/09 : sept routes servies, aucun ecran, et un mecanisme qui tournait dans le
+      // vide. Six liberations de creneau tracees, zero inscription en liste d'attente — la chaine
+      // cherchait a qui offrir une place et ne trouvait personne, faute de la porte qui remplit la
+      // liste.
+      //
+      // ⚠ SA PROPRE PORTE, ET PAS UN ONGLET DE << Reservation >>. C'est une file de travail avec
+      // une HORLOGE : une place proposee expire, et le suivant attend. Le meme argument qui a
+      // ouvert une porte au recouvrement vaut ici — une file rangee au cinquieme onglet d'un ecran
+      // de planning ne se regarde que quand on y pense.
+      { id: 'places_liberees', ic: 'subscriptions', label: 'Places libérées', perms: ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
