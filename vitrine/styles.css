@@ -436,10 +436,7 @@ input:focus-visible {
   font-size: 13.5px;
 }
 
-/* ── la scene : le produit, dessine ─────────────────────────────────────────────────────────────
-
-   Une ANIMATION plutot qu'une video (arbitrage du 04/09). Elle dit la promesse — les modules
-   s'allument, le total se compose — sans un octet de media et sans vieillir. */
+/* La scene du bandeau : le cadre lumineux qui porte l'ecran produit. */
 .hero-scene { position: relative; }
 .hero-scene::before {
   content: '';
@@ -451,112 +448,10 @@ input:focus-visible {
   opacity: .45;
 }
 
-.scene-cadre {
-  position: relative;
-  border: 1px solid rgba(231, 236, 247, .14);
-  border-radius: 16px;
-  overflow: hidden;
-  background: #0f1626;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
-}
-
-.scene-barre {
-  display: flex; align-items: center; gap: 7px;
-  padding: 12px 16px;
-  background: rgba(231, 236, 247, .04);
-  border-bottom: 1px solid rgba(231, 236, 247, .08);
-}
-.scene-pastille { width: 10px; height: 10px; border-radius: 50%; background: rgba(231, 236, 247, .18); }
-.scene-titre { margin-left: 10px; color: var(--hero-encre-faible); font-size: 12px; }
-
-.scene-corps { padding: 24px 22px 20px; }
-.scene-legende { margin: 0 0 16px; color: var(--hero-encre-douce); font-size: 14px; }
-
-.scene-modules {
-  display: flex; flex-wrap: wrap; gap: 9px;
-  margin: 0; padding: 0;
-  list-style: none;
-}
-.scene-modules li {
-  padding: 9px 14px;
-  border: 1px solid rgba(231, 236, 247, .12);
-  border-radius: 9px;
-  background: rgba(231, 236, 247, .03);
-  color: var(--hero-encre-faible);
-  font-size: 13.5px;
-  animation: hero-allumer 9s ease-in-out infinite;
-  animation-delay: calc(var(--rang) * .34s);
-}
-
-.scene-eteint { margin: 16px 0 0; color: var(--hero-encre-faible); font-size: 12.5px; }
-
-.scene-pied {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  padding: 16px 22px;
-  border-top: 1px solid rgba(231, 236, 247, .08);
-  background: rgba(5, 9, 20, .5);
-  color: var(--hero-encre-douce);
-  font-size: 13.5px;
-}
-
-/* Le total qui se compose : une bande de valeurs qu'on fait defiler par crans. Aucune JS — un
-   compteur anime en JS sur une page publique tourne pour rien tant qu'on ne le regarde pas. */
-.scene-somme {
-  display: block;
-  height: 1.35em;
-  overflow: hidden;
-  color: var(--hero-encre);
-  font-size: 22px;
-  letter-spacing: -.02em;
-}
-.scene-chiffres {
-  display: block;
-  animation: hero-compter 9s steps(1, end) infinite;
-}
-.scene-chiffres > span { display: block; height: 1.35em; line-height: 1.35em; }
-
 @keyframes hero-pouls { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 
-/* Un module s'allume, reste allume, puis tout se rejoue. Les `--rang` decalent l'entree. */
-@keyframes hero-allumer {
-  0%, 6% {
-    border-color: rgba(231, 236, 247, .12);
-    background: rgba(231, 236, 247, .03);
-    color: var(--hero-encre-faible);
-  }
-  14%, 92% {
-    border-color: rgba(39, 217, 208, .45);
-    background: rgba(39, 217, 208, .10);
-    color: var(--hero-encre);
-  }
-  100% {
-    border-color: rgba(231, 236, 247, .12);
-    background: rgba(231, 236, 247, .03);
-    color: var(--hero-encre-faible);
-  }
-}
-
-@keyframes hero-compter {
-  0%, 24% { transform: translateY(0); }
-  25%, 49% { transform: translateY(-1.35em); }
-  50%, 74% { transform: translateY(-2.7em); }
-  75%, 100% { transform: translateY(-4.05em); }
-}
-
-/* ⚠ QUI DEMANDE MOINS DE MOUVEMENT N'EN RECOIT AUCUN. Une animation en boucle sur un bandeau est
-   exactement ce que ce reglage systeme vise : elle ne porte aucune information, donc l'arreter ne
-   retire rien. On fige sur l'etat ALLUME plutot que sur l'etat eteint — l'etat eteint donnerait une
-   scene qui a l'air en panne. */
 @media (prefers-reduced-motion: reduce) {
-  .hero-point,
-  .scene-modules li,
-  .scene-chiffres { animation: none; }
-  .scene-modules li {
-    border-color: rgba(39, 217, 208, .45);
-    background: rgba(39, 217, 208, .10);
-    color: var(--hero-encre);
-  }
-  .scene-chiffres { transform: translateY(-4.05em); }
+  .hero-point { animation: none; }
 }
 
 @media (max-width: 880px) {
@@ -785,3 +680,315 @@ input:focus-visible {
 /* Les jetons de metiers etaient centres entre eux : la deuxieme ligne partait 70 px plus a droite
    que la premiere, seule chose de la page a ne pas commencer au meme bord. */
 .page-accueil .jetons { justify-content: flex-start; }
+
+/* ══ LA PAGE D'ACCUEIL REFONDUE (05/09) ═══════════════════════════════════════════════════════
+
+   ⚠ CE QUE CETTE REFONTE CORRIGE. L'ancienne page enchainait quatre sections de meme valeur —
+   titre, paragraphe, rangee de cartes blanches — sans hierarchie, sans respiration, et sans jamais
+   montrer le produit. Les bandes alternent donc sombre et clair, chaque section porte un seul
+   propos, et deux ecrans de l'application apparaissent. */
+
+.bande-sombre {
+  --hero-fond: #050914;
+  --hero-encre: #e7ecf7;
+  --hero-encre-douce: #a3aec8;
+  --hero-encre-faible: #8b96b2;
+  --hero-trait: rgba(231, 236, 247, .12);
+
+  background: var(--hero-fond);
+  color: var(--hero-encre);
+}
+.bande-sombre h2,
+.bande-sombre h3 { color: var(--hero-encre); }
+.bande-sombre p { color: var(--hero-encre-douce); }
+.bande-sombre .sur-titre { color: var(--hero-encre-faible); }
+.bande-sombre .note { color: var(--hero-encre-faible); }
+
+.bande-claire { background: var(--panel); border-block: 1px solid var(--line); }
+
+/* Le sur-titre : ce qui donne son nom a une section sans peser autant qu'un titre. */
+.sur-titre {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.section-tete {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: 36px;
+}
+.section-tete-note { max-width: 24em; font-size: 15px; }
+
+/* ── sections en duo : un propos a gauche, un objet a droite ────────────────────────────────── */
+.section-duo .duo {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
+  gap: 56px;
+  align-items: center;
+}
+.duo-dire { max-width: 34em; }
+.duo-scene { min-width: 0; }
+
+/* ── la bande de preuve ─────────────────────────────────────────────────────────────────────── */
+.hero-preuve {
+  position: relative;
+  border-top: 1px solid var(--hero-trait);
+  background: rgba(5, 9, 20, .6);
+}
+.hero-preuve-corps { padding: 18px 0; }
+.preuve-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.preuve-items li { font-size: 13.5px; color: var(--hero-encre-faible); }
+
+/* ── les familles de modules ────────────────────────────────────────────────────────────────── */
+.familles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+.famille {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 26px 24px;
+  border: 1px solid var(--hero-trait);
+  border-radius: 16px;
+  background: rgba(231, 236, 247, .025);
+}
+.famille-trait { width: 36px; height: 3px; border-radius: 2px; }
+.famille h3 { margin: 0; font-size: 19px; font-weight: 500; }
+.famille-propos { margin: 0; font-size: 14px; line-height: 1.55; }
+.famille-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.famille-modules li { display: flex; align-items: center; gap: 9px; font-size: 14.5px; }
+.famille-modules svg { flex: none; }
+.famille-modules a { color: var(--hero-encre); text-decoration: none; }
+.famille-modules a:hover { text-decoration: underline; }
+
+/* ── la liste des metiers ───────────────────────────────────────────────────────────────────── */
+.metiers-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--line);
+}
+.metiers-liste li { padding: 15px 22px; background: var(--panel); }
+.metiers-liste a { color: var(--ink); text-decoration: none; font-weight: 500; }
+.metiers-liste a:hover { color: var(--accent); }
+
+/* ── les tarifs ─────────────────────────────────────────────────────────────────────────────── */
+.tarifs-grille {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+  margin-top: 32px;
+}
+.tarifs-options { display: flex; flex-direction: column; gap: 22px; }
+
+/* ── la foire aux questions, sur deux colonnes ──────────────────────────────────────────────── */
+.faq-colonnes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 56px;
+}
+
+/* ══ LES ECRANS PRODUIT ═══════════════════════════════════════════════════════════════════════
+
+   ⚠ RECONSTITUTIONS, PAS CAPTURES. Dessines aux jetons REELS du frontal
+   (`frontend/src/styles.css`) : barre laterale #050914, encre #d3dcf0 et #8e9bbc, panneau #ffffff,
+   filet #dde3f0, encre #0b1020 et #4b5675, accent #3755e8 et #e8ecfd, rayon 12 px.
+
+   Les valeurs sont ecrites en dur plutot que par des jetons de la vitrine, et c'est voulu : ces
+   ecrans representent l'APPLICATION, dont les couleurs ne suivent pas le theme du visiteur. Un
+   ecran produit qui change de couleur avec les preferences du lecteur ne montrerait plus le
+   produit. C'est le cas sain pour `verifier-encre-sur-fond` : encre et fond voyagent ensemble. */
+.ecran {
+  position: relative;
+  border: 1px solid rgba(231, 236, 247, .14);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0f1626;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
+}
+.ecran-clair {
+  border-color: #dde3f0;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(11, 16, 32, .10);
+}
+
+.ecran-barre {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 14px;
+  background: #0b1020;
+  border-bottom: 1px solid #1a2338;
+}
+.ecran-pastille { width: 9px; height: 9px; border-radius: 50%; background: rgba(211, 220, 240, .22); }
+.ecran-titre { margin-left: 10px; font-size: 11.5px; color: #8e9bbc; }
+
+.ecran-corps { display: grid; grid-template-columns: 178px minmax(0, 1fr); }
+
+.ecran-menu { display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; background: #050914; }
+.ecran-etab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d3dcf0;
+}
+.ecran-logo {
+  width: 18px; height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #27d9d0, #7a2ee6);
+}
+.ecran-entree {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #8e9bbc;
+}
+.ecran-entree-active { background: rgba(55, 85, 232, .18); color: #d3dcf0; font-weight: 500; }
+.ecran-entree-eteinte { color: #5e6884; }
+.ecran-eteint {
+  margin-left: auto;
+  padding: 1px 5px;
+  border: 1px solid #1a2338;
+  border-radius: 5px;
+  font-size: 10px;
+  color: #5e6884;
+}
+
+.ecran-panneau { padding: 16px 18px; background: #f4f6fc; }
+.ecran-panneau-creux { background: #f4f6fc; }
+.ecran-panneau-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.ecran-panneau-titre { font-size: 15px; font-weight: 600; color: #0b1020; }
+.ecran-panneau-note { font-size: 11.5px; color: #4b5675; }
+.ecran-etiquette {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8ecfd;
+  color: #2b3fb8;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* ── l'ecran de caisse ──────────────────────────────────────────────────────────────────────── */
+.caisse { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 12px; }
+.caisse-lignes { display: flex; flex-direction: column; gap: 8px; }
+.caisse-ligne {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid #dde3f0;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12.5px;
+  color: #0b1020;
+}
+.caisse-qte {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #f1f4fb;
+  color: #4b5675;
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.caisse-prix { margin-left: auto; color: #4b5675; }
+.caisse-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 2px;
+  border-top: 1px dashed #dde3f0;
+  font-size: 12.5px;
+  color: #4b5675;
+}
+.caisse-total strong { font-size: 17px; color: #0b1020; }
+
+.caisse-paiements { display: flex; flex-direction: column; gap: 7px; }
+.caisse-paiement {
+  padding: 10px;
+  border: 1px solid #dde3f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0b1020;
+  font-size: 12.5px;
+  text-align: center;
+}
+.caisse-paiement-actif { background: #3755e8; border-color: #3755e8; color: #ffffff; font-weight: 500; }
+
+/* ── l'ecran de planning ────────────────────────────────────────────────────────────────────── */
+.planning { display: grid; grid-template-columns: 44px repeat(4, minmax(0, 1fr)); gap: 6px; }
+.planning-tete { font-size: 11px; color: #4b5675; text-align: center; padding-bottom: 4px; }
+.planning-heure { font-size: 10.5px; color: #5e6884; padding-top: 6px; }
+.planning-case {
+  min-height: 26px;
+  padding: 7px 6px;
+  border: 1px dashed #dde3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 10.5px;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.planning-case-prise {
+  border: 1px solid rgba(55, 85, 232, .28);
+  background: #e8ecfd;
+  color: #2b3fb8;
+}
+
+@media (max-width: 900px) {
+  .section-duo .duo { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .tarifs-grille { grid-template-columns: minmax(0, 1fr); }
+  .section-tete { flex-direction: column; align-items: flex-start; gap: 16px; }
+}
+
+/* Les groupes de la section Tarifs, poses par . */
+.famille-tarif { display: flex; flex-direction: column; gap: 12px; }
+.famille-tarif-tete { display: flex; align-items: center; gap: 10px; }
+.famille-tarif-tete h3 { margin: 0; font-size: 16px; font-weight: 500; }

@@ -52,6 +52,24 @@ final class SiteBlocks
                     ."activez ce dont vous avez besoin, laissez le reste éteint. Vous ne payez que ce que vous activez, "
                     ."et vous pouvez changer d'avis en cours de mois. Quatorze jours d'essai pour vous en assurer, sans carte bancaire."]),
 
+            /*
+             * ⚠ LES REPERES ENTRE CROCHETS SONT VOLONTAIRES, ET ILS DOIVENT LE RESTER JUSQU'A CE
+             * QUE MAXIME LES REMPLACE.
+             *
+             * C'est la seule bande de la page qui parle de preuve : des clients, un nombre
+             * d'etablissements. Personne d'autre que lui ne peut la remplir. Y mettre un chiffre
+             * plausible en attendant serait un mensonge sur une page de vente — et le genre de
+             * mensonge qu'on oublie d'enlever.
+             */
+            self::bloc('home.proof.items', BlockType::Items, 'Bande de preuve — sous le bandeau',
+                'Vos clients et vos chiffres. Remplacez les reperes entre crochets ; une entree par ligne.',
+                ['items' => [
+                    '[ VOS CLIENTS ]',
+                    '[ N ] etablissements',
+                    '17 modules activables',
+                    '14 jours d\'essai sans carte',
+                ]]),
+
             self::bloc('home.modules.title', BlockType::Line, 'Titre — section Modules', '',
                 ['text' => 'Un socle commun, des modules à la carte']),
 

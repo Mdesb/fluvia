@@ -2,7 +2,7 @@
 {% import 'website/_blocs.html.twig' as b %}
 
 {#
-  La page d'accueil (ED-10).
+  La page d'accueil (ED-10), refondue le 05/09 sur maquette validée par Maxime.
 
   ⚠ AUCUN PRIX N'EST ÉCRIT ICI, ET AUCUN BLOC N'EN PORTE. La section Tarifs se remplit depuis le
   catalogue réel (`tarifs.js` lit `/api/editor/plans`). Un tarif saisi dans un bloc de contenu
@@ -10,6 +10,12 @@
 
   Ce qui est éditable est le TEXTE ; la mise en page reste ici. C'est la ligne que Maxime a tracée le
   04/09 : administrer les mots, pas construire un site.
+
+  ⚠ CE QUI A CHANGÉ, ET POURQUOI. L'ancienne page enchaînait quatre sections de même valeur — titre,
+  paragraphe, rangée de cartes blanches — sans hiérarchie ni respiration, et sans jamais montrer le
+  produit. Trois manques comblés ici : on voit deux écrans de l'application, les modules sont rangés
+  par usage plutôt qu'alphabétiquement, et les bandes sombres et claires alternent pour donner un
+  rythme. Le reste — largeurs, alignements — découle de ça.
 #}
 
 {% block title %}{{ b.ligne(blocs['home.hero.title']|default(null))|striptags|trim ?: 'Fluvia' }}{% endblock %}
@@ -20,8 +26,9 @@
 
 {% block body %}
 
+  {# ══ 1. BANDEAU ═══════════════════════════════════════════════════════════════════════════ #}
   <section class="bande hero">
-    <div class="mesure hero-grille">
+    <div class="hero-grille">
 
       <div class="hero-dire">
         <p class="hero-jeton"><span class="hero-point"></span>14 jours d'essai — sans carte bancaire</p>
@@ -31,80 +38,109 @@
           <a class="btn btn-primaire btn-grand" href="#souscrire">Essayer gratuitement 14 jours</a>
           <a class="btn btn-fantome btn-grand" href="#tarifs">Voir les tarifs</a>
         </p>
-        <p class="hero-gages"><span>Sans engagement</span><span>Hébergé en France</span><span>Vos données restent vôtres</span></p>
       </div>
 
       {#
-        LA SCENE — decorative, donc masquee aux lecteurs d'ecran.
+        L'ÉCRAN DE CAISSE — décoratif, donc masqué aux lecteurs d'écran.
 
-        Elle ne dit rien que le chapo ne dise deja, et le prix qu'elle affiche est un DECOR : le
-        tarif qui engage est celui du catalogue, plus bas. Une scene lue a voix haute reciterait
-        huit modules et un montant sans contexte.
+        Il ne dit rien que le chapô ne dise déjà, et ses montants sont un décor : les tarifs qui
+        engagent sont plus bas, lus sur le catalogue. Lu à voix haute, cet écran réciterait des
+        lignes de vente qui n'existent pas.
       #}
       <div class="hero-scene" aria-hidden="true">
-        <div class="scene-cadre">
-          <div class="scene-barre">
-            <span class="scene-pastille"></span>
-            <span class="scene-pastille"></span>
-            <span class="scene-pastille"></span>
-            <span class="scene-titre">Fluvia — votre plateforme</span>
-          </div>
+        {% include 'website/_ecran_caisse.html.twig' %}
+      </div>
+    </div>
 
-          <div class="scene-corps">
-            <p class="scene-legende">Vous activez ce dont vous avez besoin.</p>
+    {#
+      La bande de preuve : ce qui manquait le plus à un acheteur devant justifier son choix.
 
-            <ul class="scene-modules">
-              <li style="--rang: 0">Billetterie</li>
-              <li style="--rang: 1">Réservation</li>
-              <li style="--rang: 2">Contrôle d'accès</li>
-              <li style="--rang: 3">Caisse</li>
-              <li style="--rang: 4">Boutique en ligne</li>
-              <li style="--rang: 5">CRM</li>
-              <li style="--rang: 6">Facturation</li>
-              <li style="--rang: 7">Statistiques</li>
-            </ul>
-
-            <p class="scene-eteint">Les autres restent éteints — et ne se facturent pas.</p>
-          </div>
-
-          <div class="scene-pied">
-            <span>Votre total</span>
-            <strong class="scene-somme"><span class="scene-chiffres">
-              <span>39,90 €</span>
-              <span>58,90 €</span>
-              <span>77,90 €</span>
-              <span>96,90 €</span>
-            </span></strong>
-          </div>
+      ⚠ ELLE NE S'AFFICHE PAS VIDE. `ContentBlocks::valeurs()` ne lit que la base : un bloc déclaré
+      et jamais rempli n'a pas de valeur, et la bande aurait rendu un bandeau sombre sans contenu —
+      ce qui se lit comme un défaut d'affichage, pas comme une section à remplir.
+    #}
+    {% if blocs['home.proof.items'].items|default([]) is not empty %}
+      <div class="hero-preuve">
+        <div class="hero-preuve-corps">
+          {{ b.items(blocs['home.proof.items'], 'preuve-items') }}
         </div>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ══ 2. LE SOCLE ══════════════════════════════════════════════════════════════════════════ #}
+  <section class="bande section-duo" id="modules">
+    <div class="duo">
+      <div class="duo-dire">
+        <p class="sur-titre">Le socle</p>
+        {% if blocs['home.modules.title'] is defined %}<h2>{{ b.ligne(blocs['home.modules.title']) }}</h2>{% endif %}
+        {{ b.paragraphes(blocs['home.modules.lead']|default(null), null) }}
+      </div>
+
+      {# Deux modules y sont marqués « éteint » : la section le dit, l'écran le montre. #}
+      <div class="duo-scene" aria-hidden="true">
+        {% include 'website/_ecran_planning.html.twig' %}
       </div>
     </div>
   </section>
 
-  <section class="bande" id="modules">
-    <div class="mesure">
-      {% if blocs['home.modules.title'] is defined %}<h2>{{ b.ligne(blocs['home.modules.title']) }}</h2>{% endif %}
-      {{ b.paragraphes(blocs['home.modules.lead']|default(null), null) }}
+  {# ══ 3. LES MODULES, RANGÉS PAR USAGE ═════════════════════════════════════════════════════ #}
+  <section class="bande bande-sombre" id="familles">
+    <div class="section-tete">
+      <div>
+        <p class="sur-titre">Les modules</p>
+        <h2>{{ familles|length }} familles, {{ modulesParFamille|reduce((total, m) => total + m|length, 0) }} modules.</h2>
+      </div>
+      <p class="section-tete-note">
+        Rangés par ce qu'ils vous font faire, pas par ordre alphabétique. Chacun s'active seul.
+      </p>
     </div>
 
-    {{ b.cartes(blocs['home.modules.cards']|default(null)) }}
+    <div class="familles">
+      {% for famille in familles %}
+        <div class="famille">
+          <span class="famille-trait" style="background: {{ famille.teinte }}"></span>
+          <h3>{{ famille.titre }}</h3>
+          <p class="famille-propos">{{ famille.propos }}</p>
+          <ul class="famille-modules">
+            {% for module in modulesParFamille[famille.cle]|default([]) %}
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="{{ famille.teinte }}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <a href="{{ path('website_module', {slug: module.slug}) }}">{{ module.libelle }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
   </section>
 
-  <section class="bande bande-creuse" id="metiers">
-    <div class="mesure">
-      {% if blocs['home.trades.title'] is defined %}<h2>{{ b.ligne(blocs['home.trades.title']) }}</h2>{% endif %}
-      {{ b.paragraphes(blocs['home.trades.lead']|default(null), null) }}
-    </div>
+  {# ══ 4. MÉTIERS ═══════════════════════════════════════════════════════════════════════════ #}
+  <section class="bande section-duo" id="metiers">
+    <div class="duo">
+      <div class="duo-dire">
+        <p class="sur-titre">Votre métier</p>
+        {% if blocs['home.trades.title'] is defined %}<h2>{{ b.ligne(blocs['home.trades.title']) }}</h2>{% endif %}
+        {{ b.paragraphes(blocs['home.trades.lead']|default(null), null) }}
+        {{ b.paragraphes(blocs['home.trades.note']|default(null), 'note') }}
+      </div>
 
-    {{ b.items(blocs['home.trades.items']|default(null), 'jetons') }}
-
-    <div class="mesure">
-      {{ b.paragraphes(blocs['home.trades.note']|default(null), 'note') }}
+      <ul class="metiers-liste" role="list">
+        {% for metier in metiers %}
+          <li>
+            <a href="{{ path('website_metier', {slug: metier.slug}) }}">{{ metier.nom }}</a>
+          </li>
+        {% endfor %}
+      </ul>
     </div>
   </section>
 
-  <section class="bande" id="tarifs">
+  {# ══ 5. TARIFS ════════════════════════════════════════════════════════════════════════════ #}
+  <section class="bande bande-claire" id="tarifs">
     <div class="mesure">
+      <p class="sur-titre">Tarifs</p>
       {% if blocs['home.pricing.title'] is defined %}<h2>{{ b.ligne(blocs['home.pricing.title']) }}</h2>{% endif %}
       {{ b.paragraphes(blocs['home.pricing.lead']|default(null), null) }}
     </div>
@@ -115,24 +151,28 @@
       page qui reconnaît ne pas pouvoir les afficher maintenant.
     #}
     <div id="tarifs-etat" class="etat" role="status">Chargement des tarifs…</div>
-    <div id="tarifs-formules" class="grille" hidden></div>
 
-    <div class="mesure">
-      <h3 class="sous-titre">Options</h3>
-      <div id="tarifs-options-etat" class="etat" role="status" hidden></div>
-    </div>
-    <ul id="tarifs-options" class="options" role="list" hidden></ul>
+    <div class="tarifs-grille">
+      <div id="tarifs-formules" class="formules" hidden></div>
 
-    <div class="mesure">
-      <p class="note">Prix hors taxes, par établissement et par mois.</p>
+      <div class="tarifs-options">
+        <div id="tarifs-options-etat" class="etat" role="status" hidden></div>
+        <div id="tarifs-options" hidden></div>
+      </div>
     </div>
+
+    <p class="note">Prix hors taxes, par établissement et par mois.</p>
   </section>
 
-  <section class="bande bande-creuse" id="souscrire">
+  {# ══ 6. L'ESSAI ═══════════════════════════════════════════════════════════════════════════ #}
+  <section class="bande bande-sombre" id="souscrire">
     <div class="mesure">
       {% if blocs['home.funnel.title'] is defined %}<h2>{{ b.ligne(blocs['home.funnel.title']) }}</h2>{% endif %}
-      {{ b.etapes(blocs['home.funnel.steps']|default(null)) }}
+    </div>
 
+    {{ b.etapes(blocs['home.funnel.steps']|default(null)) }}
+
+    <div class="mesure">
       {#
         LE FORMULAIRE NE S'AFFICHE PAS S'IL NE PEUT RIEN ENVOYER. `openCart` refuse un panier sans
         formule : tant que le catalogue n'en porte aucune, on le dit, plutôt que de montrer des
@@ -142,45 +182,43 @@
     </div>
 
     {#
-      ⚠ LE FORMULAIRE EST HORS DE LA COLONNE DE LECTURE, ET C'EST VOULU.
-
-      Le titre et les etapes ci-dessus sont de la prose : ils gardent une mesure. Le formulaire, lui,
-      porte dix-sept choix — dans une colonne de 68ch ils s'empilent sur dix-sept lignes et le
-      visiteur abandonne avant la fin. Deux objets differents, deux largeurs utiles.
+      ⚠ LE FORMULAIRE EST HORS DE LA COLONNE DE LECTURE, ET C'EST VOULU. Le titre et les étapes
+      ci-dessus sont de la prose : ils gardent une mesure. Le formulaire porte dix-sept choix — dans
+      une colonne de 68ch ils s'empilent et le visiteur abandonne avant la fin.
     #}
     <form id="tunnel-formulaire" class="tunnel" hidden novalidate>
-        <fieldset>
-          <legend>Votre formule</legend>
-          <div id="tunnel-formules" class="choix-liste"></div>
-        </fieldset>
+      <fieldset>
+        <legend>Votre formule</legend>
+        <div id="tunnel-formules" class="choix-liste"></div>
+      </fieldset>
 
-        <fieldset id="tunnel-bloc-options">
-          <legend>Les options que vous ajoutez</legend>
-          <div id="tunnel-options" class="choix-liste"></div>
-        </fieldset>
+      <fieldset id="tunnel-bloc-options">
+        <legend>Les options que vous ajoutez</legend>
+        <div id="tunnel-options" class="choix-liste"></div>
+      </fieldset>
 
-        <fieldset>
-          <legend>Vous</legend>
-          <p class="champ">
-            <label for="tunnel-structure">Nom de votre structure</label>
-            <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
-          </p>
-          <p class="champ">
-            <label for="tunnel-email">Votre adresse e-mail</label>
-            <input id="tunnel-email" name="email" type="email" required autocomplete="email">
-            <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
-          </p>
-        </fieldset>
-
-        <p id="tunnel-total" class="total" role="status" hidden></p>
-        <p id="tunnel-message" class="etat" role="status"></p>
-
-        <p class="actions">
-          <button type="submit" class="btn btn-fantome btn-grand">Voir mon total</button>
-          <button type="submit" id="tunnel-envoyer" class="btn btn-primaire btn-grand" hidden>
-            Recevoir mon accès
-          </button>
+      <fieldset>
+        <legend>Vous</legend>
+        <p class="champ">
+          <label for="tunnel-structure">Nom de votre structure</label>
+          <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
         </p>
+        <p class="champ">
+          <label for="tunnel-email">Votre adresse e-mail</label>
+          <input id="tunnel-email" name="email" type="email" required autocomplete="email">
+          <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
+        </p>
+      </fieldset>
+
+      <p id="tunnel-total" class="total" role="status" hidden></p>
+      <p id="tunnel-message" class="etat" role="status"></p>
+
+      <p class="actions">
+        <button type="submit" class="btn btn-fantome btn-grand">Voir mon total</button>
+        <button type="submit" id="tunnel-envoyer" class="btn btn-primaire btn-grand" hidden>
+          Recevoir mon accès
+        </button>
+      </p>
     </form>
 
     <div class="mesure">
@@ -196,13 +234,13 @@
   <section class="bande" id="questions">
     <div class="mesure">
       <h2>Questions fréquentes</h2>
-      <dl class="faq">
-        {% for q in questions %}
-          <dt>{{ q.question }}</dt>
-          <dd>{{ q.reponse }}</dd>
-        {% endfor %}
-      </dl>
     </div>
+    <dl class="faq faq-colonnes">
+      {% for q in questions %}
+        <dt>{{ q.question }}</dt>
+        <dd>{{ q.reponse }}</dd>
+      {% endfor %}
+    </dl>
   </section>
 
   {% if derniers|length > 0 %}
@@ -233,6 +271,14 @@
 {% endblock %}
 
 {% block javascripts %}
+{#
+  ⚠ LA TABLE DE RANGEMENT VIENT DU SERVEUR, ELLE N'EST PAS RECOPIÉE EN JAVASCRIPT.
+
+  `tarifs.js` lit les prix du catalogue réel à l'exécution ; il doit savoir dans quelle famille poser
+  chaque option. Une seconde table écrite en JavaScript divergerait au premier module ajouté, et la
+  page afficherait un rangement différent de celui que le serveur croit avoir décidé.
+#}
+<script type="application/json" id="familles-modules">{{ famillesPourLeNavigateur|json_encode(constant('JSON_HEX_TAG'))|raw }}</script>
 <script src="/tarifs.js" defer></script>
 <script src="/tunnel.js" defer></script>
 {% endblock %}
