@@ -287,6 +287,50 @@ function composition(formulaire) {
   }
 }
 
+/**
+ * Fait monter le montant jusqu'a sa valeur, plutot que de le poser d'un coup.
+ *
+ * ⚠ ON ANIME L'ARRIVEE, PAS LE CALCUL. Le tunnel promet en toutes lettres que « c'est notre serveur
+ * qui le calcule, pas cette page ». Cette fonction interpole entre 0 et un montant DEJA RENDU par le
+ * serveur : elle n'additionne rien. Un compteur qui totaliserait les cases cochees cote navigateur
+ * romprait la promesse, et le premier ecart avec le montant facture serait releve par le prospect.
+ *
+ * ⚠ QUI DEMANDE MOINS DE MOUVEMENT VOIT LE MONTANT TOUT DE SUITE. Un prix n'est pas une decoration :
+ * l'animation ne doit jamais faire attendre quelqu'un qui veut le lire.
+ */
+function afficherLeTotal(recap, centimes) {
+  const phrase = (montant) =>
+    `${prix(montant)} par mois à l’issue de vos 14 jours d’essai. Rien n’est prélevé aujourd’hui.`
+
+  const sobre = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+  if (sobre || centimes <= 0) {
+    recap.textContent = phrase(centimes)
+    return
+  }
+
+  const duree = 520
+  const depart = performance.now()
+
+  const pas = (maintenant) => {
+    const avancee = Math.min((maintenant - depart) / duree, 1)
+    // Une courbe qui ralentit a l'arrivee : le dernier chiffre se lit, il ne defile pas.
+    const adouci = 1 - Math.pow(1 - avancee, 3)
+
+    recap.textContent = phrase(Math.round(centimes * adouci))
+
+    if (avancee < 1) {
+      requestAnimationFrame(pas)
+    } else {
+      // ⚠ ON REPOSE LA VALEUR EXACTE. L'arrondi de la derniere image pourrait tomber a un centime
+      // pres du montant reel — sur un prix, ce n'est pas un detail d'affichage.
+      recap.textContent = phrase(centimes)
+    }
+  }
+
+  requestAnimationFrame(pas)
+}
+
 async function calculerLeTotal(formulaire) {
   const message = document.getElementById('tunnel-message')
   const recap = document.getElementById('tunnel-total')
@@ -303,9 +347,9 @@ async function calculerLeTotal(formulaire) {
   }
 
   message.textContent = ''
-  recap.textContent = `${prix(panier.monthlyPriceCents)} par mois à l’issue de vos 14 jours d’essai. Rien n’est prélevé aujourd’hui.`
   recap.hidden = false
   envoi.hidden = false
+  afficherLeTotal(recap, panier.monthlyPriceCents)
 }
 
 async function demanderLessai(formulaire) {

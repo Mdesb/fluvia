@@ -992,3 +992,64 @@ input:focus-visible {
 .page-accueil .bande > .mesure { max-width: 1280px; }
 .page-accueil .mesure > h2,
 .page-accueil .mesure > p { max-width: var(--mesure); }
+
+/* ══ LES ANIMATIONS ═══════════════════════════════════════════════════════════════════════════
+
+   Validees sur maquette avec Maxime le 05/09. Le principe : on n'anime que ce qui DIT quelque
+   chose. Une page qui bouge partout fait bon marche ; ce qui donne de la vie, c'est le mouvement
+   qui raconte le produit — une vente qui se compose, un creneau qui se reserve.
+
+   ⚠ TOUTES SE FIGENT SUR L'ETAT UTILE POUR QUI DEMANDE MOINS DE MOUVEMENT : la vente complete, le
+   creneau pris, les familles visibles. Se figer sur l'etat initial donnerait une page qui a l'air
+   en panne — et c'est l'erreur classique de ce reglage. */
+
+/* La vente se compose : chaque ligne arrive a son tour, puis tout se rejoue. */
+@keyframes caisse-ligne {
+  0%, 4% { opacity: 0; transform: translateY(6px); }
+  12%, 96% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+.caisse-ligne { animation: caisse-ligne 9s ease-out infinite both; }
+.caisse-ligne:nth-child(2) { animation-delay: .7s; }
+.caisse-ligne:nth-child(3) { animation-delay: 1.4s; }
+
+/* Le total suit les lignes, par crans. */
+.caisse-somme { display: block; height: 1.5em; overflow: hidden; }
+.caisse-chiffres { display: block; animation: caisse-total 9s steps(1, end) infinite; }
+.caisse-chiffres > span { display: block; height: 1.5em; line-height: 1.5em; }
+@keyframes caisse-total {
+  0%, 30% { transform: translateY(0); }
+  38%, 60% { transform: translateY(-1.5em); }
+  68%, 100% { transform: translateY(-3em); }
+}
+
+/* Un creneau libre passe a « pris » : la reservation se fait sous les yeux. */
+@keyframes creneau-pris {
+  0%, 22% { background: var(--panel); border-style: dashed; border-color: var(--line); color: transparent; }
+  30%, 92% { background: #e8ecfd; border-style: solid; border-color: rgba(55, 85, 232, .28); color: #2b3fb8; }
+  100% { background: var(--panel); border-style: dashed; border-color: var(--line); color: transparent; }
+}
+.planning-case-anime { animation: creneau-pris 7s ease-in-out infinite both; }
+
+/* Les familles se revelent en leger decalage a l'arrivee. */
+@keyframes famille-monte {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.famille { animation: famille-monte .6s ease-out both; }
+.famille:nth-child(2) { animation-delay: .12s; }
+.famille:nth-child(3) { animation-delay: .24s; }
+.famille:nth-child(4) { animation-delay: .36s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .caisse-ligne { animation: none; opacity: 1; transform: none; }
+  .caisse-chiffres { animation: none; transform: translateY(-3em); }
+  .famille { animation: none; }
+  .planning-case-anime {
+    animation: none;
+    background: #e8ecfd;
+    border-style: solid;
+    border-color: rgba(55, 85, 232, .28);
+    color: #2b3fb8;
+  }
+}
