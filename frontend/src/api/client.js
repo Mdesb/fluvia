@@ -2066,6 +2066,33 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  // LA REVENTE PAR DES PARTENAIRES EN LIGNE — sept routes servies, aucune appelee jusqu'ici.
+  //
+  // ⚠ LES NOMS DE COLLECTION NE SE DEVINENT PAS. Le partenaire est `boutique_partenaire_otas`
+  // (il appartient a la Boutique) et le reversement `reversement_otas` — pas `musee_*`, malgre
+  // l'entite `Musee\Entity\Reversement`. Verifies au routeur.
+  partenairesOta: () =>
+    request('/api/boutique_partenaire_otas', { query: { itemsPerPage: 200 } }),
+  creerPartenaireOta: (corps) =>
+    request('/api/boutique_partenaire_otas', { method: 'POST', body: corps, ld: true }),
+  majPartenaireOta: (id, corps) =>
+    request(`/api/boutique_partenaire_otas/${id}`, { method: 'PATCH', body: corps }),
+  reversementsOta: () =>
+    request('/api/reversement_otas', { query: { itemsPerPage: 200 } }),
+  // ⚠ LE MONTANT N'EST PAS FOURNI : le serveur le calcule sur les ventes de la periode. C'est ce
+  // qui permet de le refaire a l'identique si le partenaire le conteste.
+  // ⚠ `ld: true` PARCE QUE CETTE ROUTE DESERIALISE. Elle ne porte pas `input: false` :
+  // elle lit le corps comme une operation standard et n'accepte donc que `application/ld+json`.
+  // Sans le drapeau, 415 SYSTEMATIQUE — pas seulement dans certains cas. Le garde-fou n°11
+  // l'a attrape avant la livraison, une heure apres qu'un pair l'a etendu aux routes sur
+  // mesure.
+  //
+  // ⚠ NE PAS AJOUTER CE DRAPEAU PARTOUT : sur une operation qui ne deserialise pas, il est
+  // INERTE, et l'ecrire fait croire que l'appel est verifie alors qu'il ne l'est pas.
+  genererReversement: (corps) =>
+    request('/api/musee/reversements/generer', { method: 'POST', body: corps, ld: true }),
+  marquerReversementVerse: (id) =>
+    request(`/api/musee/reversements/${id}/marquer-verse`, { method: 'POST', body: {} }),
   // `POST /boutique/vitrines` existe depuis le debut (droit `boutique.gerer_vitrine`) et n'etait
   // appele de nulle part : l'ecran savait renommer une vitrine, changer ses couleurs et lire ses
   // remboursements, mais un etablissement neuf n'avait aucun moyen d'en ouvrir une — donc aucune

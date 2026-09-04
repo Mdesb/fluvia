@@ -4,6 +4,7 @@ import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
 import RetraitsClickCollect from '../components/RetraitsClickCollect.jsx'
+import PartenairesOta from '../components/PartenairesOta.jsx'
 import { api } from '../api/client.js'
 
 // Boutique en ligne (M3, vue admin) : demandes de remboursement, comptes clients, vitrines.
@@ -25,6 +26,7 @@ export default function Boutique({ etabActif, droits }) {
           ['retraits', 'Retraits en boutique'],
           ['comptes', 'Comptes clients'],
           ['vitrines', 'Vitrines'],
+          ['partenaires', 'Partenaires de revente'],
         ]}
         actif={sousOnglet}
         onChange={setSousOnglet}
@@ -36,6 +38,10 @@ export default function Boutique({ etabActif, droits }) {
 
       {sousOnglet === 'retraits' && (
         <RetraitsClickCollect etabActif={etabActif} droits={droits} />
+      )}
+
+      {sousOnglet === 'partenaires' && (
+        <PartenairesOta etabActif={etabActif} droits={droits} />
       )}
 
       {sousOnglet === 'comptes' && (

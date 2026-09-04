@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Liste, { dateHeureFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
+import ReversementsOta from '../components/ReversementsOta.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -45,6 +46,7 @@ export default function Musee({ etabActif, droits }) {
           ['visites', 'Visites guidées'],
           ['groupes', 'Groupes scolaires'],
           ['expositions', 'Expositions'],
+          ['reversements', 'Reversements'],
         ]}
         actif={onglet}
         onChange={setOnglet}
@@ -53,6 +55,10 @@ export default function Musee({ etabActif, droits }) {
       {onglet === 'salles' && <SallesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'groupes' && <GroupesSection etabActif={etabActif} droits={droits} />}
+      {onglet === 'reversements' && (
+        <ReversementsOta etabActif={etabActif} droits={droits} />
+      )}
+
       {onglet === 'expositions' && (
         <Liste
           titre="Expositions"
