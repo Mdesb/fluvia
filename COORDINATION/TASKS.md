@@ -769,6 +769,42 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ⚠ 8.8 bis — Les quatre arbitrages de Maxime du 04/09
+
+**(a) L'encaissement hors comptoir → un système de CONFIRMATION.** Ses mots : « on met un système
+où il faut une confirmation de la réservation, par exemple 24 heures avant le début de la session,
+et lors de la confirmation il faut le paiement ; pour toutes les réservations de moins de 24 heures,
+le paiement est demandé dès le départ ».
+
+Deux précisions qu'il a données ensuite, et elles changent la forme de la chose :
+
+  · **le paiement se construit maintenant, le prestataire viendra après.** « On est sur un
+    environnement de préproduction, c'est normal qu'il n'y ait aucun mode de paiement. On peut faire
+    les mécanismes. Je te dirai quand on prendra le prestataire. » Donc : point d'accroche, pas de
+    branchement. E-3 reste externe.
+  · **⚠ CE QUI SE PASSE À L'EXPIRATION EST UN PARAMÈTRE, PAS UN CHOIX FIGÉ.** « Ces décisions sont
+    des décisions métier, il faut laisser le choix à l'exploitant. » Libérer le créneau, le garder
+    bloqué, ou le libérer en facturant : trois comportements à offrir, aucun à imposer.
+
+État : **à construire**. Un patron d'expiration à échéance existe déjà et se copie
+(`PromotionListeAttenteHandler::expirerPromotionsDepassees`). ⚠ Et la réservation naît aujourd'hui
+`StatutReservation::Confirmee` — il n'existe aucun état « à confirmer ».
+
+**(b) L'organisateur doit tout — FAIT le 04/09.** Ses mots : « un joueur qui rejoint rejoint la
+réservation GLOBALE… c'est le risque de ne pas avoir le montant global payé », puis, sur la portée :
+**l'organisateur doit tout**. On garde la partie ouverte ; les parts deviennent indicatives.
+
+⚠ **CA-3 est supersédé pour le padel**, et c'est une décision, pas une dérive. Le paiement partagé
+du socle (RG-M5-10, CA-13) n'est pas touché : `/payer` marche toujours.
+
+**(c) Produit obligatoire sur une vente de réservation.** Délégué à `allaccess-a9` (§3 sexies D-2).
+
+**(d) §8.5 — la garde du délai SEPA aux DEUX endroits.** Maxime ne voyait pas le périmètre ; il est
+étroit et latent : le prélèvement des abonnements, rien d'autre, et il s'arme au premier abonnement
+hebdomadaire ou au premier créancier au-delà de 30 jours. Délégué à `allaccess-c0` (§3 sexies D-1).
+
+### ⚠ Ce que (b) disait avant d'être corrigé
+
 **(b) `RejoindrePartieProcessor:88` marque un joueur `Paye` sans créer la moindre vente.**
 Le commentaire dit « paiement à l'inscription (§4.3) ». Il n'y a pas de paiement : juste un statut.
 ⚠ À distinguer de `PayerPartProcessor`, qui ne fait lui aussi qu'un changement de statut mais **le

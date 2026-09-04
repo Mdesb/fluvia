@@ -80,6 +80,26 @@ function pourSaisieLocale(iso) {
 // raison n'est pas l'anticipation : c'est que le moment où l'on ouvrira cette liste est celui d'une
 // contestation de facture d'absence, et « présent (tourniquet, 14h02) » ne se défend pas comme
 // « présent (émargé à la main) ». Une présence sans provenance oblige à croire quelqu'un sur parole.
+// LES TROIS ÉTATS DE PAIEMENT D'UNE PART, ET L'ÉCRAN N'EN DISAIT QUE DEUX.
+//
+// `impute_organisateur` existe depuis toujours — `BasculerNoShowCommand` y bascule les parts non
+// réglées d'un no-show — et il tombait dans le « En attente » du `else`. Un joueur qui ne doit
+// rien s'affichait donc comme un impayé, avec un bouton pour régler sa part.
+//
+// ⚠ Depuis l'arbitrage de Maxime sur R15 (b), c'est le cas NORMAL d'une partie de padel :
+// l'organisateur est redevable du montant global, les autres ne doivent rien.
+const LIBELLE_PART = {
+  paye: 'Payé',
+  en_attente: 'En attente',
+  impute_organisateur: 'À la charge de l’organisateur',
+}
+
+const BADGE_PART = {
+  paye: 'good',
+  en_attente: 'mut',
+  impute_organisateur: 'info',
+}
+
 const LIBELLE_SOURCE = {
   emargement_manuel: 'émargé à la main',
   passage_acces: 'tourniquet',
@@ -1077,10 +1097,14 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                           <span className="nm">{labelBeneficiaire(p.personne) || court(p.id)}</span>
                                           {p.estOrganisateur && <span className="badge">organisateur</span>}
                                           <span className="mono">{euros(p.partMontant)}</span>
-                                          <span className={`badge ${p.statutPaiement === 'paye' ? 'good' : 'mut'}`}>
-                                            {p.statutPaiement === 'paye' ? 'Payé' : 'En attente'}
+                                          {/* ⚠ TROIS ÉTATS, ET L'ÉCRAN N'EN DISAIT QUE DEUX.
+                                              `impute_organisateur` tombait dans « En attente » —
+                                              un joueur qui ne doit rien s'affichait comme un
+                                              impayé, avec un bouton pour régler sa part. */}
+                                          <span className={`badge ${BADGE_PART[p.statutPaiement] ?? 'mut'}`}>
+                                            {LIBELLE_PART[p.statutPaiement] ?? 'En attente'}
                                           </span>
-                                          {p.statutPaiement !== 'paye' && (
+                                          {p.statutPaiement === 'en_attente' && (
                                             <button
                                               type="button"
                                               className="btn sm"

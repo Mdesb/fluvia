@@ -40,21 +40,62 @@ final class PartieOuverteTest extends PadelApiTestCase
         $reservation = $client->getResponse()->toArray();
         self::assertCount(4, $reservation['participants'] ?? []);
 
-        // Les 2 joueurs initiaux (organisateur + 2e joueur à la création) règlent leur part via le
-        // paiement partagé générique du socle ; les 2 qui ont rejoint la partie ont payé automatiquement
-        // à l'inscription (§4.3, RejoindrePartieProcessor).
+        // ⚠ CE QUI SUIT A ÉTÉ RÉÉCRIT LE 04/09, ET LE TEST PRÉCÉDENT AVAIT DEUX DÉFAUTS.
+        //
+        // Il bouclait sur tous les participants, appelait `/payer` sur ceux qui ne l'étaient pas,
+        // puis affirmait « chaque joueur a payé sa part ». Il FABRIQUAIT donc la précondition qu'il
+        // annonçait : il serait resté vert quel que soit le statut posé par le processeur. Et son
+        // commentaire affirmait que les joueurs ayant rejoint « ont payé automatiquement à
+        // l'inscription » — il n'y avait aucun paiement, juste un statut posé à la main.
+        //
+        // ⚠ ARBITRAGE DE MAXIME (R15 b) : **l'organisateur doit tout**. Un joueur qui rejoint une
+        // partie ouverte ne doit rien à l'établissement ; sa part est indicative, un partage entre
+        // amis. CA-3 est donc supersédé pour le padel, et c'est une décision, pas une dérive.
+        $parStatut = [];
         foreach ($reservation['participants'] as $participant) {
-            if ($participant['statutPaiement'] !== 'paye') {
-                $client->request('POST', '/api/reservation/participants/' . $participant['id'] . '/payer', $entete + ['json' => []]);
-                self::assertResponseIsSuccessful();
+            $parStatut[$participant['statutPaiement']] = ($parStatut[$participant['statutPaiement']] ?? 0) + 1;
+        }
+
+        self::assertSame(
+            1,
+            $parStatut['en_attente'] ?? 0,
+            'un seul redevable : l’organisateur. Les autres ne doivent rien à l’établissement.',
+        );
+        self::assertSame(
+            3,
+            $parStatut['impute_organisateur'] ?? 0,
+            'les trois autres sont à la charge de l’organisateur — et surtout PAS « payé » : '
+            . 'rejoindre une partie ne fait entrer aucun argent.',
+        );
+        self::assertSame(
+            0,
+            $parStatut['paye'] ?? 0,
+            'personne n’est réglé tant qu’aucun encaissement n’a eu lieu',
+        );
+
+        // ⚠ ET LE MÉCANISME DU SOCLE N'EST PAS TOUCHÉ : `/payer` marche toujours, pour l'agent qui
+        // encaisse la part d'un joueur au guichet. C'est le paiement partagé RG-M5-10, que Maxime
+        // n'a pas remis en cause — il a tranché sur les parties de padel.
+        $organisateur = null;
+        foreach ($reservation['participants'] as $participant) {
+            if ($participant['statutPaiement'] === 'en_attente') {
+                $organisateur = $participant['id'];
+                break;
             }
         }
+        self::assertNotNull($organisateur, 'témoin : l’organisateur est bien identifiable');
+
+        $client->request('POST', '/api/reservation/participants/' . $organisateur . '/payer', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful();
 
         $client->request('GET', '/api/reservations/' . $idReservation, $entete);
         self::assertResponseIsSuccessful();
+        $apres = [];
         foreach ($client->getResponse()->toArray()['participants'] as $participant) {
-            self::assertSame('paye', $participant['statutPaiement'], 'CA-3 : chaque joueur a payé sa part.');
+            $apres[$participant['statutPaiement']] = ($apres[$participant['statutPaiement']] ?? 0) + 1;
         }
+        self::assertSame(1, $apres['paye'] ?? 0, 'la part réglée bascule bien, et elle seule');
+        self::assertSame(3, $apres['impute_organisateur'] ?? 0, 'les autres ne bougent pas');
     }
 
     public function testCa5NiveauNonValideNonEligible(): void

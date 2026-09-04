@@ -180,13 +180,22 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         }
         $this->em->persist($reservation);
 
+        // ⚠ LES PARTS SONT INDICATIVES, ET SEUL L'ORGANISATEUR DOIT. Arbitrage de Maxime sur
+        // R15 (b) : « l'organisateur reste redevable du montant global ». Laisser les trois autres
+        // en `EnAttente` afficherait trois impayés que personne ne réclamera jamais — et ferait
+        // relancer des joueurs qui ne doivent rien.
+        //
+        // La créance réelle est `Reservation::$montantDu`, portée par la réservation elle-même.
         $partBase = number_format($prix / 4, 2, '.', '');
         foreach ($joueurs as $index => $joueur) {
+            $organisateurDuGroupe = $index === 0;
             $participant = new ParticipantReservation();
             $participant->setPersonne($joueur)
-                ->setEstOrganisateur($index === 0)
+                ->setEstOrganisateur($organisateurDuGroupe)
                 ->setPartMontant($partBase)
-                ->setStatutPaiement(StatutPaiementParticipant::EnAttente);
+                ->setStatutPaiement($organisateurDuGroupe
+                    ? StatutPaiementParticipant::EnAttente
+                    : StatutPaiementParticipant::ImputeOrganisateur);
             $reservation->addParticipant($participant);
             $this->em->persist($participant);
         }
