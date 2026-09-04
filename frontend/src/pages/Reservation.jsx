@@ -235,6 +235,22 @@ export default function Reservation({ etabActif, droits = [], session }) {
     return m
   }, [reservations])
 
+  // Les places qui OCCUPENT mais ne sont PAS ENCORE PAYÉES (R15 a).
+  //
+  // ⚠ SOUS-ENSEMBLE DE `occupation`, PAS UNE AUTRE MESURE. `a_confirmer` occupe — c'est écrit
+  // au-dessus, et c'est ce qui empêche la sur-réservation. Ce compte-ci ne dit pas « combien de
+  // places sont prises » mais « combien d'entre elles peuvent disparaître à l'échéance », ce qui
+  // n'est visible nulle part dans la grille.
+  const aConfirmer = useMemo(() => {
+    const m = {}
+    for (const r of reservations) {
+      if (r.statut !== 'a_confirmer') continue
+      const cid = idDepuisIri(r.creneau)
+      if (cid) m[cid] = (m[cid] || 0) + (r.quantity ?? 1)
+    }
+    return m
+  }, [reservations])
+
   // Les instances d'un type de ressource — « la chambre 214 » sous « chambre double ».
   //
   // ⚠ CALCULÉ ICI ET NON DEMANDÉ AU SERVEUR : la liste des ressources est déjà chargée, et
@@ -686,6 +702,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
           creneaux={creneaux || []}
           nonLu={creneaux === null}
           occupation={occupation}
+          aConfirmer={aConfirmer}
           ressources={ressources || []}
           onCreneau={(cr) => {
             // Cliquer un bloc bascule sur la liste du jour concerne : la grille sert a TROUVER,

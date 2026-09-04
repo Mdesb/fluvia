@@ -1,0 +1,10 @@
+[Unit]
+Description=Recuperation quotidienne des piles de test abandonnees
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+# Si la machine dormait a 4 h, on rattrape au demarrage plutot que de sauter le jour.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

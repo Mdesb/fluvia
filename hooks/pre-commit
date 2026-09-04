@@ -228,6 +228,9 @@ lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
 lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
 lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
 lancer_front verifier-cles-doubles.mjs  "Clés en double (n°37)"
+# `.split('/').pop()` reecrit `idDe` sans porter son nom : §8.3 comptait des NOMS et en a
+# manque 42. Le cliquet gele l'existant et refuse la reecriture suivante.
+lancer_front verifier-extraction-identifiant.mjs  "Extraction d'identifiant (n°53)"
 lancer_front verifier-portee.mjs        "Portée des identifiants (n°40)"
 # ⚠ Celui-ci CONSTRUIT le frontal (~5 s). C'est le prix d'un contrôle qui lit ce que le bundler
 # dit vraiment : le 04/09, quatre clés en double signalées par vite depuis des semaines

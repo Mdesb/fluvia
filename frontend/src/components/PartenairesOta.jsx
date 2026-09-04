@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
+import { idDe } from '../api/iri.js'
 
 /**
  * LES PARTENAIRES DE REVENTE EN LIGNE — quatre routes, aucun écran.
@@ -332,10 +333,9 @@ function EditionPartenaire({ valeurs, vitrines, onFermer, onFait, onErreur }) {
  * brusquement de vendre.
  */
 function QuotasOta({ quotas, partenaires, produits, peutGerer, onEditer, onNouveau }) {
-  function idDe(ref) {
-    if (!ref) return null
-    return typeof ref === 'string' ? String(ref).split('/').pop() : (ref.id ? String(ref.id) : null)
-  }
+  // `idDe` vient d'`api/iri.js` (§8.3, garde-fou n°53). Ce composant en avait posé une copie :
+  // `.split('/').pop()` rend la chaîne VIDE sur une référence terminée par un slash, là où la
+  // canonique filtre les segments vides. Même contrat de retour (`null` quand il n'y a rien).
 
   function nomDe(liste, ref, etiquette) {
     const id = idDe(ref)
