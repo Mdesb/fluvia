@@ -920,6 +920,13 @@ export const api = {
   // absence jamais mesuree.
   detecterPresenceIsolee: (idEspace) =>
     request(`/api/sport/espaces/${idEspace}/detecter-presence-isolee`, { method: 'POST', body: {} }),
+  // LE STATUT D'ACCES D'UN ADHERENT — lisible depuis l'origine, jamais lu par un ecran.
+  //
+  // ⚠ AUCUN `ApiFilter` N'EST DECLARE : passer `?abonnement=` serait accepte et IGNORE en silence.
+  // L'appelant lit la collection et trie lui-meme sur l'identifiant imbrique. Un filtre non
+  // declare est le pire des deux mondes — il a l'air de marcher.
+  statutsAccesFitness: () =>
+    request('/api/statut_acces_fitnesses', { query: { itemsPerPage: 200 } }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
   // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
   //
