@@ -963,6 +963,41 @@ c'est ce qui rend le chantier plus gros qu'il n'en a l'air.
 
 ---
 
+### ~~⚠ 8.12~~ — FERMÉE LE 04/09 : le produit existe, il est câblé, et une réservation l'a traversé
+
+**Arbitrage de Maxime : un produit « Location de terrain ».** Créé par l'API, comme un exploitant,
+pour qu'il traverse les validations — `PRD-D1F3C43A`, `47a9d8f3-fdb6-4f57-923e-c5b156e716d5`, type
+`entree_unitaire` (facettes `billet` + `consommateur` : une réservation de terrain est un droit
+consommé une fois), catégorie comptable **Locations**. Pas de nouvelle entrée au référentiel.
+
+    off_produit_categorie                       Locations              persisté, vérifié en base
+    Padel 90 min          → produit assigné    PATCH 200            vérifié en base
+    Visite guidée musée   → produit assigné    PATCH 200            vérifié en base
+    Créneau libre bassin  → SANS produit        correct — 0,00 €, aucune vente n'est créée
+    PadelParametrage::produitTerrainRef         PATCH 200            vérifié en base
+
+⚠ **LE 200 N'EST PAS LA PREUVE, ET LA BASE NON PLUS.** Mes fiches comptent trois « écritures
+acceptées qui n'enregistrent rien » ; j'ai donc relu chaque écriture en base plutôt que la réponse
+HTTP. Mais même ça ne dit pas que la chaîne fonctionne — seule une réservation réelle le dit.
+
+**LA PREUVE PAR EXÉCUTION.** `POST /api/padel/terrains/{id}/reservations` avec une session de caisse
+ouverte — le cas exact qui rendait 422 :
+
+    HTTP 201                       le 422 a disparu
+    ligne.produit    = 47a9d8f3…  le vrai produit, là où le code tirait un `Uuid::v4()`
+    ligne.ressource  = le terrain  l'origine de la vente, neuve du 04/09
+    ligne.type_tarif = null        LÉGITIME : le paramétrage padel n'a pas de type membre /
+                                   non-membre. C'est précisément le cas que §8.11 devait couvrir,
+                                   et il est arrivé le jour même.
+    ligne.activite   = null        correct : une réservation de terrain n'a pas d'`Activite`
+    24 lignes en base, 1 avec ressource   les 23 anciennes intactes — D66-ter tenu
+
+**Ce qui reste, et qui n'est PAS un blocage** : `produitTarifReference` est dans `activite:write`
+mais **aucun écran ne le propose**, et il n'existe aucun écran de création d'activité. Un exploitant
+ne peut donc pas refaire par l'interface ce que je viens de faire par l'API. À planifier.
+
+<details><summary>Le constat d'origine, gardé</summary>
+
 ### ⚠ 8.12 — La préproduction n'a AUCUN produit à vendre pour un terrain de padel
 
 Constaté le 04/09, en posant la garde « produit obligatoire » (§8.8 c). Les trois activités de la
@@ -988,6 +1023,8 @@ Le blocage est donc visible et explicite, pas silencieux.
 **Ce qu'il faut** : (1) l'arbitrage produit de Maxime, (2) un écran — `produitTarifReference` est
 dans `activite:write` mais **aucun écran ne le propose**, et il n'existe aucun écran de création
 d'activité du tout.
+
+</details>
 
 ---
 

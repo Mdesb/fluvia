@@ -54,6 +54,29 @@ declare(strict_types=1);
  */
 
 const RACINE = 'app/src';
+
+/**
+ * Le motif des références libres, écrit UNE SEULE FOIS.
+ *
+ * ⚠ Deux lecteurs posent la même question — l'inventaire global (`referencesLibres()`) et la portée
+ * par fichier (`analyser()`). Écrit deux fois, il dérive : le jour où l'un s'élargit, l'autre ne suit
+ * pas, et un témoin écrit avec le second partagerait exactement l'angle mort du premier.
+ */
+const MOTIF_REFERENCE_LIBRE = '/private\s+\??Uuid\s+\$(\w+Ref)\b/';
+
+/**
+ * Les références libres déclarées dans UN source.
+ *
+ * @return list<string>
+ */
+function referencesLibresDe(string $source): array
+{
+    if (preg_match_all(MOTIF_REFERENCE_LIBRE, $source, $correspondances) === false) {
+        return [];
+    }
+
+    return array_values(array_unique($correspondances[1]));
+}
 const LIGNE_DE_BASE = 'bin/references-libres.ligne-de-base.json';
 
 /**
@@ -83,11 +106,7 @@ function referencesLibres(): array
             continue;
         }
 
-        if (preg_match_all('/private\s+\??Uuid\s+\$(\w+Ref)\b/', $source, $correspondances) === false) {
-            continue;
-        }
-
-        foreach ($correspondances[1] as $propriete) {
+        foreach (referencesLibresDe($source) as $propriete) {
             $trouvees[$propriete] = $entree->getPathname();
         }
     }
@@ -192,6 +211,22 @@ function analyser(string $fichier, array $proprietes, array $filtrables): array
         fwrite(STDERR, sprintf("\n=== ERREUR — fichier illisible : %s ===\n\n", $fichier));
         exit(2);
     }
+
+    // ⚠ UN `SearchFilter` SE JUGE DANS LE FICHIER QUI DÉCLARE LA PROPRIÉTÉ, ET C'EST NEUF (§8.13).
+    //
+    // `$filtrables` est l'inventaire GLOBAL des références libres du dépôt. L'utiliser tel quel fait
+    // juger un filtre par un nom déclaré ailleurs : `LimiteAutorisation::$etablissement` est une
+    // RELATION, et il ressortait signalé parce qu'un AUTRE fichier déclare un `?Uuid $etablissement`.
+    // Le nom suffisait à contaminer.
+    //
+    // Or `#[ApiFilter(SearchFilter::class, ...)]` se pose sur la classe qui déclare le champ : les
+    // deux vivent dans le même fichier. La portée du jugement est donc le fichier, pas le dépôt.
+    //
+    // ⚠ L'INTERSECTION N'EST PAS DÉCORATIVE. `referencesLibresDe()` seul suffirait à la portée ;
+    // garder `$filtrables` conserve l'invariant que SEULES les références libres craignent le filtre
+    // — une relation ne le craint pas, API Platform la résout par son IRI. Le jour où le collecteur
+    // s'élargira, cette ligne empêchera le filtre d'accuser les relations sans qu'on y repense.
+    $filtrables = array_values(array_intersect($filtrables, referencesLibresDe($source)));
 
     $trouvailles = [];
     $lignes = explode("\n", $source);
