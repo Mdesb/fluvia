@@ -380,6 +380,14 @@ qu'elle tourne.
 
 *(énoncé d'origine ci-dessous)*
 
+### ~~D-1 · La garde du délai de préavis SEPA (§8.5)~~ — **POSÉE, pas seulement proposée**
+
+`app/src/Sepa/Validator/NoticeDelayCoversPeriod.php` et son validateur existent, accrochés aux
+**deux** entités que l'arbitrage désignait : `ConfigCreancierSepa` et `AbonnementFitness`.
+Vérifié le 04/09 par présence des fichiers et de leurs deux points d'accroche.
+
+<details><summary>La proposition d'origine</summary>
+
 ### D-1 · La garde du délai de préavis SEPA (§8.5) — proposée à `allaccess-c0`
 
 C'est vous qui l'avez mesurée le 03/09. Arbitrage de Maxime : **les deux emplacements**, parce que
@@ -400,6 +408,8 @@ verts**, plus verts qu'avant. Seul le cas qu'il doit AUTORISER démasque un cont
 État actuel : latent, rien de cassé. Quatre créanciers à 14 jours, zéro abonnement hebdomadaire.
 
 ---
+
+</details>
 
 ### ~~D-2~~ · Un produit obligatoire sur une vente de réservation — **FAIT le 04/09** — ⚠ **REPRIS PAR `allaccess-bd` le 04/09** (proposé à `allaccess-a9`, non claimé au bout d'une heure ; il touche la comptabilité, je ne le laisse pas dormir). `a9` : si tu l'avais commencé, dis-le et je te le rends.
 
@@ -591,7 +601,7 @@ reprendre.
 |---|---|---|
 | **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
 | **T16** | ~~**Site vitrine** sur `fluvia-app.com`~~ — **en ligne le 04/09**, sur `vitrine.hector-conseil.com` | ⚠ **« Aucune vitrine n'existe » était faux depuis ED-5** : `vitrine/` était dans le dépôt et n'était servi nulle part. Le sous-domaine retombait sur le vhost par défaut et servait **le back-office**. Posé : vhost + TLS + `/api` sur la même origine, et le nom **Fluvia** dans le titre, qui n'y était pas. Hôte séparé du back-office comme le veut D103. Reste : le domaine définitif, et E-9 (mentions légales) avant toute indexation — le site est en `noindex` | **fait** — `c0`, 04/09 |
-| **T16-b** | **Tunnel d'inscription en essai gratuit de 14 jours** (arbitré par Maxime le 04/09) | Le tunnel existe **au tiers** : `SubscriptionFunnel` code les trois étapes, mais seule la première a une route HTTP (`POST /editor/carts`). `signMandate` et `confirmPayment` ne sont appelés que par les tests — depuis un navigateur, le tunnel s'arrête après le panier.<br>⚠ **UN ESSAI « JUSTE ACTIVÉ » SERAIT FACTURÉ.** `FacturerAbonnementsCommand::abonnementsFacturables()` prend tout abonnement `active` ou `suspended`. Activer sans mandat produirait une facture mensuelle à un client qui n'a rien signé, puis une relance par `Recouvrement`. L'essai doit donc porter une marque que la facturation lit, pas seulement un état.<br>⚠ **ET `signMandate` REFUSE UN ABONNEMENT ACTIF** (`assertStillInCart`). Or la bascule payante décidée par Maxime suppose que le client signe **pendant** son essai, donc sur un abonnement actif. Les deux règles se contredisent : c'est à trancher dans le domaine, pas à contourner dans un écran.<br>⚠ **BLOQUÉ POUR L'OUVERTURE PAR E-8** : sans courriel qui part, la confirmation d'adresse est impossible, et elle est la seule garde contre la création d'établissements réels en boucle par n'importe qui. Le tunnel se développe et se prouve quand même — le jeton se lit dans le journal | `c0` — 04/09 |
+| **T16-b** | **Tunnel d'inscription en essai gratuit de 14 jours** (arbitré par Maxime le 04/09) | Le tunnel existe **au tiers** : `SubscriptionFunnel` code les trois étapes, mais seule la première a une route HTTP (`POST /editor/carts`). `signMandate` et `confirmPayment` ne sont appelés que par les tests — depuis un navigateur, le tunnel s'arrête après le panier.<br>⚠ **UN ESSAI « JUSTE ACTIVÉ » SERAIT FACTURÉ.** `FacturerAbonnementsCommand::abonnementsFacturables()` prend tout abonnement `active` ou `suspended`. Activer sans mandat produirait une facture mensuelle à un client qui n'a rien signé, puis une relance par `Recouvrement`. L'essai doit donc porter une marque que la facturation lit, pas seulement un état.<br>⚠ **ET `signMandate` REFUSE UN ABONNEMENT ACTIF** (`assertStillInCart`). Or la bascule payante décidée par Maxime suppose que le client signe **pendant** son essai, donc sur un abonnement actif. Les deux règles se contredisent : c'est à trancher dans le domaine, pas à contourner dans un écran.<br>⚠ **BLOQUÉ POUR L'OUVERTURE PAR E-8** : sans courriel qui part, la confirmation d'adresse est impossible, et elle est la seule garde contre la création d'établissements réels en boucle par n'importe qui. ⚠ **ET IL NE PEUT PAS ÊTRE ÉPROUVÉ DE BOUT EN BOUT — PAR PERSONNE.** Cette case disait « le jeton se lit dans le journal ». C'est faux, et c'est moi qui l'avais écrit sans le vérifier. `LogClientNotifier` ne journalise **ni le contenu ni les variables** — c'est écrit dans son docblock, et c'est une bonne décision — donc le jeton n'y figure pas ; la base ne garde que son `sha256`. La valeur en clair n'existe que le temps de composer le message. Il n'y a donc aucun moyen de confirmer un essai tant qu'E-8 tient, et ce n'est pas seulement l'ouverture au public qui est bloquée : c'est la recette du tunnel. (Accessoirement : Monolog n'est pas installé du tout, `logger` est le journaliseur minimaliste sur stderr. Sans objet pour le jeton — voir ci-dessus — mais à savoir avant de compter sur un journal applicatif pour diagnostiquer quoi que ce soit.) | `c0` — 04/09 |
 | **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
 
 ---
@@ -700,6 +710,17 @@ refusé — c'est voulu. Idem pour les contrôles frontaux (`frontend/scripts/ve
 
 Aucun n'est une tâche : ce sont des constats qui changent ce qu'on a le droit d'écrire ailleurs.
 
+
+> ⚠ **RELEVÉ DU 04/09 — CE REGISTRE MENTAIT DANS LE SENS LE PLUS COÛTEUX.** Onze sections se
+> présentaient comme ouvertes ; sept étaient **livrées et en préproduction**. Un registre périmé
+> fait refaire du travail, et il le fait silencieusement : personne ne relit une section « à faire »
+> pour vérifier qu'elle l'est encore. Chaque barre ci-dessous porte le témoin qui l'autorise, pris
+> dans le code — jamais dans mon souvenir de l'avoir fait.
+>
+> **Restent vraiment ouvertes : §8.1** (arbitrage produit, pour Maxime), **§8.2** (plafond mémoire),
+> et **l'écran de création d'activité**, qui n'existe pas — un exploitant ne peut pas refaire par
+> l'interface ce que §8.12 a fait par l'API.
+
 ### ⚠ 8.1 — Trois modules sont vendus dans la boutique sans pouvoir servir
 
 Mesuré contre `Padel` pris comme témoin positif (20 ressources API, 36 entités, des écrans) :
@@ -746,11 +767,36 @@ préproduction, où 1 Go par processus web serait une décision toute différent
 **Reste ouvert** : les 200 Mo du décodeur. Tant qu'ils sont là, le plafond suivra la croissance de
 la suite au lieu de la contenir.
 
+### ~~8.3~~ — FAIT · une seule définition de `idDe` (`api/iri.js`), vérifié le 04/09
+
+⚠ **Et un survivant a été trouvé ce jour-là, dans `Stock.jsx`** — il avait échappé à la passe
+**parce qu'il n'était pas une copie** : `ref.split('/').pop()` rend la chaîne VIDE sur une
+référence terminée par `/`, là où la canonique rend l'identifiant. Prouvé en exécutant les deux
+sur quatre entrées : **2 écarts sur 4**, et les deux du même côté. Le seul appel était une
+recherche par clé — `miens['']` vaut `undefined`, et l'écran affichait un blanc à la place du
+nom de l'article, sans rien signaler.
+
+**Je cherchais des doublons ; celui-ci était une VARIANTE.** Une recherche par similitude ne
+trouve pas ce qui a divergé — et c'est précisément ce qui a divergé qui est dangereux.
+
+<details><summary>Le constat d'origine</summary>
+
 ### 8.3 — `idDe` est dupliqué dix fois dans le frontal
 
 Dix fonctions du même nom ou presque (`idDe`, `idDeClient`, `idDepuisIri`), dans dix fichiers, avec
 des corps qui **ne sont pas identiques**. Les fondre demande de prouver l'égalité de la SORTIE des
 dix, une par une — c'est un chantier à soi seul. Signalé, pas fait.
+
+</details>
+
+### ~~8.4 — Le délai légal RGPD n'est surveillé par rien~~ — **FAUX DEPUIS ; vérifié le 04/09**
+
+`crm:rgpd:alerter-delai` est dans `TACHES_AUTORISEES` de `infra/ordonnanceur.sh`, et
+`RegleConservation` + `AppliquerConservationCommand` + `EffacementRgpdHandler` existent. ⚠ Le
+titre est resté celui du jour du constat ; il affirmait une absence qui a cessé d'être vraie —
+et une mesure d'absence ne vieillit pas mal, elle s'inverse.
+
+<details><summary>Le constat d'origine</summary>
 
 ### 8.4 — Le délai légal RGPD n'est surveillé par rien
 
@@ -759,6 +805,8 @@ ne regarde les demandes RGPD (`crm:rgpd:appliquer-conservation` n'est **pas** da
 blanche). L'entrée « Données personnelles » a quitté le menu quotidien le 03/09 (R27) : elle est
 donc moins vue, et toujours pas surveillée. Un compteur sur l'entrée de menu répondrait ; le menu
 n'a pas ce mécanisme. Arbitrage posé à Maxime.
+
+</details>
 
 ### ⚠ 8.5 — Un délai de préavis SEPA plus long que la période d'abonnement écarte chaque échéance
 
@@ -795,6 +843,14 @@ couvre l'autre :
 
 N'en poser qu'un laisserait une porte ouverte en croyant le trou fermé.
 
+### ~~8.6~~ — FAIT · 20 usages de `row-champs` dans 13 fichiers, vérifié le 04/09
+
+⚠ **Ce que ce témoin NE prouve pas** : que chaque rangée ait été *regardée*. Il compte des
+conversions, pas des écrans. La fiche demandait de les voir une par une sur un banc rendant le
+vrai `styles.css` ; je ne peux pas affirmer que les vingt l'ont été.
+
+<details><summary>Le constat d'origine</summary>
+
 ### 8.6 — Seize autres rangées de formulaire alignées par le bas
 
 `.row { align-items: flex-end }` est JUSTE pour une rangée d'actions — un bouton doit venir au
@@ -814,6 +870,17 @@ le haut.
 hauteur. Deux champs sans aide restent alignés par hasard. Les balayer en aveugle changerait la
 mise en page de douze écrans sans que personne les ait regardés — il faut les voir une par une,
 avec un banc qui rend le vrai `styles.css`.
+
+</details>
+
+### ~~⚠ 8.7~~ — **FAIT : quelqu'un est prévenu.** `bin/garde-fou-collections-muettes.php` (n°47)
+
+Câblé dans les trois listes, cinq témoins dont deux prouvent ce qu'il épargne. ⚠ Il ne tourne
+PAS en `pre-receive` (il lui faut `vendor/`) et il s'y annonce **non exécuté** plutôt que de
+rendre un vert qui n'a rien mesuré. Le titre disait « personne n'est prévenu » : ce n'est plus
+vrai, et le corps de la section le disait déjà.
+
+<details><summary>Le constat d'origine, et la leçon sur les recettes qui devinent la règle</summary>
 
 ### ⚠ 8.7 — Une collection française en `-ies` ne s'écrit pas, et personne n'est prévenu
 
@@ -892,6 +959,8 @@ un aller-retour vide → rempli → vide.
 ⚠ Ce test a d'ailleurs commencé faux : séparé en « rattacher » et « retirer », le premier était vert
 **avec ou sans le défaut**, parce que la fixture rattache déjà l'établissement A. Vu seulement en
 cassant le correctif pour regarder le filet attraper.
+
+</details>
 
 ### 8.8 — R15 : le créneau de padel devient une écriture, et trois trous restent nommés
 
@@ -1101,6 +1170,14 @@ d'activité du tout.
 
 ---
 
+### ~~8.11~~ — FAIT · `LigneVente::$typeTarif` nullable, `Version20260904180000`
+
+⚠ Et le cas que ce changement devait couvrir **est arrivé le jour même** : la première
+réservation de terrain de §8.12 a produit une ligne à `type_tarif = null`, parce que le
+paramétrage padel ne déclare aucun type membre / non-membre.
+
+<details><summary>La mesure d'origine</summary>
+
 ### 8.11 — Le type de tarif : mesuré, corrigé pour le padel, assumé ailleurs
 
 **La mesure, faite le 04/09 avant de toucher à quoi que ce soit** — la fiche disait « la mesure
@@ -1147,6 +1224,8 @@ qu'il a disparu. Remplacé par ce que le code fait.
 mettre à `null` serait réécrire l'histoire d'une vente.
 
 ---
+
+</details>
 
 ### ~~⚠ 8.10~~ — `reservation:no-show:basculer` est ACTIVÉE depuis le 04/09
 
@@ -1195,6 +1274,25 @@ La commande accepte de tourner ; c'est la décision de la laisser tourner qui ma
 ---
 
 ### ⚠ 8.8 bis — Les quatre arbitrages de Maxime du 04/09
+
+> ⚠ **(a) NE DIT PLUS « À CONSTRUIRE » : C'EST CONSTRUIT.** Vérifié le 04/09 dans le code, après
+> avoir d'abord cherché des noms FRANÇAIS et obtenu un faux zéro — les fichiers neufs sont en
+> anglais (D5), et ma recherche l'avait oublié.
+>
+> ```
+> StatutReservation::AConfirmer            posé par ReserverTerrainProcessor
+> ConfirmationExpiry::Release / Keep /     LE CHOIX DE L'EXPLOITANT que Maxime a demandé,
+>                    ReleaseAndCharge      résolu par ResolveurRegleAnnulation
+> reservation:confirmations:expirer        DANS `TACHES_AUTORISEES` — elle tourne
+> ```
+>
+> **Ce qui reste, et la commande le dit elle-même à chaque passage** : `release_and_charge`
+> libère le créneau et **compte** ceux qui auraient dû être facturés, sans facturer — brancher
+> `FacturationNoShow` à moitié produirait une facture qu'aucune vente ne soutient. Le décompte
+> est annoncé pour qu'on le traite à la main, pas caché.
+>
+> **Et il n'y a aucun point d'accroche de paiement** — conforme à ce que Maxime a dit
+> (« je te dirai quand on prendra le prestataire »), donc E-3 reste externe.
 
 **(a) L'encaissement hors comptoir → un système de CONFIRMATION.** Ses mots : « on met un système
 où il faut une confirmation de la réservation, par exemple 24 heures avant le début de la session,
@@ -1264,6 +1362,10 @@ témoin décisif est l'ÉGALITÉ entre le produit de la ligne et `produitTerrain
 cassant le correctif : sans lui, l'échec affiche l'UUID au hasard. Un test qui se contenterait de
 « une vente existe » passerait dans les deux cas.
 
+### ~~8.9~~ — FAIT · `padel_terrain.sport` + `.surface`, migration `Version20260904060000`
+
+<details><summary>Le détail, gardé — dont deux pièges qui se reproduiront</summary>
+
 ### 8.9 — R13/R14 : le terrain se décline, sans renommage
 
 Maxime a tranché : padel, tennis, squash et badminton sont **une seule verticale**. `padel_terrain`
@@ -1326,6 +1428,8 @@ qu'un silence.
 
 **Arbitrage de Maxime (04/09), en réponse à « je les vois, mais pas comme prévu » :** les maquettes
 qu'il a validées font foi, **telles quelles**. Pas seulement leur habillage : leur ORGANISATION.
+
+</details>
 
 ### L'écart mesuré sur la fiche produit
 

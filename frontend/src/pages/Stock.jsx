@@ -10,6 +10,7 @@ import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros, libelleProduit } from '../api/produit.js'
+import { idDe } from '../api/iri.js'
 import { confirmer } from '../components/Confirmation.jsx'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
@@ -966,11 +967,11 @@ function TransfertsSection({ articles, peutTransferer, onErreur, onFait }) {
     return m
   }, [articles])
 
-  function idDe(ref) {
-    if (!ref) return null
-    return typeof ref === 'string' ? ref.split('/').pop() : (ref.id ? String(ref.id) : null)
-  }
-
+  // `idDe` vient de `api/iri.js` (§8.3). Cette page en gardait une version LOCALE et DIFFÉRENTE :
+  // `ref.split('/').pop()` rend la chaîne VIDE sur une référence terminée par `/`, là où la
+  // canonique filtre les segments vides et ne rend jamais autre chose qu'un identifiant ou `null`.
+  // Le seul appel est la recherche ci-dessous : `miens['']` vaut `undefined`, et l'écran affichait
+  // un blanc à la place du nom de l'article, sans rien signaler.
   function nomArticle(ref) {
     const a = miens[idDe(ref)]
     if (a) return a.libelle || a.reference || a.designation || 'article'

@@ -161,6 +161,9 @@ function libelleMode(mode) {
 
 export default function ProduitFiche({
   produit,
+  // Ouvre la copie apres duplication. Absent, on se contente de recharger.
+  onDuplique,
+  peutCreer = false,
   // Sert UNIQUEMENT à prévenir avant qu'une fiche ne sorte du périmètre de celui qui l'édite —
   // voir l'avertissement des sites de commercialisation.
   etabActif,
@@ -200,6 +203,7 @@ export default function ProduitFiche({
     return () => { annule = true }
   }, [peutModifierCompta])
   const [enregistrement, setEnregistrement] = useState(false)
+  const [duplication, setDuplication] = useState(false)
   // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
   //
   // Demande de Maxime : « il doit y avoir une partie WYSIWYG et une autre config, ça peut faire
@@ -571,12 +575,41 @@ export default function ProduitFiche({
     }
   }
 
+  /**
+   * ⚠ ON ATTERRIT SUR LA COPIE, ON NE RESTE PAS SUR L'ORIGINAL.
+   *
+   * Elle naît en BROUILLON, avec un code neuf et un libellé suffixé « – copie » — c'est-à-dire
+   * faite pour être modifiée immédiatement. Rester ici obligerait à la retrouver dans la liste,
+   * et le suffixe qu'on a mis là pour être corrigé ne le serait jamais.
+   *
+   * Sans `onDuplique`, la copie existe quand même : on recharge, et on le dit. Un geste qui a
+   * abouti ne doit pas ressembler à un échec parce que l'écran n'a pas su naviguer.
+   */
+  async function dupliquer() {
+    setDuplication(true)
+    setErreur(null)
+    try {
+      const copie = await api.dupliquerProduit(p.id)
+      if (onDuplique && copie?.id) onDuplique(copie)
+      else onModifie?.()
+    } catch (e) {
+      setErreur(e.message || 'La duplication n’a pas abouti.')
+    } finally {
+      setDuplication(false)
+    }
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       <div className="fiche-ident" style={{ marginBottom: 'var(--esp-large)' }}>
-        <div>
+        {/* ⚠ DEUX LETTRES, ET PAS UNE. La fiche client en met une seule — un client se distingue
+            par son nom entier, juste a cote. Un produit s'appelle « Entree adulte piscine » ou
+            « Entree enfant piscine » : la premiere lettre ne distingue rien. L'ecart avec la fiche
+            client est donc voulu, pas une inconstance. */}
+        <div className="fiche-avatar" aria-hidden="true">{initialesProduit(p)}</div>
+        <div style={{ minWidth: 0 }}>
           <div className="fiche-nom">{libelleProduit(p)}</div>
           <div className="sub">
             {p.code || '—'} · {p.type?.libelle || humaniser(p.typeCode)}
@@ -585,6 +618,17 @@ export default function ProduitFiche({
         <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
           {st.libelle}
         </span>
+        {peutCreer && (
+          <button
+            type="button"
+            className="btn ghost sm"
+            disabled={duplication || enregistrement}
+            title="Crée une copie en brouillon, code neuf, libellé suffixé « – copie ». On arrive dessus."
+            onClick={dupliquer}
+          >
+            {duplication ? 'Duplication…' : 'Dupliquer'}
+          </button>
+        )}
       </div>
 
       {/* ── LA LIGNE COMPACTE ────────────────────────────────────────────────────────────────
@@ -1918,4 +1962,26 @@ function PhotosProduit({ produitId, peutModifier }) {
       {photos.length === 0 && !peutModifier && <div className="hint">Aucune photo.</div>}
     </Section>
   )
+}
+
+
+/**
+ * DEUX LETTRES POUR UN PRODUIT.
+ *
+ * « Entrée adulte piscine » et « Entrée enfant piscine » partagent leur première lettre : un avatar
+ * à une lettre les rendrait identiques côte à côte dans un catalogue. On prend donc l'initiale des
+ * deux premiers mots significatifs.
+ *
+ * ⚠ Les mots vides sont écartés — « Carte de 10 entrées » donnerait « CD » sinon, ce qui ne se
+ * rattache à rien de ce qu'on lit.
+ */
+const MOTS_VIDES = new Set(['de', 'du', 'des', 'le', 'la', 'les', 'un', 'une', 'à', 'a', 'en', 'et'])
+
+function initialesProduit(p) {
+  const nom = String(libelleProduit(p) || '').trim()
+  if (nom === '') return '?'
+  const mots = nom.split(/[\s—–-]+/).filter((m) => m !== '' && !MOTS_VIDES.has(m.toLowerCase()))
+  if (mots.length === 0) return nom[0].toUpperCase()
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase()
+  return (mots[0][0] + mots[1][0]).toUpperCase()
 }
