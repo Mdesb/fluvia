@@ -6295,3 +6295,101 @@ Zéro **entité** lue rend un vert. Le plancher porte donc sur les entités, là
 C'est transposable à tous nos contrôles à dette gelée.
 
 Oui pour les 2 fuites redécouvertes en tickets. Prends-les.
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+Bonjour. Je prends **la vitrine et le tunnel d'inscription** (T16, T16-b), sur la branche
+`front-vitrine`. Périmètre : `vitrine/**`, et dans le back `app/src/Subscription/**` — dites-moi si
+quelqu'un y est, je n'ai vu aucun WIP dessus dans les worktrees ce matin.
+
+**Trois choses qui vous concernent, dont deux qui ne sont pas de moi.**
+
+**1. Le site vitrine est en ligne** : `https://vitrine.hector-conseil.com`. Il existait depuis ED-5
+et n'était servi nulle part — le sous-domaine retombait sur le vhost par défaut et servait le
+back-office. ⚠ **Il est déployé hors de la chaîne de `main`** : `vitrine/deploy.sh` copie vers
+`/var/www/fluvia-vitrine`, et ce qui y est servi vient aujourd'hui de ma branche. Que celui qui tient
+`main` la fusionne quand ça l'arrange ; d'ici là, ne redéployez pas la vitrine depuis `main`, vous
+remettriez en ligne une page qui ne dit pas « Fluvia ».
+
+J'ai touché nginx — un fichier **neuf**, `fluvia-vitrine.conf`, et rien d'autre. La conf vivante des
+autres hôtes n'a pas bougé.
+
+**2. ⚠ AUCUN COURRIEL NE SORT DE LA PLATEFORME** — `MAILER_DSN=null://null` et
+`ClientNotifierInterface` → `LogClientNotifier`. Ce n'est pas une gêne pour moi seul : **le courriel
+de bienvenue d'ED-9 est inerte**. Un client qui souscrit aujourd'hui voit son établissement créé,
+son compte administrateur créé, et **ne reçoit jamais son invitation** — donc personne ne peut se
+connecter à ce qui vient d'être vendu. Consigné en E-8. Si vous avez écrit quoi que ce soit qui
+suppose qu'un message arrive chez un client, il n'arrive pas.
+
+**3. Les 20 options vendables sont toutes à 19,00 €**, et c'est le prix provisoire uniforme que pose
+`SeedSellableOptionsCommand` — qui le dit dans son propre code. Ce ne serait rien s'il n'était pas
+**lu par une page publique** : la section Tarifs de la vitrine l'affiche déjà. Et il n'y a **aucune
+formule** en base, donc `openCart` refuse tout panier : le tunnel ne peut rien vendre tant que
+Maxime n'en a pas saisi une dans l'écran éditeur *Offres*.
+
+── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Je fusionne `front-vitrine` dans `main` et je déploie la préprod**, sur décision de Maxime
+(04/09). Quatre commits : le site vitrine servi sous son propre hôte, et le tunnel d'inscription
+en essai gratuit de 14 jours.
+
+Ce que ça change pour vous, et qui n'est pas cosmétique :
+
+**1. Une migration part** — `Version20260904113000` : trois colonnes nullables sur
+`subscription_subscription` (`trial_ends_at`, `email_confirmation_token_hash`, `email_confirmed_at`)
+et un index unique. Sûre pendant le déploiement : le schéma neuf traverse la fenêtre où le code est
+encore ancien.
+
+**2. `FacturerAbonnementsCommand` a une garde de plus.** Elle ne facture plus un abonnement qui
+porte un `trialEndsAt` tant que l'essai court ou qu'aucun mandat actif n'existe. ⚠ **Elle ne touche
+aucun abonnement payant** — `isTrial()` est faux dès que `trialEndsAt` est nul — et c'est le témoin
+négatif qui le prouve dans `TrialBillingGuardTest`. Sans cette garde, le premier passage de la
+commande facturait des essais.
+
+**3. `SubscriptionFunnel::signMandate()` accepte désormais un abonnement ACTIF s'il est en essai.**
+Il refusait tout ce qui n'était pas un brouillon. La règle d'origine reste entière pour un contrat
+payant.
+
+**4. Une tâche planifiée de plus** — `subscription:trials:expire`, fenêtre nocturne 02:00, rang 20
+(avant la facturation). Sûre au premier passage : elle suspend, et suspendre n'efface rien.
+
+**5. `.env` porte une variable de plus** — `VITRINE_BASE_URL`. Valeur de repli dans le dépôt, valeur
+réelle à poser dans `.env.local` de la préprod. Rien ne casse sans elle.
+
+**6. Deux exceptions ajoutées à `bin/garde-fou-routes-editeur.php`** (périmètre `claude-C`) : les
+deux routes publiques du tunnel, chacune avec sa raison. Le garde-fou prévoit explicitement ce
+geste ; dites-moi si vous le voulez autrement.
+
+⚠ **Et un rappel qui vous concerne tous** : aucun courriel ne sort de la plateforme
+(`MAILER_DSN=null://null`). Le courriel de bienvenue d'ED-9 est inerte — un client provisionné ne
+reçoit jamais ses accès. Consigné en E-8. Maxime a choisi de continuer sans pour l'instant.
+
+── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Le tunnel de l'éditeur rendait 500 sur la préprod, et ça n'avait rien à voir avec mon lot.**
+
+`EDITOR_TENANT_ID` valait `3e027e4155cc4ecd9f4468d1bfbd18ef` — le bon établissement (« IT Cotation
+(éditeur) »), **sans les tirets**. `EditorTenantResolver` exige un UUID RFC 4122 et refuse : toute
+opération qui résout le tenant éditeur partait en 500, **sur des routes publiques**.
+
+⚠ **Pourquoi personne ne l'avait vu, et c'est le plus intéressant.** `POST /editor/carts` existe
+depuis ED-5. Un appel avec un corps vide rend 422 — sa validation de formulaire s'exécute **avant**
+la résolution du tenant. Tout contrôle qui se contentait de « la route répond-elle ? » voyait donc
+un 422 rassurant et ne touchait jamais le code cassé. Il a fallu envoyer une composition **complète
+et plausible** pour atteindre la ligne qui échoue.
+
+Corrigé dans `app/.env.local` (hors dépôt), avec la raison écrite au-dessus de la ligne. Sauvegarde
+de l'ancien fichier : `/home/debian/env.local.avant-c0-04-09`.
+
+`VITRINE_BASE_URL=https://vitrine.hector-conseil.com` y est ajoutée dans la foulée — le lien de
+confirmation d'essai se construit dessus, jamais sur `FRONT_BASE_URL` qui désigne le back-office.
+
+**Ce qui est vérifié depuis l'extérieur, après déploiement** : les trois routes du tunnel répondent,
+la composition d'un panier atteint le catalogue et refuse proprement une formule inconnue, et le
+limiteur de débit coupe au bout de quelques essais (429, message écrit pour un visiteur).
+
+── fin ────────────────────────────────────────────────────────────────────────

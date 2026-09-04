@@ -243,8 +243,64 @@ em { font-style: normal; color: var(--accent-2); }
 .pied { border-top: 1px solid var(--line); padding: 32px 24px; }
 .pied p { color: var(--ink-faint); font-size: 14px; margin: 0; text-align: center; }
 
+/* ---------- tunnel d'inscription ----------
+
+   AUCUNE COULEUR NEUVE ICI, ET C'EST UNE CONTRAINTE, PAS UNE PREFERENCE. Toutes les valeurs sont
+   des jetons deja declares plus haut, donc deja mesures par `verifier-contrastes.mjs`. Une teinte
+   inventee pour un formulaire passerait sous le controle sans etre vue -- c'est exactement ce qui
+   avait laisse cinq paires sous le seuil WCAG dans ce fichier jusqu'au 01/09.
+
+   LE FOCUS EST VISIBLE, ET SUR TOUT CE QUI SE FOCALISE. Un formulaire de vente parcouru au clavier
+   sans anneau de focus est un formulaire qu'on remplit a l'aveugle. */
+
+.tunnel { margin-top: 32px; }
+.tunnel fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin: 0 0 18px; background: var(--panel); }
+.tunnel legend { font-weight: 600; padding: 0 8px; color: var(--ink); }
+
+.choix-liste { display: grid; gap: 8px; }
+
+.choix {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.choix:hover { border-color: var(--accent); }
+.choix input { margin: 0; flex: none; accent-color: var(--accent); }
+.choix-texte { display: flex; flex: 1; gap: 12px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+.choix-prix { color: var(--ink-soft); font-size: 14px; white-space: nowrap; }
+
+.champ { display: grid; gap: 6px; margin: 0 0 16px; }
+.champ:last-child { margin-bottom: 0; }
+.champ label { font-weight: 600; font-size: 15px; }
+.champ input {
+  font: inherit;
+  padding: 11px 13px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2); color: var(--ink);
+}
+.aide { color: var(--ink-faint); font-size: 13px; }
+
+.total {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft); color: var(--accent-2);
+  font-weight: 600;
+}
+
+/* L'anneau de focus, sur tout ce qui se focalise dans la page -- boutons, liens, champs, choix. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 640px) {
   .bande { padding: 44px 18px; }
   .hero { padding-top: 56px; padding-bottom: 56px; }
   .entete nav a:not(.btn) { display: none; }
+  .tunnel fieldset { padding: 14px 14px; }
 }

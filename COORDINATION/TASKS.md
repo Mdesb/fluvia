@@ -398,6 +398,57 @@ d'une cause ne sont pas ses effets. Le chiffre décide si c'est une correction o
 Le patron à imiter existe : `ParametragePadel::$produitTerrainRef`, désormais lu par
 `ReserverTerrainProcessor` (commit `3be5fd2b`).
 
+#### ⛔ MESURÉ PAR `allaccess-a9` LE 04/09 — NE PAS LIVRER LA LEVÉE EN L'ÉTAT
+
+Deux choses ont changé depuis la rédaction, et la seconde renverse la conclusion.
+
+**1. Les deux appelants sont DÉJÀ équipés.** `DebitPmvStrategie:57` et
+`VenteDiffereeAgentStrategie:57` passent tous les deux
+`$reservation->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId()`. La fiche disait
+« n'en passe aucun » ; c'était vrai à l'écriture. Les trois appelants convergent donc désormais sur
+la même source — et tous trois peuvent encore rendre `null` par leur chaîne de `?->`.
+
+**2. ⚠ MAIS AUCUNE ACTIVITÉ N'A DE PRODUIT, ET AUCUN ÉCRAN NE PERMET D'EN METTRE UN.**
+
+    reservation_activite                                   3 lignes
+    dont produit_tarif_reference_id IS NULL                3   ← toutes
+    `produitTarifReference` dans le groupe `activite:write` OUI, écrivable par l'API
+    mentions dans frontend/src/                            0   ← aucun écran
+    `api.reservationActivites()` existe (lecture)          mais Reservation.jsx n'affiche pas
+                                                            les activités du tout
+
+Lever aujourd'hui **bloquerait 100 % des ventes de réservation**, sans aucun moyen de débloquer
+depuis l'interface. Ce n'est pas un correctif latent : c'est une panne immédiate.
+
+**Et le zéro qui rassurait ne prouvait rien.** J'ai d'abord compté les dégâts existants :
+
+    vente_ligne                                            23 lignes
+    dont produit absent du catalogue                       0
+    dont type_tarif absent du catalogue                    0
+    dont libelle_produit vide                              0   (témoin : la jointure marche, 23/23)
+
+Zéro orpheline — non parce que le défaut est inoffensif, mais parce que **ce chemin n'a jamais
+produit de ligne persistée**. Une base propre ne dit pas qu'un code est sain, elle dit qu'il n'a pas
+servi.
+
+**⚠ Et le même défaut est juste en dessous, non mentionné par la fiche :**
+`VenteReservationHandler:44` fait `setTypeTarif(Uuid::v4())` **sans condition** — jamais fourni par
+personne, toujours fantôme. Le corriger demande une source pour le type de tarif, qui n'existe
+nulle part aujourd'hui.
+
+#### CE QU'IL FAUT AVANT LA LEVÉE
+
+1. **Un écran qui permette de poser le produit sur une activité.** C'est le vrai prérequis, et il
+   n'était pas dans la fiche. Les activités ne sont affichées nulle part : c'est un écran à
+   construire, pas un champ à ajouter.
+2. **Les trois activités existantes configurées.**
+3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
+
+Tant que 1 n'existe pas, livrer la levée transforme un défaut comptable invisible en refus de vente
+visible. C'est un mauvais échange, et il est irréversible pour l'exploitant qui le subit.
+
+**Statut : mesuré, bloqué sur le prérequis 1. Non claimé — disponible pour qui prend l'écran.**
+
 ---
 
 ### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — pour `allaccess-df`
@@ -444,7 +495,8 @@ reprendre.
 | # | lot | pourquoi |
 |---|---|---|
 | **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
-| **T16** | **Site vitrine** sur `fluvia-app.com` | Aucune vitrine n'existe. Hôte séparé du back-office (D103) : elle porte des traceurs, il porte des sessions |
+| **T16** | ~~**Site vitrine** sur `fluvia-app.com`~~ — **en ligne le 04/09**, sur `vitrine.hector-conseil.com` | ⚠ **« Aucune vitrine n'existe » était faux depuis ED-5** : `vitrine/` était dans le dépôt et n'était servi nulle part. Le sous-domaine retombait sur le vhost par défaut et servait **le back-office**. Posé : vhost + TLS + `/api` sur la même origine, et le nom **Fluvia** dans le titre, qui n'y était pas. Hôte séparé du back-office comme le veut D103. Reste : le domaine définitif, et E-9 (mentions légales) avant toute indexation — le site est en `noindex` | **fait** — `c0`, 04/09 |
+| **T16-b** | **Tunnel d'inscription en essai gratuit de 14 jours** (arbitré par Maxime le 04/09) | Le tunnel existe **au tiers** : `SubscriptionFunnel` code les trois étapes, mais seule la première a une route HTTP (`POST /editor/carts`). `signMandate` et `confirmPayment` ne sont appelés que par les tests — depuis un navigateur, le tunnel s'arrête après le panier.<br>⚠ **UN ESSAI « JUSTE ACTIVÉ » SERAIT FACTURÉ.** `FacturerAbonnementsCommand::abonnementsFacturables()` prend tout abonnement `active` ou `suspended`. Activer sans mandat produirait une facture mensuelle à un client qui n'a rien signé, puis une relance par `Recouvrement`. L'essai doit donc porter une marque que la facturation lit, pas seulement un état.<br>⚠ **ET `signMandate` REFUSE UN ABONNEMENT ACTIF** (`assertStillInCart`). Or la bascule payante décidée par Maxime suppose que le client signe **pendant** son essai, donc sur un abonnement actif. Les deux règles se contredisent : c'est à trancher dans le domaine, pas à contourner dans un écran.<br>⚠ **BLOQUÉ POUR L'OUVERTURE PAR E-8** : sans courriel qui part, la confirmation d'adresse est impossible, et elle est la seule garde contre la création d'établissements réels en boucle par n'importe qui. Le tunnel se développe et se prouve quand même — le jeton se lit dans le journal | `c0` — 04/09 |
 | **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
 
 ---
