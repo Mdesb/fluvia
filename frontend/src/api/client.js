@@ -1481,6 +1481,13 @@ export const api = {
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).
   indicateurs: () => request('/api/indicateurs', { query: { itemsPerPage: 100 } }),
+  // L'Explorateur (M7-04) : un indicateur x un perimetre x UN JOUR. Route hors `/api`, comme le
+  // tableau de bord voisin. Rend 404 quand aucune mesure ne couvre le jour demande -- ce qui n'est
+  // pas zero, et l'ecran doit les distinguer.
+  explorerIndicateur: ({ indicateur, niveau, entiteId, periodeDebut, periodeFin }) =>
+    request('/reporting/explorateur', {
+      query: { indicateur, niveau, entiteId, periodeDebut, periodeFin },
+    }),
 
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
