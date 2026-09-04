@@ -69,6 +69,14 @@ final class ProjectionAccesDoctrine implements ProjectionAccesInterface
                 'espace' => (string) $espace->getId(),
                 'libelle' => $espace->getLibelle(),
                 'valeurCourante' => $jauge->getValeurCourante(),
+                // ⚠ « DEPUIS L'OUVERTURE », PAS « DU JOUR ». Ce compteur est incrémenté par les
+                // `UPDATE` atomiques de passage et remis à zéro par un seul chemin :
+                // `RecalageFmiHandler::ouvrir()`, le recalage d'ouverture de site. Aucune tâche
+                // planifiée ne l'appelle — un site qui n'ouvre pas garde le compteur de la veille.
+                //
+                // Il manquait à cette projection, et l'écran qui le lit affichait donc 0 sur tous
+                // les espaces depuis toujours.
+                'cumulJour' => $jauge->getCumulJour(),
                 'seuil' => $jauge->getSeuil(),
                 'mode' => $jauge->getMode()->value,
             ];

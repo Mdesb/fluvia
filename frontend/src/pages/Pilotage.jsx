@@ -198,7 +198,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           <div className="card-b" style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
-                <tr><th>Espace</th><th className="num">Courant</th><th className="num">Seuil</th><th className="num">Cumul jour</th><th>État</th></tr>
+                <tr><th>Espace</th><th className="num">Courant</th><th className="num">Seuil</th><th className="num">Depuis l&rsquo;ouverture</th><th>État</th></tr>
               </thead>
               <tbody>
                 {jauges.map((j, i) => {

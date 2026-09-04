@@ -214,7 +214,12 @@ export default function Supervision({ etabActif, droits = [] }) {
   const enAlerte = jauges.filter((j) => j.seuil > 0 && j.valeurCourante >= j.seuil).length
   const enLigne = controleurs.filter((c) => c.etat === 'en_ligne').length
   const muets = controleurs.filter((c) => signeDeVie(c).suspect).length
-  const frequentation = jauges.reduce((s, j) => s + (j.cumulJour || 0), 0)
+  // ⚠ CE N'EST PAS LA FRÉQUENTATION DU JOUR, ET L'APPELER AINSI CONTREDISAIT DEUX AUTRES ÉCRANS.
+  // `cumulJour` ne se remet à zéro qu'au recalage d'ouverture de site (`RecalageFmiHandler::ouvrir`)
+  // — aucune tâche planifiée ne l'appelle. Un jour sans ouverture, il porte les entrées de la
+  // dernière. Mesuré : cet écran affichait 5 quand le tableau de bord, qui compte les vrais
+  // `Passage` du jour, affichait 0.
+  const entreesDepuisOuverture = jauges.reduce((s, j) => s + (j.cumulJour || 0), 0)
   const refus = incidents.filter((i) => i.type === 'refus')
   // « Rien n'a été lu » et « rien n'a été trouvé » ne s'écrivent pas pareil.
   const lectureManquee = !sup
@@ -289,8 +294,8 @@ export default function Supervision({ etabActif, droits = [] }) {
               {muets > 0 && <div style={{ color: 'var(--warn)' }}>dont {muets} sans signe de vie récent</div>}
             </div>
             <div className="kpi">
-              <div className="lbl">Fréquentation (jour)</div>
-              <div className="val">{frequentation.toLocaleString('fr-FR')}</div>
+              <div className="lbl">Entrées depuis l&rsquo;ouverture</div>
+              <div className="val">{entreesDepuisOuverture.toLocaleString('fr-FR')}</div>
             </div>
           </div>
 
