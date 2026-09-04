@@ -5,6 +5,19 @@ declare(strict_types=1);
 /**
  * VALIDÉE AVANT D'ÊTRE POSÉE — garde-fou n°48.
  *
+ * ⚠ IL A UN VOISIN, ET IL FAUT LIRE LES DEUX AVANT D'EN ÉCRIRE UN TROISIÈME.
+ * `bin/garde-fou-validation-avant-processeur.php` (n°34, `c2`, 01/09) couvre la même règle par
+ * l'autre bout : il signale une COLLISION — champ contraint ET posé par un processeur, écrivable
+ * ou non — et gèle 32 cas. Ses mots : « il pose la question ; il ne tranche pas ».
+ *
+ * Celui-ci ne pose aucune question : il signale ce qui NE PEUT PAS ABOUTIR, et rend zéro.
+ * Ce qu'il voit et que le n°34 ne voit pas : si l'une des 32 collisions gelées sort du groupe
+ * d'écriture, le compte du n°34 reste à 32 et reste vert — alors que le cas est devenu un 422
+ * permanent. C'est une TRANSITION, invisible à un cliquet qui compte.
+ *
+ * ⚠ Ce fichier existe parce qu'une fiche périmée disait « n°34 à écrire » trois jours après sa
+ * livraison. Le doublon a été évité de justesse ; la duplication de la FICHE, elle, a bien eu lieu.
+ *
  * ── LE DÉFAUT QU'IL ATTRAPE ─────────────────────────────────────────────────────────────────────
  *
  * La validation d'API Platform tourne **avant** le processeur. Une propriété qui porte une

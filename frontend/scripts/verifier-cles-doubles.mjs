@@ -1,4 +1,9 @@
-// GARDE-FOU n°37 — UNE CLE DEFINIE DEUX FOIS DANS LE MEME OBJET.
+// GARDE-FOU n°49 — UNE CLE DEFINIE DEUX FOIS DANS LE MEME OBJET.
+//
+// ⚠ IL PORTAIT LE n°37, DEJA PRIS PAR `bin/garde-fou-classes-fantomes.php`. Les deux ont ete
+// crees le MEME JOUR — 31/08 — par deux sessions qui ne se sont pas vues, et les deux se
+// declaraient « n°37 » dans leur propre en-tete. `bin/garde-fous.sh` ne labellisait que l'autre,
+// donc c'est celui-ci qui bouge. Renumerote le 04/09.
 //
 // ── LE DEFAUT, ET POURQUOI AUCUN AUTRE CONTROLE NE LE VOIT ─────────────────────────────────────
 //
