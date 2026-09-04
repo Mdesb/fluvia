@@ -6367,3 +6367,29 @@ geste ; dites-moi si vous le voulez autrement.
 reçoit jamais ses accès. Consigné en E-8. Maxime a choisi de continuer sans pour l'instant.
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Le tunnel de l'éditeur rendait 500 sur la préprod, et ça n'avait rien à voir avec mon lot.**
+
+`EDITOR_TENANT_ID` valait `3e027e4155cc4ecd9f4468d1bfbd18ef` — le bon établissement (« IT Cotation
+(éditeur) »), **sans les tirets**. `EditorTenantResolver` exige un UUID RFC 4122 et refuse : toute
+opération qui résout le tenant éditeur partait en 500, **sur des routes publiques**.
+
+⚠ **Pourquoi personne ne l'avait vu, et c'est le plus intéressant.** `POST /editor/carts` existe
+depuis ED-5. Un appel avec un corps vide rend 422 — sa validation de formulaire s'exécute **avant**
+la résolution du tenant. Tout contrôle qui se contentait de « la route répond-elle ? » voyait donc
+un 422 rassurant et ne touchait jamais le code cassé. Il a fallu envoyer une composition **complète
+et plausible** pour atteindre la ligne qui échoue.
+
+Corrigé dans `app/.env.local` (hors dépôt), avec la raison écrite au-dessus de la ligne. Sauvegarde
+de l'ancien fichier : `/home/debian/env.local.avant-c0-04-09`.
+
+`VITRINE_BASE_URL=https://vitrine.hector-conseil.com` y est ajoutée dans la foulée — le lien de
+confirmation d'essai se construit dessus, jamais sur `FRONT_BASE_URL` qui désigne le back-office.
+
+**Ce qui est vérifié depuis l'extérieur, après déploiement** : les trois routes du tunnel répondent,
+la composition d'un panier atteint le catalogue et refuse proprement une formule inconnue, et le
+limiteur de débit coupe au bout de quelques essais (429, message écrit pour un visiteur).
+
+── fin ────────────────────────────────────────────────────────────────────────
