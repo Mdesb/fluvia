@@ -26,6 +26,11 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'subscription_subscription')]
+// L'unicité est déclarée AU MAPPING, pas seulement en migration (D32, garde-fou n°10) : sans cette
+// ligne, un `migrations:diff` ultérieur croirait la contrainte dérivée et proposerait de la
+// supprimer. Elle garantit aussi que la recherche par empreinte de jeton ne peut pas être ambiguë —
+// `findOneBy` sur une colonne non unique rend « l'un des deux », en silence.
+#[ORM\UniqueConstraint(name: 'uniq_subscription_email_confirmation', columns: ['email_confirmation_token_hash'])]
 class Subscription
 {
     #[ORM\Id]
@@ -77,6 +82,39 @@ class Subscription
      */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $demoConfiguration = null;
+
+    /**
+     * Fin de l'essai gratuit, ou `null` pour un abonnement qui n'est pas passé par là.
+     *
+     * **Cette date ne s'efface pas quand l'essai se termine.** Elle reste, dans le passé, et c'est
+     * elle qui distingue à jamais un abonnement né d'un essai d'un abonnement né d'une souscription
+     * payante. La remettre à `null` à la conversion ferait perdre la seule trace de ce qu'on a
+     * offert, et rendrait la facturation incapable de dire pourquoi elle n'a rien facturé en mars.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $trialEndsAt = null;
+
+    /**
+     * L'empreinte du jeton de confirmation d'adresse — jamais le jeton lui-même.
+     *
+     * **Même règle que l'invitation d'un utilisateur** ({@see \App\Subscription\EventListener\EnvoyerCourrielDeBienvenue}) :
+     * la valeur en clair n'existe que le temps de composer le message, la base n'en garde que le
+     * `sha256`. Un jeton stocké en clair est un identifiant de connexion qui vit dans une sauvegarde,
+     * dans un export, et dans l'écran de qui ouvre la table.
+     */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $emailConfirmationTokenHash = null;
+
+    /**
+     * Quand le prospect a prouvé qu'il lisait l'adresse qu'il a donnée.
+     *
+     * **C'est la seule garde entre le formulaire public et la création d'un établissement réel.**
+     * Sans elle, un script crée autant d'établissements que de requêtes, sous des adresses qui
+     * n'existent pas — et chacun est un vrai locataire, avec son groupe, sa région et son
+     * administrateur.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $emailConfirmedAt = null;
 
     public function __construct()
     {
@@ -273,6 +311,62 @@ class Subscription
     public function setDemoConfiguration(?array $demoConfiguration): self
     {
         $this->demoConfiguration = $demoConfiguration;
+
+        return $this;
+    }
+
+    public function getTrialEndsAt(): ?\DateTimeImmutable
+    {
+        return $this->trialEndsAt;
+    }
+
+    public function setTrialEndsAt(?\DateTimeImmutable $trialEndsAt): self
+    {
+        $this->trialEndsAt = $trialEndsAt;
+
+        return $this;
+    }
+
+    /** L'essai court-il encore à cet instant ? */
+    public function isInTrial(\DateTimeImmutable $instant): bool
+    {
+        return null !== $this->trialEndsAt && $instant < $this->trialEndsAt;
+    }
+
+    /**
+     * Cet abonnement est-il né d'un essai gratuit ?
+     *
+     * ⚠ **Ce n'est pas `isInTrial()`, et les confondre coûte de l'argent dans les deux sens.**
+     * `isInTrial()` dit « on n'a pas encore le droit de facturer » ; celle-ci dit « cet abonnement
+     * n'a jamais été payé d'avance », ce qui reste vrai après l'échéance. La facturation a besoin des
+     * deux : elle ne facture pas pendant l'essai, et elle ne facture jamais un essai qui n'a pas
+     * abouti à un mandat — même si personne n'a fait tourner la commande d'échéance.
+     */
+    public function isTrial(): bool
+    {
+        return null !== $this->trialEndsAt;
+    }
+
+    public function getEmailConfirmationTokenHash(): ?string
+    {
+        return $this->emailConfirmationTokenHash;
+    }
+
+    public function setEmailConfirmationTokenHash(?string $emailConfirmationTokenHash): self
+    {
+        $this->emailConfirmationTokenHash = $emailConfirmationTokenHash;
+
+        return $this;
+    }
+
+    public function getEmailConfirmedAt(): ?\DateTimeImmutable
+    {
+        return $this->emailConfirmedAt;
+    }
+
+    public function setEmailConfirmedAt(?\DateTimeImmutable $emailConfirmedAt): self
+    {
+        $this->emailConfirmedAt = $emailConfirmedAt;
 
         return $this;
     }

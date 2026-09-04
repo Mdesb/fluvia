@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluvia — confirmation de votre essai</title>
+<meta name="robots" content="noindex, nofollow">
+
+<!--
+  La page d'atterrissage du lien envoyé par courriel (ED-5).
+
+  POURQUOI CETTE PAGE EXISTE, ALORS QUE LE LIEN POURRAIT TOUT FAIRE LUI-MÊME. Parce qu'un `GET`
+  n'ouvre rien : les antivirus, les pré-visualiseurs de messagerie et les robots d'indexation
+  suivent les liens des courriels sans que personne ne soit devant l'écran. Mettre la création d'un
+  établissement derrière l'un d'eux, c'est la déclencher pour des machines. Cette page reçoit le
+  visiteur, et c'est elle qui envoie le `POST`.
+
+  ELLE PORTE `noindex` EN PROPRE, en plus de l'en-tête du serveur. Une adresse qui contient un jeton
+  n'a rien à faire dans un moteur de recherche.
+-->
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="saut" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="bande bande-etroite entete-corps">
+    <a class="marque" href="/">
+      <span class="marque-point" aria-hidden="true"></span>
+      <span>Fluvia</span>
+    </a>
+  </div>
+</header>
+
+<main id="contenu">
+  <section class="bande">
+    <div class="mesure">
+      <h1>Votre essai gratuit</h1>
+
+      <!--
+        Un seul état visible à la fois, et il commence par « en cours ». Une page qui s'ouvrirait sur
+        « c'est prêt » avant d'avoir reçu la réponse dirait quelque chose qu'elle ne sait pas encore.
+      -->
+      <p id="confirmation-etat" class="etat" role="status">Ouverture de votre plateforme…</p>
+
+      <div id="confirmation-succes" hidden>
+        <p class="chapo" id="confirmation-titre"></p>
+        <p id="confirmation-suite"></p>
+      </div>
+
+      <p class="actions">
+        <a class="btn btn-fantome" href="/">Retour au site</a>
+      </p>
+    </div>
+  </section>
+</main>
+
+<script src="confirmation.js" defer></script>
+</body>
+</html>
