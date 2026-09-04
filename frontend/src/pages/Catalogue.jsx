@@ -450,18 +450,28 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                     <td className="num">{euros(prixIndicatif(p))}</td>
                     <td className="num">
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                        {actionsStatut(p.statut).map((a) => (
+                        {actionsStatut(p.statut).map((a) => {
+                          // ⚠ LE DROIT VIENT DE L'ACTION, ET IL EST CELUI DU SERVEUR. Ces quatre
+                          // boutons se rendaient pour tout le monde ; l'echec arrivait apres le
+                          // clic, sur un ecran ou « Publier » met un produit EN VENTE. On ne cache
+                          // pas l'action — savoir qu'elle existe fait partie du travail — on la
+                          // neutralise et on dit le droit qui manque.
+                          const autorise = !a.droit || aLeDroit(droits, a.droit)
+                          return (
                           <button
                             key={a.id}
                             className={`btn ${a.ton} sm`}
                             type="button"
-                            title={a.aide}
-                            disabled={actionEnCours === p.id}
+                            title={autorise
+                              ? a.aide
+                              : `Ce compte n’a pas le droit « ${a.droit} ». Ce n’est pas une panne : demandez-le à un administrateur.`}
+                            disabled={actionEnCours === p.id || !autorise}
                             onClick={() => agir(p, a)}
                           >
                             {actionEnCours === p.id ? '…' : a.libelle}
                           </button>
-                        ))}
+                          )
+                        })}
                         <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
                           Options
                         </button>

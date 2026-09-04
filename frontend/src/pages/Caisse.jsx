@@ -241,6 +241,17 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // `caisse.gerer` : le meme droit que celui qui protege le PATCH du point de vente cote serveur.
   // Un caissier sans ce droit ne voit pas l'etoile, plutot que de la voir refuser au clic.
   const peutEpingler = !!pdvActif && aLeDroit(droits, 'caisse.gerer')
+  // ⚠ CET ECRAN NE VERIFIAIT QU'UN SEUL DROIT, ET SEULEMENT POUR EPINGLER.
+  //
+  // Le serveur, lui, exige `vente.creer` sur les operations de vente et `vente.encaisser` sur
+  // l'encaissement (`Vente/Entity/Vente.php`). Un role de lecture — `Regisseur`, six droits, tel
+  // qu'il est en base — obtenait donc douze tuiles actives et « Encaisser » en gros, pour un refus
+  // au dernier geste, panier construit devant le client.
+  //
+  // On lit la caisse sans pouvoir vendre : c'est le metier d'un regisseur. Rien n'est cache, seuls
+  // les gestes qui ne peuvent pas aboutir sont neutralises — et ils disent pourquoi.
+  const peutVendre = aLeDroit(droits, 'vente.creer')
+  const peutEncaisser = aLeDroit(droits, 'vente.encaisser')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
@@ -994,7 +1005,14 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   </div>
 
                   {!enPaiement ? (
-                    <button className="btn primary lg" onClick={demarrerPaiement} disabled={busy}>
+                    <button
+                      className="btn primary lg"
+                      onClick={demarrerPaiement}
+                      disabled={busy || !peutEncaisser}
+                      title={peutEncaisser
+                        ? undefined
+                        : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
+                    >
                       {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
                     </button>
                   ) : (
@@ -1087,9 +1105,16 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   ))}
                 </div>
               )}
+              {!peutVendre && (
+                <div className="banner" style={{ marginBottom: 'var(--esp-large)' }}>
+                  Ce compte peut <b>lire</b> la caisse — session, clôture&nbsp;Z, écarts — mais pas
+                  enregistrer de vente&nbsp;: il lui manque le droit <code>vente.creer</code>. Ce
+                  n’est pas une panne&nbsp;; demandez-le à un administrateur.
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {produitsAffiches.map((p) => {
-                  const vendable = estVendable(p) && !enPaiement
+                  const vendable = estVendable(p) && !enPaiement && peutVendre
                   const raison = raisonNonVendable(p)
                   const epingle = favoris.includes(p.id)
                   return (
@@ -1104,9 +1129,11 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                         title={
                           enPaiement
                             ? 'Encaissement en cours'
-                            : vendable
-                              ? 'Ajouter au panier'
-                              : expliqueNonVendable(p) || ''
+                            : !peutVendre
+                              ? 'Ce compte peut lire la caisse mais pas enregistrer de vente : il lui manque le droit vente.creer. Ce n’est pas une panne.'
+                              : vendable
+                                ? 'Ajouter au panier'
+                                : expliqueNonVendable(p) || ''
                         }
                       >
                         <span className="pn">{libelleProduit(p)}</span>

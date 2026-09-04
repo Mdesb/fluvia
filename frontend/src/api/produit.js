@@ -166,6 +166,7 @@ export function actionsStatut(statut) {
       return [
         {
           id: 'publier',
+          droit: 'offre.publier',
           libelle: 'Publier',
           ton: 'primary',
           aide: 'Met le produit en vente sur ses canaux. Exige un tarif et un site de commercialisation.',
@@ -182,6 +183,7 @@ export function actionsStatut(statut) {
         // ligne, et il fallait un chemin pour l'enlever qui ne passe pas par la vitrine.
         {
           id: 'archiver',
+          droit: 'offre.archiver',
           libelle: 'Archiver',
           ton: 'ghost',
           aide: "Retire le produit de la liste courante. Rien n'est supprimé, et il se réactive.",
@@ -197,6 +199,7 @@ export function actionsStatut(statut) {
       return [
         {
           id: 'depublier',
+          droit: 'offre.publier',
           libelle: 'Dépublier',
           ton: 'ghost',
           aide: 'Retire le produit de la vente et le repasse en brouillon. Réversible.',
@@ -204,6 +207,7 @@ export function actionsStatut(statut) {
         },
         {
           id: 'archiver',
+          droit: 'offre.archiver',
           libelle: 'Archiver',
           ton: 'ghost',
           aide: "Retire le produit de la liste courante. L'historique est conservé.",
@@ -215,6 +219,7 @@ export function actionsStatut(statut) {
       return [
         {
           id: 'reactiver',
+          droit: 'offre.modifier',
           libelle: 'Réactiver',
           ton: 'primary',
           aide: 'Sort le produit des archives et le repasse en brouillon.',
