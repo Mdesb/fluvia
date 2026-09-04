@@ -155,6 +155,13 @@ const NAV = [
       { id: 'sepa', ic: 'sepa', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
       { id: 'recouvrement', ic: 'collections', label: 'Recouvrement', perms: ['recouvrement.lire', 'recouvrement.piloter', 'compta.lire'] },
       { id: 'caution', ic: 'deposits', label: 'Cautions', perms: ['caution.lire', 'caution.piloter'] },
+      // Ouvert le 05/09 : huit routes servies, aucun ecran, et un module qui n'avait JAMAIS tourne.
+      // `RecoverySequence` naît inactive par choix (RG-RR-02) et le moteur sort sans rien faire
+      // sans sequence active : il manquait donc le seul geste qui rend le module vivant.
+      // Distinct du recouvrement juste au-dessus : celui-la traite les impayes et les acces
+      // bloques, celui-ci relance par courriel apres un no-show, une annulation ou un paiement
+      // refuse.
+      { id: 'relance_recettes', ic: 'settlements', label: 'Relance des recettes', perms: ['revenue_recovery.read', 'revenue_recovery.configure', 'revenue_recovery.manage'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
