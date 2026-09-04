@@ -54,7 +54,10 @@ function labelBeneficiaire(b) {
 // `StatutReservation::occupePlace()` rend vrai pour `confirmee` et `honoree`, et rien d'autre.
 // Compter positivement reste juste quels que soient les statuts à venir ; une liste d'exclusions
 // redevient fausse au premier statut ajouté.
-const STATUTS_QUI_OCCUPENT = new Set(['confirmee', 'honoree'])
+// ⚠ `a_confirmer` OCCUPE AUSSI. Une place réservée est prise tant qu'elle n'a pas expiré :
+// « non confirmée » ne veut pas dire « libre », ça veut dire « pas encore payée ». L'oublier
+// afficherait un créneau libre qui ne l'est pas, et le ferait vendre deux fois.
+const STATUTS_QUI_OCCUPENT = new Set(['a_confirmer', 'confirmee', 'honoree'])
 
 // Une date ISO vers la valeur d'un `<input type="datetime-local">`, EN HEURE LOCALE.
 //
@@ -117,6 +120,9 @@ const LIBELLE_ATTENTE = {
 }
 
 const LIBELLE_STATUT = {
+  // ⚠ « À confirmer » OCCUPE LE CRÉNEAU (voir `STATUTS_QUI_OCCUPENT`). Le libellé doit donc dire
+  // l'attente, pas la disponibilité : une place réservée est prise tant qu'elle n'a pas expiré.
+  a_confirmer: 'À confirmer',
   confirmee: 'Confirmée',
   liste_attente: 'Liste d’attente',
   annulee_libre: 'Annulée',
@@ -1020,7 +1026,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                 <div key={r.id} className="resa-inscrit">
                                   <div className="resa-inscrit-h">
                                     <span className="nm">{labelBeneficiaire(r.organisateur) || court(r.id)}</span>
-                                    <span className={`badge ${r.statut === 'confirmee' ? 'info' : occupe ? 'good' : 'mut'}`}>
+                                    {/* ⚠ « À confirmer » OCCUPE AUSSI, donc `occupe` est vrai pour lui.
+                                        Sans ce cas explicite il porterait le même badge qu'une
+                                        réservation honorée — alors que c'est celui-là qu'il faut
+                                        regarder avant que l'échéance passe. */}
+                                    <span className={`badge ${r.statut === 'a_confirmer' ? 'warn' : r.statut === 'confirmee' ? 'info' : occupe ? 'good' : 'mut'}`}>
                                       {LIBELLE_STATUT[r.statut] || r.statut}
                                     </span>
                                     {r.presenceConfirmee && (

@@ -115,7 +115,7 @@ final class AssignResourceProcessor implements ProcessorInterface
             ->andWhere('c.fin > :debut')
             ->setParameter('instance', $instance->getId(), 'uuid')
             ->setParameter('moi', $reservation->getId(), 'uuid')
-            ->setParameter('statuts', [StatutReservation::Confirmee->value, StatutReservation::Honoree->value])
+            ->setParameter('statuts', [StatutReservation::AConfirmer->value, StatutReservation::Confirmee->value, StatutReservation::Honoree->value])
             ->setParameter('debut', $creneau->getDebut(), 'datetime_immutable')
             ->setParameter('fin', $creneau->getFin(), 'datetime_immutable')
             ->setMaxResults(1)

@@ -91,7 +91,16 @@ final class JaugeCreneauGuard
         $hex = array_map(static fn (string $id): string => str_replace('-', '', $id), array_map('strval', $identifiants));
         $marqueurs = implode(', ', array_fill(0, \count($hex), 'UNHEX(?)'));
 
-        $statuts = [StatutReservation::Confirmee->value, StatutReservation::Honoree->value];
+        $statuts = [StatutReservation::AConfirmer->value, StatutReservation::Confirmee->value, StatutReservation::Honoree->value];
+        // ⚠ LE NOMBRE DE MARQUEURS SE DEDUIT DE LA LISTE, IL NE SE RECOPIE PAS.
+        // Cette requete portait `IN (?, ?)` en dur. Ajouter un troisieme statut le 04/09 a fait
+        // sauter TOUTES les jauges — 75 tests — avec un message qui ne nomme rien : « number of
+        // bound variables does not match number of tokens ».
+        //
+        // La bonne technique etait deja dans ce fichier, deux lignes plus haut : `$marqueurs` se
+        // construit par `array_fill`. La liste des identifiants etait robuste au nombre, celle des
+        // statuts ne l'etait pas — meme requete, deux traitements.
+        $marqueursStatuts = implode(', ', array_fill(0, \count($statuts), '?'));
 
         /** @var list<array{creneau: string, occupees: int|string}> $lignes */
         $lignes = $this->em->getConnection()->executeQuery(
@@ -99,7 +108,7 @@ final class JaugeCreneauGuard
             . 'FROM reservation_consumed_slot cs '
             . 'INNER JOIN reservation_reservation r ON r.id = cs.reservation_id '
             . 'WHERE cs.creneau_id IN (' . $marqueurs . ') '
-            . 'AND r.statut IN (?, ?) '
+            . 'AND r.statut IN (' . $marqueursStatuts . ') '
             . 'GROUP BY cs.creneau_id',
             array_merge($hex, $statuts),
         )->fetchAllAssociative();
