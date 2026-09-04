@@ -1091,3 +1091,23 @@ input:focus-visible {
 /* La carte de formule accompagne le defilement des options plutot que de laisser un vide sous elle.
    `top` laisse la place au menu flottant, qui recouvrirait sinon le prix. */
 .tarifs-grille .formules { position: sticky; top: 96px; }
+
+/* Ce que comprend la formule, sous la carte de prix. */
+.socle-inclus {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.socle-inclus li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.socle-inclus svg { flex: none; color: var(--accent); }
+.socle-essai { margin: 22px 0 0; }
+.socle-essai .btn { display: block; text-align: center; }
