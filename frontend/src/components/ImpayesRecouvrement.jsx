@@ -606,7 +606,9 @@ function Representations({ peutPiloter, incidentsParId, listeIncidentsPartielle,
 // abonnés, la trouvait trop brutale, et n'avait aucun moyen d'en changer : il en concluait que le
 // logiciel était comme ça. Montrer un réglage sans donner le bouton est pire que ne rien montrer.
 function Politique({ droits, etabActif, onSucces }) {
-  const [politiques, setPolitiques] = useState([])
+  const [politiquesLu, setPolitiquesLu] = useState(null)
+  // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
+  const politiques = politiquesLu || []
   const [edition, setEdition] = useState(null)
 
   const peutParametrer = aLeDroit(droits, 'recouvrement.parametrer')
@@ -614,8 +616,11 @@ function Politique({ droits, etabActif, onSucces }) {
   const recharger = useCallback(() => {
     let annule = false
     api.politiquesRecouvrement()
-      .then((p) => { if (!annule) setPolitiques(membres(p)) })
-      .catch(() => { if (!annule) setPolitiques([]) })
+      .then((p) => { if (!annule) setPolitiquesLu(membres(p)) })
+      // ⚠ `[]` faisait dire a l'ecran un REGLEMENT — « une representation a J+5, refus d'acces
+      // apres une representation echouee » — qui n'est peut-etre pas celui de cet etablissement.
+      // Une absence deguisee en reponse est pire qu'un tableau vide : elle ne se signale pas.
+      .catch(() => { if (!annule) setPolitiquesLu(null) })
     return () => { annule = true }
   }, [])
 
@@ -649,8 +654,16 @@ function Politique({ droits, etabActif, onSucces }) {
           // Une politique absente n'est pas une absence de regle : ce sont les valeurs par defaut de
           // l'entite qui s'appliquent. Les taire laisserait croire que rien ne coupe l'acces.
           <div className="empty">
+            {politiquesLu === null ? (
+              <b>
+                La règle de recouvrement n’a pas pu être lue. N’en concluez pas que les valeurs par
+                défaut s’appliquent : cet établissement en a peut-être une à lui, et elle décide
+                quand un accès se ferme.
+              </b>
+            ) : (<>
             Aucune règle propre à cet établissement — les valeurs par défaut s&rsquo;appliquent :
             une représentation à J+5, et refus d&rsquo;accès après une représentation échouée.
+            </>)}
           </div>
         ) : (
           politiques.map((p) => (

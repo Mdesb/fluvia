@@ -88,7 +88,10 @@ export default function Agenda({ droits = [], etabActif = null }) {
       setVacances(indices?.schoolHolidays || [])
     } catch (e) {
       setErreur(e.message || 'L’agenda n’a pas pu être chargé.')
-      setEvenementsLu([])
+      // ⚠ `[]` ici rasait le `null` de l'initialisation, et l'ecran repartait dire « Rien de
+      // programme sur cette periode » sur une lecture refusee. Un etat initial honnete ne suffit
+      // pas : c'est le chemin d'erreur qui decide de ce qui s'affiche.
+      setEvenementsLu(null)
     } finally {
       setChargement(false)
     }
