@@ -887,6 +887,16 @@ le hasard actuel. La mesure d'abord.
 
 ---
 
+### ~~⚠ 8.10~~ — `reservation:no-show:basculer` est ACTIVÉE depuis le 04/09
+
+Arbitrage de Maxime : « l'activer maintenant ». Arriéré mesuré avant d'appuyer : 5 créneaux
+terminés encore planifiés, 6 réservations confirmées dessus, **28,00 €** au total — sur des
+données de test. ⚠ `--only` contourne `safeOnFirstRun` : le premier passage a traité tout
+l'arriéré d'un coup, sans le garde qui protège un premier démarrage. Acceptable à 28 € sur de la
+préproduction ; à ne pas reproduire en service.
+
+*(texte d'origine ci-dessous)*
+
 ### ⚠ 8.10 — `reservation:no-show:basculer` n'est dans aucune liste blanche
 
 Vu en cherchant le patron d'une commande planifiée, le 04/09. `BasculerNoShowCommand` existe,
