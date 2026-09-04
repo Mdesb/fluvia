@@ -18,9 +18,17 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Projection optionnelle d'un droit d'accès sur la fenêtre du créneau (RG-M5-12). Créée en
  * side-effect à la confirmation d'une réservation sur une Ressource `ouvreAcces=true`
- * (`ProjectionAccesReservationHandler`). `droitAccesRef` reste nullable : la projection réelle vers
- * `App\Acces\Entity\DroitAcces` nécessite une extension du port `ProjectionDroitInterface` côté L3
- * (Risque n°2 du plan), hors périmètre de ce lot — no-op documenté (log) en attendant.
+ * (`ProjectionAccesReservationHandler`).
+ *
+ * ⚠ CETTE FICHE A DIT PENDANT UN TEMPS « no-op documenté (log) en attendant » — c'était vrai avant
+ * que le handler soit écrit, ça ne l'est plus : il CONSTRUIT un `App\Acces\Entity\DroitAcces` réel
+ * (`sourceType = TypeDroitAcces::Booking`), avec révocation symétrique. Corrigé le 04/09 après
+ * qu'une session ait failli en tirer une conclusion fausse sur ce qu'un réservant obtient.
+ *
+ * ⚠ CE QUI RESTE VRAI, ET QUI EST LA VRAIE LIMITE : rien n'est projeté si la Ressource ne porte pas
+ * `ouvreAcces = true`. Mesuré le 04/09 en préproduction : **2 ressources sur 11** le portent. Une
+ * réservation de visite guidée n'ouvre donc aucun accès — non par manque de code, mais par
+ * configuration. `droitAccesRef` reste nullable pour cette raison.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'reservation_projection_acces')]
