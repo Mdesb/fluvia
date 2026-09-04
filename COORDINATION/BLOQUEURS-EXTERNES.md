@@ -33,9 +33,21 @@
 
 - **E-8 est le seul de la liste qui rend inerte une fonctionnalité déjà livrée**, et c'est ce qui le
   distingue des autres. Les six premiers repoussent du travail à venir ; celui-ci fait qu'ED-9 —
-  écrit, testé, fusionné — ne produit rien chez le client. Un contournement existe pour le
-  développement (lire le journal), aucun pour un vrai prospect. Il est aussi **le seul débloqué par un
+  écrit, testé, fusionné — ne produit rien chez le client. Il est aussi **le seul débloqué par un
   achat, pas par une démarche** : un compte chez un expéditeur se crée dans l'heure.
+
+  ⚠ **ET IL N'EXISTE AUCUN CONTOURNEMENT, PAS MÊME POUR LE DÉVELOPPEMENT.** Cette entrée disait
+  qu'on pouvait « lire le journal ». C'est faux, et la phrase s'était déjà recopiée dans `TASKS.md`
+  avant que quiconque la vérifie. `LogClientNotifier` ne journalise **ni le contenu ni les
+  variables** — son docblock le dit et le justifie, parce qu'elles portent un nom, un solde, une
+  adresse — et la base ne garde que le `sha256` du jeton. Le lien de confirmation n'existe donc
+  nulle part après l'envoi.
+
+  Ce que ça change : E-8 ne bloque pas seulement l'ouverture au public du tunnel d'essai, il bloque
+  sa **recette**. Personne ne peut aujourd'hui dérouler une inscription jusqu'au bout, Maxime
+  compris. Si l'on veut éprouver le tunnel avant de payer un expéditeur, il faut le décider
+  explicitement — une commande qui frappe un lien de confirmation serait un outil de recette, donc
+  une capacité à part entière, pas un détail d'implémentation.
 
 - **E-9 suit E-1** : même immatriculation, même date. Ce qui change, c'est ce qu'elle autorise —
   E-1 ouvre les réseaux sociaux, E-9 ouvre le site au public.
