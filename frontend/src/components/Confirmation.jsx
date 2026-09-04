@@ -93,8 +93,13 @@ export function HoteConfirmation() {
         )}
         <div className="modal-actions">
           {/* ⚠ « Annuler » d'abord, et il n'est pas `primary` : le geste par défaut d'une
-              confirmation est de NE PAS agir. La modale rend le focus au premier élément
-              interactif — c'est donc « Annuler » qui l'a, et Entrée ne supprime rien. */}
+              confirmation est de NE PAS agir.
+
+              Sur OÙ VA LE FOCUS, mesuré plutôt que supposé — j'avais d'abord écrit ici qu'il
+              revenait à « Annuler », c'était faux : `Modal.jsx` le donne à son premier
+              focusable, qui est sa croix de fermeture. La propriété qui compte tient quand
+              même — Échap et Entrée ferment tous deux sans agir — mais elle ne tient pas
+              pour la raison que j'avais écrite. */}
           <button type="button" className="btn" onClick={() => repondre(false)}>
             Annuler
           </button>
