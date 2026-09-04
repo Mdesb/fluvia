@@ -21,7 +21,12 @@ if [ ! -f "$SOURCE/index.html" ]; then
 fi
 
 sudo mkdir -p "$CIBLE"
-sudo cp "$SOURCE/index.html" "$SOURCE/styles.css" "$SOURCE/tarifs.js" "$CIBLE/"
+
+# TOUT CE QUI EST SERVABLE PART, PLUTOT QU'UNE LISTE A TENIR A JOUR. La liste nominative a tenu le
+# temps d'un fichier : `confirmation.html` et `tunnel.js` sont arrives le meme jour, et une page
+# ajoutee au depot mais absente du deploiement rend un 404 sur un lien qu'on vient d'envoyer par
+# courriel. `deploy.sh`, `README.md` et `nginx/` ne correspondent a aucun de ces motifs.
+sudo cp "$SOURCE"/*.html "$SOURCE"/*.css "$SOURCE"/*.js "$CIBLE/"
 sudo chown -R www-data:www-data "$CIBLE"
 
 # LE TÉMOIN. On relit la page servie par nginx, pas le fichier qu'on vient de copier — c'est la

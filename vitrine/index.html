@@ -56,7 +56,7 @@
       <a href="#modules">Modules</a>
       <a href="#metiers">Métiers</a>
       <a href="#tarifs">Tarifs</a>
-      <a class="btn btn-primaire" href="#souscrire">Composer mon offre</a>
+      <a class="btn btn-primaire" href="#souscrire">Essayer 14 jours</a>
     </nav>
   </div>
 </header>
@@ -69,10 +69,11 @@
       <p class="chapo">
         Billetterie, réservation, contrôle d'accès, caisse, boutique en ligne, CRM, facturation :
         activez ce dont vous avez besoin, laissez le reste éteint. Vous ne payez que ce que vous
-        activez, et vous pouvez changer d'avis en cours de mois.
+        activez, et vous pouvez changer d'avis en cours de mois. Quatorze jours d'essai pour vous en
+        assurer, sans carte bancaire.
       </p>
       <p class="actions">
-        <a class="btn btn-primaire btn-grand" href="#souscrire">Composer mon offre</a>
+        <a class="btn btn-primaire btn-grand" href="#souscrire">Essayer gratuitement 14 jours</a>
         <a class="btn btn-fantome btn-grand" href="#tarifs">Voir les tarifs</a>
       </p>
     </div>
@@ -173,27 +174,72 @@
 
   <section class="bande bande-creuse" id="souscrire">
     <div class="mesure">
-      <h2>Comment ça se passe</h2>
+      <h2>Quatorze jours d'essai, sans carte bancaire</h2>
       <ol class="etapes">
         <li>
           <strong>Vous composez.</strong>
           Vous choisissez une formule et les options qui vous manquent. Le total s'affiche avant que
-          vous n'engagiez quoi que ce soit.
+          vous n'engagiez quoi que ce soit — et c'est notre serveur qui le calcule, pas cette page.
         </li>
         <li>
-          <strong>Vous signez un mandat de prélèvement.</strong>
-          Le règlement se fait par prélèvement SEPA. Vous pouvez corriger vos coordonnées bancaires
-          tant que vous n'avez pas confirmé.
+          <strong>Vous confirmez votre adresse.</strong>
+          Nous vous envoyons un lien. Rien n'est créé tant que vous ne l'avez pas ouvert : c'est ce
+          qui nous évite d'ouvrir des plateformes au nom de gens qui n'ont rien demandé.
         </li>
         <li>
-          <strong>Votre plateforme est ouverte.</strong>
+          <strong>Votre plateforme est ouverte pour quatorze jours.</strong>
           Votre établissement est créé, votre compte administrateur reçoit son invitation, et seuls
-          les modules souscrits sont actifs.
+          les modules choisis sont actifs. Aucun prélèvement, aucune carte bancaire demandée.
         </li>
       </ol>
-      <p class="actions">
-        <a class="btn btn-primaire btn-grand" href="#tarifs">Commencer</a>
-      </p>
+
+      <!--
+        LE FORMULAIRE NE S'AFFICHE PAS S'IL NE PEUT RIEN ENVOYER. `openCart` refuse un panier sans
+        formule : tant que le catalogue n'en porte aucune, on le dit, plutôt que de montrer des
+        champs dont le bouton échouerait après la saisie.
+      -->
+      <p id="tunnel-etat" class="etat" role="status">Chargement des offres…</p>
+
+      <form id="tunnel-formulaire" class="tunnel" hidden novalidate>
+        <fieldset>
+          <legend>Votre formule</legend>
+          <div id="tunnel-formules" class="choix-liste"></div>
+        </fieldset>
+
+        <fieldset id="tunnel-bloc-options">
+          <legend>Les options que vous ajoutez</legend>
+          <!--
+            Ce que la formule comprend déjà n'apparaît pas ici : le serveur ne le facture pas deux
+            fois, et le proposer ferait croire à un supplément que le total démentirait.
+          -->
+          <div id="tunnel-options" class="choix-liste"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Vous</legend>
+          <p class="champ">
+            <label for="tunnel-structure">Nom de votre structure</label>
+            <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
+          </p>
+          <p class="champ">
+            <label for="tunnel-email">Votre adresse e-mail</label>
+            <input id="tunnel-email" name="email" type="email" required autocomplete="email">
+            <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
+          </p>
+        </fieldset>
+
+        <p id="tunnel-total" class="total" role="status" hidden></p>
+        <p id="tunnel-message" class="etat" role="status"></p>
+
+        <p class="actions">
+          <button type="submit" class="btn btn-fantome btn-grand">Voir mon total</button>
+          <button type="submit" id="tunnel-envoyer" class="btn btn-primaire btn-grand" hidden>
+            Recevoir mon accès
+          </button>
+        </p>
+      </form>
+
+      <p id="tunnel-envoye" class="chapo" role="status" hidden></p>
     </div>
   </section>
 
@@ -201,10 +247,14 @@
 
 <footer class="bande pied">
   <div class="mesure">
-    <p>Prélèvement SEPA. Vos données restent les vôtres : un module désactivé n'efface rien.</p>
+    <p>
+      Essai de 14 jours sans carte bancaire. Vos données restent les vôtres : un module désactivé
+      n'efface rien, et un essai qui s'arrête ne supprime pas ce que vous avez saisi.
+    </p>
   </div>
 </footer>
 
 <script src="tarifs.js" defer></script>
+<script src="tunnel.js" defer></script>
 </body>
 </html>
