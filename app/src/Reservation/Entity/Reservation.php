@@ -199,6 +199,22 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $confirmedAt = null;
 
+    /**
+     * Quand le rappel est-il parti ? `null` tant qu'il n'est pas parti.
+     *
+     * C'EST CE QUI EMPECHE DE RAPPELER LE MEME CLIENT TOUS LES QUARTS D'HEURE : seule une valeur
+     * nulle rend un rendez-vous candidat, et l'estampille n'est posee qu'APRES un envoi reussi.
+     *
+     * Elle n'est PAS posee quand aucun contact n'est connu : ce n'est pas un echec, et si l'adresse
+     * du client arrive demain, le rappel partira. L'estampiller ferait taire definitivement un
+     * rappel qui aurait fini par etre possible.
+     *
+     * En lecture seule : c'est un fait constate par la plateforme, pas un champ qu'on renseigne.
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?\DateTimeImmutable $reminderSentAt = null;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $dateLimiteAnnulation = null;
@@ -550,6 +566,18 @@ class Reservation
     public function setConfirmedAt(?\DateTimeImmutable $quand): self
     {
         $this->confirmedAt = $quand;
+
+        return $this;
+    }
+
+    public function getReminderSentAt(): ?\DateTimeImmutable
+    {
+        return $this->reminderSentAt;
+    }
+
+    public function setReminderSentAt(?\DateTimeImmutable $quand): self
+    {
+        $this->reminderSentAt = $quand;
 
         return $this;
     }

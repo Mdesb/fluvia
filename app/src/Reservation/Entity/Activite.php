@@ -101,6 +101,21 @@ class Activite
     #[Groups(['activite:read', 'activite:write'])]
     private int $battementMinutes = 0;
 
+    /**
+     * Combien d'heures avant le rendez-vous le client est-il rappele ? `0` = pas de rappel.
+     *
+     * LE DELAI APPARTIENT A LA PRESTATION, PAS A L'ETABLISSEMENT. Un massage de 90 minutes se
+     * rappelle la veille ; une retouche de quinze minutes, deux heures avant. Un reglage unique par
+     * etablissement aurait force le meme delai aux deux.
+     *
+     * Defaut a 0 : meme raisonnement que `battementMinutes` juste au-dessus. Toute autre valeur par
+     * defaut ferait partir des courriels, des le prochain passage de l'ordonnanceur, aux clients de
+     * tous les etablissements existants -- qui n'ont rien demande.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    #[Groups(['activite:read', 'activite:write'])]
+    private int $rappelHeuresAvant = 0;
+
     #[ORM\Column(length: 60, nullable: true)]
     #[Groups(['activite:read', 'activite:write'])]
     private ?string $niveauRequis = null;
@@ -180,6 +195,21 @@ class Activite
         // Un battement negatif ferait se chevaucher deux rendez-vous : on le refuse ici plutot que
         // de compter dessus plus loin.
         $this->battementMinutes = max(0, $battementMinutes);
+
+        return $this;
+    }
+
+    public function getRappelHeuresAvant(): int
+    {
+        return $this->rappelHeuresAvant;
+    }
+
+    public function setRappelHeuresAvant(int $heures): self
+    {
+        // Un delai negatif placerait l'echeance de rappel APRES le rendez-vous : la commande
+        // enverrait alors le rappel a tout coup, des la creation. On borne ici plutot que d'y
+        // compter plus loin -- meme garde que le battement.
+        $this->rappelHeuresAvant = max(0, $heures);
 
         return $this;
     }
