@@ -151,25 +151,36 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
   async function charger() {
     setChargement(true)
     setErreur(null)
-    try {
-      const [c, cmd, bil] = await Promise.all([
-        boutique.moiCompte().catch(() => null),
-        boutique.mesCommandes().catch(() => ({ commandes: [] })),
-        boutique.mesBillets().catch(() => ({ billets: [] })),
-      ])
-      setCompte(c)
-      setCommandes(cmd?.commandes || [])
-      setBillets(bil?.billets || [])
-    } catch (e) {
-      if (e?.status === 401) {
-        clientTokenStore.clear()
-        onDeconnexion()
-        return
-      }
-      setErreur(e?.message || 'Chargement impossible.')
-    } finally {
+    // ⚠ ON CAPTURE L'ERREUR AU LIEU DE L'ECRASER. `catch(() => ({ billets: [] }))` transformait un
+    // refus en « vous n'avez rien achete » — la phrase la plus chere du produit, lue par quelqu'un
+    // qui a paye et qui attend devant un tourniquet.
+    //
+    // Effet de bord de cette forme, et ce n'est pas un detail : le `catch` exterieur qui traite le
+    // 401 ne s'executait JAMAIS, puisque chaque appel avalait sa propre erreur et que
+    // `Promise.all` ne rejetait pas. Le chemin de reconnexion existait et etait mort.
+    const enveloppe = (p) => p.then((v) => ({ v })).catch((e) => ({ e }))
+    const [c, cmd, bil] = await Promise.all([
+      enveloppe(boutique.moiCompte()),
+      enveloppe(boutique.mesCommandes()),
+      enveloppe(boutique.mesBillets()),
+    ])
+
+    // Session expiree ou revoquee : on le dit et on renvoie a la connexion, plutot que d'afficher
+    // un espace client vide qui ressemble a un compte sans achats.
+    if ([c, cmd, bil].some((r) => r.e?.status === 401)) {
+      clientTokenStore.clear()
       setChargement(false)
+      onDeconnexion()
+      return
     }
+
+    setCompte(c.v ?? null)
+    // `null` = PAS LU, `[]` = LU ET VIDE. La distinction etait deja a l'initialisation ; c'est le
+    // `.catch()` qui la detruisait.
+    setCommandes(cmd.e ? null : cmd.v?.commandes || [])
+    setBillets(bil.e ? null : bil.v?.billets || [])
+    if (cmd.e && bil.e) setErreur(cmd.e?.message || 'Chargement impossible.')
+    setChargement(false)
   }
 
   useEffect(() => {
@@ -210,9 +221,9 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
       ) : erreur ? (
         <Erreur message={erreur} onReessayer={charger} />
       ) : onglet === 'commandes' ? (
-        <Commandes commandes={commandes} />
+        <Commandes commandes={commandes} nonLu={commandes === null} />
       ) : (
-        <Billets billets={billets} />
+        <Billets billets={billets} nonLu={billets === null} />
       )}
     </section>
   )
@@ -235,7 +246,7 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
  * rechargement, cet écran ne sait donc plus qu'une demande est en cours — il l'annonce au lieu de
  * laisser croire qu'il suit le dossier.
  */
-function Commandes({ commandes }) {
+function Commandes({ commandes, nonLu }) {
   const [pour, setPour] = useState(null)
   const [motif, setMotif] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -243,7 +254,14 @@ function Commandes({ commandes }) {
   const [deposees, setDeposees] = useState({})
 
   if (!commandes || commandes.length === 0) {
-    return <Vide titre="Aucune commande" texte="Vos commandes payées apparaîtront ici." />
+    return nonLu ? (
+      <Vide
+        titre="Vos commandes n’ont pas pu être lues"
+        texte="Cette liste est vide parce que la lecture a échoué, pas parce que vous n’avez rien commandé. Rechargez la page dans un moment."
+      />
+    ) : (
+      <Vide titre="Aucune commande" texte="Vos commandes payées apparaîtront ici." />
+    )
   }
 
   async function demander(commande) {
@@ -343,9 +361,18 @@ function Commandes({ commandes }) {
   )
 }
 
-function Billets({ billets }) {
+function Billets({ billets, nonLu }) {
   if (!billets || billets.length === 0) {
-    return <Vide titre="Aucun billet" texte="Vos billets à QR apparaîtront ici après un achat." />
+    // ⚠ « Aucun billet » a quelqu'un qui a paye, c'est lui dire que son achat n'a pas abouti. On ne
+    // le dit que quand on a REGARDE.
+    return nonLu ? (
+      <Vide
+        titre="Vos billets n’ont pas pu être lus"
+        texte="Ne concluez pas que votre achat n’a pas abouti : nous n’avons pas réussi à lire vos billets à l’instant. Rechargez la page dans un moment, et gardez votre e-mail de confirmation."
+      />
+    ) : (
+      <Vide titre="Aucun billet" texte="Vos billets à QR apparaîtront ici après un achat." />
+    )
   }
   return (
     <ul className="bq-billets">
