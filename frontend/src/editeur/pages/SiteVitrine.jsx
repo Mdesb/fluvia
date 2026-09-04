@@ -257,6 +257,25 @@ function EditeurDeBloc({ bloc, onEnregistrer, enCours }) {
         </>
       )}
 
+      {bloc.type === 'rich' && (
+        <>
+          <label className="lbl" htmlFor={`bloc-${bloc.id}`}>Texte de la page</label>
+          <textarea
+            id={`bloc-${bloc.id}`}
+            className="input"
+            rows={14}
+            value={valeur?.html || ''}
+            onChange={(e) => changer({ html: e.target.value })}
+          />
+          <div className="hint">
+            HTML accepté : sous-titres (h2, h3), paragraphes, listes, gras, liens, images, citations.
+            Tout le reste est retiré à l’enregistrement. ⚠ La description courte de la page vient du
+            catalogue du produit et ne se modifie pas ici — sans quoi le site dirait autre chose que
+            ce qui est vendu.
+          </div>
+        </>
+      )}
+
       {bloc.type === 'items' && (
         <>
           <label className="lbl" htmlFor={`bloc-${bloc.id}`}>Une entrée par ligne</label>
@@ -332,7 +351,14 @@ function EditeurDeBloc({ bloc, onEnregistrer, enCours }) {
   )
 }
 
-function PageDaccueil() {
+/**
+ * Les blocs d'un groupe — `accueil` ou `modules`.
+ *
+ * ⚠ UN SEUL COMPOSANT POUR LES DEUX, ET LE GROUPE VIENT DU SERVEUR. La déclaration des blocs vit
+ * dans `SiteBlocks` : ajouter un module au produit fait apparaître son bloc ici, sans toucher à cet
+ * écran. Une liste écrite côté navigateur aurait divergé au premier module ajouté.
+ */
+function EditeurDeBlocs({ groupe, introduction }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Même règle que `ReferentielEditable` : sur une lecture
   // refusée, afficher « aucun bloc » dirait une absence qu'on n'a pas mesurée.
   const [blocs, setBlocs] = useState(null)
@@ -343,11 +369,11 @@ function PageDaccueil() {
   const recharger = useCallback(async () => {
     setErreur(null)
     try {
-      setBlocs(membres(await api.editorBlocs()))
+      setBlocs(membres(await api.editorBlocs()).filter((b) => b.groupe === groupe))
     } catch (e) {
       setErreur(e?.message || 'Les blocs de la page d’accueil n’ont pas pu être lus.')
     }
-  }, [])
+  }, [groupe])
 
   useEffect(() => {
     recharger()
@@ -374,11 +400,7 @@ function PageDaccueil() {
 
   return (
     <div>
-      <p className="hint">
-        Le texte de la page d’accueil. La mise en page reste dans le code ; ce sont les mots qui se
-        modifient ici. ⚠ Les prix ne s’écrivent nulle part sur cette page : la section Tarifs lit le
-        catalogue réel, pour qu’un prix affiché ne puisse pas diverger du prix facturé.
-      </p>
+      <p className="hint">{introduction}</p>
 
       {erreur && <p className="banner-error">{erreur}</p>}
       {succes && <p className="ok">{succes}</p>}
@@ -427,6 +449,7 @@ export default function SiteVitrine({ peutEcrire = true }) {
           ['articles', 'Articles'],
           ['rubriques', 'Rubriques'],
           ['accueil', 'Page d’accueil'],
+          ['modules', 'Pages de modules'],
         ].map(([cle, libelle]) => (
           <button
             key={cle}
@@ -451,7 +474,26 @@ export default function SiteVitrine({ peutEcrire = true }) {
           onEcrit={relireLesRubriques}
         />
       )}
-      {onglet === 'accueil' && <PageDaccueil />}
+      {onglet === 'accueil' && (
+        <EditeurDeBlocs
+          groupe="accueil"
+          introduction={
+            'Le texte de la page d’accueil. La mise en page reste dans le code ; ce sont les mots qui '
+            + 'se modifient ici. ⚠ Les prix ne s’écrivent nulle part : la section Tarifs lit le '
+            + 'catalogue réel, pour qu’un prix affiché ne puisse pas diverger du prix facturé.'
+          }
+        />
+      )}
+      {onglet === 'modules' && (
+        <EditeurDeBlocs
+          groupe="modules"
+          introduction={
+            'Une page par module, à l’adresse /modules/…. Le titre et la description courte viennent '
+            + 'du catalogue du produit — ils ne se saisissent pas. Ce que vous écrivez ici est le '
+            + 'texte long de la page : il n’est pas obligatoire, et la page tient sans lui.'
+          }
+        />
+      )}
     </section>
   )
 }

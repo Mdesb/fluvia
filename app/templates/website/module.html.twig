@@ -1,0 +1,69 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  La page d'un module (ED-11).
+
+  DEUX SOURCES, ET ELLES NE SE MÉLANGENT PAS. La description courte vient du catalogue technique :
+  elle est celle du produit, et personne ne la retouche ici. Le texte long vient d'un bloc rédigeable ;
+  son absence ne laisse pas de trou — la page tient sans lui, et c'est ce qui permet aux vingt pages
+  d'exister avant qu'une seule ligne soit écrite.
+
+  ⚠ `corps|raw` est sûr par construction : ce bloc est assaini À L'ÉCRITURE, par le même assainisseur
+  que le corps d'un article. Le rendu fait confiance à la colonne parce que rien d'autre n'y entre.
+#}
+
+{% block title %}{{ module.libelle }} — Fluvia{% endblock %}
+{% block description %}{{ module.description|slice(0, 300) }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ url('website_module', {slug: module.slug}) }}">{% endblock %}
+
+{% block body %}
+  <article class="bande">
+    <div class="mesure">
+      <p class="fil">
+        <a href="{{ path('website_home') }}">Accueil</a> ·
+        <a href="{{ path('website_modules') }}">Modules</a> ·
+        {{ module.libelle }}
+      </p>
+
+      <h1>{{ module.libelle }}</h1>
+      <p class="chapo">{{ module.description }}</p>
+    </div>
+
+    {% if corps is not empty %}
+      <div class="mesure corps-article">
+        {{ corps|raw }}
+      </div>
+    {% endif %}
+
+    <div class="mesure">
+      <p class="actions">
+        <a class="btn btn-primaire btn-grand" href="{{ path('website_home') }}#souscrire">Essayer 14 jours avec ce module</a>
+        <a class="btn btn-fantome btn-grand" href="{{ path('website_home') }}#tarifs">Voir les tarifs</a>
+      </p>
+      <p class="note">
+        Ce module s'ajoute à une formule et se facture au mois. Il se désactive quand vous voulez —
+        vos données restent.
+      </p>
+    </div>
+  </article>
+
+  {% if voisins|length > 0 %}
+    <section class="bande bande-creuse">
+      <div class="mesure">
+        <h2>Dans la même famille</h2>
+      </div>
+      <ul class="grille" role="list">
+        {% for autre in voisins %}
+          <li class="carte">
+            <h3><a href="{{ path('website_module', {slug: autre.slug}) }}">{{ autre.libelle }}</a></h3>
+            <p>{{ autre.description }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  <p><a href="{{ path('website_modules') }}">Tous les modules de Fluvia</a></p>
+{% endblock %}
