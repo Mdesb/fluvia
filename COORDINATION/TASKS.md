@@ -1097,3 +1097,33 @@ standard, les écrirait très bien — un défaut visible seulement à la créat
 `sport` hors énumération part en 400 par le sérialiseur, et le repli `?? CourtSport::Padel` du
 processeur ne couvre que le sport **absent**. Mon premier commentaire annonçait l'inverse ; il a été
 corrigé, et un test fige la frontière.
+
+---
+
+## 3 septies. Trouvé par `allaccess-a9` le 04/09 — le code de retrait est lisible, donc il ne prouve rien
+
+`RetraitClickCollect::$codeRetrait` est déclaré dans le groupe `retrait:read`. L'API le renvoie donc
+à quiconque peut lire la collection (`boutique.lire` **ou** `boutique.lire_soi`).
+
+⚠ **Or le serveur le compare avec `hash_equals`** — comparaison en temps constant, celle qu'on
+réserve aux secrets (`ValiderRetraitClickCollectProcessor:36`). Les deux faits ne peuvent pas être
+vrais ensemble :
+
+    ou bien le code est une PREUVE   → il ne doit pas être lisible
+    ou bien il ne l'est pas          → `hash_equals` est du décor
+
+**Ce que ça coûte concrètement** : un agent qui voit le code n'a plus besoin de le demander. Il
+valide sans vérifier, et n'importe qui repart avec la commande d'un autre. Le contrôle reste vert,
+la protection a disparu — c'est la forme la plus discrète de régression.
+
+**L'écran livré (`78a15617`) ne l'affiche pas**, et une garde de son script de correctif l'interdit.
+Mais c'est un pansement : la donnée part quand même sur le réseau, et l'onglet réseau du navigateur
+la montre.
+
+**Le correctif est d'un seul mot** : retirer `codeRetrait` du groupe `retrait:read`.
+
+⚠ **Vérifier d'abord qui le lit légitimement.** Le client doit peut-être le voir dans SON espace
+(`boutique.lire_soi`) : dans ce cas il faut un groupe distinct, pas une suppression sèche. C'est le
+genre de correctif où retirer trop casse un écran client sans qu'aucun test du back ne tombe.
+
+**Non claimé.** Périmètre `app/src/Boutique/` — hors du mien.
