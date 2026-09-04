@@ -83,12 +83,27 @@ final class ConfirmerReservationProcessor implements ProcessorInterface
             && (float) $montant > 0.0;
 
         if ($session !== null && $doitPayer) {
+            // ⚠ SANS PRODUIT, ON N'ENCAISSE PAS — mais ON CONFIRME QUAND MÊME. La confirmation est
+            // le geste du joueur ; le paramétrage manquant est celui de l'exploitant. Refuser la
+            // confirmation entière ferait porter au joueur une faute qui n'est pas la sienne, et
+            // laisserait son créneau expirer.
+            $produitRef = $this->produitDe($data);
+            if ($produitRef === null) {
+                throw new UnprocessableEntityHttpException(
+                    'Aucun produit tarifaire sur cette activité : impossible de rattacher un encaissement '
+                    . 'à la comptabilité. Confirmez sans session de caisse, ou renseignez le produit '
+                    . 'tarifaire sur cette activité.',
+                );
+            }
+
             $vente = $this->venteHandler->creerVente(
                 $session,
                 $montant,
                 $data->getOrganisateur()?->getClient()?->getId(),
                 'Confirmation réservation ' . (string) $data->getId(),
-                $this->produitDe($data),
+                $produitRef,
+                $data->getCreneau()?->getActivite()?->getId(),
+                $data->getCreneau()?->getRessource()?->getId(),
             );
             $data->setVenteRattachee($vente);
         }

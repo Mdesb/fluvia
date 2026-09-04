@@ -64,6 +64,19 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
         $lignes = $vente->getLignes()->toArray();
         self::assertCount(1, $lignes, 'une réservation de terrain, une ligne');
 
+        // ⚠ L'ORIGINE DE LA RECETTE (§8.12). Sans la ressource, « combien le padel a-t-il rapporté »
+        // reste sans réponse : la ventilation comptable ne voit que la catégorie du produit, et un
+        // créneau de padel ne porte AUCUNE activité — c'est la ressource qui mène au sport, via
+        // `TerrainPadel::$sport`.
+        $terrain = $em->getRepository(\App\Padel\Entity\TerrainPadel::class)->find($this->idTerrain());
+        self::assertNotNull($terrain, 'témoin : le terrain existe');
+        self::assertSame(
+            (string) $terrain->getRessource()?->getId(),
+            (string) $lignes[0]->getRessource(),
+            'la ligne doit dire QUEL ÉQUIPEMENT a été occupé — sinon le padel est invisible dans '
+            . 'les recettes, et la question ne pourra plus jamais être posée sur ces ventes',
+        );
+
         self::assertSame(
             (string) $produitTerrain,
             (string) $lignes[0]->getProduit(),
@@ -134,6 +147,45 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
         self::assertResponseStatusCodeSame(
             404,
             'la session d’un autre établissement doit être introuvable — sinon on y crée une écriture',
+        );
+    }
+
+    /**
+     * ⚠ SANS PRODUIT PARAMÉTRÉ, LA VENTE EST REFUSÉE — elle n'est plus inventée.
+     *
+     * `VenteReservationHandler` faisait `setProduit($produitRef ?? Uuid::v4())` : sans produit, la
+     * ligne désignait un produit qui n'existe pas — aucune catégorie comptable, donc absente de la
+     * ventilation, et `LineLabelStamper` laissait le libellé nul, ce qu'il documente lui-même.
+     *
+     * Arbitrage de Maxime le 04/09 : produit obligatoire. Le paramètre est désormais NON NULLABLE,
+     * et chaque appelant doit dire quoi faire quand il n'en a pas.
+     *
+     * ⚠ CE TEST NE PEUT PASSER QUE SI LE REFUS EXISTE. Sans lui la réservation aboutirait, avec une
+     * vente parfaitement valide pointant vers un produit fantôme, et rien ne le signalerait.
+     *
+     * ⚠ Et une réservation SANS session reste acceptée — c'est ce que prouve le test voisin. Un
+     * paramétrage manquant ne doit bloquer que l'encaissement, pas la réservation.
+     */
+    public function testSansProduitParametreLEncaissementEstRefuse(): void
+    {
+        [$http, $entete] = $this->adminSurA();
+        $http->disableReboot();
+
+        // On ne pose PAS `produitTerrainRef` : c'est l'état de la préproduction, mesuré le 04/09.
+        $session = $this->sessionOuverteSur(SocleFixtures::ETAB_A_NOM);
+
+        $http->request('POST', '/api/padel/terrains/' . $this->idTerrain() . '/reservations', $entete + [
+            'json' => [
+                'debut' => (new \DateTimeImmutable('next tuesday'))->setTime(19, 0)->format(DATE_ATOM),
+                'dureeMinutes' => 90,
+                'organisateur' => '/api/beneficiaires/' . $this->idJoueur(1),
+                'session' => (string) $session->getId(),
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(
+            422,
+            'sans produit paramétré, la vente doit être REFUSÉE — pas créée sur un produit inventé',
         );
     }
 

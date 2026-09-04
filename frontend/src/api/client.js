@@ -1069,6 +1069,19 @@ export const api = {
   supprimerIndisponibilite: (id) =>
     request(`/api/reservation_indisponibilites/${id}`, { method: 'DELETE' }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
+  // CREER ET CORRIGER UNE ACTIVITE — les deux routes existaient, aucun ecran ne les appelait.
+  //
+  // ⚠ LE NOM EST DELIBEREMENT LONG : `creerActivite` existe deja et designe une ACTIVITE
+  // COMMERCIALE du CRM (un appel, une relance). Deux objets sans rapport sous le meme mot — le
+  // piege qui m'a deja coute deux mesures fausses aujourd'hui.
+  //
+  // ⚠ `produitTarifReference` s'ecrit en IRI, et `null` DETACHE. Un champ absent laisserait la
+  // valeur precedente : sans le `null` explicite, on ne pourrait jamais retirer un produit pose
+  // par erreur.
+  creerActiviteReservation: (corps) =>
+    request('/api/reservation_activites', { method: 'POST', body: corps, ld: true }),
+  majActiviteReservation: (id, corps) =>
+    request(`/api/reservation_activites/${id}`, { method: 'PATCH', body: corps }),
   // PLACEMENT LIBRE : les debuts ou un rendez-vous TIENDRAIT, un jour donne.
   //
   // Sans `ressource`, on interroge tous les praticiens capables -- le mode << avec qui est
@@ -2382,6 +2395,37 @@ export const api = {
   // Catalogue d'offres, côté administration éditeur (ED-6). Ces routes rendent AUSSI ce que la
   // vitrine cache — formules retirées de la vente, formules incohérentes — parce que c'est le seul
   // écran où on peut les corriger.
+
+  // ── Site vitrine de l'editeur : blog et page d'accueil (ED-10) ───────────────────────────────
+  //
+  // ⚠ CES APPELS SONT GARDES PAR L'ETABLISSEMENT ACTIF, PAS PAR CET OBJET. `/editor/website/**`
+  // repond 404 a une session qui n'est pas celle de l'editeur — l'ecran n'a donc aucune regle de
+  // droits a rejouer, et c'est D39 dans sa forme la plus sure : ne pas filtrer du tout plutot que
+  // filtrer a moitie.
+  editorArticles: () => request('/api/editor/website/posts'),
+  editorArticle: (id) => request(`/api/editor/website/posts/${id}`),
+  // ⚠ `ld: true` : ces ressources n'exposent que `application/ld+json`. Sans lui, la creation
+  // part en `application/json` et le back repond 415 — et RIEN ne l'avait dit :
+  // `verifier-formats.mjs` saute deliberement les routes a `uriTemplate` sur mesure, parce qu'il
+  // ne peut pas savoir lesquelles ont `input: false` (ou ld+json est au contraire interdit).
+  // Trouve le 04/09 en ouvrant l'ecran : le formulaire affichait le message d'API Platform, en
+  // anglais, a la place de l'article qu'on venait d'ecrire.
+  creerEditorArticle: (corps) => request('/api/editor/website/posts', { method: 'POST', body: corps, ld: true }),
+  majEditorArticle: (id, corps) => request(`/api/editor/website/posts/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorArticle: (id) => request(`/api/editor/website/posts/${id}`, { method: 'DELETE' }),
+
+  editorRubriques: () => request('/api/editor/website/categories'),
+  creerEditorRubrique: (corps) => request('/api/editor/website/categories', { method: 'POST', body: corps, ld: true }),
+  majEditorRubrique: (id, corps) => request(`/api/editor/website/categories/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorRubrique: (id) => request(`/api/editor/website/categories/${id}`, { method: 'DELETE' }),
+
+  editorBlocs: () => request('/api/editor/website/blocks'),
+  editorBloc: (cle) => request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`),
+  // PUT et non PATCH : un bloc n'a qu'une valeur, et elle se remplace en entier. Une fusion
+  // partielle sur une liste de cartes demanderait une semantique d'index que personne n'a demandee.
+  enregistrerEditorBloc: (cle, corps) =>
+    request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`, { method: 'PUT', body: corps, ld: true }),
+
   editorPlans: () => request('/api/editor/catalog/plans'),
   creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
   majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),

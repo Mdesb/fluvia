@@ -164,12 +164,30 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         // invisible à la ventilation.
         $session = $this->sessionOptionnelle($corps['session'] ?? null);
         if ($session !== null && $prix > 0.0) {
+            // ⚠ SANS PRODUIT, ON N'ENCAISSE PAS. `ParametragePadel::$produitTerrainRef` est le
+            // produit sous lequel le créneau se vend ; il est nullable, et il l'est en préproduction.
+            // Le handler inventait alors un `Uuid::v4()` — un produit inexistant, invisible à la
+            // ventilation comptable. On refuse, et on nomme le paramétrage qui manque.
+            $produitRef = $parametrage?->getProduitTerrainRef();
+            if ($produitRef === null) {
+                throw new UnprocessableEntityHttpException(
+                    'Aucun produit de terrain paramétré : la vente ne serait rattachée à aucune catégorie '
+                    . 'comptable. Renseignez « produit du terrain » dans le paramétrage padel de cet '
+                    . 'établissement, ou réservez sans session de caisse.',
+                );
+            }
+
             $vente = $this->venteHandler->creerVente(
                 $session,
                 $montantDu,
                 $organisateur->getClient()?->getId(),
                 'Réservation terrain ' . (string) $creneau->getId(),
-                $parametrage?->getProduitTerrainRef(),
+                $produitRef,
+                // ⚠ PAS D'ACTIVITÉ, ET ON N'EN INVENTE PAS : un créneau de padel n'en porte aucune.
+                // C'est la RESSOURCE qui mène au sport, via `TerrainPadel::$sport`. Sans elle, tout
+                // le padel serait invisible dans les recettes — exactement la question posée.
+                null,
+                $ressource->getId(),
             );
             $reservation->setVenteRattachee($vente);
         }

@@ -11,6 +11,8 @@ use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Produit;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\RegleAnnulation;
@@ -69,7 +71,10 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
 
     public function getDependencies(): array
     {
-        return [SocleFixtures::class, ComptaFixtures::class, CrmFixtures::class, SepaFixtures::class];
+        // ⚠ `OffreFixtures` AJOUTEE LE 04/09 : les activites portent desormais un produit
+        // tarifaire, et sans cette dependance les produits pouvaient ne pas exister encore.
+        // Aucun cycle : `OffreFixtures` ne depend que de `SocleFixtures`.
+        return [SocleFixtures::class, ComptaFixtures::class, CrmFixtures::class, SepaFixtures::class, OffreFixtures::class];
     }
 
     public function load(ObjectManager $manager): void
@@ -180,9 +185,29 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
             ->setLibelle(self::RESSOURCE_GUIDE_LIBELLE)->setCapacitePropre(1)->setCompetenceRequise('habilitation_guide');
         $manager->persist($guide);
 
+        // ⚠ LE PRODUIT TARIFAIRE EST OBLIGATOIRE DEPUIS LE 04/09 sur toute activité PAYANTE :
+        // sans lui, `ReserverProcessor` refuse la vente plutôt que d'inventer un produit inexistant.
+        // On le résout par son libellé, comme le reste de ces fixtures.
+        // ⚠ ON CHERCHE PAR `libelleRecherche`, PAS PAR `libelle`. `Produit::$libelle` est un TABLEAU
+        // (`['fr' => '...']`) : un `findOneBy(['libelle' => 'Entrée unitaire piscine'])` compare une
+        // chaine a une colonne JSON, ne trouve rien, et rend `null` EN SILENCE — puis le `?->` de
+        // l'activite avale le nul, et la garde du produit obligatoire refuse la vente. C'est le
+        // defaut meme contre lequel cette garde a ete ecrite, reproduit une fonction plus loin.
+        $produitEntree = $manager->getRepository(Produit::class)
+            ->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_ENTREE]);
+        if ($produitEntree === null) {
+            // ⚠ ON NE CONTINUE PAS SANS. Poser une activite payante sans produit recree exactement
+            // l'etat que la garde refuse, et le prochain le decouvrirait par 33 tests rouges.
+            throw new \RuntimeException(
+                'Fixture : produit « ' . OffreFixtures::PRODUIT_ENTREE . ' » introuvable. '
+                . 'Les activites payantes ne peuvent pas etre creees sans produit tarifaire.',
+            );
+        }
+
         // --- Activités (cahier M5-02) : une payante, une gratuite ---
         $activitePadel = (new Activite())->setEtablissement($etabA)->setLibelle(self::ACTIVITE_PADEL_LIBELLE)
-            ->setTypeActivite('sport')->setDureeMinutes(90)->setTarifReferenceMontant('24.00');
+            ->setTypeActivite('sport')->setDureeMinutes(90)->setTarifReferenceMontant('24.00')
+            ->setProduitTarifReference($produitEntree);
         $manager->persist($activitePadel);
 
         $activiteGratuite = (new Activite())->setEtablissement($etabA)->setLibelle(self::ACTIVITE_GRATUITE_LIBELLE)
@@ -191,7 +216,8 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
 
         $activiteVisite = (new Activite())->setEtablissement($etabA)->setLibelle(self::ACTIVITE_VISITE_LIBELLE)
             ->setTypeActivite('culture')->setDureeMinutes(60)->setTarifReferenceMontant('12.00')
-            ->setCompetenceExigee('habilitation_guide');
+            ->setCompetenceExigee('habilitation_guide')
+            ->setProduitTarifReference($produitEntree);
         $manager->persist($activiteVisite);
 
         // --- Règle d'annulation établissement (RG-M5-09) : délai franc 24 h, montant fixe 10 €,

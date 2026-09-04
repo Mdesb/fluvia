@@ -1,0 +1,85 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  La liste des articles (ED-10).
+
+  ⚠ ELLE NE MONTRE QUE DU PUBLIÉ, ET CE N'EST PAS CETTE PAGE QUI LE DÉCIDE. `BlogReader` est le seul
+  endroit qui sait dire « publié » — statut ET date au passé. Refaire la condition ici en ferait une
+  deuxième, et le jour où l'une des deux oublie la date, ce sont des brouillons qui s'affichent.
+#}
+
+{% block title %}Le blog de Fluvia{% if rubrique %} — {{ rubrique.name }}{% endif %}{% endblock %}
+{% block description %}{% if rubrique and rubrique.description %}{{ rubrique.description }}{% else %}Ce qu'on apprend en équipant des piscines, des patinoires, des salles et des musées : gestion, billetterie, accès, facturation.{% endif %}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ rubrique ? url('website_blog_category', {slug: rubrique.slug}) : url('website_blog_index') }}">{% endblock %}
+
+{% block body %}
+  <section class="bande hero">
+    <div class="mesure">
+      <h1>{% if rubrique %}{{ rubrique.name }}{% else %}Le blog{% endif %}</h1>
+      {% if rubrique and rubrique.description %}
+        <p class="chapo">{{ rubrique.description }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if rubriques|length > 0 %}
+    <section class="bande bande-etroite">
+      <ul class="jetons" role="list">
+        <li><a href="{{ path('website_blog_index') }}">Toutes</a></li>
+        {% for r in rubriques %}
+          <li><a href="{{ path('website_blog_category', {slug: r.slug}) }}">{{ r.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="bande">
+    {% if articles|length == 0 %}
+      {#
+        Une absence se dit. Une grille vide laisse le visiteur chercher ce qu'il a mal fait, et un
+        robot conclure que la page est cassée.
+      #}
+      <div class="mesure">
+        <p class="etat">
+          {% if rubrique %}Aucun article publié dans cette rubrique pour l'instant.{% else %}Le blog n'a pas encore d'article publié.{% endif %}
+        </p>
+      </div>
+    {% else %}
+      <ul class="grille" role="list">
+        {% for article in articles %}
+          <li class="carte">
+            {% if article.coverUrl %}
+              <img src="{{ article.coverUrl }}" alt="{{ article.coverAlt|default('') }}" loading="lazy">
+            {% endif %}
+            <h2><a href="{{ path('website_blog_post', {slug: article.slug}) }}">{{ article.title }}</a></h2>
+            <p class="note">
+              <time datetime="{{ article.publishedAt|date('Y-m-d') }}">{{ article.publishedAt|date('d/m/Y') }}</time>
+              {% if article.category %} · {{ article.category.name }}{% endif %}
+            </p>
+            <p>{{ article.excerpt }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+
+  {% if pages > 1 %}
+    <section class="bande bande-etroite">
+      <div class="mesure">
+        <p class="actions">
+          {% if page > 1 %}
+            <a class="btn btn-fantome" href="{{ path(rubrique ? 'website_blog_category' : 'website_blog_index', rubrique ? {slug: rubrique.slug, page: page - 1} : {page: page - 1}) }}">Page précédente</a>
+          {% endif %}
+          {% if page < pages %}
+            <a class="btn btn-fantome" href="{{ path(rubrique ? 'website_blog_category' : 'website_blog_index', rubrique ? {slug: rubrique.slug, page: page + 1} : {page: page + 1}) }}">Page suivante</a>
+          {% endif %}
+        </p>
+        <p class="note">Page {{ page }} sur {{ pages }}.</p>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  <p>Le blog de Fluvia. <a href="/blog/rss.xml">Flux RSS</a>.</p>
+{% endblock %}

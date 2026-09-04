@@ -199,7 +199,31 @@ final class ReserverProcessor implements ProcessorInterface
                     throw new UnprocessableEntityHttpException('Aucun quota disponible : une vente à l\'unité est nécessaire (session de caisse requise, RG-M5-02).');
                 }
                 $clientRef = $organisateur->getClient()?->getId();
-                $vente = $this->venteHandler->creerVente($session, $tarif, $clientRef, 'Réservation ' . (string) $creneau->getId(), $activite?->getProduitTarifReference()?->getId());
+                // ⚠ DEUX `?->` QUI RETOMBAIENT SUR `null`, ET LE HANDLER INVENTAIT UN PRODUIT.
+                // Mesuré le 04/09 : les 3 activités de la préproduction sont sans produit tarifaire,
+                // donc cette chaîne rendait `null` à tous les coups. La vente partait avec un
+                // `Uuid::v4()` — un produit inexistant, invisible à la ventilation comptable.
+                $produitRef = $activite?->getProduitTarifReference()?->getId();
+                if ($produitRef === null) {
+                    throw new UnprocessableEntityHttpException(sprintf(
+                        'L\'activité de ce créneau n\'a pas de produit tarifaire : la vente ne peut pas être '
+                        . 'rattachée à la comptabilité. Renseignez `produitTarifReference` sur l\'activité%s.',
+                        $activite === null ? '' : ' « ' . $activite->getLibelle() . ' »',
+                    ));
+                }
+
+                $vente = $this->venteHandler->creerVente(
+                    $session,
+                    $tarif,
+                    $clientRef,
+                    'Réservation ' . (string) $creneau->getId(),
+                    $produitRef,
+                    // ⚠ L'ORIGINE DE LA RECETTE (§8.12) : sans elle, « combien la visite guidée
+                    // a-t-elle rapporté » reste sans réponse — la ventilation ne voit que la
+                    // catégorie comptable du produit.
+                    $activite?->getId(),
+                    $creneau->getRessource()?->getId(),
+                );
                 $reservation->setModeDecompte(ModeDecompteReservation::VenteUnite);
                 $reservation->setVenteRattachee($vente);
                 $reservation->setMontantDu($tarif);

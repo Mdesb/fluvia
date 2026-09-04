@@ -22,6 +22,7 @@ import Offres from './pages/Offres.jsx'
 import Clients from './pages/Clients.jsx'
 import Facturation from './pages/Facturation.jsx'
 import Reglements from './pages/Reglements.jsx'
+import SiteVitrine from './pages/SiteVitrine.jsx'
 
 // Administration de l'éditeur (ED-6) — l'outil avec lequel l'éditeur pilote ses clients, ses offres
 // et ses abonnements.
@@ -130,7 +131,11 @@ export default function EditeurApp() {
   // rien — et c'est voulu : un filtre d'affichage qui rattrape une garde manquante la fait oublier.
   // Les cinq ecrans qui n'existent que pour l'editeur. Le reste — agenda, assistance, documents… —
   // sont les outils communs du produit, employes ici comme partout ailleurs.
-  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'acces-support'])
+  // ⚠ DEUX LISTES, ET OUBLIER LA SECONDE NE CASSE RIEN — l'ecran apparait simplement dans le
+  // mauvais groupe. `onglets` dit ce qui existe, cet ensemble dit ce qui appartient a l'editeur.
+  // « Site vitrine » a passe une heure sous « OUTILS », entre l'agenda et l'assistance, faute
+  // d'etre ici : rien n'echouait, le menu etait juste faux. Vu en ouvrant l'ecran.
+  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'site', 'acces-support'])
 
   const onglets = [
     { id: 'abonnements', ic: 'subscriptions', label: 'Abonnements', perms: ['editor.read_subscription'] },
@@ -138,6 +143,7 @@ export default function EditeurApp() {
     { id: 'clients', ic: 'customers', label: 'Clients', perms: ['editor.read_customer'] },
     { id: 'facturation', ic: 'invoicing', label: 'Facturation', perms: ['editor.read_billing'] },
     { id: 'reglements', ic: 'settlements', label: 'Règlements', perms: ['editor.read_billing'] },
+    { id: 'site', ic: 'website', label: 'Site vitrine', perms: ['editor.manage_website'] },
     // ⚠ LE PENDANT DU BOUTON « BASCULER EN MODE SUPPORT ». Ouvrir un accès était possible ; savoir
     // combien étaient ouverts, chez qui et depuis quand, ne l'était pas — et un accès que personne
     // ne voit finit par ne plus se refermer. C'est aussi le SEUL endroit d'où l'on révoque :
@@ -277,6 +283,7 @@ export default function EditeurApp() {
             {onglet === 'clients' && <Clients onRefus={() => setRefuse(true)} />}
             {onglet === 'facturation' && <Facturation onRefus={() => setRefuse(true)} />}
             {onglet === 'reglements' && <Reglements onRefus={() => setRefuse(true)} />}
+            {onglet === 'site' && <SiteVitrine />}
             {onglet === 'acces-support' && <AccesAssistance onRefus={() => setRefuse(true)} />}
             {/*
               Les deux écrans de l'application client, tels quels : leur API est cadrée sur

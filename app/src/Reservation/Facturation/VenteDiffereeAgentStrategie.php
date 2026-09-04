@@ -49,12 +49,25 @@ final class VenteDiffereeAgentStrategie implements StrategieFacturationNoShow
         $organisateur = $reservation?->getOrganisateur();
         $clientRef = $organisateur?->getClient()?->getId();
 
+        // ⚠ MÊME GARDE QUE `DebitPmvStrategie` : sans produit, la vente pointerait vers un produit
+        // inexistant et sortirait de la ventilation comptable. On refuse, et on dit quoi paramétrer.
+        $produitRef = $reservation?->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId();
+        if ($produitRef === null) {
+            return new ResultatFacturationNoShow(
+                false,
+                'L\'activité de ce créneau n\'a pas de produit tarifaire : la vente ne serait rattachée à '
+                . 'aucune catégorie comptable. Renseignez-le avant d\'émettre cette facturation.',
+            );
+        }
+
         $vente = $this->venteHandler->creerVente(
             $session,
             $facturation->getMontant(),
             $clientRef,
             'No-show / annulation tardive — réservation ' . (string) $reservation?->getId(),
-            $reservation?->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId(),
+            $produitRef,
+            $reservation?->getCreneau()?->getActivite()?->getId(),
+            $reservation?->getCreneau()?->getRessource()?->getId(),
         );
 
         $facturation->setVenteRattachee($vente);

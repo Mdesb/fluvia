@@ -385,11 +385,18 @@ Arbitrage de Maxime : **produit obligatoire**. Lever si absent.
 ⚠ **NE PAS LEVER AVANT D'AVOIR ÉQUIPÉ LES DEUX APPELANTS QUI N'EN PASSENT PAS**, sinon vous cassez
 le no-show et le débit PMV :
 
-    ReserverProcessor:202          passe `$activite?->getProduitTarifReference()?->getId()`
-                                   ⚠ DEUX `?->` : il retombe sur `null` dès qu'une activité n'a
-                                   pas de produit-tarif. À traiter comme les deux autres.
-    DebitPmvStrategie:52           n'en passe aucun
-    VenteDiffereeAgentStrategie:52 n'en passe aucun
+⚠ **CE TABLEAU DISAIT « n'en passe aucun » POUR DEUX D'ENTRE EUX. C'ÉTAIT FAUX.** Ma mesure était
+un `grep -A3` autour de `creerVente(`, et l'argument produit est à la **cinquième** ligne de l'appel :
+la fenêtre s'arrêtait deux lignes trop tôt. Les trois passent bien une expression. Corrigé le 04/09
+en ouvrant les fichiers.
+
+    ReserverProcessor              `$activite?->getProduitTarifReference()?->getId()`
+    DebitPmvStrategie              `$reservation->getCreneau()?->getActivite()?->…?->getId()`
+    VenteDiffereeAgentStrategie    idem
+
+Le vrai défaut est donc plus simple, et pire : **les trois sont des chaînes de `?->` qui rendent
+`null`** dès qu'une activité n'a pas de produit tarifaire — et **les 3 activités de la préproduction
+sont dans ce cas**, mesuré le 04/09.
 
 ⚠ **ET MESUREZ L'IMPACT AVANT DE CONCLURE** : trois sites d'appel ne sont pas trois défauts. Comptez
 combien de `LigneVente` existantes pointent vers un produit absent du catalogue — les occurrences
@@ -438,16 +445,56 @@ nulle part aujourd'hui.
 
 #### CE QU'IL FAUT AVANT LA LEVÉE
 
-1. **Un écran qui permette de poser le produit sur une activité.** C'est le vrai prérequis, et il
-   n'était pas dans la fiche. Les activités ne sont affichées nulle part : c'est un écran à
-   construire, pas un champ à ajouter.
-2. **Les trois activités existantes configurées.**
+1. ~~**Un écran qui permette de poser le produit sur une activité.**~~ ✅ **LIVRÉ le 04/09 par
+   `allaccess-a9`** (`20b81b1e`, servi et vérifié). Onglet « Activités » dans Réservation : liste,
+   création, modification, et le produit de référence enfin réglable. Le manque y est signalé —
+   bandeau qui compte les activités concernées, pastille par ligne — **sans verrouiller
+   l'enregistrement** : bloquer aurait empêché de corriger les autres champs tant que le produit
+   n'était pas tranché, transformant un défaut en impasse.
+2. **Les trois activités existantes configurées.** ⚠ À faire par un humain : c'est une décision
+   produit, pas une migration. Sous quel produit se vend un cours, un créneau de bassin, un
+   rendez-vous ? Personne d'autre que l'exploitant ne peut répondre.
+
+   ⚠ **ET LE TYPE DU PRODUIT DÉCIDE DE CE QUE LA VENTE FABRIQUE — mesuré le 04/09.**
+
+       ValiderVenteService::emetSupport()   billet OU carnet OU acces  →  un support est ÉMIS
+
+   Les quatre types existants : `abonnement` (formule+acces), `boutique_stock` (stock+consommateur),
+   `carte` (carnet+consommateur), `entree_unitaire` (billet+consommateur). **Aucun ne décrit un
+   service réservé**, et les trois premiers comme le quatrième émettent un support.
+
+   Rattacher une activité à `entree_unitaire` ferait donc émettre un billet à chaque réservation
+   vendue — y compris **quand on facture un no-show** (`DebitPmvStrategie` valide la vente) : un
+   ticket remis à quelqu'un pour ne pas être venu.
+
+   ⚠ **Le référentiel des types est FERMÉ À L'ÉCRITURE, délibérément** — `TypeProduit` n'expose que
+   `GetCollection` et `Get`, et son docblock le dit : « référentiel administré (pas d'écriture API
+   en L1) ». Ce n'est pas un écran qui manque. Seul `ModelePiscineTypeGenerator` en crée, par
+   `trouverOuCreerTypeProduit` — dont « Cours piscine » en `billet + consommateur`, ce qui est la
+   réponse que le dépôt s'est déjà donnée pour un cours.
+
+   **Statut : Maxime réfléchit au type à retenir (04/09). Ne rattachez PAS les activités à un type
+   existant en attendant** — une facette de trop change silencieusement ce que la vente fabrique, et
+   le défaut ne se voit ni à la caisse ni au ticket.
+
+   ⚠ **Au passage, ce qui explique le silence du défaut initial** : `ValiderVenteService:261` fait
+   `find($ligne->getProduit())` et **retourne `null` sans rien dire** quand le produit n'existe pas.
+   Pas de support, pas d'erreur, pas de trace. Un produit fantôme ne fait donc AUCUN bruit — c'est
+   ce qui lui a permis de vivre.
 3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
 
-Tant que 1 n'existe pas, livrer la levée transforme un défaut comptable invisible en refus de vente
-visible. C'est un mauvais échange, et il est irréversible pour l'exploitant qui le subit.
+⚠ **NE PAS SAUTER LE 2.** Le 1 est fait, mais les trois activités sont toujours sans produit :
+livrer la levée maintenant refuserait encore 100 % des ventes de réservation. La seule chose qui a
+changé, c'est qu'on peut désormais les configurer — et vérifier qu'on l'a fait :
 
-**Statut : mesuré, bloqué sur le prérequis 1. Non claimé — disponible pour qui prend l'écran.**
+    SELECT COUNT(*) FROM reservation_activite WHERE produit_tarif_reference_id IS NULL;
+    -- doit rendre 0 AVANT de livrer la levée
+
+⚠ **Et le compagnon du défaut est toujours là** : `VenteReservationHandler:44` fait
+`setTypeTarif(Uuid::v4())` **sans condition**. Corriger le produit sans lui laisserait la moitié du
+fantôme en place — la ligne désignerait un vrai produit et un type de tarif inexistant.
+
+**Statut : prérequis 1 levé. Bloqué sur le 2, qui appartient à Maxime. Non claimé.**
 
 ---
 
@@ -820,6 +867,115 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 → Décider : une opération `encaisser` sur la réservation, ou rendre la session obligatoire et
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
+
+### ⚠ 8.13 — Le garde-fou des références libres indexe par NOM COURT, et confond les homonymes
+
+Trouvé le 04/09 en ajoutant deux références libres à `LigneVente` : le compte de propriétés
+surveillées est passé de **71 à 72** alors que j'en ajoutais **deux**. Une seule était vue.
+
+**La cause**, `bin/garde-fou-references-libres.php` lignes 65 et 124 :
+
+    @return array<string, string> nom de propriété => fichier qui la déclare
+
+L'inventaire est indexé par **nom de propriété seul, à travers tout le dépôt**. `Creneau::$activite`
+(une relation) et `LigneVente::$activite` (une référence libre) occupent donc la **même case**, et
+seule la dernière parcourue survit — avec sa classification. Mes deux champs sont classés
+« relation » et **ne sont pas protégés** par ce contrôle.
+
+⚠ **C'EST EXACTEMENT LE DÉFAUT DU PROTOTYPE DU n°34** (T22) : « il indexait les processeurs par leur
+nom court, et neuf classes du dépôt s'appellent `EstablishmentStampProcessor` — elles s'écrasaient
+l'une l'autre ». Le même piège, dans un autre garde-fou, trouvé le même jour.
+
+⚠ **Et le fichier fait DÉJÀ bien à un autre endroit** : ses *trouvailles* sont clefées
+`fichier:propriete:forme` (ligne 412). C'est l'inventaire qui est en cause, pas la logique.
+
+**Ampleur, mesurée** : 192 noms de propriété distincts dans `app/src`, dont **44 déclarés sur
+plusieurs entités**. Tous ne sont pas dans le périmètre du contrôle (il ne regarde que les `?Uuid`
+et les relations), mais deux au moins le sont, démontrés.
+
+**Le remède** : clefer l'inventaire par `fichier:propriete`, comme les trouvailles. ⚠ Ça fera
+apparaître des cas jusque-là masqués : il faudra les trier — geler ceux qui sont légitimes AVEC leur
+raison écrite, corriger les autres — et surtout **ne pas régénérer la ligne de base en bloc**, ce qui
+gèlerait la dérive au lieu de la montrer.
+
+---
+
+### ⚠ 8.12 — La préproduction n'a AUCUN produit à vendre pour un terrain de padel
+
+Constaté le 04/09, en posant la garde « produit obligatoire » (§8.8 c). Les trois activités de la
+préproduction n'ont pas de produit tarifaire, et **aucun produit du catalogue ne leur correspond** :
+
+    Padel 90 min          sport      24,00 €   →  aucun produit « padel » n'existe
+    Visite guidée musée   culture    12,00 €   →  rien qui aille (Audioguide est un complément)
+    Créneau libre bassin  natation    0,00 €   →  n'en a pas besoin, aucune vente n'est créée
+
+⚠ **CE N'EST PAS SEULEMENT UN TROU DE DONNÉES DE DÉMONSTRATION.** `ParametragePadel::$produitTerrainRef`
+est vide pour la même raison. La question de fond est : **qu'est-ce qu'on vend quand on réserve un
+terrain ?** Un produit « location de terrain » par établissement, un par durée, un par sport ? Elle
+commande la ventilation comptable de toutes les recettes de réservation.
+
+⚠ **JE N'EN AI ASSIGNÉ AUCUN**, et c'est délibéré : choisir « Entrée unitaire piscine » pour une
+activité de padel mettrait une fausse donnée dans la préproduction et rendrait la ventilation
+comptable menteuse — exactement ce que la garde vient d'empêcher.
+
+**Effet aujourd'hui** : une réservation payante accompagnée d'une session de caisse répond 422 avec
+le message qui nomme le paramétrage manquant. Une réservation SANS caisse passe normalement.
+Le blocage est donc visible et explicite, pas silencieux.
+
+**Ce qu'il faut** : (1) l'arbitrage produit de Maxime, (2) un écran — `produitTarifReference` est
+dans `activite:write` mais **aucun écran ne le propose**, et il n'existe aucun écran de création
+d'activité du tout.
+
+---
+
+### ⚠ 8.11 — Le TYPE DE TARIF est lui aussi tiré au hasard
+
+Vu en corrigeant D-2, le 04/09. `VenteReservationHandler` ne fait plus `setProduit(Uuid::v4())` —
+le produit est obligatoire depuis l'arbitrage de Maxime. Mais la ligne suivante fait toujours :
+
+    $ligne->setTypeTarif(Uuid::v4());
+
+Même famille, autre champ : une référence tirée au hasard, qui ne désigne aucun type de tarif
+existant. Reste à mesurer ce que le type de tarif commande réellement — s'il ne sert qu'à
+l'affichage, c'est cosmétique ; s'il entre dans un état de caisse ou une ventilation, c'est le même
+défaut que le produit.
+
+⚠ **NE PAS LE CORRIGER PAR SYMÉTRIE.** Le produit avait un propriétaire évident (l'activité, le
+paramétrage padel) ; le type de tarif n'en a peut-être aucun, et lui en inventer un serait pire que
+le hasard actuel. La mesure d'abord.
+
+---
+
+### ~~⚠ 8.10~~ — `reservation:no-show:basculer` est ACTIVÉE depuis le 04/09
+
+Arbitrage de Maxime : « l'activer maintenant ». **Fait le 04/09**, et trois choses à corriger dans
+ce que j'avais écrit une heure plus tôt.
+
+⚠ **1. `--only` NE CONTOURNE PAS `safeOnFirstRun`** — je l'avais écrit ici et dans un message de
+commit. C'est **D109 qui a corrigé exactement ce défaut** : le verrou lisait « lancé avec `--only` »
+comme « regardé par un humain », alors que la boucle passe `--only` à chaque cycle. La supervision
+est désormais une attestation explicite. L'ordonnanceur a donc REFUSÉ de lancer la tâche, et il
+avait raison.
+
+    La levée, à la main :  platform:scheduler:run --only=<tâche> --supervise
+
+⚠ **2. `--dry-run` sur une tâche verrouillée NE MONTRE RIEN** : il réimprime le message du verrou.
+Le message conseille pourtant « ce que cette exécution ferait : --dry-run ». Le conseil ne tient pas
+dans le seul cas où on en aurait besoin. ⚠ Et ces options appartiennent à `platform:scheduler:run`,
+pas à la commande métier — `reservation:no-show:basculer --dry-run` rend « The "--dry-run" option
+does not exist », ce qui envoie l'exploitant dans le mur.
+
+⚠ **3. MA MESURE D'ARRIÉRÉ ÉTAIT LA MAUVAISE GRANDEUR.** J'avais annoncé **28,00 €** en sommant
+`reservation.montant_du`. Le passage supervisé a créé **6 facturations pour 80,00 €** — 2 × 10 € et
+4 × 15 €, les **montants fixes des règles d'annulation**. Le no-show ne facture pas ce qui était dû,
+il facture ce que la règle prévoit. Deux grandeurs différentes, et j'ai mesuré celle qui ne décide
+de rien.
+
+**Effet réel** : 6 réservations passées en `no_show_facture`, 6 facturations au statut
+**`a_facturer`** — c'est-à-dire **rien d'encaissé**. Elles attendent qu'un agent les émette depuis
+une caisse. La tâche tourne désormais toute seule, toutes les 15 minutes.
+
+*(texte d'origine ci-dessous)*
 
 ### ⚠ 8.10 — `reservation:no-show:basculer` n'est dans aucune liste blanche
 

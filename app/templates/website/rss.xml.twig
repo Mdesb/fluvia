@@ -1,0 +1,27 @@
+{#-
+  Le flux du blog (ED-10).
+
+  ⚠ LE CORPS PART ASSAINI, PARCE QU'IL EST RANGÉ ASSAINI. C'est exactement ce que la règle « assainir
+  à l'écriture » achète : ce gabarit n'a rien à savoir, rien à se rappeler, et il ne peut pas oublier.
+  Un flux RSS est lu par des agrégateurs qui rendent le HTML tel quel.
+-#}
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Le blog de Fluvia</title>
+        <link>{{ url('website_blog_index') }}</link>
+        <description>Ce qu'on apprend en équipant des piscines, des patinoires, des salles et des musées.</description>
+        <language>fr</language>
+        <atom:link href="{{ url('website_blog_rss') }}" rel="self" type="application/rss+xml"/>
+{%- for article in articles %}
+        <item>
+            <title>{{ article.title }}</title>
+            <link>{{ url('website_blog_post', {slug: article.slug}) }}</link>
+            <guid isPermaLink="true">{{ url('website_blog_post', {slug: article.slug}) }}</guid>
+            <pubDate>{{ article.publishedAt|date('r') }}</pubDate>
+            <description>{{ article.excerpt }}</description>
+            <content:encoded xmlns:content="http://purl.org/rss/1.0/modules/content/"><![CDATA[{{ article.body|raw }}]]></content:encoded>
+        </item>
+{%- endfor %}
+    </channel>
+</rss>
