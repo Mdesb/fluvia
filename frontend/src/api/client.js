@@ -1740,6 +1740,19 @@ export const api = {
   majNoteDeFrais: (id, corps) =>
     request(`/api/expense_reports/${id}`, { method: 'PATCH', body: corps }),
   // La ligne porte la nature, la date, le montant TTC et la piece justificative.
+  // LIRE UN JUSTIFICATIF — meme contrat que l'extraction de facture fournisseur.
+  //
+  // ⚠ `content` EST DU BASE64 NU, pas une data-URL. `readAsDataURL` rend
+  // « data:<mime>;base64,<contenu> » : le serveur attend le contenu SEUL, et rend 422 sur le
+  // prefixe. C'est le meme piege que sur les factures, et il ne se voit qu'a l'execution.
+  //
+  // ⚠ AUCUNE CREATION AUTOMATIQUE DE LIGNE (RG-EXP-03) : cette route ne fait que pre-remplir.
+  extraireJustificatifFrais: (content, mimeType) =>
+    request('/api/finance/expense-reports/extract', {
+      method: 'POST',
+      body: { content, mimeType },
+      ld: true,
+    }),
   creerLigneFrais: (corps) =>
     request('/api/expense_lines', { method: 'POST', body: corps, ld: true }),
   supprimerLigneFrais: (id) =>
