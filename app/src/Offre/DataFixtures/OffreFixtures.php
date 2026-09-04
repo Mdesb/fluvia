@@ -38,6 +38,7 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
     public const TYPE_ENTREE = 'entree_unitaire';
     public const TYPE_ABONNEMENT = 'abonnement';
     public const TYPE_CARTE = 'carte';
+    public const TYPE_PRESTATION = 'prestation';
     public const TARIF_PLEIN = 'Plein tarif';
     public const TARIF_GUICHET = 'Tarif guichet uniquement';
     public const SAISON = 'Saison 2026';
@@ -82,6 +83,17 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $typeCarte = $this->parCode($manager, TypeProduit::class, self::TYPE_CARTE);
         $typeCarte->setLibelle('Carte multi-entrées')
             ->setFacettes([TypeProduit::FACETTE_CARNET, TypeProduit::FACETTE_CONSOMMATEUR]);
+
+        // ⚠ LA PRESTATION RÉSERVÉE N'ÉMET AUCUN SUPPORT, ET C'EST TOUT SON INTÉRÊT.
+        // `ValiderVenteService::emetSupport()` fait émettre un billet ou une carte à tout type
+        // portant `billet`, `carnet` ou `acces` — or la facturation d'un NO-SHOW passe par la même
+        // validation. Un type émetteur aurait imprimé un billet à quelqu'un qui n'est jamais venu.
+        // ⚠ Et `consommateur` n'est LU par aucun code (mesuré le 04/09) : elle est posée pour la
+        // cohérence avec ses sœurs vendables, pas pour un comportement. Voir
+        // `Version20260904232000` — arbitrage de Maxime, 04/09.
+        $typePrestation = $this->parCode($manager, TypeProduit::class, self::TYPE_PRESTATION);
+        $typePrestation->setLibelle('Prestation réservée')
+            ->setFacettes([TypeProduit::FACETTE_CONSOMMATEUR]);
 
         // entree_unitaire ↔ carte : conversion assistée compatible (CA-13). `addTypeCompatible` est
         // gardé par `contains`, donc réattacher sur un type réutilisé est sans effet.

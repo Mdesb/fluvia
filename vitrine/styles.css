@@ -632,9 +632,30 @@ input:focus-visible {
    ⚠ SEULEMENT SUR L'ACCUEIL, et seulement en haut. Les autres pages n'ont pas de bandeau sombre —
    le meme reglage y poserait du texte clair sur fond clair. Et des qu'on defile, le menu doit
    reprendre un fond : `position: sticky` le fait passer au-dessus du contenu clair. */
+/* ⚠ `sticky` NE SUFFIT PAS : IL GARDE SA PLACE DANS LE FLUX.
+   Rendu transparent, le menu ne revelait pas le bandeau — il revelait le FOND DE PAGE, et l'on
+   voyait une bande blanche au-dessus du navy avec la marque claire dessus, illisible. Mesure sur la
+   page servie : menu haut de 65 px, bandeau commencant a y=65.
+   Sur l'accueil seulement, il flotte donc au-dessus, et le bandeau remonte sous lui. */
 .page-accueil .entete {
-  background: transparent;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+
+  /* ⚠ LE NAVY EN DUR PLUTOT QUE `transparent`, ET C'EST UNE MESURE, PAS UN GOUT.
+     Rendu transparent au-dessus du bandeau, le menu laissait passer une bande CLAIRE : mesure au
+     navigateur — fond calcule `rgba(0,0,0,0)`, bandeau navy dont la boite commence bien a y=0, et
+     pourtant du blanc a l'ecran. Test decisif : en forcant le fond en rouge, la capture a suivi ;
+     la couche peinte sous le menu n'etait donc pas le bandeau. Plutot que de poursuivre une
+     subtilite d'empilement, le menu porte lui-meme la couleur du bandeau : le resultat ne depend
+     plus de ce qui se peint derriere. */
+  background: #050914;
   border-bottom-color: transparent;
+}
+/* De quoi loger le menu flottant sans que le badge passe dessous, y compris si la navigation
+   repasse sur deux lignes en etroit. */
+.page-accueil .hero { padding-top: 132px; }
+@media (max-width: 720px) {
+  .page-accueil .hero { padding-top: 168px; }
 }
 .page-accueil .entete .marque { color: #e7ecf7; }
 .page-accueil .entete nav a { color: #a3aec8; }
@@ -651,6 +672,7 @@ input:focus-visible {
     animation-range: 0 220px;
   }
   @keyframes entete-poser {
+    from { background: #050914; border-bottom-color: transparent; }
     to {
       background: color-mix(in srgb, var(--bg) 88%, transparent);
       border-bottom-color: var(--line);
@@ -661,5 +683,21 @@ input:focus-visible {
 /* Le badge se cassait en deux lignes dans la colonne etroite. */
 .hero-jeton { white-space: nowrap; }
 
-/* Le titre gardait sa taille pleine largeur dans une demi-colonne : cinq lignes. */
-.hero-grille h1 { font-size: clamp(28px, 3.1vw, 40px); }
+/* ⚠ LE BANDEAU N'EST PAS UNE COLONNE DE LECTURE.
+   `.mesure` vaut 68ch — une largeur faite pour lire un paragraphe. La grille a deux colonnes s'y
+   trouvait ecrasee au milieu de l'ecran : titre sur six lignes, et du vide des deux cotes. Le
+   bandeau prend donc la largeur de page ; c'est le TEXTE, a l'interieur, qui garde une mesure. */
+.hero-grille { max-width: var(--page); }
+.hero-dire { max-width: 36em; }
+.hero-grille h1 { font-size: clamp(32px, 3.4vw, 50px); }
+
+/* ⚠ LE BOUTON SECONDAIRE PESAIT PLUS QUE LE PRINCIPAL.
+   `.btn-fantome` prend `var(--panel)` — blanc en theme clair. Sur le bandeau sombre, ca donnait un
+   pave blanc massif a cote de l'action qu'on veut vraiment : le secondaire criait plus fort que le
+   primaire. Sur le bandeau, il redevient un contour. Encre #e7ecf7 sur #050914 : 16,3:1. */
+.hero .btn-fantome {
+  background: transparent;
+  border-color: rgba(231, 236, 247, .24);
+  color: var(--hero-encre);
+}
+.hero .btn-fantome:hover { background: rgba(231, 236, 247, .08); }
