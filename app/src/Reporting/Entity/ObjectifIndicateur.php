@@ -13,16 +13,36 @@ use ApiPlatform\Metadata\Post;
 use App\Reporting\Entity\Trait\RattachementNiveauInterface;
 use App\Reporting\Entity\Trait\RattachementNiveauTrait;
 use App\Reporting\Enum\GranulariteMesure;
+use App\Reporting\State\ObjectifIndicateurProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
-use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Valeur cible d'un indicateur sur une période/un périmètre (§1.5 plan-reporting.md) — ajouté par
  * le plan (absent du §5 « Objets de données » de la spec) pour rendre testable CA-3 (« écart vs
  * objectifs »). CRUD `reporting.configurer` en écriture, filtré périmètre en lecture.
+ */
+/**
+ * OBJECTIF SUR UN INDICATEUR.
+ *
+ * ⚠ CINQ `Assert\NotNull` ONT ÉTÉ RETIRÉS ICI LE 05/09, ET IL FAUT SAVOIR POURQUOI AVANT D'EN
+ * REPOSER. `Post` et `Patch` sont déclarées `input: false` : plus rien n'est désérialisé, et
+ * API Platform valide ENTRE la désérialisation et le processeur. Ces contraintes ne voyaient
+ * donc plus jamais la charge du client — elles ne gardaient rien, tout en donnant à lire
+ * qu'elles gardaient quelque chose. C'est exactement la faute que décrit le garde-fou n°34 :
+ * « croire la contrainte appliquée à la valeur fabriquée ».
+ *
+ * L'exigence n'a pas disparu, elle a changé de place, et elle tient maintenant à deux endroits
+ * qui, eux, s'exécutent :
+ *
+ *   ObjectifIndicateurProcessor   un 422 qui nomme le champ, avant toute écriture
+ *   les colonnes                  toutes `nullable: false`, la jointure comprise
+ *
+ * ⚠ SI QUELQU'UN REND UN JOUR CES OPÉRATIONS DÉSÉRIALISANTES en retirant `input: false`, il
+ * faut REPOSER ces contraintes dans le même geste : sans elles, un champ omis ne serait plus
+ * arrêté par le processeur mais par la base, et un 422 deviendrait un 500.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'report_objectif_indicateur')]
@@ -31,8 +51,22 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'reporting.lire')"),
         new Get(security: "is_granted('PERM', 'reporting.lire')"),
-        new Post(security: "is_granted('PERM', 'reporting.configurer')"),
-        new Patch(security: "is_granted('PERM', 'reporting.configurer')"),
+        // ⚠ `input: false` ET UN PROCESSEUR, PARCE QUE LA VOIE STANDARD N'ECRIVAIT PAS LE
+        // RATTACHEMENT. `RattachementNiveauTrait` n'expose aucun setter -- seulement
+        // `definirRattachement*()`, qui pose le niveau et la cle ensemble. Le deserialiseur
+        // ignorait donc `niveau`, `etablissement`, `region` et `groupe` en silence : un POST
+        // rendait 201 et creait une ligne sans perimetre, invisible et non supprimable (mesure :
+        // DELETE -> 404 sur une ligne qu'on venait de creer).
+        new Post(
+            security: "is_granted('PERM', 'reporting.configurer')",
+            input: false,
+            processor: ObjectifIndicateurProcessor::class,
+        ),
+        new Patch(
+            security: "is_granted('PERM', 'reporting.configurer')",
+            input: false,
+            processor: ObjectifIndicateurProcessor::class,
+        ),
         new Delete(security: "is_granted('PERM', 'reporting.configurer')"),
     ],
     normalizationContext: ['groups' => ['objectif:read']],
@@ -49,27 +83,22 @@ class ObjectifIndicateur implements RattachementNiveauInterface
 
     #[ORM\ManyToOne(targetEntity: Indicateur::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
     #[Groups(['objectif:read', 'objectif:write'])]
     private ?Indicateur $indicateur = null;
 
     #[ORM\Column(type: 'date_immutable')]
-    #[Assert\NotNull]
     #[Groups(['objectif:read', 'objectif:write'])]
     private \DateTimeImmutable $periodeDebut;
 
     #[ORM\Column(type: 'date_immutable')]
-    #[Assert\NotNull]
     #[Groups(['objectif:read', 'objectif:write'])]
     private \DateTimeImmutable $periodeFin;
 
     #[ORM\Column(length: 8, enumType: GranulariteMesure::class)]
-    #[Assert\NotNull]
     #[Groups(['objectif:read', 'objectif:write'])]
     private GranulariteMesure $granularite = GranulariteMesure::Jour;
 
     #[ORM\Column(type: 'decimal', precision: 14, scale: 2)]
-    #[Assert\NotNull]
     #[Groups(['objectif:read', 'objectif:write'])]
     private string $valeurCible = '0.00';
 
