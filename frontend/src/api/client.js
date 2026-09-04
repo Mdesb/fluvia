@@ -588,6 +588,13 @@ export const api = {
   // ⚠ `SearchFilter` sur `client` est DECLARE en `exact` (verifie dans l'entite) : `?client=<IRI>`
   // filtre vraiment. Sans cette verification, un filtre non declare serait accepte et IGNORE, et
   // la fiche afficherait les consentements du voisin sans qu'aucune erreur ne le dise.
+  // ⚠ CETTE ROUTE S'APPELLE « rattacher » ET NE RATTACHE RIEN. Le processeur VERIFIE qu'un numero
+  // de support appartient bien au client, et rend une erreur sinon — aucune ecriture. Le nom de la
+  // fonction cliente dit ce qu'elle FAIT : c'est l'appelant qu'il ne faut pas tromper.
+  //
+  // 200 = c'est bien sa carte · 404 = carte inconnue · 422 = carte d'un AUTRE client.
+  verifierCarteClient: (idClient, identifiant) =>
+    request(`/api/clients/${idClient}/rattacher-support`, { method: 'POST', body: { identifiant } }),
   consentementsClient: (idClient) =>
     request('/api/consentements', {
       query: {
