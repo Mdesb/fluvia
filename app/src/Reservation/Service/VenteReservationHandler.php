@@ -28,7 +28,18 @@ final class VenteReservationHandler
     ) {
     }
 
-    public function creerVente(SessionCaisse $session, string $montant, ?Uuid $clientRef, string $libelle, ?Uuid $produitRef = null): Vente
+    /**
+     * ⚠ `$produitRef` EST OBLIGATOIRE DEPUIS LE 04/09, ET NON NULLABLE. Arbitrage de Maxime.
+     *
+     * Cette methode faisait `setProduit($produitRef ?? Uuid::v4())` : sans produit, la ligne
+     * designait un produit qui n'existe pas — donc sans categorie comptable, donc absente de la
+     * ventilation — et `LineLabelStamper` laissait le libelle nul, ce qu'il documente lui-meme.
+     *
+     * Un type non nullable plutot qu'un `throw` : le `throw` se declenche a l'execution, chez le
+     * premier malchanceux. Le type oblige CHAQUE appelant a decider quoi dire quand il n'a pas de
+     * produit, et le prochain appelant ecrit ne pourra pas passer `null` sans le voir.
+     */
+    public function creerVente(SessionCaisse $session, string $montant, ?Uuid $clientRef, string $libelle, Uuid $produitRef): Vente
     {
         $vente = new Vente();
         $vente->setSession($session)
@@ -39,7 +50,7 @@ final class VenteReservationHandler
         }
 
         $ligne = new LigneVente();
-        $ligne->setProduit($produitRef ?? Uuid::v4());
+        $ligne->setProduit($produitRef);
         $ligne->setTypeTarif(Uuid::v4());
         $ligne->setQuantite(1);
         $ligne->setPrixUnitaire($montant);

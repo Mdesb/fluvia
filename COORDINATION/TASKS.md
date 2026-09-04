@@ -385,11 +385,18 @@ Arbitrage de Maxime : **produit obligatoire**. Lever si absent.
 ⚠ **NE PAS LEVER AVANT D'AVOIR ÉQUIPÉ LES DEUX APPELANTS QUI N'EN PASSENT PAS**, sinon vous cassez
 le no-show et le débit PMV :
 
-    ReserverProcessor:202          passe `$activite?->getProduitTarifReference()?->getId()`
-                                   ⚠ DEUX `?->` : il retombe sur `null` dès qu'une activité n'a
-                                   pas de produit-tarif. À traiter comme les deux autres.
-    DebitPmvStrategie:52           n'en passe aucun
-    VenteDiffereeAgentStrategie:52 n'en passe aucun
+⚠ **CE TABLEAU DISAIT « n'en passe aucun » POUR DEUX D'ENTRE EUX. C'ÉTAIT FAUX.** Ma mesure était
+un `grep -A3` autour de `creerVente(`, et l'argument produit est à la **cinquième** ligne de l'appel :
+la fenêtre s'arrêtait deux lignes trop tôt. Les trois passent bien une expression. Corrigé le 04/09
+en ouvrant les fichiers.
+
+    ReserverProcessor              `$activite?->getProduitTarifReference()?->getId()`
+    DebitPmvStrategie              `$reservation->getCreneau()?->getActivite()?->…?->getId()`
+    VenteDiffereeAgentStrategie    idem
+
+Le vrai défaut est donc plus simple, et pire : **les trois sont des chaînes de `?->` qui rendent
+`null`** dès qu'une activité n'a pas de produit tarifaire — et **les 3 activités de la préproduction
+sont dans ce cas**, mesuré le 04/09.
 
 ⚠ **ET MESUREZ L'IMPACT AVANT DE CONCLURE** : trois sites d'appel ne sont pas trois défauts. Comptez
 combien de `LigneVente` existantes pointent vers un produit absent du catalogue — les occurrences
@@ -820,6 +827,24 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 → Décider : une opération `encaisser` sur la réservation, ou rendre la session obligatoire et
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
+
+### ⚠ 8.11 — Le TYPE DE TARIF est lui aussi tiré au hasard
+
+Vu en corrigeant D-2, le 04/09. `VenteReservationHandler` ne fait plus `setProduit(Uuid::v4())` —
+le produit est obligatoire depuis l'arbitrage de Maxime. Mais la ligne suivante fait toujours :
+
+    $ligne->setTypeTarif(Uuid::v4());
+
+Même famille, autre champ : une référence tirée au hasard, qui ne désigne aucun type de tarif
+existant. Reste à mesurer ce que le type de tarif commande réellement — s'il ne sert qu'à
+l'affichage, c'est cosmétique ; s'il entre dans un état de caisse ou une ventilation, c'est le même
+défaut que le produit.
+
+⚠ **NE PAS LE CORRIGER PAR SYMÉTRIE.** Le produit avait un propriétaire évident (l'activité, le
+paramétrage padel) ; le type de tarif n'en a peut-être aucun, et lui en inventer un serait pire que
+le hasard actuel. La mesure d'abord.
+
+---
 
 ### ⚠ 8.10 — `reservation:no-show:basculer` n'est dans aucune liste blanche
 

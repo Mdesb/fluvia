@@ -164,12 +164,25 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         // invisible à la ventilation.
         $session = $this->sessionOptionnelle($corps['session'] ?? null);
         if ($session !== null && $prix > 0.0) {
+            // ⚠ SANS PRODUIT, ON N'ENCAISSE PAS. `ParametragePadel::$produitTerrainRef` est le
+            // produit sous lequel le créneau se vend ; il est nullable, et il l'est en préproduction.
+            // Le handler inventait alors un `Uuid::v4()` — un produit inexistant, invisible à la
+            // ventilation comptable. On refuse, et on nomme le paramétrage qui manque.
+            $produitRef = $parametrage?->getProduitTerrainRef();
+            if ($produitRef === null) {
+                throw new UnprocessableEntityHttpException(
+                    'Aucun produit de terrain paramétré : la vente ne serait rattachée à aucune catégorie '
+                    . 'comptable. Renseignez « produit du terrain » dans le paramétrage padel de cet '
+                    . 'établissement, ou réservez sans session de caisse.',
+                );
+            }
+
             $vente = $this->venteHandler->creerVente(
                 $session,
                 $montantDu,
                 $organisateur->getClient()?->getId(),
                 'Réservation terrain ' . (string) $creneau->getId(),
-                $parametrage?->getProduitTerrainRef(),
+                $produitRef,
             );
             $reservation->setVenteRattachee($vente);
         }

@@ -48,13 +48,26 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
             return new ResultatFacturationNoShow(false, 'Bénéficiaire sans fiche client CRM rattachée : débit PMV impossible.');
         }
 
+        // ⚠ SANS PRODUIT, ON NE FACTURE PAS. La chaîne de `?->` rendait `null` dès qu'une activité
+        // n'a pas de produit tarifaire — les 3 de la préproduction, mesuré le 04/09 — et le handler
+        // inventait alors un produit inexistant. Un no-show débité sur un produit fantôme est une
+        // recette que la comptabilité ne verra jamais.
+        $produitRef = $reservation->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId();
+        if ($produitRef === null) {
+            return new ResultatFacturationNoShow(
+                false,
+                'L\'activité de ce créneau n\'a pas de produit tarifaire : le débit ne serait rattaché à '
+                . 'aucune catégorie comptable. Renseignez-le avant de facturer ce no-show.',
+            );
+        }
+
         $session = $this->sessionSysteme->sessionSysteme($etablissement);
         $vente = $this->venteHandler->creerVente(
             $session,
             $facturation->getMontant(),
             $clientRef,
             'No-show (débit PMV automatique) — réservation ' . (string) $reservation->getId(),
-            $reservation->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId(),
+            $produitRef,
         );
 
         try {

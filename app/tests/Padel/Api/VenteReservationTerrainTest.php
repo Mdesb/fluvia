@@ -137,6 +137,45 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
         );
     }
 
+    /**
+     * ⚠ SANS PRODUIT PARAMÉTRÉ, LA VENTE EST REFUSÉE — elle n'est plus inventée.
+     *
+     * `VenteReservationHandler` faisait `setProduit($produitRef ?? Uuid::v4())` : sans produit, la
+     * ligne désignait un produit qui n'existe pas — aucune catégorie comptable, donc absente de la
+     * ventilation, et `LineLabelStamper` laissait le libellé nul, ce qu'il documente lui-même.
+     *
+     * Arbitrage de Maxime le 04/09 : produit obligatoire. Le paramètre est désormais NON NULLABLE,
+     * et chaque appelant doit dire quoi faire quand il n'en a pas.
+     *
+     * ⚠ CE TEST NE PEUT PASSER QUE SI LE REFUS EXISTE. Sans lui la réservation aboutirait, avec une
+     * vente parfaitement valide pointant vers un produit fantôme, et rien ne le signalerait.
+     *
+     * ⚠ Et une réservation SANS session reste acceptée — c'est ce que prouve le test voisin. Un
+     * paramétrage manquant ne doit bloquer que l'encaissement, pas la réservation.
+     */
+    public function testSansProduitParametreLEncaissementEstRefuse(): void
+    {
+        [$http, $entete] = $this->adminSurA();
+        $http->disableReboot();
+
+        // On ne pose PAS `produitTerrainRef` : c'est l'état de la préproduction, mesuré le 04/09.
+        $session = $this->sessionOuverteSur(SocleFixtures::ETAB_A_NOM);
+
+        $http->request('POST', '/api/padel/terrains/' . $this->idTerrain() . '/reservations', $entete + [
+            'json' => [
+                'debut' => (new \DateTimeImmutable('next tuesday'))->setTime(19, 0)->format(DATE_ATOM),
+                'dureeMinutes' => 90,
+                'organisateur' => '/api/beneficiaires/' . $this->idJoueur(1),
+                'session' => (string) $session->getId(),
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(
+            422,
+            'sans produit paramétré, la vente doit être REFUSÉE — pas créée sur un produit inventé',
+        );
+    }
+
     /** Réserve un terrain, avec ou sans session de caisse, et rend l'identifiant de la réservation. */
     private function reserverTerrain(object $client, array $entete, ?string $session): string
     {
