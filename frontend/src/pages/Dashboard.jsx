@@ -34,7 +34,9 @@ function nomSession(session) {
 export default function Dashboard({ etabActif, etablissements, droits = [], onNav }) {
   const [dash, setDash] = useState(null)
   const [dashInfo, setDashInfo] = useState(null)
-  const [sessions, setSessions] = useState([])
+  // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
+  const [sessionsLu, setSessionsLu] = useState(null)
+  const sessions = sessionsLu || []
   const [regies, setRegies] = useState([])
   const [regieInfo, setRegieInfo] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -64,8 +66,10 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
     // Sessions de caisse (état ouverte).
     const pSessions = api
       .sessionsCaisse()
-      .then((r) => setSessions(membres(r)))
-      .catch(() => setSessions([]))
+      .then((r) => setSessionsLu(membres(r)))
+      // ⚠ `[]` faisait dire « aucune session ouverte » a un ecran qui n'avait pas pu regarder.
+      // C'est ce qu'on vient verifier en fin de journee.
+      .catch(() => setSessionsLu(null))
 
     // Régies (solde vs plafond d'encaisse) — nécessite compta.lire.
     const pRegies = api
@@ -91,6 +95,10 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
     (r) => (r.plafondEncaisseCentimes || 0) > 0 && (r.soldeEncaisseCentimes || 0) >= (r.plafondEncaisseCentimes || 0),
   )
   const nbAlertes = jaugesAlerte.length + regiesAuPlafond.length
+  // Les deux sources d'alerte manquent separement : `dash` porte les jauges FMI, `regies` les
+  // plafonds d'encaisse. Un 403 sur l'une ne dit rien de l'autre — on nomme celle qui manque
+  // plutot que d'additionner un zero qu'on n'a pas mesure.
+  const sourcesManquantes = [!dash && 'jauges', regieInfo && 'régies'].filter(Boolean)
 
   if (chargement) {
     return (
@@ -133,12 +141,24 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
 
             Une session ouverte n'est ni bonne ni mauvaise — c'est un fait, et son compte le dit
             entierement. Le vert ne veut plus qu'une chose sur cet ecran. */}
-        <Kpi label="Sessions de caisse ouvertes" valeur={sessionsOuvertes.length} />
+        <Kpi
+          label="Sessions de caisse ouvertes"
+          valeur={sessionsLu === null ? 'n/d' : sessionsOuvertes.length}
+          sous={sessionsLu === null ? 'liste non lue' : undefined}
+        />
+        {/* ⚠ LE VERT DISPARAIT DES QU'UNE SOURCE MANQUE, ET C'EST LUI LE VRAI DEFAUT. Le
+            commentaire ci-dessus dit ce qu'il signifie ici : « rien ne reclame d'attention ». Un
+            zero se lit ; une couleur se voit sans etre lue. Sur une lecture refusee, cette carte
+            montrait le signe du « tout va bien » a quelqu'un qui n'avait rien mesure.
+            Les deux sources manquent separement, donc on ne dit ni « 0 » ni « alerte » : on dit
+            le compte de ce qu'on a lu, et le nom de ce qui manque. */}
         <Kpi
           label="Alertes"
-          valeur={nbAlertes}
-          accent={nbAlertes ? 'var(--crit)' : 'var(--good)'}
-          sous={nbAlertes ? `${jaugesAlerte.length} jauge(s) · ${regiesAuPlafond.length} régie(s)` : 'aucune'}
+          valeur={sourcesManquantes.length && !nbAlertes ? 'n/d' : nbAlertes}
+          accent={nbAlertes ? 'var(--crit)' : sourcesManquantes.length ? undefined : 'var(--good)'}
+          sous={sourcesManquantes.length
+            ? `non lu : ${sourcesManquantes.join(' · ')}`
+            : nbAlertes ? `${jaugesAlerte.length} jauge(s) · ${regiesAuPlafond.length} régie(s)` : 'aucune'}
         />
       </div>
 
@@ -156,7 +176,12 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
           <div className="card-h"><h3>Alertes</h3><span className="sub">jauges FMI &amp; régies</span></div>
           <div className="card-b" style={{ overflowX: 'auto' }}>
             {nbAlertes === 0 ? (
-              <div className="empty">Aucune alerte en cours.</div>
+              <div className="empty">
+                {sourcesManquantes.length
+                  ? <b>Les alertes n’ont pas pu être lues ({sourcesManquantes.join(' · ')}) :
+                      ce n’est pas « aucune alerte », c’est « on n’a pas pu regarder ».</b>
+                  : 'Aucune alerte en cours.'}
+              </div>
             ) : (
               <table className="tbl">
                 <thead>
@@ -190,7 +215,12 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
           <div className="card-h"><h3>Sessions de caisse ouvertes</h3></div>
           <div className="card-b" style={{ overflowX: 'auto' }}>
             {sessionsOuvertes.length === 0 ? (
-              <div className="empty">Aucune session ouverte.</div>
+              <div className="empty">
+                {sessionsLu === null
+                  ? <b>La liste des sessions de caisse n’a pas pu être lue : elle est vide parce que
+                      la lecture a échoué, pas parce qu’aucune caisse n’est ouverte.</b>
+                  : 'Aucune session ouverte.'}
+              </div>
             ) : (
               <table className="tbl">
                 <thead>

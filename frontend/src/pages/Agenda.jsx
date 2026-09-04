@@ -57,7 +57,13 @@ export default function Agenda({ droits = [], etabActif = null }) {
   const [onglet, setOnglet] = useState('site')
   const [vue, setVue] = useState('semaine')
   const [ancre, setAncre] = useState(() => new Date())
-  const [evenements, setEvenements] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Rien de programme sur cette periode » sur une
+  // lecture refusee annonce une journee libre a quelqu'un qui a peut-etre des creneaux.
+  const [evenementsLu, setEvenementsLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const evenements = evenementsLu || []
   const [vacances, setVacances] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -78,11 +84,14 @@ export default function Agenda({ droits = [], etabActif = null }) {
         api.journalAgenda(iso(du), iso(au), portee),
         api.indicesOuverture(iso(du), iso(au)).catch(() => null),
       ])
-      setEvenements(journal.events || [])
+      setEvenementsLu(journal.events || [])
       setVacances(indices?.schoolHolidays || [])
     } catch (e) {
       setErreur(e.message || 'L’agenda n’a pas pu être chargé.')
-      setEvenements([])
+      // ⚠ `[]` ici rasait le `null` de l'initialisation, et l'ecran repartait dire « Rien de
+      // programme sur cette periode » sur une lecture refusee. Un etat initial honnete ne suffit
+      // pas : c'est le chemin d'erreur qui decide de ce qui s'affiche.
+      setEvenementsLu(null)
     } finally {
       setChargement(false)
     }
@@ -142,7 +151,7 @@ export default function Agenda({ droits = [], etabActif = null }) {
             </div>
           )}
 
-          <AVenir evenements={evenements} portee={portee} />
+          <AVenir evenements={evenements} portee={portee} nonLu={evenementsLu === null} />
           <AbonnementIcs etabActif={etabActif} />
         </>
       )}
@@ -177,7 +186,7 @@ export default function Agenda({ droits = [], etabActif = null }) {
  * répondent à des questions différentes, et l'une ne remplace pas l'autre — c'est pourquoi Vespera
  * garde aussi sa liste « À venir » sous son calendrier.
  */
-function AVenir({ evenements, portee }) {
+function AVenir({ evenements, portee, nonLu }) {
   const maintenant = Date.now()
   const suivants = evenements
     .filter((e) => e.source !== 'opening' && new Date(e.end).getTime() >= maintenant)
@@ -194,7 +203,9 @@ function AVenir({ evenements, portee }) {
         {suivants.length === 0 ? (
           // Le message dit ce qui ferait apparaître une ligne, plutôt que « aucun élément ».
           <div className="empty">
-            {portee === 'mine'
+            {nonLu
+              ? <b>L’agenda n’a pas pu être lu : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien à venir.</b>
+              : portee === 'mine'
               ? 'Rien de programmé pour vous sur cette période. Vos créneaux de travail et vos événements personnels apparaîtront ici.'
               : 'Rien de programmé sur cette période. Les créneaux de réservation et les événements du site apparaîtront ici.'}
           </div>

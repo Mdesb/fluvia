@@ -49,7 +49,14 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   // Choisir « Traitées » dans le filtre affichait donc « À traiter : 0 » — alors que deux demandes
   // attendaient. Un zéro qui dit « vous n'avez rien à faire » est exactement le genre de certitude
   // fausse que cet écran ne peut pas se permettre : il porte un délai légal.
-  const [toutes, setToutes] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Cet ecran PORTE UN DELAI LEGAL : « Aucune demande
+  // enregistree » sur une lecture refusee dit qu'il n'y a rien a repondre, et le delai court
+  // pendant ce temps.
+  const [toutesLu, setToutesLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const toutes = toutesLu || []
   const [total, setTotal] = useState(null)
   const [fiches, setFiches] = useState({})
   const [chargement, setChargement] = useState(true)
@@ -78,7 +85,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
       ])
       const liste = membres(reponse)
       setDemandes(liste)
-      setToutes(params.statut ? membres(entiere) : liste)
+      setToutesLu(params.statut ? membres(entiere) : liste)
       const t = (params.statut ? entiere : reponse)?.totalItems
         ?? (params.statut ? entiere : reponse)?.['hydra:totalItems']
       setTotal(typeof t === 'number' ? t : null)
@@ -130,15 +137,15 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   const affichees = demandes
 
   const compteurs = useMemo(() => {
-    const ouvertes = toutes.filter((d) => d.statut === 'recue' || d.statut === 'en_cours')
+    const ouvertes = (toutes || []).filter((d) => d.statut === 'recue' || d.statut === 'en_cours')
     return {
       ouvertes: ouvertes.length,
       horsDelai: ouvertes.filter((d) => joursRestants(d.dateDemande) < 0).length,
-      traitees: toutes.filter((d) => d.statut === 'realisee').length,
+      traitees: (toutes || []).filter((d) => d.statut === 'realisee').length,
       // Le serveur pagine. Au-delà d'une page, ces trois nombres comptent une PAGE et non la file
       // — on le dit plutôt que d'afficher un total qu'on n'a pas mesuré. La comparaison, et non un
       // plafond appris par cœur : celui-ci a changé une fois déjà.
-      partiels: total != null && total > toutes.length,
+      partiels: total != null && total > (toutes || []).length,
     }
   }, [toutes, total])
 
@@ -236,7 +243,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
 
       {compteurs.partiels && (
         <p className="hint" style={{ marginTop: -8 }}>
-          {total} demandes en tout : ces trois nombres ne portent que sur les {toutes.length}
+          {total} demandes en tout : ces trois nombres ne portent que sur les {(toutes || []).length}
           {' '}premières, le serveur ne rendant pas davantage en une fois.
         </p>
       )}
@@ -264,7 +271,9 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
           ) : affichees.length === 0 ? (
             <div className="empty">
-              {params.statut
+              {toutesLu === null
+                ? <b>La liste des demandes n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien. Un délai légal court : ne concluez pas qu’il n’y a rien à traiter.</b>
+                : params.statut
                 ? 'Aucune demande dans cet état.'
                 : params.client
                 ? 'Cette personne n’a jamais demandé l’effacement de ses données.'

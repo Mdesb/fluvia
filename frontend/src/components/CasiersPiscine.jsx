@@ -28,7 +28,13 @@ import { mot } from '../api/vocabulaire.js'
 const ETATS = ['libre', 'occupe', 'non_rendu']
 
 export default function CasiersPiscine({ etabActif, droits }) {
-  const [casiers, setCasiers] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucun casier enregistre » sur une lecture refusee
+  // envoie parametrer des casiers qui existent peut-etre deja.
+  const [casiersLu, setCasiersLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const casiers = casiersLu || []
   const [bracelets, setBracelets] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -44,7 +50,7 @@ export default function CasiersPiscine({ etabActif, droits }) {
     setChargement(true)
     try {
       const [c, b] = await Promise.all([api.piscineCasiers(), api.piscineBracelets()])
-      setCasiers(membres(c).sort((x, y) => (x.numero || 0) - (y.numero || 0)))
+      setCasiersLu(membres(c).sort((x, y) => (x.numero || 0) - (y.numero || 0)))
       setBracelets(membres(b))
     } catch (e) {
       setErreur(e.message)
@@ -62,9 +68,9 @@ export default function CasiersPiscine({ etabActif, droits }) {
     [casiers],
   )
 
-  const visibles = zone ? casiers.filter((c) => c.zone === zone) : casiers
+  const visibles = zone ? (casiers || []).filter((c) => c.zone === zone) : casiers
   const compte = Object.fromEntries(
-    ETATS.map((e) => [e, casiers.filter((c) => c.etat === e).length]),
+    ETATS.map((e) => [e, (casiers || []).filter((c) => c.etat === e).length]),
   )
 
   async function geste(casier, action, message) {
@@ -119,10 +125,16 @@ export default function CasiersPiscine({ etabActif, droits }) {
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
-          ) : casiers.length === 0 ? (
+          ) : (casiers || []).length === 0 ? (
             <div className="empty">
-              Aucun casier enregistré. Les casiers se créent dans le paramétrage de la piscine, avec
-              leur numéro et leur zone — c'est ce numéro que le nageur retiendra.
+              {casiersLu === null ? (
+                <b>La liste des casiers n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
+              ) : (
+                <>
+                  Aucun casier enregistré. Les casiers se créent dans le paramétrage de la piscine,
+                  avec leur numéro et leur zone — c'est ce numéro que le nageur retiendra.
+                </>
+              )}
             </div>
           ) : (
             <>

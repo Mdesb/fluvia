@@ -32,7 +32,13 @@ const A_TRAITER = ['draft']
 const A_PAYER = ['to_pay', 'partially_paid']
 
 export default function FacturesFournisseur({ etabActif, droits }) {
-  const [factures, setFactures] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucune facture a approuver » sur une lecture
+  // refusee laisse croire que la file est traitee.
+  const [facturesLu, setFacturesLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const factures = facturesLu || []
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -59,10 +65,11 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         api.facturesFournisseur(),
         api.stockFournisseurs().catch(() => null),
       ])
-      setFactures(membres(f))
+      setFacturesLu(membres(f))
       setFournisseurs(four ? membres(four) : [])
     } catch (e) {
       setErreur(e.message)
+      setFacturesLu(null)
     } finally {
       setChargement(false)
     }
@@ -91,10 +98,10 @@ export default function FacturesFournisseur({ etabActif, droits }) {
     }
   }
 
-  const aTraiter = factures.filter((f) => A_TRAITER.includes(f.status))
-  const contestees = factures.filter((f) => f.status === 'disputed')
-  const aPayer = factures.filter((f) => A_PAYER.includes(f.status))
-  const closes = factures.filter((f) => f.status === 'paid' || f.status === 'cancelled')
+  const aTraiter = (factures || []).filter((f) => A_TRAITER.includes(f.status))
+  const contestees = (factures || []).filter((f) => f.status === 'disputed')
+  const aPayer = (factures || []).filter((f) => A_PAYER.includes(f.status))
+  const closes = (factures || []).filter((f) => f.status === 'paid' || f.status === 'cancelled')
 
   if (chargement) {
     return (
@@ -137,7 +144,9 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         titre="À approuver"
         sous={aTraiter.length === 0 ? 'aucune en attente' : `${aTraiter.length} en attente`}
         factures={aTraiter}
-        vide="Aucune facture à approuver. Une facture enregistrée ici y arrive, et n'entre dans le circuit de paiement qu'une fois approuvée."
+        vide={facturesLu === null
+          ? "La liste des factures n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien."
+          : "Aucune facture à approuver. Une facture enregistrée ici y arrive, et n'entre dans le circuit de paiement qu'une fois approuvée."}
         actions={(f) => (
           <>
             {peutApprouver && (
@@ -633,7 +642,7 @@ function TableauFactures({ titre, sous, factures, vide, actions, fournisseurs = 
         <span className="sub">{sous}</span>
       </div>
       <div className="card-b">
-        {factures.length === 0 ? (
+        {(factures || []).length === 0 ? (
           <div className="empty">{vide}</div>
         ) : (
           <table className="tbl">
@@ -648,7 +657,7 @@ function TableauFactures({ titre, sous, factures, vide, actions, fournisseurs = 
               </tr>
             </thead>
             <tbody>
-              {factures.map((f) => {
+              {(factures || []).map((f) => {
                 const enRetard =
                   f.dueDate && A_PAYER.includes(f.status) && new Date(f.dueDate) < new Date()
                 return (
