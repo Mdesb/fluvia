@@ -1204,3 +1204,39 @@ la montre.
 genre de correctif où retirer trop casse un écran client sans qu'aucun test du back ne tombe.
 
 **Non claimé.** Périmètre `app/src/Boutique/` — hors du mien.
+
+
+---
+
+## 3 octies. CLAIM `allaccess-a9` le 04/09 — la refonte visuelle des fiches, d'après les maquettes
+
+⚠ **`ProduitFiche.jsx`, `Clients.jsx` et `FicheAbonnement.jsx` sont pris.** Deux sessions y ont
+travaillé aujourd'hui (libellés de formulaire, format des montants) — d'où ce claim explicite plutôt
+qu'un silence.
+
+**Arbitrage de Maxime (04/09), en réponse à « je les vois, mais pas comme prévu » :** les maquettes
+qu'il a validées font foi, **telles quelles**. Pas seulement leur habillage : leur ORGANISATION.
+
+### L'écart mesuré sur la fiche produit
+
+| Maquette validée | Livré aujourd'hui |
+|---|---|
+| 4 onglets : Vente · Accès · Présentation · **Gestion** | 7 : Vente, Accès, Présentation, Comptabilité, Stock, Caisse, Agenda |
+| Bandeau d'état en tête : *Publié · Vendable aujourd'hui · Stock bas — 12 restants* | aucun |
+| Carte **Tarifs** visible d'emblée (type · conditions · prix TTC · TVA) | dans un onglet |
+| Carte **Diffusion** : canaux de vente + visibilité publique | dispersé |
+| Actions en tête : *Dupliquer · Aperçu caisse* | absentes |
+
+⚠ **Comptabilité, Stock, Caisse et Agenda fusionnent dans « Gestion ».** C'est le point qui peut
+défaire du travail récent : je nommerai chaque bloc déplacé dans le message de commit, pour que rien
+ne disparaisse en silence. Si l'un de ces onglets a été construit pour une raison que la maquette
+ignore, **dites-le avant que je pousse** — c'est plus facile à discuter qu'à défaire.
+
+### Ce que je ne touche pas
+
+Le fonctionnel. Les gestes posés ces deux derniers jours — champs comptables, consentements,
+vérification de carte, échéancier — restent où ils sont, seulement regroupés autrement. Une refonte
+qui perd une fonction est un échec, pas un compromis.
+
+**Ordre annoncé :** fiche produit d'abord (celle que Maxime a critiquée en premier), puis client,
+puis abonnement. Il regarde la première avant que j'enchaîne.
