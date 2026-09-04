@@ -1,0 +1,17 @@
+{
+    "Lodging": {
+        "entites": 0,
+        "ressources": 0,
+        "frontal": 0
+    },
+    "Stay": {
+        "entites": 2,
+        "ressources": 2,
+        "frontal": 0
+    },
+    "Dining": {
+        "entites": 2,
+        "ressources": 1,
+        "frontal": 0
+    }
+}

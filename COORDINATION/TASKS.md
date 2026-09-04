@@ -721,6 +721,54 @@ Aucun n'est une tâche : ce sont des constats qui changent ce qu'on a le droit d
 > et **l'écran de création d'activité**, qui n'existe pas — un exploitant ne peut pas refaire par
 > l'interface ce que §8.12 a fait par l'API.
 
+### ~~⚠ 8.1~~ — TRANCHÉ LE 04/09 : « les rendre non facturables », appliqué
+
+**Maxime : « Les rendre non facturables ».** Ils restent au catalogue avec leur mention « en
+construction » — l'exploitant voit ce qui arrive — mais rien ne se vend et rien ne se facture.
+
+    DescripteurCapacite::$peutServir     la question, portée par la fiche de la capacité
+    CatalogueCapacites::peutServir()     la réponse, avec la mesure de chaque module en commentaire
+    OfferCatalog::activeOptions()        le point de passage UNIQUE de la vente et de la composition
+    SubscriptionInvoicer::lignes()       la garde côté facturation, pour un abonnement antérieur
+    SeedSellableOptionsCommand           n'en crée plus, et DÉSACTIVE les trois déjà en vente
+
+⚠ **LE CODE DÉCIDE, PAS LA DONNÉE.** Les trois options existaient à **19,00 € / mois**, `active = 1`.
+Basculer le booléen aurait suffi jusqu'à ce qu'une case recochée dans `/editeur` les remette en vente
+sans que personne s'en aperçoive. Le catalogue est la source ; la donnée suit.
+
+⚠ **CE N'EST PAS `estVerticale`, ET LES CONFONDRE SERAIT FAUX.** Une verticale est hors boutique **par
+nature** — c'est ce qu'un établissement EST. Celle-ci l'est **temporairement**, par un état de fait
+qui cessera.
+
+⚠ **ET C'EST TOUT LE PROBLÈME : LA DÉCISION REPOSE SUR UNE ABSENCE, QUI VA CESSER.** Le jour où
+quelqu'un écrit la première entité de `Lodging`, ces trois lignes deviennent le contraire du vrai et
+le module reste **gratuit pour toujours** — sans qu'aucun test ne tombe, parce qu'il marchera très
+bien, il ne sera juste pas facturé. Personne n'a de raison d'aller relire un `match` en écrivant une
+entité.
+
+**`bin/garde-fou-modules-non-servables.php` (n°52) rend cette absence bruyante.** Il fige la mesure
+et refuse la poussée dès qu'un module listé grossit. ⚠ Il **ne décide pas** : il ne dit pas « vends-le
+», il dit « la raison de ne pas le vendre n'a peut-être plus cours, refais la mesure ».
+
+    témoins   une entité de plus → vu · une trace au frontal → vue
+              une mesure inchangée → épargnée · une mesure en BAISSE → épargnée
+    et une croissance RÉELLE, pas seulement fabriquée : une entité posée dans `Lodging`,
+    le contrôle passe au rouge, retirée, il revient au vert.
+
+⚠ **J'AI RECOPIÉ UN CHIFFRE SANS LE MESURER.** Cette fiche disait « stay : 9 entités » ; en écrivant
+le contrôle, le même module en rend **2**. Ni l'un ni l'autre n'est faux — l'ancien comptage donne 36
+entités à Padel là où les attributs `#[ORM\Entity]` en montrent 15. **Un chiffre sans sa définition
+ne se relaie pas.** Ce qui est publié désormais est ce qu'une commande recompte :
+
+    lodging   0 entité · 0 ressource · 0 écran     il ne peut pas enregistrer une chambre
+    stay      2 entités · 2 ressources · 0 écran   le serveur existe, personne ne s'en sert
+    dining    2 entités · 1 ressource · 0 écran    même situation
+    padel     15 entités · 17 ressources · écrans  le témoin positif
+
+**174 tests verts** (`Subscription` + `Fonctionnalite`), code de sortie 0.
+
+<details><summary>Le constat d'origine</summary>
+
 ### ⚠ 8.1 — Trois modules sont vendus dans la boutique sans pouvoir servir
 
 Mesuré contre `Padel` pris comme témoin positif (20 ressources API, 36 entités, des écrans) :
@@ -733,6 +781,8 @@ Mesuré contre `Padel` pris comme témoin positif (20 ressources API, 36 entité
 pures. Les trois sont **activables et facturés au mois**. Leur description dans
 `CatalogueCapacites` le dit désormais en une phrase, à l'endroit où l'exploitant décide. **Les
 retirer de la vitrine est un arbitrage produit : posé à Maxime, pas pris.**
+
+</details>
 
 ### ⚠ 8.2 — La suite de tests tient à 5 % de son plafond mémoire
 

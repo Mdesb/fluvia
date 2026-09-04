@@ -79,17 +79,45 @@ final class SeedSellableOptionsCommand extends Command
         }
 
         $existantes = [];
+        /** @var array<string, PlanOption> $objets */
+        $objets = [];
         foreach ($this->em->getRepository(PlanOption::class)->findAll() as $option) {
             $existantes[$option->getCapability()] = $option->getMonthlyPriceCents();
+            $objets[$option->getCapability()] = $option;
         }
 
         $crees = [];
         $ignorees = [];
         $verticales = [];
+        $nonServables = [];
+        $desactivees = [];
 
         foreach ($this->catalogue->toutes() as $descripteur) {
             if ($descripteur->estVerticale) {
                 $verticales[] = $descripteur->code;
+                continue;
+            }
+
+            // ⚠ UN MODULE QUI NE PEUT RIEN SERVIR NE SE MET PAS EN VENTE (§8.1, arbitrage du 04/09).
+            //
+            // Et s'il est DÉJÀ en vente, on l'en retire : trois options à 19,00 € / mois existaient
+            // pour `lodging`, `stay` et `dining` au moment de l'arbitrage. Une commande qui se
+            // contenterait de ne plus en créer laisserait exactement ce qu'elle est censée empêcher.
+            //
+            // ⚠ ELLE NE SUPPRIME PAS, ELLE DÉSACTIVE. Le prix saisi survit, et le jour où le module
+            //   sert, une seule case le remet en vente — là où une suppression demanderait de
+            //   retrouver ce que quelqu'un avait décidé.
+            if (!$descripteur->peutServir) {
+                $nonServables[] = $descripteur->code;
+
+                $option = $objets[$descripteur->code] ?? null;
+                if (null !== $option && $option->isActive()) {
+                    if (!$simulation) {
+                        $option->setActive(false);
+                    }
+                    $desactivees[] = $descripteur->code;
+                }
+
                 continue;
             }
 
@@ -110,7 +138,7 @@ final class SeedSellableOptionsCommand extends Command
             $crees[] = $descripteur->code;
         }
 
-        if (!$simulation && $crees !== []) {
+        if (!$simulation && ($crees !== [] || $desactivees !== [])) {
             $this->em->flush();
         }
 
@@ -126,6 +154,25 @@ final class SeedSellableOptionsCommand extends Command
 
         // ⚠ ON NOMME CE QU'ON N'A PAS TOUCHE. Une commande qui ne dit que ce qu'elle a fait laisse
         // croire qu'elle a tout traite — et personne ne saurait qu'un prix existant a ete respecte.
+        // ⚠ ON NOMME CE QU'ON A RETIRÉ DE LA VENTE, ET POURQUOI. Une option qui disparaît de la
+        //   boutique sans que rien ne le dise se lit comme une panne, et quelqu'un la « répare ».
+        if ($nonServables !== []) {
+            $io->writeln('');
+            $io->writeln(sprintf(
+                '%d module(s) NON MIS EN VENTE — ils ne peuvent rien servir (§8.1) :',
+                \count($nonServables),
+            ));
+            foreach ($nonServables as $code) {
+                $io->writeln(sprintf(
+                    '    · %-24s %s',
+                    $code,
+                    \in_array($code, $desactivees, true)
+                        ? ($simulation ? 'SERAIT désactivé (il était en vente)' : 'DÉSACTIVÉ (il était en vente)')
+                        : 'déjà hors vente',
+                ));
+            }
+        }
+
         if ($ignorees !== []) {
             $io->writeln('');
             $io->writeln(sprintf('%d option(s) deja tarifee(s), prix INCHANGE :', \count($ignorees)));
