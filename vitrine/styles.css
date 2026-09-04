@@ -217,14 +217,27 @@ em { font-style: normal; color: var(--accent-2); }
 
 /* ---------- options ---------- */
 
-.options { list-style: none; padding: 0; margin: 20px auto 0; max-width: 760px; }
-.options li {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  padding: 14px 4px;
-  border-bottom: 1px solid var(--line);
+/* ⚠ DIX-SEPT LIGNES IDENTIQUES DANS UNE COLONNE DE 760 px.
+   C'est ce que la page servie montrait sur un grand ecran : le regard traversait du vide pour lire
+   dix-sept fois « 19 € / mois ». Une grille de cartes se balaie d'un coup d'oeil ; une liste
+   verticale se lit, ou plutot ne se lit pas. */
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 24px auto 0;
+  max-width: var(--page);
 }
-.options li:last-child { border-bottom: none; }
-.options .option-prix { font-weight: 600; white-space: nowrap; }
+.options li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.options .option-prix { font-weight: 600; white-space: nowrap; color: var(--ink-soft); }
 
 /* ---------- états ---------- */
 
@@ -701,3 +714,32 @@ input:focus-visible {
   color: var(--hero-encre);
 }
 .hero .btn-fantome:hover { background: rgba(231, 236, 247, .08); }
+
+/* ── LE TUNNEL SUR LA LARGEUR DE LA PAGE ───────────────────────────────────────────────────────
+
+   Meme raison que les options ci-dessus : dix-sept choix empiles dans une colonne de lecture font
+   une page qu'on n'atteint jamais le bas. Les choix deviennent une grille ; les champs de saisie,
+   eux, restent etroits — un nom et une adresse n'ont pas besoin de mille pixels. */
+.tunnel { max-width: var(--page); margin-inline: auto; }
+
+.choix-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+/* Les champs « Vous » gardent une largeur de formulaire, pas de page. */
+.tunnel .champ { max-width: 30em; }
+
+/* Le total et les actions se lisent au meme endroit que les champs. */
+.tunnel .total,
+.tunnel .actions { max-width: 30em; }
+
+/* ⚠ UNE SEULE FORMULE DANS UNE GRILLE `auto-fill` DEVIENT UNE VIGNETTE.
+   `.grille` cree autant de colonnes de 240 px que la largeur en permet ; avec un seul plan, la
+   carte occupait une colonne sur six et se retrouvait minuscule, collee a gauche. `auto-fit` avec
+   une borne haute la laisse respirer, et la centre tant qu'il y en a peu. */
+#tarifs-formules {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 380px));
+  justify-content: center;
+}
