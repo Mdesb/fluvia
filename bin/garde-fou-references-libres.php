@@ -65,13 +65,73 @@ const RACINE = 'app/src';
 const MOTIF_REFERENCE_LIBRE = '/private\s+\??Uuid\s+\$(\w+Ref)\b/';
 
 /**
+ * Le source, ses commentaires blanchis — NUMÉROS DE LIGNE INTACTS.
+ *
+ * ⚠ CE CONTRÔLE LISAIT LES COMMENTAIRES COMME DU CODE, et ça lui coûtait deux défauts d'un coup.
+ *
+ * Mesuré le 04/09 en lui faisant nommer la ligne qu'il accusait dans
+ * `CreateSlotWaitlistEntryProcessor` :
+ *
+ *     ligne 82   establishment   comparaison DQL sans type explicite
+ *       // ⚠ D58 vaut aussi pour l'ASSOCIATION : `e.establishment = :establishment` avec
+ *
+ * C'est un commentaire — et il explique précisément le défaut que le code, cinq lignes plus bas,
+ * NE FAIT PLUS. Une phrase qui décrit un défaut devient une accusation le jour où on la relit
+ * avec un outil qui ne sait pas que c'en est une.
+ *
+ * ⚠ ET LE SECOND DÉFAUT SE CACHAIT DERRIÈRE LE PREMIER. La fenêtre de la chaîne fluide s'arrête au
+ * premier `;` ; ce même commentaire en porte un (« était juste ; sa liaison »). Même en accusant la
+ * bonne ligne, la fenêtre se serait refermée avant le `setParameter` typé. Blanchir les commentaires
+ * répare les deux, parce que les deux avaient la même cause.
+ *
+ * ⚠ ON NE RÉÉCRIT PAS LA SYNTAXE DES COMMENTAIRES À LA MAIN. `token_get_all()` est le tokeniseur de
+ * PHP lui-même. Une expression maison se tromperait sur `'// dans une chaîne'`, sur `#[Attribut]`
+ * (qui n'est pas un commentaire depuis PHP 8), et sur un bloc `slash-étoile` ouvert dans un HEREDOC.
+ *
+ * Les sauts de ligne des commentaires sont conservés : les numéros signalés doivent rester ceux du
+ * fichier réel, sinon le message envoie le lecteur au mauvais endroit.
+ */
+function sansCommentaires(string $source): string
+{
+    $jetons = @token_get_all($source);
+
+    if ($jetons === [] && trim($source) !== '') {
+        // Un fichier qu'on n'arrive pas à lire n'est pas « rien à signaler » : c'est un contrôle qui
+        // n'a pas eu lieu. On refuse plutôt que de compter ça comme conforme.
+        fwrite(STDERR, "\n=== ERREUR — source PHP non tokenisable ===\n\n");
+        exit(2);
+    }
+
+    $sortie = '';
+
+    foreach ($jetons as $jeton) {
+        if (!is_array($jeton)) {
+            $sortie .= $jeton;
+            continue;
+        }
+
+        if ($jeton[0] === T_COMMENT || $jeton[0] === T_DOC_COMMENT) {
+            $sortie .= str_repeat("\n", substr_count($jeton[1], "\n"));
+            continue;
+        }
+
+        $sortie .= $jeton[1];
+    }
+
+    return $sortie;
+}
+
+/**
  * Les références libres déclarées dans UN source.
+ *
+ * ⚠ Sur le source SANS commentaires : un `private ?Uuid $exempleRef` cité dans un docbloc n'est pas
+ * une déclaration, et il inventerait un nom de propriété que le dépôt ne porte pas.
  *
  * @return list<string>
  */
 function referencesLibresDe(string $source): array
 {
-    if (preg_match_all(MOTIF_REFERENCE_LIBRE, $source, $correspondances) === false) {
+    if (preg_match_all(MOTIF_REFERENCE_LIBRE, sansCommentaires($source), $correspondances) === false) {
         return [];
     }
 
@@ -227,6 +287,14 @@ function analyser(string $fichier, array $proprietes, array $filtrables): array
     // — une relation ne le craint pas, API Platform la résout par son IRI. Le jour où le collecteur
     // s'élargira, cette ligne empêchera le filtre d'accuser les relations sans qu'on y repense.
     $filtrables = array_values(array_intersect($filtrables, referencesLibresDe($source)));
+
+    // ⚠ À PARTIR D'ICI, ON NE REGARDE QUE DU CODE (§8.13, pas 2). Les commentaires sont blanchis,
+    // leurs sauts de ligne conservés : les numéros signalés restent ceux du fichier réel.
+    //
+    // Ce contrôle accusait un commentaire qui EXPLIQUAIT le défaut, dans un fichier qui ne le
+    // commettait plus. Et le `;` de ce commentaire refermait la fenêtre de la chaîne fluide avant
+    // le `setParameter` typé — le second défaut ne pouvait pas se voir tant que le premier durait.
+    $source = sansCommentaires($source);
 
     $trouvailles = [];
     $lignes = explode("\n", $source);
