@@ -217,14 +217,27 @@ em { font-style: normal; color: var(--accent-2); }
 
 /* ---------- options ---------- */
 
-.options { list-style: none; padding: 0; margin: 20px auto 0; max-width: 760px; }
-.options li {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  padding: 14px 4px;
-  border-bottom: 1px solid var(--line);
+/* ⚠ DIX-SEPT LIGNES IDENTIQUES DANS UNE COLONNE DE 760 px.
+   C'est ce que la page servie montrait sur un grand ecran : le regard traversait du vide pour lire
+   dix-sept fois « 19 € / mois ». Une grille de cartes se balaie d'un coup d'oeil ; une liste
+   verticale se lit, ou plutot ne se lit pas. */
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 24px auto 0;
+  max-width: var(--page);
 }
-.options li:last-child { border-bottom: none; }
-.options .option-prix { font-weight: 600; white-space: nowrap; }
+.options li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.options .option-prix { font-weight: 600; white-space: nowrap; color: var(--ink-soft); }
 
 /* ---------- états ---------- */
 
@@ -683,5 +696,92 @@ input:focus-visible {
 /* Le badge se cassait en deux lignes dans la colonne etroite. */
 .hero-jeton { white-space: nowrap; }
 
-/* Le titre gardait sa taille pleine largeur dans une demi-colonne : cinq lignes. */
-.hero-grille h1 { font-size: clamp(28px, 3.1vw, 40px); }
+/* ⚠ LE BANDEAU N'EST PAS UNE COLONNE DE LECTURE.
+   `.mesure` vaut 68ch — une largeur faite pour lire un paragraphe. La grille a deux colonnes s'y
+   trouvait ecrasee au milieu de l'ecran : titre sur six lignes, et du vide des deux cotes. Le
+   bandeau prend donc la largeur de page ; c'est le TEXTE, a l'interieur, qui garde une mesure. */
+.hero-grille { max-width: var(--page); }
+.hero-dire { max-width: 36em; }
+.hero-grille h1 { font-size: clamp(32px, 3.4vw, 50px); }
+
+/* ⚠ LE BOUTON SECONDAIRE PESAIT PLUS QUE LE PRINCIPAL.
+   `.btn-fantome` prend `var(--panel)` — blanc en theme clair. Sur le bandeau sombre, ca donnait un
+   pave blanc massif a cote de l'action qu'on veut vraiment : le secondaire criait plus fort que le
+   primaire. Sur le bandeau, il redevient un contour. Encre #e7ecf7 sur #050914 : 16,3:1. */
+.hero .btn-fantome {
+  background: transparent;
+  border-color: rgba(231, 236, 247, .24);
+  color: var(--hero-encre);
+}
+.hero .btn-fantome:hover { background: rgba(231, 236, 247, .08); }
+
+/* ── LE TUNNEL SUR LA LARGEUR DE LA PAGE ───────────────────────────────────────────────────────
+
+   Meme raison que les options ci-dessus : dix-sept choix empiles dans une colonne de lecture font
+   une page qu'on n'atteint jamais le bas. Les choix deviennent une grille ; les champs de saisie,
+   eux, restent etroits — un nom et une adresse n'ont pas besoin de mille pixels. */
+.tunnel { max-width: var(--page); margin-inline: auto; }
+
+.choix-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+/* Les champs « Vous » gardent une largeur de formulaire, pas de page. */
+.tunnel .champ { max-width: 30em; }
+
+/* Le total et les actions se lisent au meme endroit que les champs. */
+.tunnel .total,
+.tunnel .actions { max-width: 30em; }
+
+/* ⚠ UNE SEULE FORMULE DANS UNE GRILLE `auto-fill` DEVIENT UNE VIGNETTE.
+   `.grille` cree autant de colonnes de 240 px que la largeur en permet ; avec un seul plan, la
+   carte occupait une colonne sur six et se retrouvait minuscule, collee a gauche. `auto-fit` avec
+   une borne haute la laisse respirer, et la centre tant qu'il y en a peu. */
+#tarifs-formules {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 380px));
+  justify-content: center;
+}
+
+/* ⚠ UNE PROSE CENTREE AU-DESSUS D'UNE GRILLE PLEINE LARGEUR NE S'ALIGNE SUR RIEN.
+   `.mesure` centre un bloc de 68ch dans la page. Tant que toute la section etait etroite, ca se
+   voyait a peine. Depuis que les options et le tunnel prennent la largeur, le titre commencait
+   250 px a droite du premier module : deux bords gauches differents dans la meme section, ce que
+   l'oeil lit comme un defaut de fabrication. La prose garde sa mesure, mais s'aligne a gauche. */
+/* ⚠ ALIGNER N'EST PAS ELARGIR. En imposant le bord gauche ci-dessous, la prose a herite de la
+   largeur de page et une ligne courait sur 150 caracteres. Elle garde donc sa mesure de lecture —
+   c'est la MARGE qu'on voulait changer, pas la largeur. */
+#tarifs .mesure,
+#souscrire .mesure { margin-inline: 0; max-width: var(--mesure); }
+
+/* ⚠ ALIGNER PAR CONSTRUCTION, PAS EN CHERCHANT POURQUOI CA DECALE.
+   Prose et grilles heritaient de contraintes differentes — `.mesure` centre sur 68ch, `.options`
+   centre sur sa propre largeur, la grille de formules sur la sienne. Trois centrages differents
+   donnent trois bords gauches. On leur impose le meme : plus rien ne peut deriver. */
+#tarifs > *,
+#souscrire > * { margin-inline: 0; max-width: var(--page); }
+
+/* ⚠ DEUX SYSTEMES D'ALIGNEMENT SUR UNE MEME PAGE, C'EST PIRE QU'UN SEUL MAUVAIS.
+   En calant les tarifs et le tunnel a gauche, j'ai laisse la FAQ, les modules et les metiers
+   centres : le regard changeait de bord en descendant. L'accueil partage donc un seul bord gauche,
+   celui du bandeau. Les AUTRES pages gardent leur prose centree — un article de blog n'a pas de
+   grille en face de lui, rien n'y justifie de casser le centrage. */
+.page-accueil .bande > * { margin-inline: 0; }
+
+#tarifs-formules { justify-content: start; }
+
+/* ⚠ LE PRIX TOMBAIT A LA LIGNE, ET LES CARTES DEVENAIENT IRREGULIERES.
+   `.choix-texte` porte `flex-wrap: wrap` : des que le libelle etait long, le prix passait dessous.
+   Sur une grille, ca donne une carte sur trois avec deux lignes et une mise en page qui a l'air
+   ratee. Le libelle se coupe donc a l'interieur de sa propre colonne, le prix reste a sa place. */
+.choix-texte { flex-wrap: nowrap; }
+.choix-texte > :first-child { min-width: 0; }
+
+/* Un cran de plus par colonne : un libelle comme « Recouvrement des impayes » tient alors sur une
+   ligne dans la plupart des cas. */
+.choix-liste { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+
+/* Les jetons de metiers etaient centres entre eux : la deuxieme ligne partait 70 px plus a droite
+   que la premiere, seule chose de la page a ne pas commencer au meme bord. */
+.page-accueil .jetons { justify-content: flex-start; }

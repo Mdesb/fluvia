@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
+import { idDe } from '../api/iri.js'
 import Modal from './Modal.jsx'
 
 /**
@@ -36,10 +37,13 @@ const VIDE = {
   actif: true,
 }
 
-function idDeProduit(ref) {
-  if (!ref) return ''
-  return typeof ref === 'string' ? String(ref).split('/').pop() : String(ref.id || '')
-}
+// `idDe` vient de `api/iri.js` (§8.3). Cette page en avait sa propre version : `.split('/').pop()`
+// rend la chaîne VIDE sur une référence terminée par un slash, là où la canonique filtre les
+// segments vides et ne rend jamais autre chose qu'un identifiant ou `null`.
+//
+// ⚠ Le `?? ''` est ICI, et pas dans `idDe` : `''` est la valeur d'un `<select>` sans choix, ce qui
+// est une convention de FORMULAIRE, pas une réponse à « quel est l'identifiant ». Une fonction qui
+// rendrait tantôt `null` tantôt `''` redeviendrait celle qu'on vient de retirer.
 
 export default function ActivitesReservation({ droits = [] }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
@@ -148,7 +152,7 @@ export default function ActivitesReservation({ droits = [] }) {
               </thead>
               <tbody>
                 {activites.map((a) => {
-                  const pid = idDeProduit(a.produitTarifReference)
+                  const pid = idDe(a.produitTarifReference) ?? ''
                   const p = parId[pid]
                   return (
                     <tr key={a.id}>

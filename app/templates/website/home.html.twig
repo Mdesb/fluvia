@@ -139,8 +139,16 @@
         champs dont le bouton échouerait après la saisie.
       #}
       <p id="tunnel-etat" class="etat" role="status">Chargement des offres…</p>
+    </div>
 
-      <form id="tunnel-formulaire" class="tunnel" hidden novalidate>
+    {#
+      ⚠ LE FORMULAIRE EST HORS DE LA COLONNE DE LECTURE, ET C'EST VOULU.
+
+      Le titre et les etapes ci-dessus sont de la prose : ils gardent une mesure. Le formulaire, lui,
+      porte dix-sept choix — dans une colonne de 68ch ils s'empilent sur dix-sept lignes et le
+      visiteur abandonne avant la fin. Deux objets differents, deux largeurs utiles.
+    #}
+    <form id="tunnel-formulaire" class="tunnel" hidden novalidate>
         <fieldset>
           <legend>Votre formule</legend>
           <div id="tunnel-formules" class="choix-liste"></div>
@@ -173,8 +181,9 @@
             Recevoir mon accès
           </button>
         </p>
-      </form>
+    </form>
 
+    <div class="mesure">
       <p id="tunnel-envoye" class="chapo" role="status" hidden></p>
     </div>
   </section>
