@@ -16,6 +16,8 @@
 {% block description %}{{ blocs['home.hero.lead'].text|default('')|slice(0, 300) }}{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_home') }}">{% endblock %}
 
+{% block corps_classe %}page-accueil{% endblock %}
+
 {% block body %}
 
   <section class="bande hero">

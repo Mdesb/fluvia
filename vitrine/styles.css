@@ -623,3 +623,43 @@ input:focus-visible {
 .faq { margin: 24px 0 0; }
 .faq dt { font-weight: 600; margin-top: 20px; }
 .faq dd { margin: 6px 0 0; color: var(--ink-soft); }
+
+/* ── FINITIONS DU BANDEAU, vues sur la page servie ─────────────────────────────────────────────
+
+   Le menu clair coupait net au-dessus du bandeau sombre : deux sites empiles. Il se fond dans le
+   bandeau tant qu'on est en haut de l'accueil.
+
+   ⚠ SEULEMENT SUR L'ACCUEIL, et seulement en haut. Les autres pages n'ont pas de bandeau sombre —
+   le meme reglage y poserait du texte clair sur fond clair. Et des qu'on defile, le menu doit
+   reprendre un fond : `position: sticky` le fait passer au-dessus du contenu clair. */
+.page-accueil .entete {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+.page-accueil .entete .marque { color: #e7ecf7; }
+.page-accueil .entete nav a { color: #a3aec8; }
+.page-accueil .entete nav a:hover { color: #e7ecf7; background: rgba(231, 236, 247, .08); }
+.page-accueil .entete nav a.btn-primaire { color: var(--sur-accent); }
+
+/* `animation-timeline: scroll()` n'est pas partout ; la regle ci-dessous est donc une AMELIORATION
+   progressive. La ou elle ne s'applique pas, le menu reste transparent en haut de l'accueil — ce
+   qui est exactement l'etat voulu au chargement. */
+@supports (animation-timeline: scroll()) {
+  .page-accueil .entete {
+    animation: entete-poser linear both;
+    animation-timeline: scroll();
+    animation-range: 0 220px;
+  }
+  @keyframes entete-poser {
+    to {
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      border-bottom-color: var(--line);
+    }
+  }
+}
+
+/* Le badge se cassait en deux lignes dans la colonne etroite. */
+.hero-jeton { white-space: nowrap; }
+
+/* Le titre gardait sa taille pleine largeur dans une demi-colonne : cinq lignes. */
+.hero-grille h1 { font-size: clamp(28px, 3.1vw, 40px); }
