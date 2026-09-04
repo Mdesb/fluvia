@@ -57,7 +57,9 @@ export default function Agenda({ droits = [], etabActif = null }) {
   const [onglet, setOnglet] = useState('site')
   const [vue, setVue] = useState('semaine')
   const [ancre, setAncre] = useState(() => new Date())
-  const [evenements, setEvenements] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Rien de programme sur cette periode » sur une
+  // lecture refusee annonce une journee libre a quelqu'un qui a peut-etre des creneaux.
+  const [evenements, setEvenements] = useState(null)
   const [vacances, setVacances] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -194,7 +196,9 @@ function AVenir({ evenements, portee }) {
         {suivants.length === 0 ? (
           // Le message dit ce qui ferait apparaître une ligne, plutôt que « aucun élément ».
           <div className="empty">
-            {portee === 'mine'
+            {evenements === null
+              ? <b>L’agenda n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
+              : portee === 'mine'
               ? 'Rien de programmé pour vous sur cette période. Vos créneaux de travail et vos événements personnels apparaîtront ici.'
               : 'Rien de programmé sur cette période. Les créneaux de réservation et les événements du site apparaîtront ici.'}
           </div>

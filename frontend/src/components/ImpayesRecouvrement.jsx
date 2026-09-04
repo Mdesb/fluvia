@@ -36,7 +36,11 @@ import { centimes } from '../api/produit.js'
 // Les présenter côte à côte comme deux boutons équivalents ferait choisir le plus rapide.
 
 export default function ImpayesRecouvrement({ etabActif, droits }) {
-  const [incidents, setIncidents] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, cet ecran affirmait deux fois
+  // qu'il n'y avait aucun impaye — dans le compteur du bandeau de carte, et dans l'etat vide.
+  // C'est la phrase qui fait arreter de chercher, sur le seul ecran ou une creance oubliee
+  // vieillit toute seule.
+  const [incidents, setIncidents] = useState(null)
   const [totalIncidents, setTotalIncidents] = useState(null)
   const [bord, setBord] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -62,6 +66,10 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       setTotalIncidents(typeof total === 'number' ? total : null)
     } catch (e) {
       setErreur(e.message)
+      // On ne garde pas la liste precedente : elle donnerait les impayes d'hier pour ceux
+      // d'aujourd'hui, ce qui est pire qu'une absence annoncee.
+      setIncidents(null)
+      setTotalIncidents(null)
     } finally {
       setChargement(false)
     }
@@ -89,7 +97,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   // Inventer un libelle « client inconnu » ferait croire a une donnee manquante ; la reference est
   // laide mais vraie, et elle permet de retrouver la ligne.
   const nomRedevable = (type, reference) => {
-    const connu = incidents.find((i) => i.typeRedevable === type && i.referenceRedevable === reference)
+    const connu = (incidents || []).find((i) => i.typeRedevable === type && i.referenceRedevable === reference)
     return connu?.nomRedevable || connu?.libelleRedevable || reference
   }
 
@@ -133,7 +141,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
 
-  const ouverts = incidents.filter((i) => i.statut !== 'resolu')
+  const ouverts = (incidents || []).filter((i) => i.statut !== 'resolu')
   // LE DENOMINATEUR EXACT, DEPUIS QUE LE SERVEUR EXPOSE `nbResolus` (main, bb1ff2e).
   //
   // Hier soir je ne pouvais trancher que le cas << rien nulle part >>, faute de connaitre le total :
@@ -155,10 +163,13 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     ? (bord.nbEnRepresentation || 0) + (bord.nbEnRecouvrement || 0) + bord.nbResolus
     : null
   // Sans le champ, on retombe sur le seul cas qu'on sait trancher : rien nulle part.
-  const rienAMesurer = assietteConnue
+  const listeLue = incidents !== null
+  // ⚠ « Rien a mesurer » est une CONCLUSION : elle exige d'avoir lu. Sans la liste, on ne peut pas
+  // la tirer — meme quand le tableau de bord, lui, a repondu.
+  const rienAMesurer = listeLue && (assietteConnue
     ? assietteDuTaux === 0
-    : incidents.length === 0 && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques
-  const resolus = incidents.filter((i) => i.statut === 'resolu')
+    : (incidents || []).length === 0 && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques)
+  const resolus = (incidents || []).filter((i) => i.statut === 'resolu')
 
   return (
     <>
@@ -211,7 +222,9 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 : `${Math.round((bord.tauxResolutionSelfService || 0) * 100)} %`}
             </div>
             <div className="st-lbl">
-              {rienAMesurer
+              {!listeLue
+                ? 'Taux non calculable : la liste des impayés n’a pas pu être lue'
+                : rienAMesurer
                 ? 'Rien à mesurer : aucun impayé'
                 : assietteConnue
                   ? `Réglés par le client seul, sur ${assietteDuTaux} incident${assietteDuTaux > 1 ? 's' : ''}`
@@ -225,7 +238,9 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         <div className="card-h">
           <h3>Impayés en cours</h3>
           <span className="sub">
-            {ouverts.length === 0 ? 'aucun impayé ouvert' : `${ouverts.length} à traiter`}
+            {!listeLue
+              ? 'liste non lue'
+              : ouverts.length === 0 ? 'aucun impayé ouvert' : `${ouverts.length} à traiter`}
           </span>
         </div>
         <div className="card-b">
@@ -246,6 +261,14 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 On décrit ce qui remplit réellement cette liste. Signalé au serveur : c'est là que le
                 chaînage manque, pas ici. */}
             <div className="empty">
+              {!listeLue ? (
+                <b>
+                  La liste des impayés n’a pas pu être lue. Elle est vide parce que la lecture a
+                  échoué, pas parce qu’aucun impayé n’est ouvert — ne concluez pas que tout est
+                  réglé, et réessayez.
+                </b>
+              ) : (
+                <>
               Aucun impayé en cours. Un impayé s’ouvre aujourd’hui à partir d’une échéance
               d’abonnement rejetée, ou du résultat négatif d’une représentation bancaire — il bloque
               alors l’accès du redevable et en repart quand le paiement est régularisé.
@@ -253,6 +276,8 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 <b>Un rejet SEPA déclaré depuis l’écran Prélèvements n’ouvre pas d’impayé</b> : il
                 est enregistré au journal des rejets et rien d’autre. Vérifié en le faisant.
               </div>
+                </>
+              )}
               {resolus.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   {resolus.length} impayé{resolus.length > 1 ? 's ont' : ' a'} été régularisé
@@ -428,7 +453,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       <Representations
         peutPiloter={peutPiloter}
         incidentsParId={incidentsParId}
-        listeIncidentsPartielle={totalIncidents !== null && incidents.length < totalIncidents}
+        listeIncidentsPartielle={totalIncidents !== null && (incidents || []).length < totalIncidents}
         onErreur={setErreur}
       />
 

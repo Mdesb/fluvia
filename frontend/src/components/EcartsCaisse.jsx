@@ -41,7 +41,9 @@ import { euros } from '../api/produit.js'
 // retourne voir son Z d'hier doit lire cette phrase, sinon il conclura que le logiciel n'a rien fait.
 
 export default function EcartsCaisse({ etabActif, droits }) {
-  const [alertes, setAlertes] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucun ecart inexplique » sur une lecture refusee
+  // annonce une caisse saine qu'on n'a pas regardee.
+  const [alertes, setAlertes] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -76,8 +78,8 @@ export default function EcartsCaisse({ etabActif, droits }) {
   // Rien n'est stocké côté serveur : c'est un fait constaté à la lecture, calculé en une requête
   // pour toute la page. L'alerte reste l'entité immuable qu'elle déclare être, et il n'y a pas de
   // drapeau à maintenir — donc pas de drapeau qu'on oublie de maintenir.
-  const ouvertes = alertes.filter((a) => !a.expliquee)
-  const closes = alertes.filter((a) => a.expliquee)
+  const ouvertes = (alertes || []).filter((a) => !a.expliquee)
+  const closes = (alertes || []).filter((a) => a.expliquee)
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
@@ -95,8 +97,10 @@ export default function EcartsCaisse({ etabActif, droits }) {
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
         ) : ouvertes.length === 0 ? (
           <div className="empty">
+            {alertes === null ? <b>La liste des écarts n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : <>
             Aucun écart inexpliqué. Une clôture dont le comptage ne tombe pas juste apparaît ici, et
             en repart dès qu'une correction de règlement dit ce qui s'est passé.
+            </>}
             {closes.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 {closes.length} écart{closes.length > 1 ? 's ont' : ' a'} été expliqué

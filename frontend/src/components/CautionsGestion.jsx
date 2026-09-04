@@ -32,7 +32,9 @@ import { idDe } from '../api/iri'
 // partout dans l'établissement, sinon ce n'est pas un barème.
 export default function CautionsGestion({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('cautions')
-  const [cautions, setCautions] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucune caution en cours » sur une lecture refusee
+  // dit a l'exploitant qu'il ne detient l'argent de personne.
+  const [cautions, setCautions] = useState(null)
   const [mouvements, setMouvements] = useState([])
   const [grilles, setGrilles] = useState([])
   const [baremePartiel, setBaremePartiel] = useState(false)
@@ -56,7 +58,8 @@ export default function CautionsGestion({ etabActif, droits }) {
       api.cautionMouvements(),
       api.grillesRetenue(),
     ])
-    setCautions(c.status === 'fulfilled' ? membres(c.value) : [])
+    // ⚠ Le `: []` transformait un REFUS en « il n'y en a pas ». C'est le defaut, ecrit tel quel.
+    setCautions(c.status === 'fulfilled' ? membres(c.value) : null)
     setMouvements(m.status === 'fulfilled' ? membres(m.value) : [])
     setGrilles(g.status === 'fulfilled' ? membres(g.value) : [])
 
@@ -136,7 +139,7 @@ export default function CautionsGestion({ etabActif, droits }) {
 
       <Tabs
         onglets={[
-          ['cautions', `Cautions${cautions.length ? ` (${cautions.length})` : ''}`],
+          ['cautions', `Cautions${(cautions || []).length ? ` (${(cautions || []).length})` : ''}`],
           ['journal', 'Journal'],
           ['bareme', `Barème${grilles.length ? ` (${grilles.length})` : ''}`],
         ]}
@@ -191,7 +194,7 @@ export default function CautionsGestion({ etabActif, droits }) {
 function Cautions({ cautions, totaux, mouvementsParCaution, grillesParId, ouverte, onOuvrir }) {
   const [filtre, setFiltre] = useState('ouvertes')
 
-  const visibles = cautions.filter((c) => {
+  const visibles = (cautions || []).filter((c) => {
     if (filtre === 'ouvertes') return c.statut !== 'restituee'
     if (filtre === 'retenues') return c.statut === 'retenue_partielle' || c.statut === 'retenue_totale'
     if (filtre === 'restituees') return c.statut === 'restituee'
@@ -236,7 +239,9 @@ function Cautions({ cautions, totaux, mouvementsParCaution, grillesParId, ouvert
         <div className="card-b" style={{ overflowX: 'auto' }}>
           {visibles.length === 0 ? (
             <div className="empty">
-              {filtre === 'ouvertes'
+              {cautions === null
+                ? <b>La liste des cautions n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
+                : filtre === 'ouvertes'
                 ? "Aucune caution en cours. Une caution apparaît ici dès qu'un support est remis contre dépôt — un casier à la piscine, du matériel au padel, des patins à la patinoire."
                 : 'Aucune caution dans cette sélection.'}
             </div>
