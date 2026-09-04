@@ -806,6 +806,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         me={me}
         etabActif={etabActif}
         session={session}
+        droits={droits}
         onRefresh={onSessionRefresh}
         onClose={() => setCaisseModale(false)}
       />

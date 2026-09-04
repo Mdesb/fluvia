@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { aLeDroit } from '../api/droits.js'
 import { api, membres } from '../api/client.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
@@ -6,7 +7,16 @@ import { euros } from '../api/produit.js'
 // Gestion de la session de caisse (M2) : ouverture (point de vente, caisse, fond, régisseur)
 // et clôture Z (comptages, écart de régie, versement, fond reporté).
 // Rendu en modale depuis l'écran Caisse (`modale`) ou en page autonome (par défaut).
-export default function SessionCaisse({ me, etabActif, session, onRefresh, modale = false, onClose }) {
+export default function SessionCaisse({ me, etabActif, session, droits = [], onRefresh, modale = false, onClose }) {
+  // ⚠ CET ECRAN NE RECEVAIT PAS `droits` DU TOUT, ET IL PORTE LES DEUX GESTES QUI ENCADRENT UNE
+  // JOURNEE DE GUICHET. Le serveur exige `caisse.ouvrir` sur l'ouverture et `caisse.cloturer` sur
+  // la cloture (`Caisse/Entity/SessionCaisse.php`) — deux droits que des roles reels separent :
+  // « Role Caissier = caisse.cloturer uniquement », dit `CaisseClotureRoleFixtures`.
+  //
+  // On ne cache pas les boutons : savoir que le geste existe fait partie du travail, et un guichet
+  // qui n'ouvre pas doit pouvoir dire quoi demander.
+  const peutOuvrir = aLeDroit(droits, 'caisse.ouvrir')
+  const peutCloturer = aLeDroit(droits, 'caisse.cloturer')
   const [pdvs, setPdvs] = useState([])
   const [caisses, setCaisses] = useState([])
   const [moyens, setMoyens] = useState([])
@@ -177,7 +187,14 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
       <div className="hint" style={{ marginBottom: 14 }}>
         Régisseur : <b>{me?.nom || me?.email}</b>. Aucun code n'est requis à l'ouverture.
       </div>
-      <button className="btn primary lg" type="submit" disabled={ouverture || !pdvId || !caisseId}>
+      <button
+        className="btn primary lg"
+        type="submit"
+        disabled={ouverture || !pdvId || !caisseId || !peutOuvrir}
+        title={peutOuvrir
+          ? undefined
+          : 'Ce compte n’a pas le droit d’ouvrir une caisse (caisse.ouvrir). Ce n’est pas une panne : demandez-le à un administrateur.'}
+      >
         {ouverture ? 'Ouverture…' : 'Ouvrir la caisse'}
       </button>
     </>
@@ -225,7 +242,15 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
         </div>
       </div>
 
-      <button className="btn primary lg" type="submit" disabled={cloture} style={{ marginTop: 14 }}>
+      <button
+        className="btn primary lg"
+        type="submit"
+        disabled={cloture || !peutCloturer}
+        title={peutCloturer
+          ? undefined
+          : 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'}
+        style={{ marginTop: 14 }}
+      >
         {cloture ? 'Clôture…' : 'Clôturer (Z)'}
       </button>
       <div className="hint">

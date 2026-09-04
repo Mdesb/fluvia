@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Website\Service;
 
 use App\Website\Entity\BlogPost;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
@@ -30,8 +31,22 @@ final readonly class StructuredData
 {
     private const DRAPEAUX = \JSON_HEX_TAG | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR;
 
-    public function __construct(private UrlGeneratorInterface $urls)
-    {
+    public function __construct(
+        private UrlGeneratorInterface $urls,
+        /**
+         * ⚠ L'ADRESSE PUBLIQUE DU SITE, PAS CELLE DE LA REQUÊTE.
+         *
+         * `UrlGeneratorInterface::ABSOLUTE_URL` construit depuis la requête ; derrière le proxy,
+         * Symfony ne voit pas que l'appel est arrivé en HTTPS — aucun proxy de confiance n'est
+         * déclaré — et rendait `http://`. Google traite `http` et `https` comme deux adresses
+         * distinctes : la canonique et le plan du site désignaient des pages qui redirigent.
+         *
+         * Corrigé sans toucher `trusted_proxies`, qui décide aussi de l'adresse IP que voit le
+         * limiteur de débit du tunnel : on ne paie pas une question de sécurité pour une question
+         * d'affichage.
+         */
+        #[Autowire(env: 'VITRINE_BASE_URL')] private string $baseUrl = '',
+    ) {
     }
 
     /** L'éditeur lui-même — présent sur toutes les pages. */
@@ -42,7 +57,7 @@ final readonly class StructuredData
             '@type' => 'Organization',
             'name' => 'Fluvia',
             'url' => $this->absolue('website_home'),
-            'logo' => $this->absolue('website_home').'marque/FLUVIA_Logo_Color.svg',
+            'logo' => rtrim($this->baseUrl, '/').'/marque/FLUVIA_Logo_Color.svg',
             'description' => "Plateforme de gestion pour les lieux qui accueillent du public : billetterie, "
                 ."réservation, contrôle d'accès, caisse, boutique en ligne, CRM et facturation, activables module par module.",
             'areaServed' => 'FR',
@@ -82,7 +97,7 @@ final readonly class StructuredData
             '@type' => 'BlogPosting',
             'headline' => $article->getTitle(),
             'description' => $article->getMetaDescription() ?? $article->getExcerpt(),
-            'url' => $this->urls->generate('website_blog_post', ['slug' => $article->getSlug()], UrlGeneratorInterface::ABSOLUTE_URL),
+            'url' => $this->absolue('website_blog_post', ['slug' => $article->getSlug()]),
             'datePublished' => $article->getPublishedAt()?->format(\DateTimeInterface::ATOM),
             'dateModified' => $article->getUpdatedAt()->format(\DateTimeInterface::ATOM),
             'image' => $article->getCoverUrl(),
@@ -155,8 +170,8 @@ final readonly class StructuredData
         return json_encode($donnees, self::DRAPEAUX);
     }
 
-    private function absolue(string $route): string
+    private function absolue(string $route, array $parametres = []): string
     {
-        return $this->urls->generate($route, [], UrlGeneratorInterface::ABSOLUTE_URL);
+        return rtrim($this->baseUrl, '/').$this->urls->generate($route, $parametres);
     }
 }

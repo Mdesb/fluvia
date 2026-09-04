@@ -14,7 +14,7 @@
 
 {% block title %}{{ b.ligne(blocs['home.hero.title']|default(null))|striptags|trim ?: 'Fluvia' }}{% endblock %}
 {% block description %}{{ blocs['home.hero.lead'].text|default('')|slice(0, 300) }}{% endblock %}
-{% block canonical %}<link rel="canonical" href="{{ url('website_home') }}">{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_home') }}">{% endblock %}
 
 {% block body %}
 

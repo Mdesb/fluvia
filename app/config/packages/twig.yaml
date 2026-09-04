@@ -8,6 +8,15 @@ twig:
         # et son propre commentaire prevenait que « retirer l'un sans l'autre ne suffit pas ».
         site_indexable: '%env(bool:WEBSITE_INDEXABLE)%'
 
+        # ⚠ L'ADRESSE PUBLIQUE EST UN FAIT DE DEPLOIEMENT, PAS DE REQUETE. `url()` construit
+        # l'absolu depuis la requete ; derriere le proxy, Symfony ne voit pas le HTTPS et rendait
+        # `http://` dans les canoniques, l'Open Graph, le plan du site et les donnees structurees.
+        # Google traite les deux comme des adresses distinctes : la canonique designait une page qui
+        # redirige. Corrige sans toucher `trusted_proxies`, qui decide aussi de l'IP que voit le
+        # limiteur de debit du tunnel — on ne paie pas une question de securite pour une question
+        # d'affichage.
+        site_base: '%env(VITRINE_BASE_URL)%'
+
 when@test:
     twig:
         strict_variables: true

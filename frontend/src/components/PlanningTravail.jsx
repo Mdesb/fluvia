@@ -24,6 +24,11 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
   const [creation, setCreation] = useState(false)
+  // ⚠ `null` = PAS LU, comme pour les creneaux. Un planning qui affiche « personne » alors qu'il
+  // n'a pas su lire fait chercher des remplacants pour des postes deja pourvus.
+  const [affectations, setAffectations] = useState(null)
+  const [employes, setEmployes] = useState(null)
+  const [aAffecter, setAAffecter] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'personnel.gerer_planning')
 
@@ -31,6 +36,13 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
     setErreur(null)
     try {
       setCreneaux(membres(await api.creneauxTravail()))
+      // Lecture separee : une affectation illisible ne doit pas faire passer le planning entier
+      // pour illisible, et inversement. Les deux echecs ne se disent pas de la meme facon.
+      try {
+        setAffectations(membres(await api.affectationsTravail()))
+      } catch {
+        setAffectations(null)
+      }
     } catch (e) {
       // ⚠ `null` = PAS LU. « Aucun créneau planifié » sur un planning est une affirmation qui
       // fait conclure que personne n'est attendu — et on ne remplace pas quelqu'un qu'on ne
@@ -41,6 +53,46 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
   }, [etabActif])
 
   useEffect(() => { recharger() }, [recharger])
+
+  useEffect(() => {
+    api.employes()
+      .then((r) => setEmployes(membres(r)))
+      .catch(() => setEmployes(undefined))
+  }, [etabActif])
+
+  // Les affectations VIVANTES par creneau. Une affectation annulee ne compte plus dans l'effectif :
+  // la compter ferait croire un poste pourvu alors qu'il ne l'est plus.
+  const affectesPar = {}
+  for (const a of affectations || []) {
+    if (a.statut === 'annulee') continue
+    const ref = a.creneauTravail
+    const cid = typeof ref === 'string' ? String(ref).split('/').pop() : String(ref?.id || '')
+    if (!cid) continue
+    if (!affectesPar[cid]) affectesPar[cid] = []
+    affectesPar[cid].push(a)
+  }
+
+  function nomDe(ref) {
+    const id = typeof ref === 'string' ? String(ref).split('/').pop() : String(ref?.id || '')
+    if (!Array.isArray(employes)) return null
+    const e = employes.find((x) => String(x.id) === id)
+    return e ? ([e.prenom, e.nom].filter(Boolean).join(' ') || e.matricule || 'employé') : null
+  }
+
+  async function retirer(a) {
+    setBusy(true)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.annulerAffectationTravail(a.id)
+      setSucces('Affectation retirée.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'Le retrait a échoué.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function annuler(c) {
     setBusy(true)
@@ -99,6 +151,7 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
                   <th>Début</th>
                   <th>Fin</th>
                   <th className="num">Effectif</th>
+                  <th>Qui le tient</th>
                   <th>Statut</th>
                   {peutGerer && <th />}
                 </tr>
@@ -110,11 +163,54 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
                     <td>{dateHeureFr(c.debut)}</td>
                     <td>{dateHeureFr(c.fin)}</td>
                     <td className="num">{c.effectifRequis ?? '—'}</td>
+                    <td>
+                      {/* ⚠ LE CHIFFRE QUI COMPTE EST LE MANQUE, pas l'effectif. « 1 sur 2 » oblige
+                          a soustraire ; « il manque 1 » se lit d'un coup, et c'est ce qu'on cherche
+                          en parcourant un planning a la recherche d'un trou. */}
+                      {affectations === null ? (
+                        <span className="sub">affectations non lues</span>
+                      ) : (affectesPar[String(c.id)] || []).length === 0 ? (
+                        <span className="badge warn">personne</span>
+                      ) : (
+                        <>
+                          {(affectesPar[String(c.id)] || []).map((a) => (
+                            <div key={a.id}>
+                              {nomDe(a.employe) || <span className="sub">employé non lu</span>}
+                              {peutGerer && (
+                                <button
+                                  className="btn ghost sm"
+                                  type="button"
+                                  style={{ marginLeft: 'var(--esp-normal)' }}
+                                  disabled={busy}
+                                  title="L'affectation est retirée ; le créneau reste au planning."
+                                  onClick={() => retirer(a)}
+                                >
+                                  Retirer
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {(c.effectifRequis || 1) > (affectesPar[String(c.id)] || []).length && (
+                            <span className="sub">
+                              il manque {(c.effectifRequis || 1) - (affectesPar[String(c.id)] || []).length}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </td>
                     <td><span className="badge mut">{c.statut || '—'}</span></td>
                     {peutGerer && (
                       <td className="num">
                         <button
                           className="btn sm"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => { setAAffecter(c); setErreur(null); setSucces(null) }}
+                        >
+                          Affecter
+                        </button>
+                        <button
+                          className="btn ghost sm"
                           type="button"
                           disabled={busy}
                           title="Le créneau reste au planning, marqué annulé."
@@ -133,9 +229,18 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
 
         <div className="hint">
           Un créneau exprime un <b>besoin</b> — « ce poste demande deux personnes de 9 h à 17 h » —
-          et non une affectation. Rattacher un salarié à un créneau est un geste distinct.
+          et non une affectation. Rattacher un salarié reste un geste distinct — il se fait
+          maintenant ici, colonne « qui le tient ».
         </div>
       </div>
+
+      <AffectationEmploye
+        creneau={aAffecter}
+        employes={employes}
+        onFermer={() => setAAffecter(null)}
+        onFait={async (m) => { setAAffecter(null); setSucces(m); await recharger() }}
+        onErreur={setErreur}
+      />
 
       <CreneauModal
         open={creation}
@@ -257,6 +362,83 @@ function CreneauModal({ open, etabActif, onClose, onFait }) {
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+
+/**
+ * AFFECTER UN EMPLOYÉ — et ne pas prétendre savoir qui est disponible.
+ *
+ * ⚠ Le serveur refuse pour cinq raisons, dont DEUX qu'aucun écran ne peut anticiper : un conflit de
+ * planning **sur un autre établissement** (RG-PERSO-04) — que le cloisonnement cache par
+ * construction — et une absence validée sur la période (RG-PERSO-05). S'y ajoutent la qualification
+ * manquante (CA-5), le créneau annulé, et le créneau sans fenêtre horaire.
+ *
+ * Griser des employés « indisponibles » à partir de ce que cet écran voit produirait deux mensonges
+ * en sens inverse : des gens écartés à tort, et des gens proposés qui seront refusés. On propose
+ * donc tout le monde, et **le refus du serveur s'affiche tel quel** — il nomme la règle, ce qui est
+ * exactement ce dont le planificateur a besoin pour corriger.
+ */
+function AffectationEmploye({ creneau, employes, onFermer, onFait, onErreur }) {
+  const [employe, setEmploye] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { setEmploye('') }, [creneau])
+
+  async function affecter() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      await api.affecterEmploye({
+        creneauTravail: `/api/creneau_travails/${creneau.id}`,
+        employe: `/api/employes/${employe}`,
+      })
+      await onFait('Employé affecté.')
+    } catch (e) {
+      onErreur(e.message || 'L’affectation n’a pas abouti.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!creneau} onClose={onFermer} titre="Affecter quelqu’un" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          <b>{creneau?.libellePoste || 'poste'}</b> — {dateHeureFr(creneau?.debut)} → {dateHeureFr(creneau?.fin)}
+          {creneau?.qualificationRequise && <> · qualification exigée : <b>{creneau.qualificationRequise}</b></>}
+        </div>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Employé</span>
+          {employes === undefined ? (
+            <span className="sub">La liste des employés n’a pas pu être lue.</span>
+          ) : (
+            <select className="select" value={employe} onChange={(e) => setEmploye(e.target.value)}>
+              <option value="">— choisir —</option>
+              {(employes || []).map((e) => (
+                <option key={e.id} value={e.id}>
+                  {[e.prenom, e.nom].filter(Boolean).join(' ') || e.matricule || e.id}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="sub">
+            Tous les employés sont proposés. Le serveur refusera si la personne est déjà prise sur un
+            créneau qui chevauche — <b>y compris dans un autre établissement</b> —, si elle est en
+            absence validée, ou si elle n’a pas la qualification exigée. Cet écran ne peut pas le
+            savoir avant de demander.
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn primary" type="button" disabled={busy || employe === ''} onClick={affecter}>
+            {busy ? 'Affectation…' : 'Affecter'}
+          </button>
+        </div>
+      </div>
     </Modal>
   )
 }

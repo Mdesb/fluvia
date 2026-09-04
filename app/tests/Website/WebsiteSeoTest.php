@@ -203,6 +203,32 @@ final class WebsiteSeoTest extends SocleApiTestCase
         self::assertStringNotContainsString('</script><b>injecté</b>', $html);
     }
 
+    /**
+     * ⚠ **LA CANONIQUE SUIT L'ADRESSE DE DÉPLOIEMENT, PAS CELLE DE LA REQUÊTE.**
+     *
+     * Derrière le proxy, Symfony ne voit pas que l'appel est arrivé en HTTPS — aucun proxy de
+     * confiance n'est déclaré — et l'absolu tiré de la requête rendait `http://` sur un site servi
+     * en `https://`. Google traite les deux comme des adresses distinctes : la canonique désignait
+     * une page qui redirige, et le plan du site en déclarait vingt-cinq de même.
+     *
+     * Le témoin ne peut pas vérifier le `https` — l'environnement de test vaut
+     * `http://localhost:5174`. Il vérifie ce qui est réellement corrigé : que l'adresse vient de
+     * `VITRINE_BASE_URL` et non de l'hôte de la requête, qui est `localhost` sans port.
+     */
+    public function testLaCanoniqueVientDeLadresseDeDeploiement(): void
+    {
+        $this->sauterSiRouteAbsente('website_module');
+
+        $client = static::createClient();
+        $html = (string) $client->request('GET', '/modules/casiers')->getContent();
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString(
+            'rel="canonical" href="http://localhost:5174/modules/casiers"',
+            $html,
+        );
+    }
+
     // ---------------------------------------------------------------- montage
 
     private function indexable(bool $ouvert): void
