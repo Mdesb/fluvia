@@ -84,13 +84,13 @@ export default function Facturation({ onRefus }) {
     }
   }
 
-  if (erreur) return <div className="banner crit">La facturation n'a pas pu être chargée.</div>
+  if (erreur) return <div className="banner banner-error">La facturation n'a pas pu être chargée.</div>
   if (!lignes) return <div className="center"><div className="spinner" /></div>
 
   return (
     <>
       {aFacturer.length > 0 && (
-        <div className="banner warn">
+        <div className="banner banner-warn">
           <strong>
             {aFacturer.length === 1
               ? '1 abonnement n’est pas encore facturé'
@@ -100,7 +100,7 @@ export default function Facturation({ onRefus }) {
         </div>
       )}
 
-      {refus && <div className="banner crit">{refus}</div>}
+      {refus && <div className="banner banner-error">{refus}</div>}
 
       <div className="card">
         <div className="card-h">

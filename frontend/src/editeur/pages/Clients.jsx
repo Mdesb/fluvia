@@ -88,7 +88,7 @@ export default function ClientsEditeur({ onRefus }) {
     )
   }, [items, q])
 
-  if (erreur) return <div className="banner crit">Les clients n'ont pas pu être chargés.</div>
+  if (erreur) return <div className="banner banner-error">Les clients n'ont pas pu être chargés.</div>
   if (!items) return <div className="center"><div className="spinner" /></div>
 
   if (items.length === 0) {
@@ -148,7 +148,7 @@ export default function ClientsEditeur({ onRefus }) {
         </div>
         <div className="card-b">
           {!selId && <p className="hint">Choisissez un client pour voir sa fiche.</p>}
-          {selId && ficheErr && <div className="banner crit">Cette fiche n'a pas pu être chargée.</div>}
+          {selId && ficheErr && <div className="banner banner-error">Cette fiche n'a pas pu être chargée.</div>}
           {selId && !fiche && !ficheErr && <div className="center"><div className="spinner" /></div>}
           {fiche && <Fiche fiche={fiche} />}
         </div>

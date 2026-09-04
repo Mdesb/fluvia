@@ -51,7 +51,7 @@ export default function Reglements({ onRefus }) {
   const duTotal = useMemo(() => (lignes || []).reduce((s, l) => s + l.remainingCents, 0), [lignes])
   const duEnRetard = useMemo(() => enRetard.reduce((s, l) => s + l.remainingCents, 0), [enRetard])
 
-  if (erreur) return <div className="banner crit">Les créances n'ont pas pu être chargées.</div>
+  if (erreur) return <div className="banner banner-error">Les créances n'ont pas pu être chargées.</div>
   if (!lignes) return <div className="center"><div className="spinner" /></div>
 
   if (lignes.length === 0) {
@@ -65,7 +65,7 @@ export default function Reglements({ onRefus }) {
   return (
     <>
       {enRetard.length > 0 && (
-        <div className="banner crit">
+        <div className="banner banner-error">
           <strong>
             {enRetard.length === 1
               ? '1 facture est en retard de paiement'
