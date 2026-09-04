@@ -42,6 +42,12 @@ api_platform:
             # n ajoute donc jamais une ligne par anticipation — le dossier doit exister sur main
             # AVANT sa ligne. Verifie a mes depens le 24/08 : 32 erreurs.
             - '%kernel.project_dir%/src/Subscription/ApiResource'
+            # ED-10 — le site public de l'editeur : blog et blocs de la page d'accueil. C9 :
+            # sans cette ligne les routes /editor/website/** N'EXISTENT PAS, et rien ne le dit
+            # au demarrage. Le dossier existe dans le meme commit que cette ligne, jamais avant
+            # ni apres : une ligne posee sur un dossier absent fait echouer la construction du
+            # conteneur, donc la suite de tests de TOUTES les sessions.
+            - '%kernel.project_dir%/src/Website/ApiResource'
             - '%kernel.project_dir%/src/Subscription/Entity'
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'

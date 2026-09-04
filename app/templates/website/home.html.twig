@@ -1,0 +1,160 @@
+{% extends 'website/base.html.twig' %}
+{% import 'website/_blocs.html.twig' as b %}
+
+{#
+  La page d'accueil (ED-10).
+
+  ⚠ AUCUN PRIX N'EST ÉCRIT ICI, ET AUCUN BLOC N'EN PORTE. La section Tarifs se remplit depuis le
+  catalogue réel (`tarifs.js` lit `/api/editor/plans`). Un tarif saisi dans un bloc de contenu
+  divergerait du tarif facturé, et c'est le prospect qui relèverait l'écart, au premier prélèvement.
+
+  Ce qui est éditable est le TEXTE ; la mise en page reste ici. C'est la ligne que Maxime a tracée le
+  04/09 : administrer les mots, pas construire un site.
+#}
+
+{% block title %}{{ b.ligne(blocs['home.hero.title']|default(null))|striptags|trim ?: 'Fluvia' }}{% endblock %}
+{% block description %}{{ blocs['home.hero.lead'].text|default('')|slice(0, 300) }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ url('website_home') }}">{% endblock %}
+
+{% block body %}
+
+  <section class="bande hero">
+    <div class="mesure">
+      {% if blocs['home.hero.title'] is defined %}<h1>{{ b.ligne(blocs['home.hero.title']) }}</h1>{% endif %}
+      {{ b.paragraphes(blocs['home.hero.lead']|default(null), 'chapo') }}
+      <p class="actions">
+        <a class="btn btn-primaire btn-grand" href="#souscrire">Essayer gratuitement 14 jours</a>
+        <a class="btn btn-fantome btn-grand" href="#tarifs">Voir les tarifs</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="bande" id="modules">
+    <div class="mesure">
+      {% if blocs['home.modules.title'] is defined %}<h2>{{ b.ligne(blocs['home.modules.title']) }}</h2>{% endif %}
+      {{ b.paragraphes(blocs['home.modules.lead']|default(null), null) }}
+    </div>
+
+    {{ b.cartes(blocs['home.modules.cards']|default(null)) }}
+  </section>
+
+  <section class="bande bande-creuse" id="metiers">
+    <div class="mesure">
+      {% if blocs['home.trades.title'] is defined %}<h2>{{ b.ligne(blocs['home.trades.title']) }}</h2>{% endif %}
+      {{ b.paragraphes(blocs['home.trades.lead']|default(null), null) }}
+    </div>
+
+    {{ b.items(blocs['home.trades.items']|default(null), 'jetons') }}
+
+    <div class="mesure">
+      {{ b.paragraphes(blocs['home.trades.note']|default(null), 'note') }}
+    </div>
+  </section>
+
+  <section class="bande" id="tarifs">
+    <div class="mesure">
+      {% if blocs['home.pricing.title'] is defined %}<h2>{{ b.ligne(blocs['home.pricing.title']) }}</h2>{% endif %}
+      {{ b.paragraphes(blocs['home.pricing.lead']|default(null), null) }}
+    </div>
+
+    {#
+      Rempli par `tarifs.js` depuis le catalogue réel. L'état « chargement » puis, en cas d'échec, un
+      message qui le dit franchement : une page de tarifs qui affiche des prix faux est pire qu'une
+      page qui reconnaît ne pas pouvoir les afficher maintenant.
+    #}
+    <div id="tarifs-etat" class="etat" role="status">Chargement des tarifs…</div>
+    <div id="tarifs-formules" class="grille" hidden></div>
+
+    <div class="mesure">
+      <h3 class="sous-titre">Options</h3>
+      <div id="tarifs-options-etat" class="etat" role="status" hidden></div>
+    </div>
+    <ul id="tarifs-options" class="options" role="list" hidden></ul>
+
+    <div class="mesure">
+      <p class="note">Prix hors taxes, par établissement et par mois.</p>
+    </div>
+  </section>
+
+  <section class="bande bande-creuse" id="souscrire">
+    <div class="mesure">
+      {% if blocs['home.funnel.title'] is defined %}<h2>{{ b.ligne(blocs['home.funnel.title']) }}</h2>{% endif %}
+      {{ b.etapes(blocs['home.funnel.steps']|default(null)) }}
+
+      {#
+        LE FORMULAIRE NE S'AFFICHE PAS S'IL NE PEUT RIEN ENVOYER. `openCart` refuse un panier sans
+        formule : tant que le catalogue n'en porte aucune, on le dit, plutôt que de montrer des
+        champs dont le bouton échouerait après la saisie.
+      #}
+      <p id="tunnel-etat" class="etat" role="status">Chargement des offres…</p>
+
+      <form id="tunnel-formulaire" class="tunnel" hidden novalidate>
+        <fieldset>
+          <legend>Votre formule</legend>
+          <div id="tunnel-formules" class="choix-liste"></div>
+        </fieldset>
+
+        <fieldset id="tunnel-bloc-options">
+          <legend>Les options que vous ajoutez</legend>
+          <div id="tunnel-options" class="choix-liste"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Vous</legend>
+          <p class="champ">
+            <label for="tunnel-structure">Nom de votre structure</label>
+            <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
+          </p>
+          <p class="champ">
+            <label for="tunnel-email">Votre adresse e-mail</label>
+            <input id="tunnel-email" name="email" type="email" required autocomplete="email">
+            <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
+          </p>
+        </fieldset>
+
+        <p id="tunnel-total" class="total" role="status" hidden></p>
+        <p id="tunnel-message" class="etat" role="status"></p>
+
+        <p class="actions">
+          <button type="submit" class="btn btn-fantome btn-grand">Voir mon total</button>
+          <button type="submit" id="tunnel-envoyer" class="btn btn-primaire btn-grand" hidden>
+            Recevoir mon accès
+          </button>
+        </p>
+      </form>
+
+      <p id="tunnel-envoye" class="chapo" role="status" hidden></p>
+    </div>
+  </section>
+
+  {% if derniers|length > 0 %}
+    <section class="bande" id="blog">
+      <div class="mesure">
+        <h2>Derniers articles</h2>
+      </div>
+
+      <ul class="grille" role="list">
+        {% for article in derniers %}
+          <li class="carte">
+            <h3><a href="{{ path('website_blog_post', {slug: article.slug}) }}">{{ article.title }}</a></h3>
+            <p>{{ article.excerpt }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+
+      <div class="mesure">
+        <p class="actions"><a class="btn btn-fantome" href="{{ path('website_blog_index') }}">Tous les articles</a></p>
+      </div>
+    </section>
+  {% endif %}
+
+{% endblock %}
+
+{% block footer %}
+  {{ b.paragraphes(blocs['home.footer.text']|default(null), null) }}
+{% endblock %}
+
+{% block javascripts %}
+<script src="/tarifs.js" defer></script>
+<script src="/tunnel.js" defer></script>
+{% endblock %}

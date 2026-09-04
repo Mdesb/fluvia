@@ -1,0 +1,234 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Website\State;
+
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Operation;
+use ApiPlatform\State\ProcessorInterface;
+use App\Subscription\Security\EditorOnly;
+use App\Website\ApiResource\EditorBlogCategory;
+use App\Website\ApiResource\EditorBlogPost;
+use App\Website\ApiResource\EditorContentBlock;
+use App\Website\Entity\BlogCategory;
+use App\Website\Entity\BlogPost;
+use App\Website\Exception\PublishedSlugIsFrozenException;
+use App\Website\Exception\UnknownBlockException;
+use App\Website\Service\BlogEditor;
+use App\Website\Service\ContentBlocks;
+use App\Website\Service\SlugGenerator;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
+
+/**
+ * Écriture du site de l'éditeur depuis son administration (ED-10).
+ *
+ * ⚠ **AUCUNE RÈGLE MÉTIER N'EST ÉCRITE ICI.** Le slug, l'assainissement du corps, la date de
+ * publication et le gel d'une adresse publiée vivent dans {@see BlogEditor} ; la forme des blocs
+ * dans {@see ContentBlocks}. Ce processeur traduit du HTTP en appels de service, et rien d'autre —
+ * c'est ce qui permet à une commande d'import ou à une reprise d'obtenir exactement les mêmes règles
+ * sans passer par une requête.
+ *
+ * ---
+ *
+ * **@cloisonnement-verifie : le périmètre est le tenant éditeur, et il est vérifié en tête.**
+ *
+ * `assertEditor('editor.manage_website')` est la première ligne de `process()`. Les entités écrites
+ * ici n'ont pas d'établissement — elles décrivent le site de l'éditeur, pas les données d'un client
+ * — donc aucun identifiant reçu ne peut faire franchir une frontière qui n'existe pas. La rubrique
+ * résolue depuis le corps de la requête appartient au même site que celui qui l'écrit, par
+ * construction : il n'y en a qu'un.
+ *
+ * **Les refus deviennent des codes que l'écran sait lire** : 409 pour une adresse gelée — le
+ * rédacteur peut corriger et renvoyer —, 422 pour un bloc inconnu. Laisser remonter l'exception
+ * donnerait un 500 sur un geste parfaitement ordinaire.
+ */
+final class EditorWebsiteProcessor implements ProcessorInterface
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly EditorOnly $editorOnly,
+        private readonly BlogEditor $redaction,
+        private readonly ContentBlocks $blocs,
+        private readonly SlugGenerator $slugs,
+    ) {
+    }
+
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
+    {
+        $this->editorOnly->assertEditor('editor.manage_website');
+
+        $maintenant = new \DateTimeImmutable();
+
+        if ($data instanceof EditorContentBlock) {
+            return $this->ecrireLeBloc($data, $maintenant);
+        }
+
+        if ($data instanceof EditorBlogCategory) {
+            return $this->ecrireLaRubrique($data, $operation, $uriVariables);
+        }
+
+        if ($data instanceof EditorBlogPost) {
+            return $this->ecrireLArticle($data, $operation, $uriVariables, $maintenant);
+        }
+
+        return $data;
+    }
+
+    private function ecrireLeBloc(EditorContentBlock $vue, \DateTimeImmutable $maintenant): EditorContentBlock
+    {
+        try {
+            $this->blocs->enregistrer($vue->id, $vue->value ?? [], $maintenant);
+        } catch (UnknownBlockException $refus) {
+            throw new UnprocessableEntityHttpException($refus->getMessage(), $refus);
+        }
+
+        // On relit ce qui a été rangé plutôt que de rendre ce qui a été reçu : la normalisation a pu
+        // écarter une carte vide ou couper des espaces, et l'écran doit voir l'état réel.
+        foreach ($this->blocs->pourLAdministration() as $ligne) {
+            if ($ligne['key'] === $vue->id) {
+                $vue->type = $ligne['type'];
+                $vue->label = $ligne['label'];
+                $vue->help = $ligne['help'];
+                $vue->value = $ligne['value'];
+                break;
+            }
+        }
+
+        return $vue;
+    }
+
+    /**
+     * @param array<string, mixed> $uriVariables
+     */
+    private function ecrireLaRubrique(EditorBlogCategory $vue, Operation $operation, array $uriVariables): ?EditorBlogCategory
+    {
+        $rubrique = isset($uriVariables['id'])
+            ? $this->em->getRepository(BlogCategory::class)->find($this->uuid($uriVariables['id']))
+            : new BlogCategory();
+
+        if (!$rubrique instanceof BlogCategory) {
+            throw new NotFoundHttpException('Cette rubrique n’existe pas.');
+        }
+
+        if ($operation instanceof Delete) {
+            // Les articles ne partent PAS avec : la colonne repasse à NULL (`onDelete: SET NULL`).
+            $this->em->remove($rubrique);
+            $this->em->flush();
+
+            return null;
+        }
+
+        $nom = trim($vue->name);
+
+        if ('' === $nom) {
+            throw new UnprocessableEntityHttpException('Une rubrique a besoin d’un nom.');
+        }
+
+        $rubrique->setName($nom)->setDescription($vue->description);
+
+        if ('' === $rubrique->getSlug()) {
+            $rubrique->setSlug($this->slugRubrique('' !== trim($vue->slug) ? $vue->slug : $nom));
+        }
+
+        $this->em->persist($rubrique);
+        $this->em->flush();
+
+        $vue->id = $rubrique->getId()->toRfc4122();
+        $vue->slug = $rubrique->getSlug();
+
+        return $vue;
+    }
+
+    /**
+     * @param array<string, mixed> $uriVariables
+     */
+    private function ecrireLArticle(EditorBlogPost $vue, Operation $operation, array $uriVariables, \DateTimeImmutable $maintenant): ?EditorBlogPost
+    {
+        $article = isset($uriVariables['id'])
+            ? $this->em->getRepository(BlogPost::class)->find($this->uuid($uriVariables['id']))
+            : null;
+
+        if (isset($uriVariables['id']) && !$article instanceof BlogPost) {
+            throw new NotFoundHttpException('Cet article n’existe pas.');
+        }
+
+        if ($operation instanceof Delete) {
+            \assert($article instanceof BlogPost);
+            $this->em->remove($article);
+            $this->em->flush();
+
+            return null;
+        }
+
+        if ('' === trim($vue->title)) {
+            throw new UnprocessableEntityHttpException('Un article a besoin d’un titre.');
+        }
+
+        $champs = [
+            'title' => $vue->title,
+            'excerpt' => $vue->excerpt,
+            'body' => $vue->body,
+            'coverUrl' => $vue->coverUrl,
+            'coverAlt' => $vue->coverAlt,
+            'authorName' => $vue->authorName,
+            'metaDescription' => $vue->metaDescription,
+            'categoryId' => $vue->categoryId,
+            'status' => $vue->status,
+            'publishedAt' => $vue->publishedAt,
+            'slug' => $vue->slug,
+        ];
+
+        try {
+            $article = null === $article
+                ? $this->redaction->creer($champs, $maintenant)
+                : $this->redaction->modifier($article, $champs, $maintenant);
+        } catch (PublishedSlugIsFrozenException $refus) {
+            // 409 et pas 422 : la demande est bien formée, c'est l'état de la ressource qui s'y
+            // oppose. L'écran doit pouvoir le dire sans faire perdre ce qui vient d'être écrit.
+            throw new ConflictHttpException($refus->getMessage(), $refus);
+        }
+
+        $vue->id = $article->getId()->toRfc4122();
+        $vue->slug = $article->getSlug();
+        $vue->body = $article->getBody();
+        $vue->status = $article->getStatus()->value;
+        $vue->publishedAt = $article->getPublishedAt()?->format(\DateTimeInterface::ATOM);
+        $vue->visible = $article->isVisible($maintenant);
+        $vue->updatedAt = $article->getUpdatedAt()->format(\DateTimeInterface::ATOM);
+
+        return $vue;
+    }
+
+    private function slugRubrique(string $souhaite): string
+    {
+        $base = $this->slugs->unique($souhaite);
+
+        // `SlugGenerator` compte les articles, pas les rubriques : deux espaces d'adresses distincts
+        // (`/blog/{slug}` et `/blog/rubrique/{slug}`), donc aucune raison qu'un nom de rubrique se
+        // fasse suffixer parce qu'un article porte le même. On lui emprunte la normalisation et on
+        // règle l'unicité ici, où elle a un sens.
+        $candidat = $base;
+        $suffixe = 1;
+
+        while (null !== $this->em->getRepository(BlogCategory::class)->findOneBy(['slug' => $candidat])) {
+            ++$suffixe;
+            $candidat = $base.'-'.$suffixe;
+        }
+
+        return $candidat;
+    }
+
+    private function uuid(mixed $brut): Uuid
+    {
+        if (!\is_string($brut) || !Uuid::isValid($brut)) {
+            throw new NotFoundHttpException();
+        }
+
+        return Uuid::fromString($brut);
+    }
+}

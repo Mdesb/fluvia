@@ -22,6 +22,7 @@ import Offres from './pages/Offres.jsx'
 import Clients from './pages/Clients.jsx'
 import Facturation from './pages/Facturation.jsx'
 import Reglements from './pages/Reglements.jsx'
+import SiteVitrine from './pages/SiteVitrine.jsx'
 
 // Administration de l'éditeur (ED-6) — l'outil avec lequel l'éditeur pilote ses clients, ses offres
 // et ses abonnements.
@@ -138,6 +139,7 @@ export default function EditeurApp() {
     { id: 'clients', ic: 'customers', label: 'Clients', perms: ['editor.read_customer'] },
     { id: 'facturation', ic: 'invoicing', label: 'Facturation', perms: ['editor.read_billing'] },
     { id: 'reglements', ic: 'settlements', label: 'Règlements', perms: ['editor.read_billing'] },
+    { id: 'site', ic: 'website', label: 'Site vitrine', perms: ['editor.manage_website'] },
     // ⚠ LE PENDANT DU BOUTON « BASCULER EN MODE SUPPORT ». Ouvrir un accès était possible ; savoir
     // combien étaient ouverts, chez qui et depuis quand, ne l'était pas — et un accès que personne
     // ne voit finit par ne plus se refermer. C'est aussi le SEUL endroit d'où l'on révoque :
@@ -277,6 +279,7 @@ export default function EditeurApp() {
             {onglet === 'clients' && <Clients onRefus={() => setRefuse(true)} />}
             {onglet === 'facturation' && <Facturation onRefus={() => setRefuse(true)} />}
             {onglet === 'reglements' && <Reglements onRefus={() => setRefuse(true)} />}
+            {onglet === 'site' && <SiteVitrine />}
             {onglet === 'acces-support' && <AccesAssistance onRefus={() => setRefuse(true)} />}
             {/*
               Les deux écrans de l'application client, tels quels : leur API est cadrée sur

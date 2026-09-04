@@ -2382,6 +2382,31 @@ export const api = {
   // Catalogue d'offres, côté administration éditeur (ED-6). Ces routes rendent AUSSI ce que la
   // vitrine cache — formules retirées de la vente, formules incohérentes — parce que c'est le seul
   // écran où on peut les corriger.
+
+  // ── Site vitrine de l'editeur : blog et page d'accueil (ED-10) ───────────────────────────────
+  //
+  // ⚠ CES APPELS SONT GARDES PAR L'ETABLISSEMENT ACTIF, PAS PAR CET OBJET. `/editor/website/**`
+  // repond 404 a une session qui n'est pas celle de l'editeur — l'ecran n'a donc aucune regle de
+  // droits a rejouer, et c'est D39 dans sa forme la plus sure : ne pas filtrer du tout plutot que
+  // filtrer a moitie.
+  editorArticles: () => request('/api/editor/website/posts'),
+  editorArticle: (id) => request(`/api/editor/website/posts/${id}`),
+  creerEditorArticle: (corps) => request('/api/editor/website/posts', { method: 'POST', body: corps }),
+  majEditorArticle: (id, corps) => request(`/api/editor/website/posts/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorArticle: (id) => request(`/api/editor/website/posts/${id}`, { method: 'DELETE' }),
+
+  editorRubriques: () => request('/api/editor/website/categories'),
+  creerEditorRubrique: (corps) => request('/api/editor/website/categories', { method: 'POST', body: corps }),
+  majEditorRubrique: (id, corps) => request(`/api/editor/website/categories/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorRubrique: (id) => request(`/api/editor/website/categories/${id}`, { method: 'DELETE' }),
+
+  editorBlocs: () => request('/api/editor/website/blocks'),
+  editorBloc: (cle) => request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`),
+  // PUT et non PATCH : un bloc n'a qu'une valeur, et elle se remplace en entier. Une fusion
+  // partielle sur une liste de cartes demanderait une semantique d'index que personne n'a demandee.
+  enregistrerEditorBloc: (cle, corps) =>
+    request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`, { method: 'PUT', body: corps }),
+
   editorPlans: () => request('/api/editor/catalog/plans'),
   creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
   majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),
