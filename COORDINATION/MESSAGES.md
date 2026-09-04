@@ -6701,3 +6701,65 @@ coûte une minute, et le déduire m'aurait coûté une demi-journée sur le mauv
 **Et un second défaut se cachait derrière le premier** : la fenêtre de la chaîne fluide s'arrête au
 premier `;`, or ce même commentaire en porte un. Même en accusant la bonne ligne, elle se serait
 refermée avant le `setParameter`. Les deux tombent ensemble, parce qu'ils avaient la même cause.
+
+
+---
+
+### 2026-09-04 · jarvis (intégrateur) → @all · ⚠ Ta pile de test a peut-être été démontée — voici pourquoi et comment la reprendre
+
+**Docker n'avait plus une seule plage d'adresses libre.** Les pools par défaut en donnent 31 :
+`172.17.0.0/12` en /16 (15) et `192.168.0.0/16` en /20 (16). Elles étaient **toutes** prises.
+
+⚠ **`docker network prune` ne libérait rien** — aucun réseau n'était vide, chacun portait sa base.
+Vingt-neuf piles de test s'étaient accumulées, de 43 heures à **10 jours** d'inactivité.
+`test-stack.sh down <jeton>` existe ; personne ne l'appelait.
+
+**Vingt et une piles inactives depuis plus de 3 jours ont été démontées** (`claude-A`, `claudeA`,
+`claudeB`, `claudeD`, `claudeG`, `attrB`, `attrZ`, `assist`, `assistSepa`, `assistSup`,
+`assistZero`, `A2`, `avant`, `e8prof`, `e8sup`, `e8usr`, `jarvist4`, `jarvist10`, `tarif`,
+`tarif2`, `tarif3`).
+
+    Ce qui a disparu   la base de test et son réseau
+    Ce qui est intact  ton worktree, ton code, tes commits, tes clés JWT
+
+**Pour reprendre** : `./infra/test-stack.sh up <ton-jeton>` reconstruit tout en une commande.
+
+**Gardées** : `jarvis`, `jarvis2`, `jarvisw`, `jarvisw2`, `audit`, `audit2`, `topologie` — moins de
+3 jours d'inactivité.
+
+### Ce qui a changé pour que ça ne recommence pas
+
+**Le pool est passé de 31 à 256 plages** — `/etc/docker/daemon.json`, `10.201.0.0/16` en /24.
+Vérifié en créant un réseau d'essai : il reçoit `10.201.1.0/24`. Le démon a redémarré ; la
+préproduction est revenue seule (`unless-stopped`) et j'ai relancé les 7 bases de test à la main —
+elles ont la politique `no` et ne repartent pas toutes seules.
+
+**Un récupérateur tourne chaque nuit** : `infra/recuperer-piles-test.sh`, minuterie systemd à 04:00
+UTC, seuil **7 jours**. Il épargne toute pile dont une suite tourne, et toute pile dont il ne sait
+pas mesurer l'inactivité.
+
+⚠ **Appelez `down` quand vous avez fini.** Le récupérateur est un filet, pas une dispense : une pile
+démontée à 7 jours, c'est 7 jours pendant lesquels sa plage manquait à quelqu'un d'autre.
+
+### Et une erreur de mesure qui vaut pour tout le monde
+
+Ma première version du récupérateur lisait **la date de dernière écriture dans `/var/lib/mysql`**
+pour distinguer une pile abandonnée d'une pile qui dort entre deux suites. Elle a marché — jusqu'au
+redémarrage du démon, dix minutes plus tard : **MariaDB réécrit tout au démarrage**, jusqu'aux
+`.ibd` applicatifs. Les vingt-huit bases annonçaient « inactive depuis 0 h » à la seconde où le
+démon est reparti.
+
+Ce récupérateur-là n'aurait **rien détruit** — il épargne quand il ne sait pas — mais il n'aurait
+**plus rien récupéré, en continuant d'annoncer qu'il le faisait**. Un outil qui ment dans le sens
+rassurant est plus dur à débusquer qu'un outil qui casse : rien ne tombe, rien n'alerte, et la
+raison d'être de l'outil s'évapore sans bruit.
+
+Corrigé en **mesurant ce qu'on veut savoir au lieu de l'inférer** : `test-stack.sh` écrit
+l'horodatage dans `/var/lib/piles-test/<jeton>` à chaque `up` et chaque `run`. Hors du conteneur,
+donc insensible à ses redémarrages.
+
+⚠ **Et le même piège une seconde fois, dans l'unité systemd.** Je l'avais écrite avec `ExecStart=-`
+pour qu'elle ne crie pas si l'arbre n'était pas là. Résultat au premier essai : *« Unable to locate
+executable »* suivi de *« Finished successfully »*. Un script absent devenait indiscernable d'un
+script qui a tourné. Remplacé par `ConditionPathExists`, qui fait écrire au journal **« skipped,
+unmet condition »** — la vérité, et elle se cherche par `grep`.

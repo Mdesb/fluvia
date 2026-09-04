@@ -39,6 +39,48 @@ final class ReservationTerrainTest extends PadelApiTestCase
         self::assertCount(1, $reservation['participants'] ?? [], 'CA-1 : un seul joueur inscrit (organisateur).');
     }
 
+    /**
+     * ⚠ TOUTE PLAGE HORAIRE DÉCLARÉE DOIT ÊTRE TARIFÉE — 23h30 était le trou.
+     *
+     * La fixture déclare quatre plages et n'en tarifait que trois : `plageCreuse2` (23h–minuit en
+     * semaine) n'avait aucune ligne de grille. Une réservation à cette heure-là partait en 422
+     * « Aucun tarif paramétré pour ce terrain », alors que le terrain est annoncé réservable.
+     *
+     * ⚠ ET CE DÉFAUT NE SE VOYAIT QU'UNE HEURE PAR JOUR. Les tests de confirmation réservent à
+     * `maintenant + 3 heures` — ils le doivent, leur sujet est « à moins de 24 heures » — donc ils
+     * n'atteignaient 23h que si la suite y arrivait entre 20h et 21h UTC. Le 04/09 elle y est
+     * arrivée à 20h47 : six tests rouges d'un coup, sur un trou aussi vieux que la fixture.
+     *
+     * Ce témoin-ci réserve à une heure FIXE. Il tombe dans le trou à chaque exécution, pas une
+     * fois sur vingt-quatre — c'est toute la différence entre un témoin et un hasard.
+     */
+    public function testUneReservationEnFinDeSoireeEstTarifee(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $client->request('POST', '/api/padel/terrains/' . $this->idTerrain() . '/reservations', $entete + [
+            'json' => [
+                'debut' => $this->prochainLundi(23, 30)->format(DATE_ATOM),
+                'dureeMinutes' => 60,
+                'organisateur' => '/api/beneficiaires/' . $this->idJoueur(4),
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $idReservation = basename((string) $client->getResponse()->toArray()['reservation']);
+        $client->request('GET', '/api/reservations/' . $idReservation, $entete);
+        self::assertResponseIsSuccessful();
+
+        // Tarif creuse × non-membre × 60 min = 20,00 € (fixture). On vérifie le MONTANT, pas
+        // seulement le succès : une réservation acceptée à 0,00 € serait un défaut plus discret.
+        self::assertSame(
+            '20.00',
+            $client->getResponse()->toArray()['montantDu'] ?? null,
+            'La plage creuse de fin de soirée doit être tarifée comme celle du matin.',
+        );
+    }
+
     public function testCa2ChevauchementRefuse(): void
     {
         [$client, $entete] = $this->adminSurA();

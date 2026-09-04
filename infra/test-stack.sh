@@ -107,8 +107,28 @@ php_run() {
         "$PHP_IMAGE" "$@"
 }
 
+# ── La marque d'activité, lue par `recuperer-piles-test.sh` ─────────────────────────────────────
+#
+# ⚠ ELLE EXISTE PARCE QUE LA MESURE ÉVIDENTE EST MORTE. Le récupérateur lisait la date de dernière
+# écriture dans `/var/lib/mysql` — jusqu'au 04/09, où le redémarrage du démon Docker a fait
+# réécrire à MariaDB jusqu'à ses fichiers de données : les vingt-huit bases se sont mises à dire
+# « inactive depuis 0 h » à la seconde où le démon est reparti.
+#
+# Un récupérateur fondé là-dessus n'aurait rien détruit — il épargne quand il ne sait pas — mais il
+# n'aurait plus rien récupéré, en continuant d'annoncer qu'il le faisait.
+#
+# Cette marque est écrite HORS du conteneur : elle survit à son redémarrage, et elle dit exactement
+# ce qu'on veut savoir — « quand cette pile a-t-elle servi pour la dernière fois ».
+MARQUES=/var/lib/piles-test
+marquer_activite() {
+    mkdir -p "$MARQUES" 2>/dev/null || return 0
+    date -u +%s > "$MARQUES/$TOKEN" 2>/dev/null || true
+}
+
 case "$ACTION" in
 up)
+    marquer_activite
+
     docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
     echo "réseau  : $NET"
 
@@ -182,6 +202,8 @@ up)
     ;;
 
 run)
+    marquer_activite
+
     # Le cache de metadonnees d'API Platform survit d'une execution a l'autre. Le 24/08 il a
     # produit un **faux echec** : les champs ajoutes par un lot recent n'etaient pas serialises,
     # alors que le code etait juste. Le symetrique est pire — un cache perime peut masquer une
@@ -279,6 +301,7 @@ run)
     ;;
 
 down)
+    rm -f "$MARQUES/$TOKEN" 2>/dev/null || true
     rm -rf "$CACHE" 2>/dev/null || true
     docker rm -f "$DB" >/dev/null 2>&1 || true
 

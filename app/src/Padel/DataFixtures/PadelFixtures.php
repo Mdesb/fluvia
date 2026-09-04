@@ -218,6 +218,20 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($plageWeekend);
 
         // --- Grille tarifaire (RG-PADEL-02) : pleine/creuse × membre/non-membre × 60/90 min ---
+        //
+        // ⚠ CHAQUE PLAGE DÉCLARÉE CI-DESSUS DOIT FIGURER ICI. `plageCreuse2` (23h–minuit en
+        // semaine) était déclarée et JAMAIS tarifée : le terrain était réservable sur le papier et
+        // impossible à tarifer pendant cette heure-là — 422 « aucun tarif paramétré ».
+        //
+        // ⚠ ET LE TROU NE SE VOYAIT QU'UNE HEURE PAR JOUR. Les tests de confirmation réservent à
+        // `maintenant + 3 heures`, et ils DOIVENT le faire : leur sujet est « une réservation à
+        // moins de 24 heures ». Ils ne traversaient donc `plageCreuse2` que si la suite arrivait
+        // sur eux entre 20h et 21h UTC. Celle du 04/09 y est arrivée à 20h47 — six tests rouges
+        // d'un coup, sur un défaut aussi vieux que la fixture.
+        //
+        // `ReservationTerrainTest::testUneReservationEnFinDeSoireeEstTarifee` garde ce trou fermé :
+        // il réserve à 23h30 un jour fixe, donc il tombe dedans à chaque exécution, pas une par
+        // vingt-quatre.
         $tarifs = [
             [$plagePleine, StatutJoueurTarif::NonMembre, 60, '28.00'],
             [$plagePleine, StatutJoueurTarif::NonMembre, 90, '38.00'],
@@ -227,6 +241,12 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
             [$plageCreuse1, StatutJoueurTarif::NonMembre, 90, '28.00'],
             [$plageCreuse1, StatutJoueurTarif::Membre, 60, '14.00'],
             [$plageCreuse1, StatutJoueurTarif::Membre, 90, '20.00'],
+            // Même tarif que `plageCreuse1` : c'est la même heure creuse, coupée en deux parce
+            // qu'une plage ne peut pas enjamber minuit.
+            [$plageCreuse2, StatutJoueurTarif::NonMembre, 60, '20.00'],
+            [$plageCreuse2, StatutJoueurTarif::NonMembre, 90, '28.00'],
+            [$plageCreuse2, StatutJoueurTarif::Membre, 60, '14.00'],
+            [$plageCreuse2, StatutJoueurTarif::Membre, 90, '20.00'],
             [$plageWeekend, StatutJoueurTarif::NonMembre, 60, '28.00'],
             [$plageWeekend, StatutJoueurTarif::NonMembre, 90, '38.00'],
             [$plageWeekend, StatutJoueurTarif::Membre, 60, '20.00'],

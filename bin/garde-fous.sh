@@ -559,6 +559,7 @@ fi
 if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
+        executer "Extraction d'identifiant (n53)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-extraction-identifiant.mjs"
     else
         ignorer "Cles en double" "« node » indisponible ici."
     fi
