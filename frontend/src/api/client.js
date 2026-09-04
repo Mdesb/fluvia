@@ -202,8 +202,18 @@ async function request(
   if (formData !== undefined) {
     // rien : le navigateur s'en charge
   } else if (body !== undefined) {
-    // API Platform impose `application/merge-patch+json` sur les PATCH (sinon 415) ; les autres
-    // écritures acceptent JSON simple, ou JSON-LD quand l'opération l'exige (`ld: true`).
+    // API Platform impose `application/merge-patch+json` sur les PATCH (sinon 415).
+    //
+    // ⚠ POUR LE RESTE, « JSON SIMPLE » NE PASSE NULLE PART PAR TOLÉRANCE.
+    //
+    // Ce commentaire a longtemps dit que les autres écritures « acceptent JSON simple ». C'est
+    // faux, et la croyance a coûté sept boutons morts. En interrogeant le registre d'API Platform :
+    // sur 540 opérations d'écriture, 296 n'acceptent QUE `application/ld+json`, et les 244 autres
+    // ne contrôlent pas le type du tout parce qu'elles ne désérialisent pas.
+    //
+    // Autrement dit : `application/json` ne réussit jamais parce qu'il est accepté, il réussit là
+    // où personne ne regarde. Dès que l'opération lit le corps, il faut `ld: true` — c'est ce que
+    // `frontend/scripts/verifier-formats.mjs` vérifie désormais, route par route.
     headers['Content-Type'] = method === 'PATCH'
       ? 'application/merge-patch+json'
       : ld
@@ -2287,7 +2297,7 @@ export const api = {
   // Rattacher un article a un produit vendu : c'est CE lien qui fait qu'une vente decremente le
   // stock. Sans lui, le produit se vend et rien ne bouge — volontairement, et silencieusement.
   stockRattacherProduit: (id, produit) =>
-    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit } }),
+    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit }, ld: true }),
   stockDetacherProduit: (id) =>
     request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
 
@@ -2363,7 +2373,7 @@ export const api = {
   // ressources pour un terrain, et le planning ne saurait plus laquelle reserver.
   // Corps : { libelle, type: 'indoor'|'outdoor', dureesAutoriseesMinutes?: [60, 90] }
   creerTerrainPadel: (corps) =>
-    request('/api/padel/terrains', { method: 'POST', body: corps }),
+    request('/api/padel/terrains', { method: 'POST', body: corps, ld: true }),
   padelReservations: () =>
     request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
   padelLocationsMateriel: () =>
@@ -2380,7 +2390,7 @@ export const api = {
   // `quantite` doit valoir au moins 1, et `caution` est facultative (consignation deleguee au
   // service de caution generique).
   padelLouerMateriel: (corps) =>
-    request('/api/padel/locations', { method: 'POST', body: corps }),
+    request('/api/padel/locations', { method: 'POST', body: corps, ld: true }),
   padelRetournerMateriel: (id, corps) =>
     request(`/api/padel/locations/${id}/retour`, { method: 'POST', body: corps }),
   // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
@@ -2406,13 +2416,20 @@ export const api = {
     request('/api/musee_dossier_groupe_scolaires', { query: { itemsPerPage: 100 } }),
   // L'etat d'une salle se lit salle par salle : il n'existe pas de vue d'ensemble cote serveur.
   museeEtatSalle: (id) => request(`/api/musee/salles/${id}/etat`),
-  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  // ⚠ CE COMMENTAIRE DISAIT L'INVERSE, ET LES DEUX CRÉATIONS CI-DESSOUS RENDAIENT 415.
+  //
+  // Il annonçait « `input: false`, pas de `ld: true` » — vrai des confirmations, faux des
+  // deux créations, qui désérialisent leur corps. Une règle écrite pour un groupe d'appels
+  // et appliquée au voisin : les créations de visite guidée et de dossier de groupe n'ont
+  // jamais abouti.
+  //
+  // Les confirmations, elles, ne désérialisent pas : le drapeau y serait inerte.
   museeCreerVisite: (corps) =>
-    request('/api/musee/visites-guidees', { method: 'POST', body: corps }),
+    request('/api/musee/visites-guidees', { method: 'POST', body: corps, ld: true }),
   museeConfirmerVisite: (id) =>
     request(`/api/musee/visites-guidees/${id}/confirmer`, { method: 'POST', body: {} }),
   museeCreerDossierGroupe: (corps) =>
-    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps }),
+    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps, ld: true }),
   museeConfirmerDossierGroupe: (id, corps) =>
     request(`/api/musee/dossiers-groupe/${id}/confirmer`, { method: 'POST', body: corps }),
 
@@ -2456,12 +2473,26 @@ export const api = {
     request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`, { method: 'PUT', body: corps, ld: true }),
 
   editorPlans: () => request('/api/editor/catalog/plans'),
-  creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
+  // ⚠ `ld: true` OBLIGATOIRE : cette opération désérialise le corps, et n'accepte donc que
+  // `application/ld+json`. Sans le drapeau, la requête part en `application/json` et le serveur
+  // répond 415 — toujours, pour tout le monde, depuis l'écriture de l'appel.
+  //
+  // CE QUE CE DÉFAUT A COÛTÉ, ET POURQUOI IL A TENU SI LONGTEMPS.
+  //
+  // L'écran « Offres » n'a jamais pu créer une formule. `subscription_plan` est donc resté vide,
+  // et le tunnel de souscription du site vitrine refusait toute composition — Maxime l'a signalé
+  // comme « le souscrire n'est pas actif », à trois écrans de sa cause.
+  //
+  // `verifier-formats.mjs` sautait alors EN BLOC les routes à `uriTemplate` sur mesure, faute de
+  // savoir lesquelles désérialisent : c'était le seul endroit du client que rien ne surveillait,
+  // et sept écritures y étaient cassées. Le contrôle lit désormais chaque déclaration et couvre
+  // ces routes — vérifié en confrontant son verdict à celui du registre d'API Platform.
+  creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps, ld: true }),
   majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorPlan: (id) => request(`/api/editor/catalog/plans/${id}`, { method: 'DELETE' }),
 
   editorOptions: () => request('/api/editor/catalog/options'),
-  creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
+  creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps, ld: true }),
   majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
 

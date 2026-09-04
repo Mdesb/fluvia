@@ -22,6 +22,23 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { adosseAuServeur, annonceRouteAVenir, routesDeclarees } from './lib/ecart.mjs'
 
+// ⚠ CE QUE `ld: true` FAIT, ET CE QU'IL NE FAIT PAS — MESURÉ, PAS DÉDUIT.
+//
+// Ce fichier a longtemps affirmé, en quatre endroits, qu'une opération sans corps REFUSE
+// `application/ld+json` en 415. C'est faux. API Platform ne contrôle le Content-Type que s'il doit
+// désérialiser : quand l'opération ne désérialise pas, le contrôle est sauté et le type n'a aucun
+// effet — le drapeau y est inerte, ni exigé ni refusé.
+//
+// Deux mesures, le 04/09 :
+//   - le registre lui-même, noyau démarré : sur 540 opérations d'écriture, 296 exigent `ld+json`
+//     et 244 ne contrôlent rien ;
+//   - une requête sur le banc : `POST /calendar/ics-subscription/regenerate`, en
+//     `deserialize: false`, rend 404 pour `application/json` COMME pour `application/ld+json`.
+//
+// Le contrôle ne change pas pour autant : il réclame `ld: true` exactement là où le serveur
+// l'exige. Seule la justification écrite était fausse — et une justification fausse dans un
+// garde-fou se recopie. Deux des quatre phrases venaient d'être recopiées des deux autres.
+
 const CLIENT = new URL('../src/api/client.js', import.meta.url).pathname
 const SERVEUR = new URL('../../app/src/', import.meta.url).pathname
 
@@ -33,10 +50,78 @@ function php(dir) {
   })
 }
 
-// Les chemins déclarés « sur mesure » côté serveur.
+// Le texte complet de `new Xxx( ... )`, en équilibrant les parenthèses.
+//
+// ⚠ UNE FENÊTRE DE TAILLE FIXE NE SUFFIT PAS. La première version de cette mesure lisait 400
+// caractères après `new Post(` ; un `input: false` écrit plus bas lui échappait, et elle rendait
+// alors deux faux positifs — c'est-à-dire l'ordre d'ajouter un `ld: true` dont la route n'a
+// que faire. Le sens de l'erreur compte : ici, mal lire fait poser un drapeau inutile et,
+// pire, fait CROIRE que l'appel est vérifié alors qu'il ne l'est pas.
+function declarationComplete(texte, depart) {
+  const i = texte.indexOf('(', depart)
+  if (i === -1) return ''
+  let profondeur = 0
+  for (let j = i; j < texte.length; j += 1) {
+    if (texte[j] === '(') profondeur += 1
+    else if (texte[j] === ')') {
+      profondeur -= 1
+      if (profondeur === 0) return texte.slice(i, j + 1)
+    }
+  }
+  return ''
+}
+
+// Les chemins déclarés « sur mesure » côté serveur — EN DEUX ENSEMBLES, PAS UN.
+//
+// ⚠ L'ANGLE MORT QUI A COÛTÉ NEUF BOUTONS MORTS, TROUVÉ PAR `claude-C0` LE 04/09.
+//
+// Ce contrôle sautait en bloc TOUTE route à `uriTemplate` sur mesure, au motif — écrit dans son
+// propre message d'aide — que « les opérations déclarées avec un `uriTemplate` sur mesure portent
+// `input: false` ». C'est vrai de 222 d'entre elles. Ça ne l'est pas des 38 autres : celles-là
+// désérialisent le corps comme n'importe quelle opération standard, et n'acceptent donc que
+// `application/ld+json`.
+//
+// Ces 38 routes étaient le seul endroit du client que RIEN ne surveillait. Neuf écritures du
+// frontal y partaient en `application/json` et recevaient 415 — toujours, pour tout le monde,
+// depuis leur écriture. Dont `creerEditorPlan` : l'écran « Offres » n'a jamais pu créer une
+// formule, `subscription_plan` est resté vide, et le tunnel de souscription refusait en
+// conséquence toute composition. Le défaut visible était à trois écrans de sa cause.
+//
+// Un garde-fou qui saute une famille entière ne rend pas un vert prudent : il rend un vert qui ne
+// mesure rien, et il le rend avec l'autorité d'un vert. On lit donc désormais l'opération plutôt
+// que de supposer ce qu'elle contient.
 const surMesure = new Set()
+const deserialisent = new Set()
+
 for (const f of php(SERVEUR)) {
-  for (const m of readFileSync(f, 'utf8').matchAll(/uriTemplate:\s*'([^']+)'/g)) surMesure.add(m[1])
+  const texte = readFileSync(f, 'utf8')
+  for (const m of texte.matchAll(/uriTemplate:\s*'([^']+)'/g)) surMesure.add(m[1])
+
+  for (const m of texte.matchAll(/new (Post|Put|Patch)\s*\(/g)) {
+    const bloc = declarationComplete(texte, m.index)
+    const modele = /uriTemplate:\s*'([^']+)'/.exec(bloc)
+    if (modele === null) continue
+
+    // ⚠ DEUX IDIOMES DISENT « NE DÉSÉRIALISE PAS », PAS UN SEUL.
+    //
+    // `input: false` (266 occurrences) et `deserialize: false` (4). Ne connaître que le premier
+    // faisait signaler le téléversement de photo, qui porte le second — un faux positif, c'est-à-
+    // dire l'ordre d'ajouter un `ld: true` dont la route n'a que faire. Trouvé en faisant tourner
+    // ce contrôle, dès sa première exécution.
+    //
+    // CE QUE LA RÈGLE VAUT, MESURÉ PLUTÔT QUE SUPPOSÉ. En interrogeant le registre d'API Platform
+    // — l'autorité sur le 415, plutôt qu'un grep qui réimplémente sa règle — on compte 540
+    // opérations d'écriture sur mesure : 296 exigent `ld+json`, 244 sont indifférentes, et AUCUNE
+    // route portant l'un de ces deux marqueurs n'exige `ld+json`. Les deux marqueurs classent donc
+    // exactement, et ce contrôle bon marché rend le même verdict que le démarrage du noyau.
+    if (/input:\s*false/.test(bloc)) continue
+    if (/deserialize:\s*false/.test(bloc)) continue
+
+    // `inputFormats:` : l'opération choisit elle-même ses types, on ne conclut rien.
+    if (/inputFormats:/.test(bloc)) continue
+
+    deserialisent.add(modele[1])
+  }
 }
 
 // ⚠ On reutilise le calcul de `lib/ecart.mjs` plutot que d'en ecrire un second : deux
@@ -108,13 +193,45 @@ for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
   if (!/method:\s*'POST'/.test(options)) continue
   if (/\bld:\s*true/.test(options)) continue
 
-  if ([...surMesure].some((modele) => correspond(chemin.replace(/^\/api/, ''), modele))) continue
+  const sansPrefixe = chemin.replace(/^\/api/, '')
+  const correspondantes = [...surMesure].filter((modele) => correspond(sansPrefixe, modele))
+
+  if (correspondantes.length > 0) {
+    // ⚠ LA PLUS SPÉCIFIQUE L'EMPORTE — COMME DANS LE ROUTEUR LUI-MÊME.
+    //
+    // `correspond` accepte n'importe quel segment en face d'un `{...}` du serveur : un chemin
+    // touche donc souvent plusieurs déclarations à la fois. `/marketing/fidelite/mouvements`
+    // correspond ainsi à la sienne ET à `/marketing/fidelite/{id}`.
+    //
+    // Une première version refusait de trancher dans ce cas. Elle taisait alors une anomalie
+    // légitime — écart trouvé en confrontant ce contrôle au registre d'API Platform sur un client
+    // privé de tous ses `ld: true` : 84 anomalies en commun, et celle-là vue par l'autorité seule.
+    //
+    // Il n'y a pourtant rien à trancher : un segment littéral est plus spécifique qu'un joker.
+    // On garde donc les candidates les plus littérales, et on ne renonce que si plusieurs restent
+    // à égalité — cas où le contrôle se tait plutôt que de risquer un faux positif, qui ferait
+    // poser le 415 qu'il prétend prévenir.
+    const specificite = (modele) => modele.split('/').filter((s) => !s.startsWith('{')).length
+    const meilleure = Math.max(...correspondantes.map(specificite))
+    const retenues = correspondantes.filter((modele) => specificite(modele) === meilleure)
+
+    if (retenues.length > 1 || !deserialisent.has(retenues[0])) continue
+
+    const ligneSurMesure = src.slice(0, m.index).split('\n').length
+    anomalies.push(
+      `api/client.js:${ligneSurMesure} — POST ${chemin} sans \`ld: true\`. La route sur mesure ` +
+        `\`${retenues[0]}\` ne porte PAS \`input: false\` : elle désérialise le corps comme ` +
+        "une opération standard, et n'accepte donc que `application/ld+json`. Le serveur répondra " +
+        '415 — toujours, pas seulement dans certains cas — et la création échouera en silence.',
+    )
+    continue
+  }
 
   // ⚠ UNE ROUTE ANNONCÉE N'EST PAS UNE ROUTE STANDARD.
   //
   // Sans ce test, le contrôle déduisait de l'ABSENCE d'une route qu'elle désérialise le corps, et
-  // réclamait un `ld: true` que la route, écrite ensuite en `input: false`, refuse en 415. Il ne
-  // signalait pas un défaut : il en faisait poser un, puis redevenait vert.
+  // réclamait un `ld: true` dont la route, écrite ensuite en `input: false`, n'a que faire. Il ne
+  // signalait pas un défaut : il faisait poser un drapeau trompeur, puis redevenait vert.
   //
   // Le marqueur ne dit pas « c'est branché », il dit « c'est voulu et voici pourquoi ». Il devient
   // sans objet dès que la route existe — elle tombe alors dans `surMesure` juste au-dessus.
@@ -125,7 +242,7 @@ for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
   //
   // Ne pas trouver une route n'est pas la meme chose que trouver une route standard. Le controle
   // concluait la seconde de la premiere, et affirmait « elle deserialise le corps » sur une donnee
-  // manquante — conseil FAUX pour une route sur mesure a venir, qui refuse `ld: true` en 415.
+  // manquante — conseil FAUX pour une route sur mesure a venir, ou le drapeau n'a aucun sens.
   //
   // On garde le signal (une faute de frappe cote client reste vue) et on change le diagnostic.
   if (!adosseAuServeur(chemin, gabarits, noms)) {
@@ -169,8 +286,10 @@ if (anomalies.length === 0) {
 console.error(`✗ Formats : ${anomalies.length} appel(s) qui échoueront en 415.\n`)
 anomalies.forEach((a) => console.error('  - ' + a))
 console.error(
-  "\nN'ajoutez PAS `ld: true` partout : les opérations déclarées avec un `uriTemplate` sur mesure\n" +
-    "portent `input: false`, leur processor lit le corps brut et se moque du type. Ce contrôle ne\n" +
-    'signale que les opérations standard — celles qu\'il liste ci-dessus, et elles seules.',
+  "\nN'ajoutez PAS `ld: true` partout. Une opération qui ne désérialise pas — `input: false` ou\n" +
+    "`deserialize: false` — ne contrôle pas le Content-Type du tout : le drapeau y est inerte, et\n" +
+    "l'écrire fait croire que l'appel est vérifié alors qu'il ne l'est pas.\n" +
+    'Ce contrôle lit la déclaration de chaque opération pour trancher, et ne signale que celles\n' +
+    'qui désérialisent réellement — celles listées ci-dessus, et elles seules.',
 )
 process.exit(1)
