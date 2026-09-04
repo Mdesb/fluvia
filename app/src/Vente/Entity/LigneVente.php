@@ -34,10 +34,25 @@ class LigneVente
     #[Groups(['vente:read'])]
     private Uuid $produit;
 
-    /** Réf. logique TypeTarif (M1). */
-    #[ORM\Column(type: UuidType::NAME)]
+    /**
+     * Réf. logique TypeTarif (M1) — `null` quand personne n'a pu en fournir un.
+     *
+     * ⚠ NULLABLE DEPUIS LE 04/09, ET C'EST UN ARBITRAGE DE MAXIME. Le champ était obligatoire, et
+     * `VenteReservationHandler` en tirait donc un AU HASARD (`Uuid::v4()`) pour les réservations
+     * génériques : `Activite` ne porte pas de type de tarif, et son docblock dit que la chaîne de
+     * tarification est hors périmètre du lot socle.
+     *
+     * Ce que ça coûte, mesuré : la comptabilité ne lit PAS ce champ. Son seul lecteur sur une ligne
+     * est `LineLabelStamper`, qui résout le type pour figer son LIBELLÉ — une référence inventée
+     * laisse le ticket sans « Plein tarif » ni « Membre ».
+     *
+     * ⚠ LE RENDU NE CHANGE PAS, SEUL LE MODÈLE CESSE DE PRÉTENDRE. Le ticket affiche exactement la
+     * même chose qu'avant : rien. C'est ce qui rend le changement acceptable sur une entité de
+     * socle — aucun écran ne bouge, aucune ligne existante n'est touchée.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
     #[Groups(['vente:read'])]
-    private Uuid $typeTarif;
+    private ?Uuid $typeTarif = null;
 
     /** Réf. logique Saison (M1) résolue au jour de la vente. */
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
@@ -194,12 +209,12 @@ class LigneVente
         return $this;
     }
 
-    public function getTypeTarif(): Uuid
+    public function getTypeTarif(): ?Uuid
     {
         return $this->typeTarif;
     }
 
-    public function setTypeTarif(Uuid $typeTarif): self
+    public function setTypeTarif(?Uuid $typeTarif): self
     {
         $this->typeTarif = $typeTarif;
 

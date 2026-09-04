@@ -210,6 +210,63 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
         );
     }
 
+    /**
+     * ⚠ SANS TYPE DE TARIF PARAMÉTRÉ, LA LIGNE EN PORTE AUCUN — ET LA VENTE PASSE (§8.11).
+     *
+     * Le champ était NON nullable et le code en tirait un au hasard : un identifiant qui ne désigne
+     * rien, laissant le ticket sans libellé de tarif. Arbitrage de Maxime : le rendre nullable, pour
+     * que `null` dise « personne n'a pu en fournir un » au lieu de prétendre.
+     *
+     * ⚠ CE TEST PROUVE DEUX CHOSES D'UN COUP, et la seconde est celle qui casserait :
+     *   1. la ligne porte bien `null` ;
+     *   2. `LineLabelStamper` — qui tourne au `prePersist` et appelait `find($ligne->getTypeTarif())`
+     *      sans garde — ne s'étrangle pas dessus. Sans sa garde, la vente entière échouerait.
+     */
+    public function testSansTypeDeTarifLaLigneNEnPorteAucun(): void
+    {
+        [$http, $entete] = $this->adminSurA();
+        $http->disableReboot();
+
+        // On pose le produit — obligatoire — mais PAS le type de tarif.
+        $this->poserProduitTerrainSeul();
+        $session = $this->sessionOuverteSur(SocleFixtures::ETAB_A_NOM);
+
+        $idReservation = $this->reserverTerrain($http, $entete, (string) $session->getId());
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $reservation = $em->getRepository(Reservation::class)->find($idReservation);
+        self::assertNotNull($reservation, 'témoin : la réservation existe');
+
+        $vente = $reservation->getVenteRattachee();
+        self::assertNotNull($vente, 'témoin : la vente a bien été créée — sans type de tarif');
+
+        $lignes = $vente->getLignes()->toArray();
+        self::assertCount(1, $lignes);
+        self::assertNull(
+            $lignes[0]->getTypeTarif(),
+            'aucun type de tarif paramétré : la ligne doit porter `null`, pas un identifiant inventé',
+        );
+    }
+
+    /** Pose le produit du terrain SANS type de tarif — l'état d'un établissement à moitié paramétré. */
+    private function poserProduitTerrainSeul(): Uuid
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $parametrage = $em->getRepository(ParametragePadel::class)
+            ->findOneBy(['etablissement' => $this->idEtablissement(SocleFixtures::ETAB_A_NOM)]);
+        self::assertNotNull($parametrage, 'témoin : le paramétrage padel existe');
+
+        $produit = Uuid::v4();
+        $parametrage->setProduitTerrainRef($produit);
+        $parametrage->setTypeTarifMembreRef(null);
+        $parametrage->setTypeTarifNonMembreRef(null);
+        $em->flush();
+
+        return $produit;
+    }
+
     /** Réserve un terrain, avec ou sans session de caisse, et rend l'identifiant de la réservation. */
     private function reserverTerrain(object $client, array $entete, ?string $session): string
     {

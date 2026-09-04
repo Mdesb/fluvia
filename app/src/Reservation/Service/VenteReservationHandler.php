@@ -60,20 +60,21 @@ final class VenteReservationHandler
 
         $ligne = new LigneVente();
         $ligne->setProduit($produitRef);
-        // ⚠ CE `Uuid::v4()` RESTE, ET IL EST DOCUMENTE PLUTOT QUE SUBI (§8.11).
+        // ⚠ `null` EST UNE RÉPONSE, ET C'EST NEUF (§8.11). Cette ligne portait
+        // `$typeTarifRef ?? Uuid::v4()` : sans type de tarif, elle en inventait un, qui ne désigne
+        // rien. Maxime a tranché de rendre le champ nullable, pour que `null` dise « personne n'a
+        // pu en fournir un » au lieu de prétendre.
         //
-        // Ce que le type de tarif commande, mesure le 04/09 : la comptabilite ne le lit PAS ; son
-        // seul lecteur est `LineLabelStamper`, qui resout le type pour figer son LIBELLE sur la
-        // ligne. Une reference qui ne designe rien laisse donc le ticket sans « Plein tarif » ni
-        // « Membre » — visible du client, sans effet comptable.
+        // Ce que le type de tarif commande, mesuré le 04/09 : la comptabilité ne le lit PAS ; son
+        // seul lecteur sur une ligne est `LineLabelStamper`, qui le résout pour figer son LIBELLÉ.
+        // Un identifiant inventé ne résolvait rien — le ticket sortait donc déjà sans « Plein
+        // tarif » ni « Membre ». Avec `null`, il sort exactement pareil : le rendu ne change pas,
+        // seul le modèle cesse de mentir.
         //
-        // Le padel en fournit un vrai depuis `ParametragePadel` (membre / non-membre). Les
-        // reservations generiques n'ont AUCUN proprietaire : `Activite` n'en porte pas, et son
-        // docblock dit que la chaine de tarification est hors perimetre du lot socle.
-        //
-        // ⚠ La vraie reponse serait de rendre `LigneVente::$typeTarif` NULLABLE, pour cesser de
-        // pretendre. C'est un arbitrage sur une entite de socle : consigne en §8.11, pas tranche.
-        $ligne->setTypeTarif($typeTarifRef ?? Uuid::v4());
+        // Qui en fournit un : le padel, depuis `ParametragePadel` (membre / non-membre). Une
+        // réservation générique n'en a AUCUN — `Activite` n'en porte pas, et son docblock dit que
+        // la chaîne de tarification est hors périmètre du lot socle.
+        $ligne->setTypeTarif($typeTarifRef);
         $ligne->setQuantite(1);
         $ligne->setPrixUnitaire($montant);
         $ligne->setPrixForce(true);

@@ -1015,11 +1015,26 @@ n'en porte pas, et son propre docblock le dit : la chaîne de tarification (`Res
 `TypeTarif` + `Saison`) est « hors périmètre de ce lot socle ». Le `Uuid::v4()` y demeure — mais
 **documenté à l'endroit où il est écrit**, avec ce qu'il coûte, au lieu d'être subi.
 
-**Ce qui reste à trancher, et c'est un arbitrage sur une entité de socle** : rendre
-`LigneVente::$typeTarif` **nullable**, pour cesser de prétendre qu'une ligne a un type de tarif
-quand personne n'a pu en fournir un. Un `null` dirait la vérité ; un identifiant tiré au hasard
-prétend désigner quelque chose. ⚠ Le champ est non-nullable dans le schéma et lu ailleurs : ça
-touche `LineLabelStamper`, la sérialisation et tout ce qui suppose sa présence.
+~~**Ce qui reste à trancher**~~ — **tranché par Maxime le 04/09 : le champ devient NULLABLE.**
+`Version20260904180000`. `null` dit « personne n'a pu en fournir un » là où un identifiant tiré au
+hasard prétendait désigner quelque chose.
+
+⚠ **CE QUE ÇA CHANGE À L'ÉCRAN : RIEN.** Un identifiant inventé ne résolvait aucun `TypeTarif`, donc
+`LineLabelStamper` laissait déjà le libellé nul et le ticket sortait sans « Plein tarif ». Avec
+`null`, il sort exactement pareil. C'est ce qui rend le changement acceptable sur une entité de
+socle : aucun écran ne bouge, et le modèle cesse de mentir.
+
+⚠ **`LineLabelStamper` APPELAIT `find($ligne->getTypeTarif())` SANS GARDE.** `find(null)` n'est pas
+une recherche : la garde est posée AVANT d'interroger. Le test le prouve en même temps que le `null`
+lui-même — sans elle, la vente entière échouerait au `prePersist`.
+
+⚠ **UN COMMENTAIRE EST DEVENU FAUX LE JOUR MÊME.** Celui que j'avais écrit trois heures plus tôt
+disait « ce `Uuid::v4()` RESTE, et il est documenté plutôt que subi ». Il ne reste plus. Les deux
+blocs se sont retrouvés à une ligne d'intervalle, l'un annonçant que le tirage demeure, l'autre
+qu'il a disparu. Remplacé par ce que le code fait.
+
+⚠ **D66-ter : les 23 lignes existantes gardent leur valeur**, identifiants inventés compris. Les
+mettre à `null` serait réécrire l'histoire d'une vente.
 
 ---
 

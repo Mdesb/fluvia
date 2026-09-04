@@ -51,8 +51,12 @@ final class LineLabelStamper
             }
         }
 
-        if ($ligne->getLibelleTypeTarif() === null) {
-            $tarif = $em->getRepository(TypeTarif::class)->find($ligne->getTypeTarif());
+        // ⚠ `find(null)` N'EST PAS UNE RECHERCHE. Depuis que `typeTarif` est nullable (§8.11), une
+        // ligne peut légitimement n'en porter aucun — une réservation générique, dont l'activité ne
+        // déclare pas de type de tarif. On le dit AVANT d'interroger, pas après.
+        $typeTarif = $ligne->getTypeTarif();
+        if ($typeTarif !== null && $ligne->getLibelleTypeTarif() === null) {
+            $tarif = $em->getRepository(TypeTarif::class)->find($typeTarif);
             if ($tarif instanceof TypeTarif) {
                 $ligne->setLibelleTypeTarif($tarif->getNom());
             }
