@@ -762,6 +762,13 @@ input:focus-visible {
 #tarifs > *,
 #souscrire > * { margin-inline: 0; max-width: var(--page); }
 
+/* ⚠ DEUX SYSTEMES D'ALIGNEMENT SUR UNE MEME PAGE, C'EST PIRE QU'UN SEUL MAUVAIS.
+   En calant les tarifs et le tunnel a gauche, j'ai laisse la FAQ, les modules et les metiers
+   centres : le regard changeait de bord en descendant. L'accueil partage donc un seul bord gauche,
+   celui du bandeau. Les AUTRES pages gardent leur prose centree — un article de blog n'a pas de
+   grille en face de lui, rien n'y justifie de casser le centrage. */
+.page-accueil .bande > * { margin-inline: 0; }
+
 #tarifs-formules { justify-content: start; }
 
 /* ⚠ LE PRIX TOMBAIT A LA LIGNE, ET LES CARTES DEVENAIENT IRREGULIERES.
@@ -774,3 +781,7 @@ input:focus-visible {
 /* Un cran de plus par colonne : un libelle comme « Recouvrement des impayes » tient alors sur une
    ligne dans la plupart des cas. */
 .choix-liste { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+
+/* Les jetons de metiers etaient centres entre eux : la deuxieme ligne partait 70 px plus a droite
+   que la premiere, seule chose de la page a ne pas commencer au meme bord. */
+.page-accueil .jetons { justify-content: flex-start; }

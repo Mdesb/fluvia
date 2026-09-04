@@ -3,6 +3,7 @@ import EcartsCaisse from '../components/EcartsCaisse.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
+import ExplorateurIndicateurs from '../components/ExplorateurIndicateurs.jsx'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges, nonLu }) {
@@ -241,6 +242,13 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
 
       {/* Les écarts de caisse sont ici et non sur l'écran de caisse : c'est un travail de
           responsable, fait après la clôture, pas pendant le service. */}
+      {/* L'EXPLORATEUR, ET POURQUOI IL ARRIVE ICI SEULEMENT MAINTENANT.
+          Le module Reporting porte sept ressources ; cet ecran n'en appelait aucune. Il lisait le
+          tableau de bord d'etablissement et la supervision, rien d'autre -- et `api.indicateurs()`
+          etait declare dans le client HTTP, appele par zero ecran. La route de l'explorateur
+          existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
+      <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
+
       <EcartsCaisse etabActif={etabActif} droits={droits} />
 
       <p className="hint" style={{ marginTop: 14 }}>
