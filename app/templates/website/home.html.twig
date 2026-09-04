@@ -19,13 +19,63 @@
 {% block body %}
 
   <section class="bande hero">
-    <div class="mesure">
-      {% if blocs['home.hero.title'] is defined %}<h1>{{ b.ligne(blocs['home.hero.title']) }}</h1>{% endif %}
-      {{ b.paragraphes(blocs['home.hero.lead']|default(null), 'chapo') }}
-      <p class="actions">
-        <a class="btn btn-primaire btn-grand" href="#souscrire">Essayer gratuitement 14 jours</a>
-        <a class="btn btn-fantome btn-grand" href="#tarifs">Voir les tarifs</a>
-      </p>
+    <div class="mesure hero-grille">
+
+      <div class="hero-dire">
+        <p class="hero-jeton"><span class="hero-point"></span>14 jours d'essai — sans carte bancaire</p>
+        {% if blocs['home.hero.title'] is defined %}<h1>{{ b.ligne(blocs['home.hero.title']) }}</h1>{% endif %}
+        {{ b.paragraphes(blocs['home.hero.lead']|default(null), 'chapo') }}
+        <p class="actions">
+          <a class="btn btn-primaire btn-grand" href="#souscrire">Essayer gratuitement 14 jours</a>
+          <a class="btn btn-fantome btn-grand" href="#tarifs">Voir les tarifs</a>
+        </p>
+        <p class="hero-gages"><span>Sans engagement</span><span>Hébergé en France</span><span>Vos données restent vôtres</span></p>
+      </div>
+
+      {#
+        LA SCENE — decorative, donc masquee aux lecteurs d'ecran.
+
+        Elle ne dit rien que le chapo ne dise deja, et le prix qu'elle affiche est un DECOR : le
+        tarif qui engage est celui du catalogue, plus bas. Une scene lue a voix haute reciterait
+        huit modules et un montant sans contexte.
+      #}
+      <div class="hero-scene" aria-hidden="true">
+        <div class="scene-cadre">
+          <div class="scene-barre">
+            <span class="scene-pastille"></span>
+            <span class="scene-pastille"></span>
+            <span class="scene-pastille"></span>
+            <span class="scene-titre">Fluvia — votre plateforme</span>
+          </div>
+
+          <div class="scene-corps">
+            <p class="scene-legende">Vous activez ce dont vous avez besoin.</p>
+
+            <ul class="scene-modules">
+              <li style="--rang: 0">Billetterie</li>
+              <li style="--rang: 1">Réservation</li>
+              <li style="--rang: 2">Contrôle d'accès</li>
+              <li style="--rang: 3">Caisse</li>
+              <li style="--rang: 4">Boutique en ligne</li>
+              <li style="--rang: 5">CRM</li>
+              <li style="--rang: 6">Facturation</li>
+              <li style="--rang: 7">Statistiques</li>
+            </ul>
+
+            <p class="scene-eteint">Les autres restent éteints — et ne se facturent pas.</p>
+          </div>
+
+          <div class="scene-pied">
+            <span>Votre total</span>
+            <strong class="scene-somme"><span class="scene-chiffres">
+              <span>39,90 €</span>
+              <span>58,90 €</span>
+              <span>77,90 €</span>
+              <span>96,90 €</span>
+            </span></strong>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 

@@ -33,15 +33,30 @@
 'use strict'
 const BASE_API = `${window.API_BASE || ''}/api`
 
-const euros = new Intl.NumberFormat('fr-FR', {
+// ⚠ DEUX FORMATEURS, PARCE QU'UN PRIX ROND ET UN PRIX A CENTIMES NE S'ECRIVENT PAS PAREIL.
+//
+// Il n'y en avait qu'un, avec `minimumFractionDigits: 0`. C'etait juste tant que tous les prix
+// etaient ronds : « 19 € » plutot que « 19,00 € ». La premiere formule non ronde a montre l'autre
+// moitie de la regle — 39,90 s'affichait « 39,9 € », et le total « 58,9 € ».
+//
+// Un prix ampute de sa decimale ne fait pas negliger : il se LIT comme un autre prix. On garde donc
+// l'intention d'origine et on la complete, plutot que d'imposer « 19,00 € » partout.
+const eurosRonds = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
   currency: 'EUR',
   minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+
+const eurosCentimes = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })
 
 function prix(cents) {
-  return euros.format(cents / 100)
+  return cents % 100 === 0 ? eurosRonds.format(cents / 100) : eurosCentimes.format(cents / 100)
 }
 
 async function lire(chemin) {
