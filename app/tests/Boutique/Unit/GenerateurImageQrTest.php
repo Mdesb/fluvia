@@ -7,6 +7,7 @@ namespace App\Tests\Boutique\Unit;
 use App\Boutique\Billet\GenerateurImageQr;
 use App\Tests\Boutique\Support\QrSvgDecoder;
 use App\Vente\Service\GenerateurCodeSupport;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -23,6 +24,26 @@ use PHPUnit\Framework\TestCase;
  * quelques cas limites connus du décodeur pur-PHP utilisé ici (`khanamiryan/qrcode-detector-decoder`,
  * non garanti à 100 % sur un rendu vectoriel à arêtes nettes, contrairement à un vrai scanner) — cf.
  * rapport du lot.
+ *
+ * ── ⚠ POURQUOI TROIS DE CES TESTS TOURNENT DANS LEUR PROPRE PROCESSUS (§8.2) ────────────────────
+ *
+ * Le décodage rasterise le SVG dans un tableau PHP de `taille²` entiers : 2 656 × 2 656 à l'échelle
+ * 8, soit **176 Mo de pointe**. Posé sur l'accumulation ordinaire des 244 tests qui le précèdent
+ * (~330 Mo), il faisait **mourir la suite entière** — et une suite qui meurt de mémoire ne se
+ * présente pas comme un échec : le total tombe, sans `FAILURES!` ni `ERRORS!`.
+ *
+ * ⚠ LE REMÈDE N'EST PAS DE BAISSER L'ÉCHELLE, ET C'EST MESURÉ. Le lecteur pur PHP n'est pas
+ * monotone : il échoue à l'échelle 4 (« Endpoint lies outside the image ») alors qu'il réussit à 3
+ * et à 6. Choisir une échelle basse parce qu'elle passe aujourd'hui échangerait 176 Mo contre un
+ * test intermittent — et un test intermittent finit désactivé.
+ *
+ * ⚠ NI DE CHANGER LA REPRÉSENTATION : `HybridBinarizer::calculateBlackPoints()` appelle
+ * `getMatrix()` et indexe le résultat, donc le tableau est matérialisé quoi qu'il arrive.
+ *
+ * La pointe rapportée par PHPUnit est celle du processus PRINCIPAL. Ces trois tests la dépensent
+ * dans un enfant qui meurt aussitôt : le décodage reste exactement celui qui est prouvé, et la
+ * suite cesse de porter le pic. Le quatrième n'isole rien — il ne décode pas, et un démarrage de
+ * processus se paie.
  */
 final class GenerateurImageQrTest extends TestCase
 {
@@ -38,6 +59,7 @@ final class GenerateurImageQrTest extends TestCase
         self::assertMatchesRegularExpression('/^QRC-[0-9A-HJKMNP-TV-Z]{16}-[0-9A-F]{10}$/', $payload);
     }
 
+    #[RunInSeparateProcess]
     public function testLeQrSvgEstDecodableEnLePayloadFourni(): void
     {
         $image = (new GenerateurImageQr())->generer(self::PAYLOAD_FIXE);
@@ -57,6 +79,7 @@ final class GenerateurImageQrTest extends TestCase
         );
     }
 
+    #[RunInSeparateProcess]
     public function testDeuxPayloadsDifferentsProduisentDesImagesDifferentesEtDecodablesChacune(): void
     {
         $qr = new GenerateurImageQr();
@@ -69,6 +92,7 @@ final class GenerateurImageQrTest extends TestCase
         self::assertSame('CAR-2B3C4D5E6F7G8H9J-0102030405', QrSvgDecoder::decoder($imageB->contenu));
     }
 
+    #[RunInSeparateProcess]
     public function testDataUriEstDirectementEmbarquableDansUneBaliseImg(): void
     {
         $image = (new GenerateurImageQr())->generer('QRC-TESTDATAURI0000-ABCDEF0123');
