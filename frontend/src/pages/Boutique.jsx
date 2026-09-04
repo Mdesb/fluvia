@@ -3,6 +3,7 @@ import VitrinesBoutique from '../components/VitrinesBoutique.jsx'
 import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
+import RetraitsClickCollect from '../components/RetraitsClickCollect.jsx'
 import { api } from '../api/client.js'
 
 // Boutique en ligne (M3, vue admin) : demandes de remboursement, comptes clients, vitrines.
@@ -21,6 +22,7 @@ export default function Boutique({ etabActif, droits }) {
       <Tabs
         onglets={[
           ['remboursements', 'Remboursements'],
+          ['retraits', 'Retraits en boutique'],
           ['comptes', 'Comptes clients'],
           ['vitrines', 'Vitrines'],
         ]}
@@ -30,6 +32,10 @@ export default function Boutique({ etabActif, droits }) {
 
       {sousOnglet === 'remboursements' && (
         <DemandesRemboursement etabActif={etabActif} droits={droits} />
+      )}
+
+      {sousOnglet === 'retraits' && (
+        <RetraitsClickCollect etabActif={etabActif} droits={droits} />
       )}
 
       {sousOnglet === 'comptes' && (
