@@ -161,10 +161,18 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           sous={GLOSSAIRE.fmi}
           accent={enAlerte ? 'var(--crit)' : undefined}
         />
+        {/* ⚠ « THÉORIQUE », ET LE MOT N'EST PAS DÉCORATIF. Cet indicateur affichait « Fond de
+            caisse » tout court — le mot exact du fond d'OUVERTURE, que la clôture Z montre par
+            ailleurs. Deux écrans, deux montants (50,00 € contre 93,25 €), et un exploitant qui
+            compare croit sa caisse fausse.
+            Ce sont deux grandeurs différentes : `session.fondDeCaisse` est le fond saisi à
+            l'ouverture, tandis que ce champ vient de `fondDeCaisseTheorique()` — fond d'ouverture
+            plus encaissements. Le qualificatif se perdait entre la méthode serveur et l'écran.
+            `Dashboard.jsx` le nommait déjà correctement : ceci est un alignement, pas un choix. */}
         <Kpi
-          label="Fond de caisse"
+          label="Fond de caisse théorique"
           valeur={dash ? euros(dash.fondDeCaisse) : '—'}
-          sous={dash ? undefined : GLOSSAIRE.indisponible}
+          sous={dash ? 'fond d’ouverture + encaissements, avant comptage' : GLOSSAIRE.indisponible}
         />
       </div>
 
