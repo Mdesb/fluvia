@@ -192,7 +192,10 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
   // composant ; une declaration dans le parent est invisible d'ici, et le build ne le dit pas —
   // seul le rendu le dit, en cassant l'ecran.
   const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
-  const [produits, setProduits] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, ce tableau affichait
+  // « Aucun produit. » — un exploitant lit alors que son catalogue est vide. Le message du serveur
+  // etait bien la, mais dans un bandeau separe que rien ne relie a la ligne du tableau.
+  const [produits, setProduits] = useState(null)
   const [total, setTotal] = useState(0)
   const [saisie, setSaisie] = useState(params.q)
   const [types, setTypes] = useState([])
@@ -232,6 +235,10 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
       setTypes(t)
     } catch (e) {
       setErreur(e.message)
+      // On ne garde pas la liste precedente : elle donnerait un catalogue d'avant pour un
+      // catalogue d'aujourd'hui, ce qui est pire qu'un vide annonce.
+      setProduits(null)
+      setTotal(0)
     } finally {
       setChargement(false)
     }
@@ -332,7 +339,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     )
   }
 
-  const tronquee = total > produits.length
+  const tronquee = total > (produits || []).length
 
   return (
     <>
@@ -375,7 +382,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
               une liste coupee en silence fait conclure qu'un produit n'existe pas. */}
           {tronquee && (
             <p className="hint" style={{ marginBottom: 0 }}>
-              {produits.length} produits affichés sur {total}. Affinez la recherche pour voir les autres.
+              {(produits || []).length} produits affichés sur {total}. Affinez la recherche pour voir les autres.
             </p>
           )}
         </div>
@@ -411,7 +418,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                 </tr>
               </thead>
               <tbody>
-                {produits.map((p) => (
+                {(produits || []).map((p) => (
                   <tr key={p.id}>
                     <td>
                       <button
@@ -462,8 +469,14 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                     </td>
                   </tr>
                 ))}
-                {produits.length === 0 && (
-                  <tr><td colSpan={5} className="empty">Aucun produit.</td></tr>
+                {(produits || []).length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="empty">
+                      {produits === null
+                        ? 'La liste des produits n’a pas pu être lue. Ce tableau est vide parce que la lecture a échoué, pas parce que le catalogue l’est.'
+                        : 'Aucun produit.'}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
