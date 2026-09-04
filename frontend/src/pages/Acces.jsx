@@ -95,7 +95,13 @@ export default function Acces({ etabActif, droits }) {
       api.ventes({ itemsPerPage: 100, 'order[date]': 'desc' }),
       api.utilisateurs(),
     ])
-    setSupports(s.status === 'fulfilled' ? membres(s.value) : [])
+    // ⚠ `null` SUR ECHEC, PAS `[]` — SINON LES DEUX MESSAGES CI-DESSOUS SONT MORTS.
+    // Le rendu distingue « pas lu » de « vide » a deux endroits (« badges non lus », et « ce
+    // tableau est vide parce que la lecture a echoue, pas parce que cet etablissement n'a pas de
+    // badge »). Ecrire `[]` ici rendait ces deux branches inatteignables des la premiere lecture
+    // refusee, et l'ecran affirmait « Aucun badge sur cet etablissement » — la phrase que le
+    // commentaire de la declaration interdit explicitement.
+    setSupports(s.status === 'fulfilled' ? membres(s.value) : null)
     setAppairages(a.status === 'fulfilled' ? membres(a.value) : [])
     setDroitsAcces(d.status === 'fulfilled' ? membres(d.value) : [])
     setDeclarations(p.status === 'fulfilled' ? membres(p.value) : [])
