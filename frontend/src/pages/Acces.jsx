@@ -5,6 +5,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
+import { idDe } from '../api/iri'
 
 // BADGES & TERMINAUX — LE MODULE DE CONTRÔLE D'ACCÈS N'AVAIT QUE SES YEUX.
 //
@@ -764,12 +765,6 @@ function partielle(resultat) {
   if (resultat.status !== 'fulfilled') return false
   const total = resultat.value?.totalItems ?? resultat.value?.['hydra:totalItems']
   return typeof total === 'number' && total > membres(resultat.value).length
-}
-
-function idDe(ref) {
-  if (!ref) return null
-  if (typeof ref === 'string') return ref.split('/').pop()
-  return ref.id ? String(ref.id) : null
 }
 
 // `agent` et `annuleePar` arrivent en IRI nue : `Utilisateur` ne déclare aucune propriété dans le

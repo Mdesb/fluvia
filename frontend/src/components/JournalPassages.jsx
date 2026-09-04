@@ -4,6 +4,7 @@ import { jourLocal } from './Liste.jsx'
 // Les mots du controle d'acces, partages avec la supervision et la topologie : le journal les
 // citait depuis la portee de son ancien fichier.
 import { MOTIF_REFUS, RESULTAT_CLS, RESULTAT_PASSAGE, SENS_PASSAGE } from '../api/acces.js'
+import { idDe } from '../api/iri'
 
 // ⚠ ONZIEME COPIE DE `idDe` DANS LE FRONTAL, ET C'EST DELIBERE DE NE PAS LA PARTAGER ICI.
 //
@@ -17,11 +18,6 @@ import { MOTIF_REFUS, RESULTAT_CLS, RESULTAT_PASSAGE, SENS_PASSAGE } from '../ap
 // sérialisation : `Controleur.espace` est un objet dans `controleur:read`, mais la même relation vue
 // depuis un équipement n'est qu'une IRI, parce que `EspaceAcces` ne déclare rien dans
 // `equipement:read`. Comparer des `id` plutôt que des formes, c'est ce qui rend ce croisement sûr.
-function idDe(v) {
-  if (!v) return null
-  if (typeof v === 'object') return v.id || (v['@id'] ? v['@id'].split('/').pop() : null)
-  return String(v).split('/').pop()
-}
 
 // La date et l'heure d'un passage, dans le fuseau de celui qui regarde. Copiee de
 // `TopologieAcces.jsx`, qui s'en sert encore pour ses propres colonnes.

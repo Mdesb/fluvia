@@ -410,7 +410,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
       <section className="card">
         <div className="card-b">
-          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+          <div className="row row-champs" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
             <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
               <label htmlFor="cl-q">Rechercher</label>
               <input
@@ -938,6 +938,9 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
       {/* Ce que ce client accepte de recevoir. La fiche l'ignorait completement : on pouvait
           l'ecrire par l'API, jamais le relire — donc jamais savoir qu'on allait le contredire. */}
       <ConsentementsClient client={c} droits={droits} />
+
+      {/* Le geste du comptoir : le client presente une carte, est-ce la sienne ? */}
+      <VerifierCarte client={c} droits={droits} />
     </div>
   )
 }
@@ -1367,5 +1370,89 @@ function RechargePmvModal({ open, client, pmv, onClose, onFait }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+
+/**
+ * VERIFIER QU'UNE CARTE EST BIEN CELLE DE CE CLIENT.
+ *
+ * ⚠ La route s'appelle `rattacher-support` et ne rattache rien : elle VERIFIE. Le bouton dit donc
+ * « Vérifier », pas « Rattacher » — un libellé qui promet une écriture devant une simple lecture
+ * ferait croire le problème résolu alors que rien n'a changé.
+ *
+ * ⚠ ET LES TROIS REPONSES NE SE VALENT PAS. « Carte inconnue » et « carte d'un autre client » sont
+ * deux situations opposées au comptoir : la première fait créer un support, la seconde fait
+ * appeler un responsable. Les fondre en « non » perdrait ce qui fait agir.
+ */
+// Des noms de classe ENTIERS, jamais fabriques par interpolation : une classe assemblee a
+// l'execution est invisible au garde-fou qui verifie qu'elle existe, et introuvable par
+// quiconque la cherche dans le code. Le detecteur me l'a repris, et il avait raison.
+const CLASSES_VERDICT = { good: 'banner', warn: 'banner banner-warn', crit: 'banner banner-error' }
+
+function VerifierCarte({ client, droits }) {
+  const [identifiant, setIdentifiant] = useState('')
+  const [verdict, setVerdict] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  if (!aLeDroit(droits, 'crm.creer')) return null
+
+  async function verifier(e) {
+    e.preventDefault()
+    const n = identifiant.trim()
+    if (n === '') return
+    setBusy(true)
+    setVerdict(null)
+    try {
+      await api.verifierCarteClient(client.id, n)
+      setVerdict({ ton: 'good', texte: `La carte ${n} est bien celle de ce client.` })
+    } catch (err) {
+      // On ne devine pas le code : on lit ce que le serveur a repondu. Ses deux messages sont
+      // distincts et parlants — les remplacer par un « non » generique effacerait la nuance.
+      const m = err?.message || ''
+      setVerdict({
+        ton: /autre client/i.test(m) ? 'crit' : 'warn',
+        texte: m || 'La vérification n’a pas abouti.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
+      <div className="card-h"><span>Vérifier une carte</span></div>
+      <div className="card-b">
+        <form onSubmit={verifier} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)', flex: '1 1 220px' }}>
+            <span className="sub">Numéro de support ou de carte</span>
+            <input
+              className="input"
+              value={identifiant}
+              onChange={(ev) => setIdentifiant(ev.target.value)}
+              placeholder="tel qu’il figure sur le support"
+              maxLength={64}
+            />
+          </label>
+          <button className="btn" type="submit" disabled={busy || identifiant.trim() === ''}>
+            {busy ? 'Vérification…' : 'Vérifier'}
+          </button>
+        </form>
+
+        {verdict && (
+          <div
+            className={CLASSES_VERDICT[verdict.ton]}
+            style={{ marginTop: 'var(--esp-normal)' }}
+          >
+            {verdict.texte}
+          </div>
+        )}
+
+        <div className="sub" style={{ marginTop: 'var(--esp-normal)' }}>
+          Cette vérification ne modifie rien : elle dit seulement si le support est déjà rattaché à
+          ce client, à un autre, ou à personne.
+        </div>
+      </div>
+    </section>
   )
 }

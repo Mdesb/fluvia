@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { idDe } from '../api/iri'
 
 // LE RÉFÉRENTIEL LÉGAL DES TAUX DE TVA — « on les propose tous automatiquement ».
 //
@@ -57,12 +58,6 @@ const ZERO_EXPLIQUE = {
   zero: 'Zéro pour cent, avec droit à déduction.',
   exempt: 'Exonéré : pas de TVA facturée, et pas de droit à déduction.',
   out_of_scope: 'Hors du champ de la TVA — ce n’est pas un taux.',
-}
-
-function idDe(v) {
-  if (!v) return ''
-  if (typeof v === 'string') return v.split('/').pop()
-  return v.id ? String(v.id) : String(v['@id'] || '').split('/').pop()
 }
 
 export default function TauxTvaLegaux({ peutModifier, version = 0, onRepris }) {
@@ -171,7 +166,6 @@ export default function TauxTvaLegaux({ peutModifier, version = 0, onRepris }) {
       setEnCours('')
     }
   }
-
 
   if (nonBranche) {
     return (

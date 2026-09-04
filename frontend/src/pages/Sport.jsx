@@ -929,7 +929,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
           </div>
         )}
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 240px' }}>
             <label htmlFor="ab-adherent">Adhérent *</label>
             <select id="ab-adherent" className="input" value={adherent} onChange={(e) => setAdherent(e.target.value)}>
@@ -968,7 +968,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
           </select>
         </div>
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 160px' }}>
             <label htmlFor="ab-periodicite">Périodicité *</label>
             <select id="ab-periodicite" className="input" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)}>
@@ -1000,7 +1000,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
         </div>
 
         <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Mandat de prélèvement</div>
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 260px' }}>
             <label htmlFor="ab-iban">IBAN *</label>
             <input id="ab-iban" className="input" value={iban} autoComplete="off"

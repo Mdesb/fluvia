@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { idDe } from '../api/iri'
 
 // « CE PRODUIT OUVRE TELLE ET TELLE ZONE » — LA RÈGLE QUI MANQUAIT AU CONTRÔLE D'ACCÈS.
 //
@@ -232,8 +233,4 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
 }
 
 // L'identifiant d'une relation, qu'elle arrive en objet ou en IRI nue.
-function idDe(v) {
-  if (!v) return null
-  if (typeof v === 'object') return v.id || (v['@id'] ? v['@id'].split('/').pop() : null)
-  return String(v).split('/').pop()
-}
+

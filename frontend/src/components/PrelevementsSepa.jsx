@@ -6,6 +6,7 @@ import { dateFr, dateHeureFr, euroCentimes, jourLocal } from './Liste.jsx'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { idDe } from '../api/iri'
 
 // LE PRÉLÈVEMENT SEPA, DE BOUT EN BOUT — ET IL N'EN EXISTAIT QUE LE MILIEU.
 //
@@ -1410,11 +1411,6 @@ function ConfigCreancierModal({ open, config, etabActif, onClose, onFait }) {
 // EMBARQUÉE (`{ '@id': '/api/…/x', id: 'x' }`) ; sinon elle arrive comme simple IRI (`'/api/…/x'`).
 // Cela dépend des groupes côté serveur, qui bougent — un écran qui n'accepte qu'une des deux formes
 // se met à afficher des tirets le jour où quelqu'un ajoute un `#[Groups]` ailleurs, sans erreur.
-function idDe(relation) {
-  if (!relation) return null
-  if (typeof relation === 'string') return relation.split('/').pop()
-  return relation.id || (relation['@id'] ? String(relation['@id']).split('/').pop() : null)
-}
 
 // `totalItems` CONTRE LE NOMBRE DE LIGNES REÇUES : LE SEUL MOYEN DE SAVOIR QU'ON A ÉTÉ COUPÉ.
 //

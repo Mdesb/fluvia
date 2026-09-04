@@ -10,6 +10,7 @@ import Markdown from '../public/components/Markdown.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
+import { idDe as idDeRef } from '../api/iri'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
 // modale est le défaut, créer un écran est l'exception ; consulter un produit depuis sa liste ne
@@ -88,12 +89,6 @@ function valeursModifiables(p) {
       rechargeValidityMode: p.carte.rechargeValidityMode || 'extend',
     } : null,
   }
-}
-
-function idDeRef(ref) {
-  if (!ref) return null
-  if (typeof ref === 'string') return ref.split('/').pop()
-  return ref.id || String(ref['@id'] || '').split('/').pop() || null
 }
 
 // LA DURÉE REVIENT DÉVELOPPÉE, ET C'EST UN PIÈGE D'ALLER-RETOUR.
@@ -439,7 +434,6 @@ export default function ProduitFiche({
   function reinitialiserBrouillon() {
     setEdition(valeursModifiables(detail || produit))
   }
-
 
   // CE QUI A CHANGE, ET DANS QUEL ONGLET.
   //
@@ -1148,7 +1142,7 @@ export default function ProduitFiche({
 
       {edition.carte && (
         <Section titre="Carte multi-entrées" aide="Combien d'entrées la carte donne, et pour combien on la paie.">
-          <div className="row" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
+          <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
             <div className="field" style={{ flex: '1 1 10rem' }}>
               <label htmlFor="ca-paye">Entrées payées</label>
               <input
@@ -1329,7 +1323,6 @@ export default function ProduitFiche({
         )}
       </Section>
 
-
       {p.noteInterne && (
         <Section titre="Note interne">
           <div className="hint">{p.noteInterne}</div>
@@ -1439,7 +1432,6 @@ export default function ProduitFiche({
     </>
   )
 }
-
 
 /* ------------------------------------------------------------------ Aperçu caisse */
 

@@ -553,7 +553,7 @@ function EmployeModal({ open, onClose, onFait }) {
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 200px' }}>
             <label htmlFor="em-prenom">Prénom *</label>
             <input id="em-prenom" className="input" value={prenom} maxLength={100}
@@ -566,7 +566,7 @@ function EmployeModal({ open, onClose, onFait }) {
           </div>
         </div>
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 220px' }}>
             <label htmlFor="em-poste">Poste *</label>
             <input id="em-poste" className="input" value={poste} maxLength={80}
@@ -582,7 +582,7 @@ function EmployeModal({ open, onClose, onFait }) {
           </div>
         </div>
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 200px' }}>
             <label htmlFor="em-matricule">Matricule</label>
             <input id="em-matricule" className="input" value={matricule} maxLength={40}

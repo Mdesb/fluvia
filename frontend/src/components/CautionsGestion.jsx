@@ -5,6 +5,7 @@ import { euroCentimes, dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { idDe } from '../api/iri'
 
 // LES CAUTIONS : DE L'ARGENT QUI N'EST PAS À NOUS, ET QU'ON DOIT RENDRE.
 //
@@ -745,11 +746,6 @@ function badgeStatut(statut) {
 
 // Voir le commentaire jumeau dans `PrelevementsSepa.jsx` : une relation arrive embarquée ou en IRI
 // selon les groupes de sérialisation du serveur, et les deux formes sont normales.
-function idDe(relation) {
-  if (!relation) return null
-  if (typeof relation === 'string') return relation.split('/').pop()
-  return relation.id || (relation['@id'] ? String(relation['@id']).split('/').pop() : null)
-}
 
 // Le barème cité par un mouvement, résolu contre la liste déjà chargée. On accepte aussi la forme
 // embarquée : si quelqu'un ajoute un jour `caution_mouvement:read` aux propriétés de `GrilleRetenue`,

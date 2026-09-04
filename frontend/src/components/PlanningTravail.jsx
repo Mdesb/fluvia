@@ -216,7 +216,7 @@ function CreneauModal({ open, etabActif, onClose, onFait }) {
           <input id="cr-jour" className="input" type="date" value={jour} onChange={(e) => setJour(e.target.value)} />
         </div>
 
-        <div className="row">
+        <div className="row row-champs">
           <div className="field">
             <label htmlFor="cr-debut">Début *</label>
             <input id="cr-debut" className="input" type="time" value={heureDebut} onChange={(e) => setHeureDebut(e.target.value)} />

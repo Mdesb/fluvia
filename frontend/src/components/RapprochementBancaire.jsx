@@ -84,7 +84,7 @@ export default function RapprochementBancaire({ etabActif, droits }) {
           <span className="sub">{lignes.length} ligne{lignes.length > 1 ? 's' : ''}</span>
         </div>
         <div className="card-b">
-          <div className="row" style={{ gap: 'var(--esp-large)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="row row-champs" style={{ gap: 'var(--esp-large)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className="field" style={{ flex: 1, marginBottom: 0 }}>
               <label htmlFor="rap-compte">Compte bancaire</label>
               <select id="rap-compte" className="input" value={compte} onChange={(e) => setCompte(e.target.value)}>

@@ -914,7 +914,7 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
           )}
         </div>
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 180px' }}>
             <label htmlFor="tp-type">Type *</label>
             <select id="tp-type" className="input" value={type} onChange={(e) => setType(e.target.value)}>

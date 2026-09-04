@@ -35,6 +35,10 @@ import { readFileSync, existsSync } from 'node:fs'
 const FICHIERS = [
   'src/api/client.js',
   'src/public/api/boutiqueClient.js',
+  // ⚠ Ajouté le 04/09 : `Icon.jsx` portait QUATRE clés en double que ce contrôle annonçait
+  // absentes — `dashboard`, `personal-data`, `social` et `legal`. Une icône définie deux fois ne
+  // casse rien : la seconde gagne, et le dessin qu'on croit voir n'est pas celui qui s'affiche.
+  'src/components/Icon.jsx',
 ]
 
 let objetsLus = 0
@@ -51,7 +55,9 @@ for (const chemin of FICHIERS) {
   const lignes = readFileSync(chemin, 'utf8').split('\n')
 
   for (let d = 0; d < lignes.length; d++) {
-    const ouverture = /^export const ([A-Za-z_$][A-Za-z0-9_$]*) = \{\s*$/.exec(lignes[d])
+    // `export` facultatif : `Icon.jsx` garde sa table d'icônes privée, et une table privée se
+    // fusionne aussi mal qu'une exportée.
+    const ouverture = /^(?:export )?const ([A-Za-z_$][A-Za-z0-9_$]*) = \{\s*$/.exec(lignes[d])
     if (!ouverture) continue
 
     let f = -1
@@ -66,12 +72,17 @@ for (const chemin of FICHIERS) {
 
     const vues = new Map()
     for (let i = d + 1; i < f; i++) {
-      const m = /^ {2}([A-Za-z_$][A-Za-z0-9_$]*):/.exec(lignes[i])
+      // ⚠ LA CLÉ PEUT ÊTRE CITÉE, ET C'EST CE QUI CACHAIT LES QUATRE D'`Icon.jsx`.
+      // Le fichier écrivait `'dashboard':` d'un côté et `dashboard:` de l'autre. JavaScript n'y
+      // voit qu'une seule clé — l'ancien motif, lui, n'en voyait qu'une SUR DEUX, donc jamais de
+      // collision. On lit les deux formes et on compare le NOM, pas son orthographe.
+      const m = /^ {2}(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][A-Za-z0-9_$]*)):/.exec(lignes[i])
       if (!m) continue
-      if (vues.has(m[1])) {
-        fautes.push(`${chemin} · ${ouverture[1]}.${m[1]} — lignes ${vues.get(m[1])} et ${i + 1}`)
+      const cle = m[1] ?? m[2] ?? m[3]
+      if (vues.has(cle)) {
+        fautes.push(`${chemin} · ${ouverture[1]}.${cle} — lignes ${vues.get(cle)} et ${i + 1}`)
       } else {
-        vues.set(m[1], i + 1)
+        vues.set(cle, i + 1)
         clesLues++
       }
     }
@@ -84,7 +95,7 @@ if (ignores.length > 0) {
 }
 
 if (fautes.length === 0) {
-  console.log(`✓ Clés en double : aucune. ${clesLues} clé(s) lue(s) dans ${objetsLus} objet(s) exporté(s).`)
+  console.log(`✓ Clés en double : aucune. ${clesLues} clé(s) lue(s) dans ${objetsLus} objet(s), citées ou non.`)
   process.exit(0)
 }
 
