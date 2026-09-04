@@ -52,7 +52,7 @@ function hhmm(d) {
 // ⚠ `nonLu` VOYAGE A COTE DE LA LISTE, ET PAS DEDANS. L'appelant aplatit deja (`creneaux || []`),
 // donc ce composant ne peut pas distinguer « vide » de « pas lu » — et faire voyager un `null` a
 // sa place casserait tout ce qui le parcourt.
-export default function PlanningSemaine({ creneaux, occupation, ressources, onCreneau, nonLu }) {
+export default function PlanningSemaine({ creneaux, occupation, aConfirmer, ressources, onCreneau, nonLu }) {
   const [depart, setDepart] = useState(() => lundiDe(new Date()))
   const [ressourceId, setRessourceId] = useState('')
 
@@ -219,12 +219,18 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
                   const complet = prises >= capacite
                   const presque = !complet && prises / capacite >= 0.8
 
+                  // ⚠ DES PLACES PRISES PEUVENT ENCORE DISPARAÎTRE (R15 a). Une réservation
+                  // `a_confirmer` occupe la place, mais sera LIBÉRÉE à l'échéance si personne ne
+                  // confirme. Sans marque, le planning montre un créneau plein qui ne l'est
+                  // peut-être pas — et l'exploitant l'apprend le jour où la place se rouvre seule.
+                  const enAttente = aConfirmer?.[c.id] || 0
+
                   return (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => onCreneau?.(c)}
-                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)} · ${prises}/${capacite}`}
+                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)} · ${prises}/${capacite}` + (enAttente > 0 ? ` · ${enAttente} à confirmer` : '')}
                       style={{
                         position: 'absolute',
                         top: (debut - heureMin) * HAUTEUR_HEURE + 1,
@@ -240,7 +246,11 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
                         borderRadius: 6,
                         cursor: 'pointer',
                         overflow: 'hidden',
-                        border: '1px solid var(--line)',
+                        // ⚠ UN LISERÉ, PAS UNE COULEUR. Le fond dit déjà la place restante, et le
+                        // commentaire ci-dessous rappelle qu'une seule information peut l'occuper.
+                        // Le trait tireté dit « pas encore ferme » dans un autre canal : les deux
+                        // se lisent ensemble au lieu de se disputer.
+                        border: enAttente > 0 ? '1px dashed var(--warn)' : '1px solid var(--line)',
                         // La couleur dit la place restante, jamais le type d'activité : c'est la
                         // question qu'on pose au planning, et une seule information peut occuper la
                         // couleur sans que les deux se brouillent.
@@ -256,6 +266,7 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>{prises}/{capacite}</span>
                       <div className="sub" style={{ fontSize: 11 }}>
                         {c.activite?.libelle || c.ressource?.libelle || ''}
+                        {enAttente > 0 ? ` · ${enAttente} à confirmer` : ''}
                       </div>
                     </button>
                   )

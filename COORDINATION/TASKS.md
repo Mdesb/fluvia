@@ -817,7 +817,43 @@ préproduction, où 1 Go par processus web serait une décision toute différent
 **Reste ouvert** : les 200 Mo du décodeur. Tant qu'ils sont là, le plafond suivra la croissance de
 la suite au lieu de la contenir.
 
-### ~~8.3~~ — FAIT · une seule définition de `idDe` (`api/iri.js`), vérifié le 04/09
+### ~~8.3~~ — FAIT, PUIS RECOMPTÉ : la fermeture de ce matin comptait des NOMS
+
+⚠ **J'AI DÉCLARÉ CETTE SECTION CLOSE SUR LE MAUVAIS DÉNOMBREMENT.** « Une seule définition de
+`idDe` » est vrai — et sans intérêt. Le défaut n'est pas la fonction nommée `idDe`, c'est
+l'**expression** `.split('/').pop()`, qui fait la même chose sans porter le nom. Recomptée le 04/09
+par le contrôle lui-même : **42 occurrences dans 27 fichiers**.
+
+*(Mon premier décompte ad hoc disait 44 : il comptait aussi deux commentaires — dont un que je
+venais d'écrire — et la source canonique. Le chiffre publié est celui du contrôle, qui saute les
+commentaires et exempte `api/iri.js`.)*
+
+**Une recherche par NOM ne trouve pas ce qui a divergé** — et c'est exactement ce qui a divergé qui
+échappe à une unification. Troisième fois aujourd'hui que la forme de la recherche décide du
+résultat, après le faux zéro sur `ComportementExpiration` (nom français) et la lecture de
+`produit.categorie` (champ inexistant).
+
+**`frontend/scripts/verifier-extraction-identifiant.mjs` (n°53)** gèle les 41 restantes et refuse la
+suivante. Six témoins, dont trois qui prouvent ce qu'il épargne (commentaire, docbloc, appel
+canonique).
+
+⚠ **ET UNE PHRASE QUE J'AI ÉCRITE CE MATIN EST TROP FORTE.** Le message de commit du correctif
+`Stock.jsx` dit « l'écran affichait un blanc à la place du nom de l'article ». J'ai prouvé que les
+deux implémentations **divergent** — sur `/api/articles/abc-123/`, la locale rend `''` — mais je
+n'ai **pas** montré que l'API émet des IRI à slash final. API Platform n'en produit pas. C'est une
+divergence latente, pas un écran cassé observé.
+
+C'est la distinction que j'avais appliquée le matin même aux quatre trouvailles D58 (« cassé » vs
+« cassera »), et que je n'ai pas appliquée à mon propre correctif trois heures plus tard.
+
+⚠ **C'est aussi pourquoi le contrôle GÈLE au lieu de refuser** : balayer 27 fichiers pour un défaut
+que personne n'a vu se produire changerait des écrans que personne n'a regardés — ce que §8.6 refuse
+de faire, pour la même raison.
+
+**Deux réécritures nommées ont quand même été retirées**, parce qu'elles portaient le nom et
+n'avaient donc aucune excuse : `Stock.jsx` (recherche par clé) et `ActivitesReservation.jsx` (valeur
+de `<select>` — le `?? ''` est passé AU POINT D'USAGE, où `''` veut dire « aucun choix », plutôt que
+dans une fonction qui rendrait deux choses selon l'entrée).
 
 ⚠ **Et un survivant a été trouvé ce jour-là, dans `Stock.jsx`** — il avait échappé à la passe
 **parce qu'il n'était pas une copie** : `ref.split('/').pop()` rend la chaîne VIDE sur une
@@ -1369,6 +1405,37 @@ La commande accepte de tourner ; c'est la décision de la laisser tourner qui ma
 >
 > **Et il n'y a aucun point d'accroche de paiement** — conforme à ce que Maxime a dit
 > (« je te dirai quand on prendra le prestataire »), donc E-3 reste externe.
+
+> ⚠ **CONSTRUIT NE VEUT PAS DIRE EXERCÉ — ET IL NE L'AVAIT JAMAIS ÉTÉ.** Le bloc est **inerte par
+> défaut**, c'est écrit dans `ReserverTerrainProcessor` et c'est délibéré : aucune `RegleAnnulation`
+> ne déclarait de délai, donc **aucune réservation n'est jamais devenue `a_confirmer`**. Le
+> mécanisme existait, les tests passaient, et personne ne l'avait vu fonctionner une seule fois.
+>
+> **Exercé sur la préproduction le 04/09**, en activant ce qu'un exploitant activerait
+> (`confirmationDelayMinutes: 1440`, `confirmationExpiry: release`, sur les deux portées) :
+>
+> ```
+> réservation à 20 jours   a_confirmer   échéance = début − 24 h  (23/09 09:00)
+> réservation à  4 heures  a_confirmer   échéance = MAINTENANT    (20:01:18)
+> ```
+>
+> Les deux cas que Maxime avait nommés, dans l'ordre où il les avait nommés — dont « pour toutes
+> les réservations de moins de 24 heures, le paiement est demandé dès le départ ».
+>
+> **Et la boucle se referme** : `reservation:confirmations:expirer` a rendu
+> `1 libérée(s), 0 gardée(s) pour décision, 0 sans règle applicable`. La proche est passée à
+> `annulee_libre` ; **la lointaine a été épargnée** — c'est le témoin négatif, celui qui distingue
+> « la tâche trie » de « la tâche annule tout ».
+>
+> ⚠ **L'ÉCRAN, LUI, NE LE DISAIT QU'À MOITIÉ.** Le badge « À confirmer » existe dans la LISTE PAR
+> JOUR, mais il faut ouvrir le jour ET déplier les inscrits. Dans la vue **Semaine** — celle qu'on
+> regarde d'abord — une réservation en attente de paiement était indiscernable d'une réservation
+> payée, alors qu'elle **sera libérée toute seule**. Corrigé : un liseré tireté et la mention
+> « N à confirmer ». ⚠ Pas par la couleur : le composant dit lui-même qu'elle porte déjà la place
+> restante, et « une seule information peut occuper la couleur sans que les deux se brouillent ».
+>
+> ⚠ **LA CONFIRMATION RESTE ACTIVE EN PRÉPRODUCTION** pour que Maxime puisse la voir. Pour
+> l'éteindre : `confirmationDelayMinutes` à `null` sur les deux règles.
 
 **(a) L'encaissement hors comptoir → un système de CONFIRMATION.** Ses mots : « on met un système
 où il faut une confirmation de la réservation, par exemple 24 heures avant le début de la session,
