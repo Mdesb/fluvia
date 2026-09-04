@@ -47,6 +47,7 @@ final class VenteReservationHandler
         Uuid $produitRef,
         ?Uuid $activiteRef = null,
         ?Uuid $ressourceRef = null,
+        ?Uuid $typeTarifRef = null,
     ): Vente
     {
         $vente = new Vente();
@@ -59,7 +60,20 @@ final class VenteReservationHandler
 
         $ligne = new LigneVente();
         $ligne->setProduit($produitRef);
-        $ligne->setTypeTarif(Uuid::v4());
+        // ⚠ CE `Uuid::v4()` RESTE, ET IL EST DOCUMENTE PLUTOT QUE SUBI (§8.11).
+        //
+        // Ce que le type de tarif commande, mesure le 04/09 : la comptabilite ne le lit PAS ; son
+        // seul lecteur est `LineLabelStamper`, qui resout le type pour figer son LIBELLE sur la
+        // ligne. Une reference qui ne designe rien laisse donc le ticket sans « Plein tarif » ni
+        // « Membre » — visible du client, sans effet comptable.
+        //
+        // Le padel en fournit un vrai depuis `ParametragePadel` (membre / non-membre). Les
+        // reservations generiques n'ont AUCUN proprietaire : `Activite` n'en porte pas, et son
+        // docblock dit que la chaine de tarification est hors perimetre du lot socle.
+        //
+        // ⚠ La vraie reponse serait de rendre `LigneVente::$typeTarif` NULLABLE, pour cesser de
+        // pretendre. C'est un arbitrage sur une entite de socle : consigne en §8.11, pas tranche.
+        $ligne->setTypeTarif($typeTarifRef ?? Uuid::v4());
         $ligne->setQuantite(1);
         $ligne->setPrixUnitaire($montant);
         $ligne->setPrixForce(true);

@@ -943,21 +943,35 @@ d'activité du tout.
 
 ---
 
-### ⚠ 8.11 — Le TYPE DE TARIF est lui aussi tiré au hasard
+### 8.11 — Le type de tarif : mesuré, corrigé pour le padel, assumé ailleurs
 
-Vu en corrigeant D-2, le 04/09. `VenteReservationHandler` ne fait plus `setProduit(Uuid::v4())` —
-le produit est obligatoire depuis l'arbitrage de Maxime. Mais la ligne suivante fait toujours :
+**La mesure, faite le 04/09 avant de toucher à quoi que ce soit** — la fiche disait « la mesure
+d'abord », et elle avait raison de le dire :
 
-    $ligne->setTypeTarif(Uuid::v4());
+    la COMPTABILITÉ ne le lit pas           absent de `ProjectionVenteDoctrineAdapter`
+    son SEUL lecteur est LineLabelStamper   il résout le type pour figer son LIBELLÉ sur la ligne
+    en base : 23 lignes, 0 hors catalogue   le défaut n'avait jamais mordu
 
-Même famille, autre champ : une référence tirée au hasard, qui ne désigne aucun type de tarif
-existant. Reste à mesurer ce que le type de tarif commande réellement — s'il ne sert qu'à
-l'affichage, c'est cosmétique ; s'il entre dans un état de caisse ou une ventilation, c'est le même
-défaut que le produit.
+**Conséquence réelle** : le ticket affiche une ligne **sans libellé de tarif** — ni « Membre », ni
+« Plein tarif ». Visible du client, sans effet comptable. Ce n'était donc pas le même défaut que le
+produit, dont l'absence sortait la recette de la ventilation.
 
-⚠ **NE PAS LE CORRIGER PAR SYMÉTRIE.** Le produit avait un propriétaire évident (l'activité, le
-paramétrage padel) ; le type de tarif n'en a peut-être aucun, et lui en inventer un serait pire que
-le hasard actuel. La mesure d'abord.
+⚠ **ET LE PROPRIÉTAIRE EXISTAIT, POUR LE PADEL.** `ParametragePadel` porte `typeTarifMembreRef` et
+`typeTarifNonMembreRef` — **jamais lus**. Troisième champ orphelin de la journée après
+`produitTerrainRef` : déclaré, avec getter et setter, et personne ne le consommait. Le calculateur
+rendait déjà `TarifResolu::$statutJoueur` ; choisir la bonne référence ne demandait rien de neuf.
+**Fait.**
+
+⚠ **POUR LES RÉSERVATIONS GÉNÉRIQUES, IL N'Y A AUCUN PROPRIÉTAIRE, ET LE TIRAGE RESTE.** `Activite`
+n'en porte pas, et son propre docblock le dit : la chaîne de tarification (`ResolveurPrix` +
+`TypeTarif` + `Saison`) est « hors périmètre de ce lot socle ». Le `Uuid::v4()` y demeure — mais
+**documenté à l'endroit où il est écrit**, avec ce qu'il coûte, au lieu d'être subi.
+
+**Ce qui reste à trancher, et c'est un arbitrage sur une entité de socle** : rendre
+`LigneVente::$typeTarif` **nullable**, pour cesser de prétendre qu'une ligne a un type de tarif
+quand personne n'a pu en fournir un. Un `null` dirait la vérité ; un identifiant tiré au hasard
+prétend désigner quelque chose. ⚠ Le champ est non-nullable dans le schéma et lu ailleurs : ça
+touche `LineLabelStamper`, la sérialisation et tout ce qui suppose sa présence.
 
 ---
 
