@@ -315,6 +315,13 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           droits={droits}
           capacites={capacites}
           onModifie={recharger}
+          peutCreer={aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')}
+          onDuplique={(copie) => {
+            // Même geste que la création : on pousse dans l'historique pour que « précédent »
+            // ramène à l'original, et on ouvre la copie — qui attend son vrai libellé.
+            recharger()
+            majParams({ fiche: String(copie.id) }, { pousser: true })
+          }}
         />
       </>
     )
