@@ -1,4 +1,6 @@
 [
+    "app/src/Audit/Entity/EntreeAudit.php:etablissement:SearchFilter sur une r\u00e9f\u00e9rence libre",
+    "app/src/Compta/Entity/EcritureComptable.php:venteOrigine:SearchFilter sur une r\u00e9f\u00e9rence libre",
     "app/src/Crm/Command/AppliquerConservationCommand.php:groupe:comparaison DQL sans type explicite",
     "app/src/Finance/Treasury/Service/PaymentScheduleCalculator.php:establishment:IN (:liste) en DQL",
     "app/src/Finance/Treasury/Service/PaymentScheduleCalculator.php:etablissement:IN (:liste) en DQL",
@@ -9,6 +11,7 @@
     "app/src/Reporting/Service/CalculComparaisonService.php:etablissement:comparaison DQL sans type explicite",
     "app/src/Reporting/Service/CalculComparaisonService.php:groupe:comparaison DQL sans type explicite",
     "app/src/Reporting/Service/MesureLookupService.php:groupe:comparaison DQL sans type explicite",
-    "app/src/SmartFlow/State/CreateSlotWaitlistEntryProcessor.php:establishment:comparaison DQL sans type explicite",
+    "app/src/SmartFlow/Entity/RescheduleProposal.php:customerId:SearchFilter sur une r\u00e9f\u00e9rence libre",
+    "app/src/SmartFlow/Entity/SlotWaitlistEntry.php:resourceId:SearchFilter sur une r\u00e9f\u00e9rence libre",
     "app/src/Stock/Service/InventaireRegularisationHandler.php:identifiant d'entit\u00e9:IN (:liste) sur un identifiant"
 ]

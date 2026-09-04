@@ -54,13 +54,128 @@ declare(strict_types=1);
  */
 
 const RACINE = 'app/src';
+
+/**
+ * Le motif des références libres, écrit UNE SEULE FOIS.
+ *
+ * ⚠ Deux lecteurs posent la même question — l'inventaire global (`referencesLibres()`) et la portée
+ * par fichier (`analyser()`). Écrit deux fois, il dérive : le jour où l'un s'élargit, l'autre ne suit
+ * pas, et un témoin écrit avec le second partagerait exactement l'angle mort du premier.
+ */
+const MOTIF_REFERENCE_LIBRE = '/private\s+\??Uuid\s+\$(\w+)\b/';
+
+/**
+ * Les propriétés `Uuid` qui NE SONT PAS des références vers un autre module.
+ *
+ * ⚠ CHAQUE EXCLUSION PORTE SA RAISON, ET CE N'EST PAS DE LA DÉCORATION. Le type ne distingue pas une
+ * référence d'une valeur — il faut le dire. Une exclusion sans raison écrite se recopie d'un contrôle
+ * à l'autre et finit par couvrir des cas que personne n'a jamais examinés ; ce dépôt en porte déjà
+ * une, dont la justification fausse s'était recopiée quatre fois avant qu'on la relise.
+ */
+const EXCLUSIONS_NOMMEES = [
+    // Clé primaire. Doctrine connaît son mapping et la convertit : la comparaison marche.
+    // ⚠ La sixième forme du contrôle (`alias.id IN (:liste)`) couvre déjà le seul cas où elle ne
+    //   marche pas — une LISTE, que `setParameter` ne convertit élément par élément dans aucun type.
+    'id',
+    // Un secret, pas une référence. Il ne désigne aucune entité d'un autre module ; il s'échange.
+    'jeton',
+    // Elle identifie une TENTATIVE D'APPEL, pas un objet métier. Deux appels identiques la partagent
+    // — c'est tout son intérêt — donc elle ne peut pas désigner une ligne.
+    'cleIdempotence',
+];
+
+/**
+ * Le source, ses commentaires blanchis — NUMÉROS DE LIGNE INTACTS.
+ *
+ * ⚠ CE CONTRÔLE LISAIT LES COMMENTAIRES COMME DU CODE, et ça lui coûtait deux défauts d'un coup.
+ *
+ * Mesuré le 04/09 en lui faisant nommer la ligne qu'il accusait dans
+ * `CreateSlotWaitlistEntryProcessor` :
+ *
+ *     ligne 82   establishment   comparaison DQL sans type explicite
+ *       // ⚠ D58 vaut aussi pour l'ASSOCIATION : `e.establishment = :establishment` avec
+ *
+ * C'est un commentaire — et il explique précisément le défaut que le code, cinq lignes plus bas,
+ * NE FAIT PLUS. Une phrase qui décrit un défaut devient une accusation le jour où on la relit
+ * avec un outil qui ne sait pas que c'en est une.
+ *
+ * ⚠ ET LE SECOND DÉFAUT SE CACHAIT DERRIÈRE LE PREMIER. La fenêtre de la chaîne fluide s'arrête au
+ * premier `;` ; ce même commentaire en porte un (« était juste ; sa liaison »). Même en accusant la
+ * bonne ligne, la fenêtre se serait refermée avant le `setParameter` typé. Blanchir les commentaires
+ * répare les deux, parce que les deux avaient la même cause.
+ *
+ * ⚠ ON NE RÉÉCRIT PAS LA SYNTAXE DES COMMENTAIRES À LA MAIN. `token_get_all()` est le tokeniseur de
+ * PHP lui-même. Une expression maison se tromperait sur `'// dans une chaîne'`, sur `#[Attribut]`
+ * (qui n'est pas un commentaire depuis PHP 8), et sur un bloc `slash-étoile` ouvert dans un HEREDOC.
+ *
+ * Les sauts de ligne des commentaires sont conservés : les numéros signalés doivent rester ceux du
+ * fichier réel, sinon le message envoie le lecteur au mauvais endroit.
+ */
+function sansCommentaires(string $source): string
+{
+    $jetons = @token_get_all($source);
+
+    if ($jetons === [] && trim($source) !== '') {
+        // Un fichier qu'on n'arrive pas à lire n'est pas « rien à signaler » : c'est un contrôle qui
+        // n'a pas eu lieu. On refuse plutôt que de compter ça comme conforme.
+        fwrite(STDERR, "\n=== ERREUR — source PHP non tokenisable ===\n\n");
+        exit(2);
+    }
+
+    $sortie = '';
+
+    foreach ($jetons as $jeton) {
+        if (!is_array($jeton)) {
+            $sortie .= $jeton;
+            continue;
+        }
+
+        if ($jeton[0] === T_COMMENT || $jeton[0] === T_DOC_COMMENT) {
+            $sortie .= str_repeat("\n", substr_count($jeton[1], "\n"));
+            continue;
+        }
+
+        $sortie .= $jeton[1];
+    }
+
+    return $sortie;
+}
+
+/**
+ * Les références libres déclarées dans UN source.
+ *
+ * ⚠ Sur le source SANS commentaires : un `private ?Uuid $exempleRef` cité dans un docbloc n'est pas
+ * une déclaration, et il inventerait un nom de propriété que le dépôt ne porte pas.
+ *
+ * @return list<string>
+ */
+function referencesLibresDe(string $source): array
+{
+    if (preg_match_all(MOTIF_REFERENCE_LIBRE, sansCommentaires($source), $correspondances) === false) {
+        return [];
+    }
+
+    return array_values(array_diff(array_unique($correspondances[1]), EXCLUSIONS_NOMMEES));
+}
 const LIGNE_DE_BASE = 'bin/references-libres.ligne-de-base.json';
 
 /**
- * Les propriétés qui suivent la convention : un `Uuid` nu, sans relation Doctrine.
+ * Les propriétés à `Uuid` nu, sans relation Doctrine — TOUTES, pas seulement les `*Ref`.
  *
- * On exige le suffixe `Ref` parce que c'est la convention du dépôt, et parce qu'elle évite d'attraper
- * les identifiants primaires — qui, eux, sont bien convertis puisque Doctrine connaît leur mapping.
+ * ⚠ LE SUFFIXE `Ref` N'A JAMAIS FAIT LE DÉFAUT, ET S'Y FIER EN CACHAIT SEIZE (§8.13, pas 3). Le
+ * contrôle n'acceptait que `private ?Uuid $xxxRef`, « parce que c'est la convention du dépôt ». Mais
+ * le défaut est produit par le TYPE : une colonne `uuid` que rien ne relie à une entité ne se
+ * convertit pas, que son nom finisse par `Ref` ou non.
+ *
+ * Et les contre-exemples sont les références libres les plus utilisées qui existent :
+ * `LigneVente::$produit`, `$typeTarif` et `$saison` ne suivent pas la convention.
+ *
+ * ⚠ UNE RELATION NE PEUT PAS ÊTRE PRISE PAR CE MOTIF : elle se déclare `private ?Etablissement
+ * $etablissement`, jamais `private ?Uuid`. Le type les sépare. La contamination par le NOM — un
+ * `SearchFilter` jugé sur une propriété déclarée dans un autre fichier — est réglée ailleurs, par la
+ * portée par fichier du pas 1 ; les deux corrections sont indépendantes et il fallait les deux.
+ *
+ * Ce qu'il faut dire à la place, c'est ce qui N'EST PAS une référence : cf. `EXCLUSIONS_NOMMEES`.
  *
  * @return array<string, string> nom de propriété => fichier qui la déclare
  */
@@ -83,11 +198,7 @@ function referencesLibres(): array
             continue;
         }
 
-        if (preg_match_all('/private\s+\??Uuid\s+\$(\w+Ref)\b/', $source, $correspondances) === false) {
-            continue;
-        }
-
-        foreach ($correspondances[1] as $propriete) {
+        foreach (referencesLibresDe($source) as $propriete) {
             $trouvees[$propriete] = $entree->getPathname();
         }
     }
@@ -192,6 +303,30 @@ function analyser(string $fichier, array $proprietes, array $filtrables): array
         fwrite(STDERR, sprintf("\n=== ERREUR — fichier illisible : %s ===\n\n", $fichier));
         exit(2);
     }
+
+    // ⚠ UN `SearchFilter` SE JUGE DANS LE FICHIER QUI DÉCLARE LA PROPRIÉTÉ, ET C'EST NEUF (§8.13).
+    //
+    // `$filtrables` est l'inventaire GLOBAL des références libres du dépôt. L'utiliser tel quel fait
+    // juger un filtre par un nom déclaré ailleurs : `LimiteAutorisation::$etablissement` est une
+    // RELATION, et il ressortait signalé parce qu'un AUTRE fichier déclare un `?Uuid $etablissement`.
+    // Le nom suffisait à contaminer.
+    //
+    // Or `#[ApiFilter(SearchFilter::class, ...)]` se pose sur la classe qui déclare le champ : les
+    // deux vivent dans le même fichier. La portée du jugement est donc le fichier, pas le dépôt.
+    //
+    // ⚠ L'INTERSECTION N'EST PAS DÉCORATIVE. `referencesLibresDe()` seul suffirait à la portée ;
+    // garder `$filtrables` conserve l'invariant que SEULES les références libres craignent le filtre
+    // — une relation ne le craint pas, API Platform la résout par son IRI. Le jour où le collecteur
+    // s'élargira, cette ligne empêchera le filtre d'accuser les relations sans qu'on y repense.
+    $filtrables = array_values(array_intersect($filtrables, referencesLibresDe($source)));
+
+    // ⚠ À PARTIR D'ICI, ON NE REGARDE QUE DU CODE (§8.13, pas 2). Les commentaires sont blanchis,
+    // leurs sauts de ligne conservés : les numéros signalés restent ceux du fichier réel.
+    //
+    // Ce contrôle accusait un commentaire qui EXPLIQUAIT le défaut, dans un fichier qui ne le
+    // commettait plus. Et le `;` de ce commentaire refermait la fenêtre de la chaîne fluide avant
+    // le `setParameter` typé — le second défaut ne pouvait pas se voir tant que le premier durait.
+    $source = sansCommentaires($source);
 
     $trouvailles = [];
     $lignes = explode("\n", $source);

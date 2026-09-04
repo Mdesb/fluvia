@@ -916,6 +916,75 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ~~⚠ 8.13~~ — FAIT LE 04/09, EN TROIS PAS, ET LE DIAGNOSTIC D'ORIGINE ÉTAIT FAUX SUR UN POINT
+
+**Maxime a choisi « les trois étapes, dans l'ordre ».** Elles sont posées, chacune avec ses témoins
+et son commit : `35222826` (portée), `1594c99a` (commentaires), et celui-ci (élargissement).
+
+⚠ **LE PAS 2 NE PORTAIT PAS SUR CE QUE J'AVAIS ÉCRIT.** Cette fiche disait : « le `setParameter` de
+`CreateSlotWaitlistEntryProcessor:81` est TROIS LIGNES plus bas, le contrôle ne le voit pas ». En
+faisant nommer au garde-fou la ligne qu'il accuse — au lieu de la déduire — la réponse est autre :
+
+    ligne 82    establishment    comparaison DQL sans type explicite
+      // ⚠ D58 vaut aussi pour l'ASSOCIATION : `e.establishment = :establishment` avec
+
+**La ligne accusée est un COMMENTAIRE**, et ce commentaire EXPLIQUE le défaut que le code, cinq
+lignes plus bas, ne commet plus. La détection de proximité, elle, marchait déjà : le vrai `andWhere`
+et son `setParameter` typé sont dans la même chaîne fluide. **J'ai failli « corriger » un mécanisme
+sain**, sur la foi d'un diagnostic que j'avais écrit moi-même trois heures plus tôt.
+
+⚠ **ET DEUX DÉFAUTS SE CACHAIENT L'UN L'AUTRE.** La fenêtre de la chaîne fluide s'arrête au premier
+`;` — or ce même commentaire en porte un (« était juste ; sa liaison »). Même en accusant la bonne
+ligne, la fenêtre se serait refermée avant le `setParameter`. Le premier défaut empêchait le second
+de se voir. Les deux tombent ensemble parce qu'ils avaient la même cause.
+
+**LES TROIS PAS, ET CE QUE CHACUN A COÛTÉ OU RAPPORTÉ**
+
+    1. Portée par fichier      un `SearchFilter` se juge avec la déclaration DU MÊME fichier
+                               témoins : A (déclare + filtre) signalé · B (relation) épargné
+                               avant : les deux signalés — B était le faux positif
+    2. Commentaires blanchis   `token_get_all()`, l'autorité, pas une regex maison
+                               témoins : C (code) signalé · D (cité en commentaire) épargné
+                                         E (commentaire avec `;` dans la chaîne) épargné
+                               cliquet RESSERRÉ : 12 → 11, retrait seul, aucun ajout
+    3. Collecteur élargi       toutes les `?Uuid` nues, plus seulement les `*Ref`
+                               32 → 70 références libres collectées
+                               témoins : F (sans suffixe) signalé · G (`id`, `jeton`) épargné
+                               avant : F INVISIBLE — l'angle mort était réel
+
+⚠ **LES EXCLUSIONS SONT NOMMÉES ET VÉRIFIÉES NON SPÉCULATIVES.** `id` (318 déclarations, clé
+primaire que Doctrine convertit), `jeton` (1, un secret qui ne désigne rien), `cleIdempotence` (2,
+elle identifie une tentative d'appel, pas un objet). Une exclusion pour une propriété inexistante est
+du poids mort qui a l'air d'une précaution — et ce dépôt en porte déjà une dont la justification
+fausse s'était recopiée quatre fois.
+
+**CE QUE L'ÉLARGISSEMENT A TROUVÉ : QUATRE, PAS CINQUANTE-CINQ.** Les 55 de la tentative annulée
+étaient produits par les défauts que les pas 1 et 2 viennent de retirer. Les quatre qui restent sont
+tous de la même forme — un `SearchFilter` sur une colonne `uuid` nue, qui rend une liste vide en
+silence (D58) — et **tous dans le fichier qui déclare la propriété**, donc aucun n'est un faux :
+
+    Audit/Entity/EntreeAudit.php               etablissement    ⚠ PROUVÉ CASSÉ, PAS SUPPOSÉ
+    Compta/Entity/EcritureComptable.php        venteOrigine     latent (0 ligne renseignée)
+    SmartFlow/Entity/SlotWaitlistEntry.php     resourceId       latent (0 ligne renseignée)
+    SmartFlow/Entity/RescheduleProposal.php    customerId       latent (0 ligne renseignée)
+
+⚠ **« CASSÉ » ET « CASSERA » NE SE RELAIENT PAS PAREIL, donc je les ai séparés en le mesurant.**
+Pour l'audit, sur la préproduction, à travers l'API :
+
+    la base                                              22 entrées portent cet établissement
+    GET /api/entree_audits?etablissement=<le même>       totalItems : 0
+    GET /api/entree_audits (témoin, sans filtre)         totalItems : 29 990
+
+Le filtre existe, l'écran l'offre, et il répond « aucun résultat » sur une donnée qui est là. Les
+trois autres tomberont pareil **le jour où quelqu'un les remplira** — c'est-à-dire au premier usage.
+
+**LES QUATRE SONT GELÉES (plafond 11 → 15) ET DISTRIBUÉES À LEURS PROPRIÉTAIRES.** Elles ne sont pas
+de mon périmètre, et laisser le contrôle rouge bloquerait neuf sessions sur des défauts qui ne sont
+pas les leurs — un contrôle qui bloque tout le monde se contourne avant d'être corrigé. **Chaque
+entrée gelée reste un défaut réel**, pas une tolérance de style.
+
+<details><summary>Le diagnostic d'origine, gardé — il montre où le raisonnement a dérapé</summary>
+
 ### ⚠ 8.13 — Le garde-fou des références libres a un angle mort, et l'élargir tel quel fait du bruit
 
 **Tenté le 04/09, mesuré, et VOLONTAIREMENT ANNULÉ.** Le diagnostic tient ; le remède demande plus
@@ -961,7 +1030,46 @@ n'en sont pas s'apprend à sauter, et le jour où il en trouve un vrai, personne
 `SlotWaitlistEntry.resourceId`, déclaré ailleurs. Les deux mécanismes demandent deux traitements —
 c'est ce qui rend le chantier plus gros qu'il n'en a l'air.
 
+*(Resté vrai : la portée par fichier n'a été posée que sur le `SearchFilter`, jamais sur le DQL.)*
+
+</details>
+
 ---
+
+### ~~⚠ 8.12~~ — FERMÉE LE 04/09 : le produit existe, il est câblé, et une réservation l'a traversé
+
+**Arbitrage de Maxime : un produit « Location de terrain ».** Créé par l'API, comme un exploitant,
+pour qu'il traverse les validations — `PRD-D1F3C43A`, `47a9d8f3-fdb6-4f57-923e-c5b156e716d5`, type
+`entree_unitaire` (facettes `billet` + `consommateur` : une réservation de terrain est un droit
+consommé une fois), catégorie comptable **Locations**. Pas de nouvelle entrée au référentiel.
+
+    off_produit_categorie                       Locations              persisté, vérifié en base
+    Padel 90 min          → produit assigné    PATCH 200            vérifié en base
+    Visite guidée musée   → produit assigné    PATCH 200            vérifié en base
+    Créneau libre bassin  → SANS produit        correct — 0,00 €, aucune vente n'est créée
+    PadelParametrage::produitTerrainRef         PATCH 200            vérifié en base
+
+⚠ **LE 200 N'EST PAS LA PREUVE, ET LA BASE NON PLUS.** Mes fiches comptent trois « écritures
+acceptées qui n'enregistrent rien » ; j'ai donc relu chaque écriture en base plutôt que la réponse
+HTTP. Mais même ça ne dit pas que la chaîne fonctionne — seule une réservation réelle le dit.
+
+**LA PREUVE PAR EXÉCUTION.** `POST /api/padel/terrains/{id}/reservations` avec une session de caisse
+ouverte — le cas exact qui rendait 422 :
+
+    HTTP 201                       le 422 a disparu
+    ligne.produit    = 47a9d8f3…  le vrai produit, là où le code tirait un `Uuid::v4()`
+    ligne.ressource  = le terrain  l'origine de la vente, neuve du 04/09
+    ligne.type_tarif = null        LÉGITIME : le paramétrage padel n'a pas de type membre /
+                                   non-membre. C'est précisément le cas que §8.11 devait couvrir,
+                                   et il est arrivé le jour même.
+    ligne.activite   = null        correct : une réservation de terrain n'a pas d'`Activite`
+    24 lignes en base, 1 avec ressource   les 23 anciennes intactes — D66-ter tenu
+
+**Ce qui reste, et qui n'est PAS un blocage** : `produitTarifReference` est dans `activite:write`
+mais **aucun écran ne le propose**, et il n'existe aucun écran de création d'activité. Un exploitant
+ne peut donc pas refaire par l'interface ce que je viens de faire par l'API. À planifier.
+
+<details><summary>Le constat d'origine, gardé</summary>
 
 ### ⚠ 8.12 — La préproduction n'a AUCUN produit à vendre pour un terrain de padel
 
@@ -988,6 +1096,8 @@ Le blocage est donc visible et explicite, pas silencieux.
 **Ce qu'il faut** : (1) l'arbitrage produit de Maxime, (2) un écran — `produitTarifReference` est
 dans `activite:write` mais **aucun écran ne le propose**, et il n'existe aucun écran de création
 d'activité du tout.
+
+</details>
 
 ---
 
@@ -1204,3 +1314,39 @@ la montre.
 genre de correctif où retirer trop casse un écran client sans qu'aucun test du back ne tombe.
 
 **Non claimé.** Périmètre `app/src/Boutique/` — hors du mien.
+
+
+---
+
+## 3 octies. CLAIM `allaccess-a9` le 04/09 — la refonte visuelle des fiches, d'après les maquettes
+
+⚠ **`ProduitFiche.jsx`, `Clients.jsx` et `FicheAbonnement.jsx` sont pris.** Deux sessions y ont
+travaillé aujourd'hui (libellés de formulaire, format des montants) — d'où ce claim explicite plutôt
+qu'un silence.
+
+**Arbitrage de Maxime (04/09), en réponse à « je les vois, mais pas comme prévu » :** les maquettes
+qu'il a validées font foi, **telles quelles**. Pas seulement leur habillage : leur ORGANISATION.
+
+### L'écart mesuré sur la fiche produit
+
+| Maquette validée | Livré aujourd'hui |
+|---|---|
+| 4 onglets : Vente · Accès · Présentation · **Gestion** | 7 : Vente, Accès, Présentation, Comptabilité, Stock, Caisse, Agenda |
+| Bandeau d'état en tête : *Publié · Vendable aujourd'hui · Stock bas — 12 restants* | aucun |
+| Carte **Tarifs** visible d'emblée (type · conditions · prix TTC · TVA) | dans un onglet |
+| Carte **Diffusion** : canaux de vente + visibilité publique | dispersé |
+| Actions en tête : *Dupliquer · Aperçu caisse* | absentes |
+
+⚠ **Comptabilité, Stock, Caisse et Agenda fusionnent dans « Gestion ».** C'est le point qui peut
+défaire du travail récent : je nommerai chaque bloc déplacé dans le message de commit, pour que rien
+ne disparaisse en silence. Si l'un de ces onglets a été construit pour une raison que la maquette
+ignore, **dites-le avant que je pousse** — c'est plus facile à discuter qu'à défaire.
+
+### Ce que je ne touche pas
+
+Le fonctionnel. Les gestes posés ces deux derniers jours — champs comptables, consentements,
+vérification de carte, échéancier — restent où ils sont, seulement regroupés autrement. Une refonte
+qui perd une fonction est un échec, pas un compromis.
+
+**Ordre annoncé :** fiche produit d'abord (celle que Maxime a critiquée en premier), puis client,
+puis abonnement. Il regarde la première avant que j'enchaîne.
