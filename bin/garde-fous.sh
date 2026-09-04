@@ -413,6 +413,18 @@ else
     executer "Suppressions en migration (D32)" php_racine bin/garde-fou-drop-migrations.php
 fi
 
+# 13 bis. Une migration DEJA PARTIE ne se reecrit pas (n°50). Le 04/09, un `cp` a ecrase la migration
+#     d'un pair qui portait le meme numero : son texte a disparu, et la mienne n'aurait jamais tourne
+#     puisque Doctrine avait deja enregistre la version. Ni le deploiement ni `migrations:status` ne
+#     l'ont vu — seul un SELECT sur la colonne attendue.
+#     ⚠ En shell et non en PHP : c'est une verification git, et le conteneur PHP ne resout aucune
+#     reference (le `.git` d'un worktree est un fichier pointant hors du montage).
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Migrations immuables (n°50)" "$RACINE/bin/garde-fou-migrations-immuables.sh" "--contre=$REFERENCE"
+else
+    executer "Migrations immuables (n°50)" "$RACINE/bin/garde-fou-migrations-immuables.sh"
+fi
+
 # 16. Lier un OBJET à un paramètre de requête sans dire son type (D58).
 #     Doctrine passe l'identifiant SANS son type `uuid` : la requête reste valide et compte zéro,
 #     sans exception ni avertissement. Deux modules en sont morts en silence le 28/08 — le solde

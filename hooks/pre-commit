@@ -125,6 +125,14 @@ fi
 # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
 [ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
 
+# Une migration deja partie ne se reecrit pas (n°50). ⚠ En shell, donc `lancer_gf` — qui appelle php
+# — ne convient pas : on l'invoque directement et on l'ajoute A LA MAIN au suivi, sinon le filet de
+# completude refuse le commit en disant qu'un garde-fou n'a pas tourne.
+if [ -f "$RACINE/bin/garde-fou-migrations-immuables.sh" ]; then
+    LANCES="$LANCES garde-fou-migrations-immuables.sh"
+    sh "$RACINE/bin/garde-fou-migrations-immuables.sh" || ECHEC=1
+fi
+
 # Lier un OBJET a un parametre de requete sans dire son type (D58). Doctrine passe l'identifiant
 # sans son type `uuid` : la requete reste valide et compte zero, sans rien signaler.
 [ -f "$RACINE/bin/garde-fou-liaisons-objet.php" ] && { lancer_gf garde-fou-liaisons-objet.php || ECHEC=1; }

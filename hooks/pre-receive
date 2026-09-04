@@ -366,6 +366,15 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-drop-migrations.php "--contre=$BASE"
     fi
 
+    # Une migration DEJA PARTIE ne se reecrit pas (n°50). ⚠ En shell : `lancer` appelle php, on
+    # invoque donc directement et on suit le nom a la main. ⚠ Si `git` ne resout pas $BASE dans cet
+    # arbre, le script s'annonce NON EXECUTE plutot que de rendre un vert qui n'a rien mesure.
+    if [ -f "$ARBRE/bin/garde-fou-migrations-immuables.sh" ]; then
+        echo "── Migrations immuables (n°50)"
+        LANCES="$LANCES garde-fou-migrations-immuables.sh"
+        sh "$ARBRE/bin/garde-fou-migrations-immuables.sh" "--contre=$BASE" || ECHEC_REF=1
+    fi
+
 
     # Lier un OBJET a un parametre de requete sans dire son type (D58).
     if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then
