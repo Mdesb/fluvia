@@ -344,6 +344,86 @@ poussés depuis** : le porte-monnaie virtuel et les notes de frais.
 
 ---
 
+
+## 3 sexies. Posé par `allaccess-bd` le 04/09 — trois tâches prêtes, une par session
+
+Maxime a demandé que ces trois-là partent en parallèle. Chacune est autoportante : tout ce qu'il
+faut pour agir est ici, aucune ne dépend d'une conversation. ⚠ Claimez en tête de ligne avant de
+commencer, et **fusionnez `main` avant de claimer** — cette liste vieillit.
+
+---
+
+### D-1 · La garde du délai de préavis SEPA (§8.5) — pour `allaccess-c0`
+
+C'est vous qui l'avez mesurée le 03/09. Arbitrage de Maxime : **les deux emplacements**, parce que
+les deux directions attrapent des cas différents et qu'aucune ne couvre l'autre.
+
+    côté ConfigCreancierSepa   refuser un délai qui dépasse la période du plus court abonnement
+                               du site  →  attrape le créancier à 30 jours
+    côté abonnement            refuser une période plus courte que le délai du créancier
+                               →  attrape le premier abonnement hebdomadaire
+
+⚠ **LA BORNE EST STRICTE, ET C'EST MESURÉ** (`fada41fd`, `DebitPreNotifierTest`) : `reasonNotCovered`
+refuse quand `sentAt > executionDate - délai`, **strictement** supérieur. Un préavis envoyé
+exactement `délai` jours avant est COUVERT. Le contrôle refuse donc `délai > période`, **jamais
+`>=`**. Un `>=` refuserait une configuration qui marche — et **tous ses tests de refus resteraient
+verts**, plus verts qu'avant. Seul le cas qu'il doit AUTORISER démasque un contrôle trop large :
+écrivez ce test-là en premier.
+
+État actuel : latent, rien de cassé. Quatre créanciers à 14 jours, zéro abonnement hebdomadaire.
+
+---
+
+### D-2 · Un produit obligatoire sur une vente de réservation (§8.8 c) — pour `allaccess-a9`
+
+`VenteReservationHandler:42` fait `setProduit($produitRef ?? Uuid::v4())`. Sans produit fourni, la
+ligne désigne un produit **qui n'existe pas** : aucune catégorie comptable, donc absente de la
+ventilation, et `LineLabelStamper` laisse le libellé nul — il le documente lui-même.
+
+Arbitrage de Maxime : **produit obligatoire**. Lever si absent.
+
+⚠ **NE PAS LEVER AVANT D'AVOIR ÉQUIPÉ LES DEUX APPELANTS QUI N'EN PASSENT PAS**, sinon vous cassez
+le no-show et le débit PMV :
+
+    ReserverProcessor:202          passe `$activite?->getProduitTarifReference()?->getId()`
+                                   ⚠ DEUX `?->` : il retombe sur `null` dès qu'une activité n'a
+                                   pas de produit-tarif. À traiter comme les deux autres.
+    DebitPmvStrategie:52           n'en passe aucun
+    VenteDiffereeAgentStrategie:52 n'en passe aucun
+
+⚠ **ET MESUREZ L'IMPACT AVANT DE CONCLURE** : trois sites d'appel ne sont pas trois défauts. Comptez
+combien de `LigneVente` existantes pointent vers un produit absent du catalogue — les occurrences
+d'une cause ne sont pas ses effets. Le chiffre décide si c'est une correction ou une reprise.
+
+Le patron à imiter existe : `ParametragePadel::$produitTerrainRef`, désormais lu par
+`ReserverTerrainProcessor` (commit `3be5fd2b`).
+
+---
+
+### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — pour `allaccess-df`
+
+`npx vite build` signalait **quatre clés en double dans `Icon.jsx`** — `dashboard`,
+`personal-data`, `social`, `legal` — pendant que le garde-fou « Clés en double » annonçait
+« aucune ». Quatre icônes du menu n'étaient pas celles qu'on lisait dans le fichier.
+
+Corrigé le 04/09 (`ff5a00af`), et le garde-fou élargi. **Mais rien ne garantit le prochain** : le
+build passe avec des avertissements, et personne ne les regarde. Il y en a **zéro aujourd'hui** —
+c'est le bon moment pour poser le cliquet.
+
+À faire : un contrôle qui lit la sortie de `vite build` et **échoue sur tout avertissement**, avec
+une liste gelée à zéro. Câblé dans les trois listes (`bin/garde-fous.sh`, `hooks/pre-commit`,
+`hooks/pre-receive`) — le filet de complétude de `garde-fous.sh` glose `bin/garde-fou-*` et refuse
+un script non lancé, donc il vous le dira si vous en oubliez une.
+
+⚠ **UN DÉTECTEUR QUI REND ZÉRO DOIT PROUVER QU'IL SAIT TROUVER.** Posez un témoin : réintroduisez
+une clé en double dans un fichier de test, voyez-le crier, retirez-la. Sans ça vous livrez un
+contrôle que personne n'a jamais vu fonctionner.
+
+⚠ Et le repli honnête compte : si `node_modules` manque dans l'arbre, annoncez **NON EXÉCUTÉ**
+plutôt qu'un vert. Deux garde-fous font déjà exactement ça (n°47, n°48) — copiez leur forme.
+
+---
+
 ## 3 bis. Après l'API — les quatre axes de la feuille de route
 
 ⚠ **Ces quatre lots consomment l'API. Les commencer avant T1 produirait quatre couplages privés au
