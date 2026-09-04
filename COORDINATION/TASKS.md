@@ -889,11 +889,32 @@ le hasard actuel. La mesure d'abord.
 
 ### ~~⚠ 8.10~~ — `reservation:no-show:basculer` est ACTIVÉE depuis le 04/09
 
-Arbitrage de Maxime : « l'activer maintenant ». Arriéré mesuré avant d'appuyer : 5 créneaux
-terminés encore planifiés, 6 réservations confirmées dessus, **28,00 €** au total — sur des
-données de test. ⚠ `--only` contourne `safeOnFirstRun` : le premier passage a traité tout
-l'arriéré d'un coup, sans le garde qui protège un premier démarrage. Acceptable à 28 € sur de la
-préproduction ; à ne pas reproduire en service.
+Arbitrage de Maxime : « l'activer maintenant ». **Fait le 04/09**, et trois choses à corriger dans
+ce que j'avais écrit une heure plus tôt.
+
+⚠ **1. `--only` NE CONTOURNE PAS `safeOnFirstRun`** — je l'avais écrit ici et dans un message de
+commit. C'est **D109 qui a corrigé exactement ce défaut** : le verrou lisait « lancé avec `--only` »
+comme « regardé par un humain », alors que la boucle passe `--only` à chaque cycle. La supervision
+est désormais une attestation explicite. L'ordonnanceur a donc REFUSÉ de lancer la tâche, et il
+avait raison.
+
+    La levée, à la main :  platform:scheduler:run --only=<tâche> --supervise
+
+⚠ **2. `--dry-run` sur une tâche verrouillée NE MONTRE RIEN** : il réimprime le message du verrou.
+Le message conseille pourtant « ce que cette exécution ferait : --dry-run ». Le conseil ne tient pas
+dans le seul cas où on en aurait besoin. ⚠ Et ces options appartiennent à `platform:scheduler:run`,
+pas à la commande métier — `reservation:no-show:basculer --dry-run` rend « The "--dry-run" option
+does not exist », ce qui envoie l'exploitant dans le mur.
+
+⚠ **3. MA MESURE D'ARRIÉRÉ ÉTAIT LA MAUVAISE GRANDEUR.** J'avais annoncé **28,00 €** en sommant
+`reservation.montant_du`. Le passage supervisé a créé **6 facturations pour 80,00 €** — 2 × 10 € et
+4 × 15 €, les **montants fixes des règles d'annulation**. Le no-show ne facture pas ce qui était dû,
+il facture ce que la règle prévoit. Deux grandeurs différentes, et j'ai mesuré celle qui ne décide
+de rien.
+
+**Effet réel** : 6 réservations passées en `no_show_facture`, 6 facturations au statut
+**`a_facturer`** — c'est-à-dire **rien d'encaissé**. Elles attendent qu'un agent les émette depuis
+une caisse. La tâche tourne désormais toute seule, toutes les 15 minutes.
 
 *(texte d'origine ci-dessous)*
 
