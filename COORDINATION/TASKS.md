@@ -1568,3 +1568,34 @@ les catalogues. Si un écran futur affiche « produit inconnu » en masse, c'est
 pas été lu, pas le quota qui est cassé : les deux cas sont distingués à l'écran.
 
 Écart client/serveur : **600 → 570** inatteignables sur la journée.
+
+
+## 3 decies. `allaccess-a9` le 04/09 — le type de produit « prestation », et ce qu'il reste à faire
+
+**Arbitrage de Maxime (04/09, choix multiple) :** les activités de réservation vendent sous un type
+**neuf**, pas sous un type existant. `Version20260904232000` le pose ; déployé et vérifié en base.
+
+⚠ **LE POINT QUI A DÉCIDÉ :** `ValiderVenteService::emetSupport()` fait émettre un support à tout
+type portant `billet`, `carnet` ou `acces` — et la facturation d'un **no-show** passe par la même
+validation (`DebitPmvStrategie`). Un type émetteur imprime un billet à quelqu'un qui n'est jamais
+venu.
+
+⚠ **ET LE CAS EST DÉJÀ VIVANT EN PRÉPRODUCTION.** Deux des trois activités ont reçu un produit
+depuis ma première mesure — « Padel 90 min » et « Visite guidée musée » — **tous deux de type
+`entree_unitaire`**, donc émetteurs. La décision ne s'applique pas rétroactivement toute seule.
+
+⚠ **MAIS BASCULER CES DEUX PRODUITS N'EST PAS UN GESTE ANODIN**, et c'est pourquoi je ne l'ai pas
+fait : le type gouverne le PRODUIT, pas le canal. Le passer en `prestation` retire aussi le billet
+d'une vente au comptoir du même produit. Et pour le musée, le visiteur n'aurait alors plus rien :
+la ressource « Trésors d'Égypte » ne porte pas `ouvreAcces`, donc la réservation ne projette aucun
+droit d'accès. **2 ressources sur 11** le portent.
+
+⚠ **Une conversion serait probablement refusée de toute façon** : `prestation` n'est déclaré
+compatible avec aucun type (`typesCompatibles` vide). À vérifier avant de promettre le geste.
+
+**Ce qui reste, dans l'ordre :**
+
+1. « Créneau libre bassin » n'a **aucun** produit — aucune réservation payante n'y passe.
+2. Décider si les deux produits existants basculent, et ce que le visiteur reçoit alors.
+3. Le compte de fin : `SELECT COUNT(*) FROM reservation_activite WHERE
+   produit_tarif_reference_id IS NULL;` doit rendre 0. Il rend **1**.
