@@ -52,7 +52,11 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Cet ecran PORTE UN DELAI LEGAL : « Aucune demande
   // enregistree » sur une lecture refusee dit qu'il n'y a rien a repondre, et le delai court
   // pendant ce temps.
-  const [toutes, setToutes] = useState(null)
+  const [toutesLu, setToutesLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const toutes = toutesLu || []
   const [total, setTotal] = useState(null)
   const [fiches, setFiches] = useState({})
   const [chargement, setChargement] = useState(true)
@@ -81,7 +85,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
       ])
       const liste = membres(reponse)
       setDemandes(liste)
-      setToutes(params.statut ? membres(entiere) : liste)
+      setToutesLu(params.statut ? membres(entiere) : liste)
       const t = (params.statut ? entiere : reponse)?.totalItems
         ?? (params.statut ? entiere : reponse)?.['hydra:totalItems']
       setTotal(typeof t === 'number' ? t : null)
@@ -267,7 +271,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
           ) : affichees.length === 0 ? (
             <div className="empty">
-              {toutes === null
+              {toutesLu === null
                 ? <b>La liste des demandes n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien. Un délai légal court : ne concluez pas qu’il n’y a rien à traiter.</b>
                 : params.statut
                 ? 'Aucune demande dans cet état.'

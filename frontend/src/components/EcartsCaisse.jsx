@@ -43,7 +43,11 @@ import { euros } from '../api/produit.js'
 export default function EcartsCaisse({ etabActif, droits }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucun ecart inexplique » sur une lecture refusee
   // annonce une caisse saine qu'on n'a pas regardee.
-  const [alertes, setAlertes] = useState(null)
+  const [alertesLu, setAlertesLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const alertes = alertesLu || []
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -56,7 +60,7 @@ export default function EcartsCaisse({ etabActif, droits }) {
     if (!peutVoir) return
     setChargement(true)
     try {
-      setAlertes(membres(await api.alertesEcartCaisse()))
+      setAlertesLu(membres(await api.alertesEcartCaisse()))
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -97,7 +101,7 @@ export default function EcartsCaisse({ etabActif, droits }) {
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
         ) : ouvertes.length === 0 ? (
           <div className="empty">
-            {alertes === null ? <b>La liste des écarts n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : <>
+            {alertesLu === null ? <b>La liste des écarts n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : <>
             Aucun écart inexpliqué. Une clôture dont le comptage ne tombe pas juste apparaît ici, et
             en repart dès qu'une correction de règlement dit ce qui s'est passé.
             </>}

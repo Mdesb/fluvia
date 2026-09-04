@@ -40,7 +40,11 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   // qu'il n'y avait aucun impaye — dans le compteur du bandeau de carte, et dans l'etat vide.
   // C'est la phrase qui fait arreter de chercher, sur le seul ecran ou une creance oubliee
   // vieillit toute seule.
-  const [incidents, setIncidents] = useState(null)
+  const [incidentsLu, setIncidentsLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const incidents = incidentsLu || []
   const [totalIncidents, setTotalIncidents] = useState(null)
   const [bord, setBord] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -57,7 +61,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     setChargement(true)
     try {
       const reponse = await api.incidentsImpayes()
-      setIncidents(membres(reponse))
+      setIncidentsLu(membres(reponse))
       // Le serveur pagine chaque collection (l'explication complète est dans
       // `components/Liste.jsx`). Ici la conséquence n'est pas seulement une liste courte : le
       // tableau des représentations retrouve le nom du redevable EN RECOUPANT cette liste. Au-delà
@@ -68,7 +72,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       setErreur(e.message)
       // On ne garde pas la liste precedente : elle donnerait les impayes d'hier pour ceux
       // d'aujourd'hui, ce qui est pire qu'une absence annoncee.
-      setIncidents(null)
+      setIncidentsLu(null)
       setTotalIncidents(null)
     } finally {
       setChargement(false)
@@ -163,7 +167,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     ? (bord.nbEnRepresentation || 0) + (bord.nbEnRecouvrement || 0) + bord.nbResolus
     : null
   // Sans le champ, on retombe sur le seul cas qu'on sait trancher : rien nulle part.
-  const listeLue = incidents !== null
+  const listeLue = incidentsLu !== null
   // ⚠ « Rien a mesurer » est une CONCLUSION : elle exige d'avoir lu. Sans la liste, on ne peut pas
   // la tirer — meme quand le tableau de bord, lui, a repondu.
   const rienAMesurer = listeLue && (assietteConnue

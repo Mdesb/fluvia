@@ -49,7 +49,11 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
   // a pas » — la ou la reponse honnete est « on n'a pas pu regarder ». Sur les etablissements, ca
   // donnait « Aucun etablissement n'est accessible depuis ce compte », qui se lit comme un
   // probleme de droits.
-  const [lignes, setLignes] = useState(null)
+  const [lignesLu, setLignesLu] = useState(null)
+  // ⚠ `null` NE SORT PAS D'ICI. Il dit « pas lu » et rien d'autre ; tout l'aval — y
+  // compris ce qui part en prop vers un enfant — lit un tableau. Sans cette ligne il faut
+  // trouver chaque usage, et un usage manque ne se signale que par un ecran mort.
+  const lignes = lignesLu || []
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [erreurEdition, setErreurEdition] = useState(null)
@@ -64,12 +68,12 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
     setChargement(true)
     setErreur(null)
     try {
-      setLignes(membres(await charger()))
+      setLignesLu(membres(await charger()))
     } catch (e) {
       setErreur(e.message)
       // On ne garde pas la liste precedente : elle donnerait l'etat d'avant pour celui
       // d'aujourd'hui, ce qui est pire qu'une absence annoncee.
-      setLignes(null)
+      setLignesLu(null)
     } finally {
       setChargement(false)
     }
@@ -198,7 +202,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
         ) : (lignes || []).length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
             <div style={{ marginBottom: 10 }}>
-              {lignes === null ? <b>Cette liste n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
+              {lignesLu === null ? <b>Cette liste n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
             </div>
             {/* ⚠ PAS `primary` : l'en-tete du panneau porte deja « ＋ Ajouter », qui appelle le
                 MEME `ouvrirCreation`, et les deux sont visibles ensemble quand la liste est vide —
