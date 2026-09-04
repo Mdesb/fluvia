@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\ModeFacturationNoShow;
+use App\Reservation\Enum\ConfirmationExpiry;
 use App\Reservation\Enum\ModeMontantAnnulation;
 use App\Reservation\Enum\PorteeRegleAnnulation;
 use App\Reservation\State\EstablishmentStampProcessor;
@@ -79,6 +80,34 @@ class RegleAnnulation
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['regle_annulation:read', 'regle_annulation:write'])]
     private ?Activite $cibleActivite = null;
+
+    /**
+     * COMBIEN DE TEMPS AVANT LE DEBUT LA RESERVATION DOIT ETRE CONFIRMEE — R15 (a).
+     *
+     * ⚠ `null` VEUT DIRE « AUCUNE CONFIRMATION REQUISE », et c'est le comportement d'aujourd'hui.
+     * Aucune regle n'en declare : poser cette colonne ne fait donc basculer aucun module. Un
+     * exploitant l'active la ou il en veut, avec la portee qu'il choisit deja pour l'annulation.
+     *
+     * Maxime parlait de 24 heures ; c'est un exemple, pas une constante. « Ces decisions sont des
+     * decisions metier, il faut laisser le choix a l'exploitant. »
+     *
+     * ⚠ Une reservation posee APRES cette echeance doit etre confirmee immediatement : « pour
+     * toutes les reservations de moins de 24 heures, le paiement est demande des le depart ».
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['regle_annulation:read', 'regle_annulation:write'])]
+    private ?int $confirmationDelayMinutes = null;
+
+    /**
+     * CE QU'IL ADVIENT D'UNE RESERVATION NON CONFIRMEE A L'ECHEANCE.
+     *
+     * ⚠ `null` tant qu'aucun delai n'est declare : sans confirmation requise, il n'y a rien a
+     * expirer. Quand un delai est pose, ce champ decide, et il n'a pas de defaut impose — c'est
+     * precisement la decision metier que Maxime a voulu laisser a l'exploitant.
+     */
+    #[ORM\Column(length: 20, nullable: true, enumType: ConfirmationExpiry::class)]
+    #[Groups(['regle_annulation:read', 'regle_annulation:write'])]
+    private ?ConfirmationExpiry $confirmationExpiry = null;
 
     #[ORM\Column(type: 'integer')]
     #[Assert\PositiveOrZero]
@@ -301,5 +330,32 @@ class RegleAnnulation
         $centimes = (int) round(((float) $tarifReference) * 100 * ((float) $this->valeurMontant) / 100);
 
         return number_format($centimes / 100, 2, '.', '');
+    }
+
+    public function getConfirmationDelayMinutes(): ?int
+    {
+        return $this->confirmationDelayMinutes;
+    }
+
+    public function setConfirmationDelayMinutes(?int $minutes): self
+    {
+        // ⚠ Un délai nul ou négatif n'est pas « pas de confirmation » : c'est une saisie qui ne veut
+        // rien dire. On la ramène à « aucune confirmation requise » plutôt que de fabriquer une
+        // échéance dans le passé à chaque réservation.
+        $this->confirmationDelayMinutes = ($minutes === null || $minutes <= 0) ? null : $minutes;
+
+        return $this;
+    }
+
+    public function getConfirmationExpiry(): ?ConfirmationExpiry
+    {
+        return $this->confirmationExpiry;
+    }
+
+    public function setConfirmationExpiry(?ConfirmationExpiry $expiry): self
+    {
+        $this->confirmationExpiry = $expiry;
+
+        return $this;
     }
 }

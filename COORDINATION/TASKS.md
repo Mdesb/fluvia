@@ -790,6 +790,19 @@ Deux précisions qu'il a données ensuite, et elles changent la forme de la chos
 (`PromotionListeAttenteHandler::expirerPromotionsDepassees`). ⚠ Et la réservation naît aujourd'hui
 `StatutReservation::Confirmee` — il n'existe aucun état « à confirmer ».
 
+⚠ **ÉTAT AU 04/09 — LA MOITIÉ « EXPIRATION » N'EXISTE PAS ENCORE, ET C'EST UNE PRÉCAUTION, PAS UN
+détail.** Le modèle, l'entrée en « à confirmer » et la porte `POST /reservation/reservations/{id}/confirmer`
+sont posés et testés. Il manque :
+
+  · la tâche qui expire les réservations non confirmées et applique `ConfirmationExpiry` ;
+  · l'écran : le badge « à confirmer », le bouton, et le compte des réservations qui approchent
+    de leur échéance.
+
+**⚠ NE PAS RENSEIGNER `confirmationDelayMinutes` SUR UNE RÈGLE AVANT QUE LA TÂCHE EXISTE.** Une
+réservation entrerait alors en « à confirmer » et n'en sortirait jamais toute seule : le créneau
+resterait bloqué indéfiniment. Tant que la colonne reste à `NULL` — c'est le cas partout — rien ne
+peut arriver.
+
 **(b) L'organisateur doit tout — FAIT le 04/09.** Ses mots : « un joueur qui rejoint rejoint la
 réservation GLOBALE… c'est le risque de ne pas avoir le montant global payé », puis, sur la portée :
 **l'organisateur doit tout**. On garde la partie ouverte ; les parts deviennent indicatives.

@@ -21,6 +21,7 @@ use App\Reservation\Security\ReservationSoiVoter;
 use App\Reservation\State\AjouterParticipantProcessor;
 use App\Reservation\State\AssignResourceProcessor;
 use App\Reservation\State\AnnulerReservationProcessor;
+use App\Reservation\State\ConfirmerReservationProcessor;
 use App\Reservation\State\EmargerProcessor;
 use App\Reservation\State\ReserverProcessor;
 use App\Vente\Entity\Vente;
@@ -84,6 +85,17 @@ use Symfony\Component\Uid\Uuid;
             processor: EmargerProcessor::class,
             output: Emargement::class,
             normalizationContext: ['groups' => ['emargement:read']],
+        ),
+        // CONFIRMER UNE RESERVATION (R15 a). ⚠ `input: false` : le corps porte au plus une session
+        // de caisse, lue par le processeur ; rien ne se deserialise dans la reservation elle-meme,
+        // et une operation qui ne deserialise pas ne peut pas etre piegee par la validation qui
+        // tourne avant les processeurs (garde-fou n°48).
+        new Post(
+            uriTemplate: '/reservation/reservations/{id}/confirmer',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'reservation.reserver') or is_granted('PERM', 'reservation.reserver_soi')",
+            processor: ConfirmerReservationProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['reservation:read']],
@@ -160,6 +172,32 @@ class Reservation
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
     #[Groups(['reservation:read'])]
     private string $montantDu = '0.00';
+
+    /**
+     * QUAND LA CONFIRMATION DOIT ETRE FAITE — R15 (a).
+     *
+     * ⚠ `null` VEUT DIRE « AUCUNE CONFIRMATION REQUISE », et c'est le cas de toutes les
+     * reservations existantes. La colonne est posee inerte : elle ne se remplit que si une
+     * `RegleAnnulation` applicable declare un `confirmationDelayMinutes`.
+     *
+     * ⚠ FIGEE A LA RESERVATION, PAS RECALCULEE A LA LECTURE. Le delai de la regle peut changer
+     * apres coup ; recalculer deplacerait l'echeance de reservations deja prises, sous les pieds
+     * de gens a qui on a annonce une date.
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?\DateTimeImmutable $confirmationDueAt = null;
+
+    /**
+     * QUAND ELLE L'A ETE. `null` tant que personne n'a confirme.
+     *
+     * ⚠ UNE DATE ET PAS UN BOOLEEN. « Confirmee a 14h02 » repond a une question que
+     * « confirmee = vrai » ne repond pas : devant un creneau libere, l'exploitant veut savoir si
+     * quelqu'un avait confirme juste avant l'echeance.
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?\DateTimeImmutable $confirmedAt = null;
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['reservation:read'])]
@@ -490,5 +528,41 @@ class Reservation
     public function getStatutPaiement(): string
     {
         return $this->statutPaiement()->value;
+    }
+
+    public function getConfirmationDueAt(): ?\DateTimeImmutable
+    {
+        return $this->confirmationDueAt;
+    }
+
+    public function setConfirmationDueAt(?\DateTimeImmutable $due): self
+    {
+        $this->confirmationDueAt = $due;
+
+        return $this;
+    }
+
+    public function getConfirmedAt(): ?\DateTimeImmutable
+    {
+        return $this->confirmedAt;
+    }
+
+    public function setConfirmedAt(?\DateTimeImmutable $quand): self
+    {
+        $this->confirmedAt = $quand;
+
+        return $this;
+    }
+
+    /**
+     * Cette reservation attend-elle encore une confirmation ?
+     *
+     * ⚠ ON LIT LES DEUX DATES, PAS LE STATUT. Le statut peut avoir bouge pour une autre raison —
+     * annulation, no-show — et une reservation annulee n'attend plus rien. Les deux dates disent
+     * exactement ce qu'on demande : une echeance existe, et personne ne l'a honoree.
+     */
+    public function attendConfirmation(): bool
+    {
+        return $this->confirmationDueAt !== null && $this->confirmedAt === null;
     }
 }

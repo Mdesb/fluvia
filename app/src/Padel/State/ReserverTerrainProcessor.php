@@ -178,6 +178,28 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         if ($regle !== null) {
             $reservation->setDateLimiteAnnulation($debut->modify(sprintf('-%d minutes', $regle->getDelaiFrancMinutes())));
         }
+
+        // ── LA CONFIRMATION, QUAND L'EXPLOITANT EN DEMANDE UNE (R15 a) ─────────────────────────
+        //
+        // Maxime : « il faut une confirmation de la réservation, par exemple 24 heures avant le
+        // début de la session… pour toutes les réservations de moins de 24 heures, le paiement est
+        // demandé dès le départ ».
+        //
+        // ⚠ INERTE PAR DÉFAUT. Aucune `RegleAnnulation` ne déclare de délai aujourd'hui : ce bloc
+        // ne s'exécute pas, et la réservation reste `Confirmee` comme avant. Rien ne bascule tant
+        // qu'un exploitant ne l'active pas, avec la portée qu'il choisit déjà pour l'annulation.
+        $delaiConfirmation = $regle?->getConfirmationDelayMinutes();
+        if ($delaiConfirmation !== null) {
+            $echeance = $debut->modify(sprintf('-%d minutes', $delaiConfirmation));
+
+            // ⚠ RÉSERVÉ APRÈS L'ÉCHÉANCE = À CONFIRMER TOUT DE SUITE, et non une échéance dans le
+            // passé. C'est exactement le cas que Maxime a nommé : « pour toutes les réservations de
+            // moins de 24 heures, le paiement est demandé dès le départ ». Une échéance passée
+            // ferait expirer la réservation à la seconde où elle est prise.
+            $maintenant = new \DateTimeImmutable();
+            $reservation->setConfirmationDueAt($echeance > $maintenant ? $echeance : $maintenant);
+            $reservation->setStatut(StatutReservation::AConfirmer);
+        }
         $this->em->persist($reservation);
 
         // ⚠ LES PARTS SONT INDICATIVES, ET SEUL L'ORGANISATEUR DOIT. Arbitrage de Maxime sur
