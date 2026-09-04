@@ -351,6 +351,11 @@ fi
 #     claude-G, parce qu'elle et moi lancions le meme script differemment -- c'est-a-dire par hasard.
 executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
 
+# Trois modules sont déclarés « ne peuvent rien servir » et retirés de la vente (§8.1). Cette
+# décision repose sur une mesure qui CESSERA d'être vraie le jour où quelqu'un les construit —
+# et rien ne relierait alors le fait de construire au fait de vendre. Le contrôle refige.
+executer "Modules non servables (n°52)" php_racine bin/garde-fou-modules-non-servables.php
+
 # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER. API Platform ignore une propriete
 # inconnue en silence : le filtre est publie dans la documentation, le parametre est accepte, et la
 # collection sort ENTIERE. Trouve par allaccess-c2 sur `OpeningSlot`, ou le filtre disait `day` et la

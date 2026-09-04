@@ -805,6 +805,23 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px;
 }
 
+/* LE MEME ANNEAU POUR LE BACK-OFFICE, QUI N'EN AVAIT AUCUN.
+   Mesure sur le tableau de bord : 46 elements focalisables, 3 couverts — les champs et le lien
+   d'evitement. Les 43 autres sont des boutons : 37 entrees de menu, les boutons d'action, les
+   icones. Un exploitant au clavier n'y voyait que l'anneau par defaut du navigateur.
+   Les valeurs sont celles de la boutique, pas des nouvelles. */
+.app a:focus-visible, .app button:focus-visible, .app input:focus-visible, .app select:focus-visible, .app textarea:focus-visible, .app [tabindex]:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px;
+}
+/* ⚠ LA BARRE LATERALE PREND LE CYAN, ET C'EST MESURE, PAS CHOISI. Un anneau est un indicateur non
+   textuel : le seuil est 3:1 contre son entourage. Sur #050914, `--accent` rend 3,44:1 — il passe,
+   de justesse — quand `--marque-cyan` rend 11,29:1. C'est deja la couleur que le theme sombre
+   retient pour ce fond-la : aucune couleur unique ne tient sur les deux, comme le disent les
+   jetons. */
+.sidebar a:focus-visible, .sidebar button:focus-visible {
+  outline-color: var(--marque-cyan);
+}
+
 /* ---- En-tete ---- */
 .bq-header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 .bq-header-in { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }

@@ -62,6 +62,11 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
   const [echeances, setEcheances] = useState(null)
   const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
+  // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un objet = trouve ; `false` = lu, aucun
+  // statut pour cet abonnement. Quatre etats, parce que « pas de statut » et « pas pu lire » ne se
+  // corrigent pas de la meme facon — et qu'annoncer « acces ouvert » sur une lecture ratee
+  // enverrait quelqu'un a la porte pour rien.
+  const [acces, setAcces] = useState(null)
   // ⚠ TROIS ETATS, comme pour l'echeancier. `undefined` = pas lu ou refuse ; `null` = lu, aucun
   // produit ne porte cette formule ; une chaine = le libelle. Un « — » a la place d'un refus ferait
   // croire a un abonnement sans formule, alors que le champ est NON NULLABLE en base.
@@ -102,6 +107,27 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
         setTronque(miennes.length >= 200)
       })
       .catch(() => { if (!annule) setEcheances(undefined) })
+    return () => { annule = true }
+  }, [a?.id])
+
+  useEffect(() => {
+    if (!a?.id) return
+    let annule = false
+    setAcces(null)
+    api
+      .statutsAccesFitness()
+      .then((r) => {
+        if (annule) return
+        // ⚠ TRI LOCAL, faute de filtre declare cote serveur. `AbonnementFitness::$id` est dans le
+        // groupe `statut_acces:read` (verifie) : l'objet imbrique porte donc bien `id`.
+        const mien = membres(r).find((s) => {
+          const ref = s.abonnement
+          const id = typeof ref === 'string' ? String(ref).split('/').pop() : ref?.id
+          return String(id) === String(a.id)
+        })
+        setAcces(mien || false)
+      })
+      .catch(() => { if (!annule) setAcces(undefined) })
     return () => { annule = true }
   }, [a?.id])
 
@@ -188,7 +214,7 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
 
       <div className="card-b">
         <Tabs
-          onglets={[['contrat', 'Contrat'], ['prelevements', 'Prélèvements']]}
+          onglets={[['contrat', 'Contrat'], ['prelevements', 'Prélèvements'], ['acces', 'Accès']]}
           actif={onglet}
           onChange={setOnglet}
         />
@@ -227,6 +253,8 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           </p>
         </div>
       )}
+
+      {onglet === 'acces' && <OngletAcces acces={acces} />}
 
       {onglet === 'prelevements' && (
         <div className="card-b">
@@ -398,5 +426,86 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+
+// Les quatre raisons pour lesquelles un accès se ferme. Le mot brut du serveur ne dit rien à un
+// agent d'accueil ; ces phrases disent ce qu'il faut FAIRE, pas ce qui s'est passé.
+const MOTIF_ACCES = {
+  impaye: ['un impayé', 'Le prélèvement a été rejeté. L’accès rouvre au règlement.'],
+  pause: ['une pause', 'L’adhérent a demandé la suspension. L’accès rouvre à la reprise.'],
+  resiliation: ['la résiliation', 'Le contrat est résilié. L’accès ne rouvrira pas.'],
+  terme: ['le terme du contrat', 'L’engagement est arrivé à échéance sans reconduction.'],
+}
+
+/**
+ * L'ACCÈS D'UN ADHÉRENT — la question qu'on pose à la porte.
+ *
+ * ⚠ CE N'EST PAS L'ONGLET DE LA MAQUETTE, ET C'EST DÉLIBÉRÉ. Elle montrait les droits de la
+ * FORMULE — « Salle + cours collectifs ». Ce champ est stocké, exposé par l'API, et lu par personne :
+ * les cinq appels à `getDroitAcces()` portent sur `StatutAccesFitness` ou `BadgeStaff`, jamais sur
+ * une `Formule`. L'afficher décrirait un réglage qui ne décide de rien.
+ *
+ * Ce que cet onglet montre est ce qui gouverne vraiment : l'accès est-il ouvert, et sinon pourquoi.
+ */
+function OngletAcces({ acces }) {
+  if (acces === null) return <div className="empty">Lecture du statut d’accès…</div>
+
+  if (acces === undefined) {
+    return (
+      <div className="banner banner-warn">
+        Le statut d’accès n’a pas pu être lu. Cet écran ne sait donc pas si cet adhérent peut
+        entrer — ce n’est pas la même chose que « il peut ».
+      </div>
+    )
+  }
+
+  if (acces === false) {
+    return (
+      <div className="empty">
+        Aucun statut d’accès n’est rattaché à cet abonnement. Le contrôle d’accès ne le connaît
+        donc pas : il ne le laissera pas entrer, et aucun motif ne l’expliquera à la porte.
+      </div>
+    )
+  }
+
+  const [motif, quoiFaire] = MOTIF_ACCES[acces.motifInactivite] || [acces.motifInactivite, null]
+
+  return (
+    <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+      <div className="fiche-stats">
+        <div className="stat-tile">
+          <div className="st-val">
+            {acces.actif
+              ? <span className="badge good">ouvert</span>
+              : <span className="badge crit">fermé</span>}
+          </div>
+          <div className="st-lbl">Accès</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val">
+            {acces.dateDernierePropagation ? jour(acces.dateDernierePropagation) : '—'}
+          </div>
+          <div className="st-lbl">Dernière mise à jour du badge</div>
+        </div>
+      </div>
+
+      {!acces.actif && acces.motifInactivite && (
+        <div className="banner banner-warn">
+          <b>Fermé pour {motif}.</b>{quoiFaire ? ` ${quoiFaire}` : null}
+        </div>
+      )}
+
+      {/* ⚠ LE DROIT LUI-MÊME N'EST PAS RENDU. `DroitAcces` n'a aucun champ dans le groupe
+          `statut_acces:read` : le serveur envoie un identifiant nu. La fenêtre horaire et le crédit
+          restant existent en base et ne sont pas lisibles d'ici — on le dit, plutôt que d'afficher
+          un vide qui se lirait « aucune fenêtre ». */}
+      <div className="sub">
+        Le détail du droit — fenêtre horaire, crédit restant — existe en base mais n’est pas rendu
+        par l’API sur cette lecture. Cet écran dit si l’accès est ouvert, pas ce qu’il permet
+        exactement.
+      </div>
+    </div>
   )
 }

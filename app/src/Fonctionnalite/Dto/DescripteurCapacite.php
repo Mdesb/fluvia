@@ -32,6 +32,36 @@ final class DescripteurCapacite
          * deux divergeraient au premier ajout.
          */
         public readonly bool $estVerticale = false,
+        /**
+         * ⚠ CE MODULE PEUT-IL SERVIR À QUELQUE CHOSE AUJOURD'HUI ?
+         *
+         * Trois capacités du catalogue sont **activables et facturées au mois** sans pouvoir rendre
+         * le moindre service. Recompté le 04/09 par `bin/garde-fou-modules-non-servables.php`, qui
+         * compte les occurrences de `#[ORM\Entity]` et `#[ApiResource]` — contre `padel` pris comme
+         * témoin positif (15 entités, 17 ressources, des écrans) :
+         *
+         *     lodging   0 entité · 0 ressource · 0 écran   il ne peut pas enregistrer une chambre
+         *     stay      2 entités · 2 ressources · 0 écran   le serveur existe, personne ne s'en sert
+         *     dining    2 entités · 1 ressource · 0 écran   même situation
+         *
+         * `lodging` ne peut pas enregistrer une seule chambre : ses cinq fichiers sont des classes
+         * de domaine pures.
+         *
+         * ⚠ §8.1 annonçait d'autres chiffres (« stay : 9 entités ») avec un autre comptage — le même
+         * qui donne 36 entités à Padel là où les attributs en montrent 15. Je les avais recopiés sans
+         * les refaire. **Un chiffre sans sa définition ne se relaie pas** ; ceux-ci portent la leur,
+         * et une commande les recompte.
+         *
+         * **Arbitrage de Maxime, 04/09 : « les rendre non facturables ».** Ils restent au catalogue
+         * et gardent leur mention « en construction » — l'exploitant voit ce qui arrive — mais rien
+         * ne se vend et rien ne se facture tant que le module ne sert à rien.
+         *
+         * ⚠ CE N'EST PAS `estVerticale`, ET LES CONFONDRE SERAIT FAUX. Une verticale est exclue de
+         * la boutique **par nature** — c'est ce qu'un établissement EST. Celle-ci est exclue
+         * **temporairement**, par un état de fait qui cessera. Le jour où le module sert, le drapeau
+         * tombe et il se vend ; une verticale, elle, ne se vendra jamais à la carte.
+         */
+        public readonly bool $peutServir = true,
     ) {
     }
 }

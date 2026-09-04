@@ -73,6 +73,32 @@ final class CatalogueCapacites
      * plutot que recopier garantit qu'une sixieme verticale ajoutee demain sera exclue de la
      * boutique sans que personne y pense.
      */
+    /**
+     * Ce module peut-il rendre un service aujourd'hui ? (§8.1)
+     *
+     * ⚠ LISTE NOMMÉE, ET CHAQUE ENTRÉE PORTE SA MESURE. Le nombre d'entités et d'écrans n'est pas
+     * dérivable à l'exécution sans parcourir tout le code source ; il faut donc le dire. Mais une
+     * liste qui dit une absence **s'inverse en vieillissant** : le jour où quelqu'un construit
+     * `lodging`, ces trois lignes deviennent le contraire du vrai, et le module resterait gratuit
+     * pour toujours sans que personne le remarque.
+     *
+     * C'est pourquoi `bin/garde-fou-modules-non-servables.php` refuse la poussée dès qu'un module
+     * listé ici gagne une entité ou une ressource API. **L'absence est rendue bruyante.**
+     */
+    private static function peutServir(CapaciteCode $code): bool
+    {
+        return match ($code) {
+            // 0 entité, 0 ressource API, 0 écran — cinq fichiers de domaine pur, rien de persisté.
+            // Il ne peut pas enregistrer une chambre.
+            CapaciteCode::Lodging,
+            // 2 entités, 2 ressources, 0 écran — le serveur existe, personne ne peut s'en servir.
+            CapaciteCode::Stay,
+            // 2 entités, 1 ressource, 0 écran — même situation.
+            CapaciteCode::Dining => false,
+            default => true,
+        };
+    }
+
     private static function estVerticale(CapaciteCode $code): bool
     {
         return Metier::tryFrom($code->value) !== null;
@@ -248,6 +274,7 @@ final class CatalogueCapacites
             $base->description,
             $base->categorie,
             self::estVerticale($code),
+            self::peutServir($code),
         );
     }
 }

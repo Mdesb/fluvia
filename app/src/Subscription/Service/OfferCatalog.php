@@ -54,6 +54,17 @@ final class OfferCatalog
 
         $parCapacite = [];
         foreach ($options as $option) {
+            // ⚠ UN MODULE QUI NE PEUT RIEN SERVIR NE SE VEND PAS (§8.1, arbitrage du 04/09). Le
+            //   filtre est ICI et pas dans l'écran : c'est le point de passage unique de la vente
+            //   ET de la composition d'offre, donc rien ne peut le contourner par un autre chemin.
+            //
+            // ⚠ Et le CODE décide, pas la donnée. Les trois lignes correspondantes sont encore
+            //   `active = 1` en base ; les basculer aurait suffi jusqu'à ce qu'une case recochée
+            //   dans `/editeur` les remette en vente sans que personne s'en aperçoive.
+            if ($this->capacites->trouve($option->getCapability())?->peutServir === false) {
+                continue;
+            }
+
             $parCapacite[$option->getCapability()] = $option;
         }
 

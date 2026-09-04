@@ -312,6 +312,15 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-references-libres.php
     fi
 
+    # Trois modules sont vendus zero euro parce qu'ils ne peuvent rien servir (§8.1). Le controle
+    # refuse la poussee des qu'un d'eux grossit : la raison de ne pas le vendre a peut-etre cesse.
+    # ⚠ Il ne demande NI `vendor/` NI `node_modules` — il lit des sources suivies par git, donc il
+    #   tourne ici pour de vrai, contrairement a ceux qui s'y annoncent « non execute ».
+    if [ -f "$ARBRE/bin/garde-fou-modules-non-servables.php" ]; then
+        echo "── Modules non servables (n°52)"
+        lancer garde-fou-modules-non-servables.php
+    fi
+
     # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : une propriete inconnue est ignoree
     # en silence et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste vide,
     # celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent ne sont interrogees
