@@ -364,6 +364,16 @@ export const api = {
   produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  // LES PROMOTIONS — cinq routes servies, aucune appelee jusqu'ici.
+  //
+  // ⚠ `eligibilite.produits` VIDE = LA PROMOTION NE S'APPLIQUE A AUCUN PRODUIT. Pas a tous.
+  // `PriceQuoter` rend `false` des que la liste est vide ou absente, et le code le souligne parce
+  // que quelqu'un a failli le « corriger ». Les `canaux`, eux, suivent la regle INVERSE : vides,
+  // ils valent tous. Deux tableaux voisins qui se lisent a l'envers l'un de l'autre.
+  promotions: () => request('/api/promotions', { query: { itemsPerPage: 200 } }),
+  creerPromotion: (corps) => request('/api/promotions', { method: 'POST', body: corps, ld: true }),
+  majPromotion: (id, corps) => request(`/api/promotions/${id}`, { method: 'PATCH', body: corps }),
+  supprimerPromotion: (id) => request(`/api/promotions/${id}`, { method: 'DELETE' }),
   // DUPLIQUER — la route existe depuis l'origine, aucune fonction cliente ne l'appelait.
   //
   // La copie reprend type, grilles et categories, regenere un code unique, nait au statut
@@ -920,6 +930,13 @@ export const api = {
   // absence jamais mesuree.
   detecterPresenceIsolee: (idEspace) =>
     request(`/api/sport/espaces/${idEspace}/detecter-presence-isolee`, { method: 'POST', body: {} }),
+  // LE STATUT D'ACCES D'UN ADHERENT — lisible depuis l'origine, jamais lu par un ecran.
+  //
+  // ⚠ AUCUN `ApiFilter` N'EST DECLARE : passer `?abonnement=` serait accepte et IGNORE en silence.
+  // L'appelant lit la collection et trie lui-meme sur l'identifiant imbrique. Un filtre non
+  // declare est le pire des deux mondes — il a l'air de marcher.
+  statutsAccesFitness: () =>
+    request('/api/statut_acces_fitnesses', { query: { itemsPerPage: 200 } }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
   // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
   //

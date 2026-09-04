@@ -12,8 +12,8 @@ use App\Platform\Notification\NotificationBasis;
 use App\Platform\Notification\NotificationChannel;
 use App\Subscription\Entity\Subscription;
 use App\Subscription\Service\SubscriptionFunnel;
+use App\Subscription\Service\TrialConfirmationLink;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Uid\Uuid;
 
@@ -27,21 +27,25 @@ use Symfony\Component\Uid\Uuid;
  *
  * ---
  *
- * **LE JETON EST FRAPPÉ ICI, PAS TRANSPORTÉ PAR L'ÉVÉNEMENT.** Même règle que
+ * **LE JETON N'EST PAS TRANSPORTÉ PAR L'ÉVÉNEMENT.** Même règle que
  * {@see EnvoyerCourrielDeBienvenue}, et pour la même raison : un événement se journalise, se rejoue
  * et se transporte, et un secret qui voyage dans ces conditions finit par vivre dans un fichier de
- * journal. La base ne garde que le `sha256` ; la valeur en clair n'existe que le temps de composer
- * le message.
- *
- * **LE LIEN POINTE SUR LA VITRINE, PAS SUR L'APPLICATION.** `FRONT_BASE_URL` désigne le back-office,
- * où ce prospect n'a encore aucun compte : le lien y afficherait une page de connexion, sur un
- * parcours où le visiteur n'a jamais choisi de mot de passe. D'où `VITRINE_BASE_URL`, distinct — et
- * une variable d'environnement plutôt qu'une valeur en dur parce que le site changera de domaine.
+ * journal. Il est frappé au moment de composer le message, par
+ * {@see \App\Subscription\Service\TrialConfirmationLink} — qui porte aussi la forme du lien et
+ * la raison pour laquelle il pointe sur la vitrine et non sur le back-office. La base ne garde que
+ * le `sha256` ; la valeur en clair n'existe que le temps de l'envoi.
  *
  * ⚠ **RIEN NE PART TANT QUE E-8 N'EST PAS LEVÉ.** `ClientNotifierInterface` est câblé sur
- * `LogClientNotifier` et `MAILER_DSN=null://null` : ce message s'écrit dans le journal et n'arrive
- * chez personne. Le tunnel est donc complet et **inerte** — c'est la raison, et la seule, pour
- * laquelle l'essai ne peut pas encore être ouvert au public.
+ * `LogClientNotifier` et `MAILER_DSN=null://null` : ce message n'arrive chez personne. Le tunnel est
+ * donc complet et **inerte** — c'est la raison, et la seule, pour laquelle l'essai ne peut pas
+ * encore être ouvert au public.
+ *
+ * ⚠ **ET IL NE S'ÉCRIT MÊME PAS DANS LE JOURNAL.** `LogClientNotifier` ne journalise ni le contenu
+ * ni les variables — délibérément, elles portent un nom, une adresse, un solde. Le lien n'existe
+ * donc **nulle part** après l'envoi : E-8 ne bloque pas seulement l'ouverture au public, il bloque
+ * la recette du tunnel. C'est pourquoi
+ * {@see \App\Subscription\Command\IssueTrialConfirmationLinkCommand} existe — un contournement
+ * assumé, fermé par défaut, à retirer le jour où un expéditeur réel est branché.
  */
 #[AsEventListener(event: 'subscription.trial_requested')]
 final class SendTrialConfirmationEmail
@@ -49,7 +53,15 @@ final class SendTrialConfirmationEmail
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ClientNotifierInterface $notifier,
-        #[Autowire(env: 'VITRINE_BASE_URL')] private readonly string $vitrineBaseUrl,
+        /**
+         * ⚠ LA FRAPPE DU JETON EST SORTIE D'ICI, ET CE N'EST PAS UN RANGEMENT.
+         *
+         * L'outil de recette du tunnel ({@see \App\Subscription\Command\IssueTrialConfirmationLinkCommand})
+         * a besoin exactement du même geste. Deux frappes séparées auraient pu diverger — longueur,
+         * hachage, forme du lien — sans que rien ne le signale, et l'outil aurait alors prouvé son
+         * propre chemin plutôt que celui du prospect.
+         */
+        private readonly TrialConfirmationLink $liens,
     ) {
     }
 
@@ -70,9 +82,7 @@ final class SendTrialConfirmationEmail
             return;
         }
 
-        $jetonClair = bin2hex(random_bytes(32));
-        $subscription->setEmailConfirmationTokenHash(hash('sha256', $jetonClair));
-        $this->em->flush();
+        $lienConfirmation = $this->liens->issue($subscription);
 
         $this->notifier->notify(new ClientNotification(
             $prospect->getId(),
@@ -80,11 +90,7 @@ final class SendTrialConfirmationEmail
             'abonnement.essai.confirmation',
             [
                 'structure' => $prospect->getRaisonSociale() ?? '',
-                'lienConfirmation' => sprintf(
-                    '%s/confirmation.html?jeton=%s',
-                    rtrim($this->vitrineBaseUrl, '/'),
-                    $jetonClair,
-                ),
+                'lienConfirmation' => $lienConfirmation,
                 'validiteHeures' => SubscriptionFunnel::CONFIRMATION_HOURS,
                 'joursEssai' => SubscriptionFunnel::TRIAL_DAYS,
             ],
