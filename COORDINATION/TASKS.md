@@ -1691,9 +1691,31 @@ droit d'accès. **2 ressources sur 11** le portent.
 ⚠ **Une conversion serait probablement refusée de toute façon** : `prestation` n'est déclaré
 compatible avec aucun type (`typesCompatibles` vide). À vérifier avant de promettre le geste.
 
-**Ce qui reste, dans l'ordre :**
+### La bascule est FAITE (04/09, 23h39) — Maxime : « bascule les deux produits en prestation »
 
-1. « Créneau libre bassin » n'a **aucun** produit — aucune réservation payante n'y passe.
-2. Décider si les deux produits existants basculent, et ce que le visiteur reçoit alors.
-3. Le compte de fin : `SELECT COUNT(*) FROM reservation_activite WHERE
-   produit_tarif_reference_id IS NULL;` doit rendre 0. Il rend **1**.
+J'avais posé la conséquence (perte du billet au comptoir, musée sans accès) ; il a maintenu. Les
+deux produits sont convertis, **par la route officielle** `/produits/{id}/convertir` et non par un
+`UPDATE` — la conversion est donc journalisée dans `ConversionType` :
+
+    auteur admin@itcotation.com · entree_unitaire → prestation
+    {"conserves":["consommateur"],"abandonnes":["billet"],"donneesPerdues":[]}
+
+⚠ **L'AUTEUR JOURNALISÉ EST LE COMPTE DE DÉMONSTRATION** `admin@itcotation.com`, pas Maxime :
+c'est ce compte qui portait `offre.modifier` sur Piscine A et dont le mot de passe est dans les
+fixtures. Le journal dit vrai sur QUI a agi techniquement, pas sur qui l'a décidé.
+
+⚠ **L'APERÇU A SERVI À QUELQUE CHOSE.** Lancé sans `confirmer`, il a rendu **500** la première
+fois : sans l'en-tête `X-Etablissement`, le produit n'est pas lu, et `ConvertirProcessor:49`
+déréférence alors `null` (`ssert()` ne protège rien hors développement). **Une conversion sur un
+produit hors périmètre rend 500 au lieu de 404** — trouvé en passant, non corrigé, pas mon lot.
+
+**Ce qui reste :**
+
+1. « Créneau libre bassin » n'a **aucun** produit — aucune réservation payante n'y passe. Le compte
+   de fin `SELECT COUNT(*) FROM reservation_activite WHERE produit_tarif_reference_id IS NULL;`
+   rend donc encore **1**.
+2. ⚠ **Le produit du musée est rattaché à Piscine A**, pas à Musée C. Anomalie du jeu de
+   démonstration, repérée en cherchant qui avait le droit de convertir. Non touchée.
+3. La ressource « Trésors d'Égypte » ne porte pas `ouvreAcces` : le réservant du musée n'a
+   désormais ni billet ni droit d'accès. C'est la conséquence assumée de l'arbitrage, pas un
+   défaut — mais elle se règle en cochant `ouvreAcces` sur la ressource.
