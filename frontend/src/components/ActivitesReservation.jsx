@@ -30,6 +30,7 @@ const VIDE = {
   typeActivite: '',
   dureeMinutes: '60',
   battementMinutes: '0',
+  rappelHeuresAvant: '0',
   niveauRequis: '',
   competenceExigee: '',
   tarifReferenceMontant: '0.00',
@@ -164,6 +165,9 @@ export default function ActivitesReservation({ droits = [] }) {
                       <td className="num">
                         {a.dureeMinutes} min
                         {a.battementMinutes > 0 && <div className="sub">+{a.battementMinutes} de battement</div>}
+                        {a.rappelHeuresAvant > 0
+                          ? <div className="sub">rappel {a.rappelHeuresAvant} h avant</div>
+                          : <div className="sub">aucun rappel</div>}
                       </td>
                       <td className="num">{a.tarifReferenceMontant}</td>
                       <td>
@@ -194,6 +198,7 @@ export default function ActivitesReservation({ droits = [] }) {
                               typeActivite: a.typeActivite || '',
                               dureeMinutes: String(a.dureeMinutes ?? 60),
                               battementMinutes: String(a.battementMinutes ?? 0),
+                              rappelHeuresAvant: String(a.rappelHeuresAvant ?? 0),
                               niveauRequis: a.niveauRequis || '',
                               competenceExigee: a.competenceExigee || '',
                               tarifReferenceMontant: a.tarifReferenceMontant || '0.00',
@@ -257,6 +262,7 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
         typeActivite: v.typeActivite.trim(),
         dureeMinutes: Number(v.dureeMinutes) || 0,
         battementMinutes: Number(v.battementMinutes) || 0,
+        rappelHeuresAvant: Number(v.rappelHeuresAvant) || 0,
         niveauRequis: v.niveauRequis.trim() || null,
         competenceExigee: v.competenceExigee.trim() || null,
         tarifReferenceMontant: String(v.tarifReferenceMontant || '0.00'),
@@ -310,6 +316,19 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
             <span className="sub">Battement (minutes)</span>
             <input className="input" type="number" min="0" value={v.battementMinutes} onChange={(e) => champ('battementMinutes', e.target.value)} />
             <span className="sub">Temps laissé entre deux créneaux.</span>
+          </label>
+
+          {/* ⚠ ZÉRO VEUT DIRE « AUCUN RAPPEL », ET C'EST LE DÉFAUT. Toute autre valeur par défaut
+              enverrait des courriels aux clients d'établissements qui n'ont rien demandé. Le libellé
+              doit donc dire ce que fait zéro, sinon un exploitant croit le rappel actif. */}
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Rappel au client (heures avant)</span>
+            <input className="input" type="number" min="0" value={v.rappelHeuresAvant} onChange={(e) => champ('rappelHeuresAvant', e.target.value)} />
+            <span className="sub">
+              {Number(v.rappelHeuresAvant) > 0
+                ? `Un courriel part ${v.rappelHeuresAvant} h avant le rendez-vous, une seule fois, si le client a une adresse connue.`
+                : 'Zéro : aucun rappel n’est envoyé pour cette prestation.'}
+            </span>
           </label>
         </div>
 
