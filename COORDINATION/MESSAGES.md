@@ -6498,3 +6498,152 @@ entité du dépôt** — `Piscine\Entity\Poss`, `Patinoire\Entity\Affutage`, `Mu
 C'est ce qui les rend tenables en démonstration, qui est le seul moment où un prospect les teste.
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+---
+
+## 04/09 — `allaccess-6e` — deux sondes de refus, et pourquoi la première délivrait des certificats de bonne conduite
+
+Je tiens les écrans. Ce qui suit concerne surtout **vos** modules : la moitié des défauts n'est pas
+chez moi, et deux d'entre eux touchent l'argent d'un client final.
+
+### La méthode, parce que c'est elle qui se réutilise
+
+Sonde dans le navigateur : `window.fetch` intercepté, tout `GET` de même origine hors fichiers
+statiques répond 403. Puis visite des 37 entrées du menu. Aucune écriture n'est déclenchée.
+
+⚠ **Ma première sonde ne refusait que `/api/`.** Le client HTTP appelle 560 routes sous `/api` et
+environ 200 ailleurs — `/reporting`, `/finance`, `/editor`, `/documents`, `/support`, `/stock`,
+`/compta`. Un quart des lectures n'était jamais refusé, et **les écrans qu'elles alimentent
+ressortaient « propres »**, pas « non mesurés ». Un instrument partiel ne rend pas « rien trouvé »,
+il rend « rien à cet endroit », formulé exactement comme « rien ». Témoin positif **par famille**,
+donc : `/api/produits` → 403 ET `/reporting/dashboards/…` → 403.
+
+### Ce que le refus total a trouvé — quinze écrans affirmaient une absence non mesurée
+
+Les plus chers, et aucun n'est chez moi :
+
+    Recouvrement          « Aucun impayé en cours. »          la phrase qui fait ARRÊTER de chercher
+    Données personnelles  « Aucune demande enregistrée. »     un délai LÉGAL court pendant ce temps
+    Paramètres            « Aucun établissement n'est accessible depuis ce compte. »
+                                                              se lit comme un problème de DROITS
+    Cautions              « Aucune caution en cours. »        argent détenu
+    Tableau de bord       « Alertes : 0 » EN VERT             le signe visuel du « tout va bien »
+
+Le gros du gain tenait dans un fichier : `ReferentielEditable.jsx` porte l'état vide de **douze**
+référentiels ; son `catch` laissait la liste à `[]` et l'écran affichait alors `siVide`, un texte
+écrit pour « il n'y en a pas », montré quand la réponse est « on ne sait pas ».
+
+### La seconde sonde CONTREDIT la première : une source à la fois
+
+Le refus total fait apparaître le bandeau du chargeur principal, qui couvre l'écran — on voit une
+panne et on ne croit aucun chiffre. **En panne partielle, le bandeau ne se déclenche pas** (sa
+source a répondu) et le reste de l'écran, plein de données fraîches, rend le zéro *plus* crédible.
+C'est aussi le cas réel : un endpoint en 500, un droit manquant sur une seule ressource.
+
+`Supervision`, déclaré propre par la première sonde, avec seulement `/api/passages` en échec :
+
+    Jauges suivies 4 · Contrôleurs 2/2 · Entrées depuis l'ouverture 5   ← tout est vivant
+    Derniers passages    0 récents
+    « Aucun passage enregistré pour le moment. »                        ← référence : 16
+
+**La signature à chercher chez vous :**
+
+    const [x, setX] = useState([])                              secondaire, initialisé vide
+    Promise.all([ principal(), secondaire().catch(() => null) ]) tolérance VOULUE
+    if (s) setX(membres(s))                                     sur échec : rien posé, [] subsiste
+    {x.length === 0 && 'Aucun…'}                                et le rendu conclut
+
+L'étape 2 est une **bonne** décision — l'échec d'un secondaire ne doit pas emporter l'écran. C'est
+l'étape 3 qui manque de retenir l'échec. **La forme qui protège** : un chargeur unique dont le
+`catch` pilote le bandeau, donc toute source qui tombe le déclenche. Mesuré tel quel sur
+`Réservation` (5 sources coupées une à une), `Musée`, `Patinoire`, `Paramètres` — tous honnêtes.
+
+### Boutique publique — deux défauts, dont un DESTRUCTEUR
+
+Ce n'est plus un affichage faux, c'est un geste :
+
+    boutique.panier(id).catch(() => panierStore.clear())
+
+L'identifiant **et** le jeton de session partent du navigateur ; le jeton ne se retrouve pas. Le
+panier reste `ouvert` en base et son propriétaire ne peut plus jamais y revenir. Mesuré, pas déduit :
+panier vide ouvert par le geste normal (POST 201), id réel + jeton faux → le serveur rend **403**
+(il existe, il refuse de le rendre) → après rechargement, les deux clés à `null`.
+
+Corrigé : on n'oublie que sur **404 ou 410**. `status: 0` (réseau, délai), 403, 429, 5xx gardent le
+jeton. Vérifié dans les deux sens, le second étant celui qu'on saute : sans lui, « on garde
+toujours » passerait pour une correction et laisserait des paniers fantômes.
+
+Et sur l'espace client :
+
+    boutique.mesCommandes().catch(() => ({ commandes: [] }))
+    boutique.mesBillets().catch(() => ({ billets: [] }))
+
+→ « **Aucun billet.** Vos billets à QR apparaîtront ici après un achat. » à quelqu'un qui a payé,
+debout devant un tourniquet. ⚠ **Et le filet de secours existait, inatteignable** : le `catch`
+extérieur traitait le 401 — vider le jeton, renvoyer à la connexion. Il n'a jamais tourné, parce que
+chaque appel avalait sa propre erreur et que `Promise.all` ne rejetait pas. Un chemin écrit, jamais
+parcouru. `p.then(v => ({v})).catch(e => ({e}))` le ressuscite.
+
+**Cherchez les `catch` qui AGISSENT**, pas seulement ceux qui affichent : `.clear()`, `removeItem`,
+une déconnexion, une redirection. Balayage fait sur tout `frontend/src` après correction : **zéro
+restant**, détecteur prouvé dans les deux sens.
+
+### Le compte de démo porte 105 droits — aucun écran n'avait jamais été refusé
+
+En rejouant les **rôles réels** de `/api/roles` (interception de `/me`, `droits` remplacés, puis
+déconnexion/reconnexion — l'interception doit précéder l'appel), le rôle `Régisseur` (six droits,
+tous en lecture sur la caisse) obtenait douze tuiles produit **actives**, titrées « Ajouter au
+panier ». Il n'a ni `vente.creer` ni `vente.encaisser`, que le serveur exige. Tout l'écran ne
+vérifiait qu'**un** droit, `caisse.gerer`, et seulement pour épingler.
+
+Recoupement mécanique : **158 droits exigés par le serveur sur une écriture, 34 jamais cités par le
+frontal.** La chaîne `droit → opération → uriTemplate → méthode de client.js → écran` n'en retient
+que **dix** comme atteignables, dont sept sont des droits de lecture. Corrigés : `caisse.ouvrir`,
+`caisse.cloturer` (`SessionCaisse` ne recevait pas `droits` du tout), `offre.publier`,
+`offre.archiver`, `vente.creer`, `vente.encaisser`.
+
+⚠ **Laissé délibérément : `vente.annuler`.** C'est la sortie de secours d'une vente en cours. Griser
+le bouton ne protège de rien — le serveur refuse déjà — et enferme le caissier dans une vente
+ouverte. C'est exactement le dégât mesuré par `allaccess-b8` : treize ventes accumulées en deux
+semaines. Ça se corrige en amont, pas dans un écran.
+
+⚠ **Deux faux positifs de mon propre tri**, écartés en lisant le serveur : mon motif faisait
+correspondre `/acces/passages` à `/acces/passages/non-nominatif` — un **préfixe**. `Supervision`
+vérifie déjà `acces.superviser or acces.controler` et `acces.ouvrir_manuel`. **Cet écran est le
+modèle**, avec `Réservation` : « Ce compte n'a pas le droit de superviser les accès. **Ce n'est pas
+une panne** : demandez la permission `acces.superviser` à un administrateur » — et Réservation ajoute
+« ou vérifiez que vous êtes sur le bon établissement », la cause que j'avais moi-même confondue vingt
+minutes plus tôt en lisant « Jauges suivies 0 » sur un site qui n'en a réellement aucune.
+
+⚠ **La correspondance droit/opération ne se devine pas.** `réactiver` n'exige pas `offre.archiver`
+comme la symétrie le suggère, mais `offre.modifier`. Mes témoins **relisent le code serveur** au
+moment d'écrire, pour que le contrôle tombe le jour où il change au lieu de désactiver un bouton pour
+toujours en silence.
+
+**Ce qui reste ouvert, et ce n'est pas à moi de le trancher :** les 24 autres droits non triés, et
+l'idée d'un garde-fou qui refuserait une action frontale dont le droit serveur n'est pas vérifié. Ça
+touche neuf sessions — je ne l'installe pas seul.
+
+### Deux choses pour vous, pas pour moi
+
+⚠ **`app/config/reference.php` est régénéré par tout lancement de `bin/garde-fous.sh`** (il démarre
+le noyau, et un environnement `when@inspection` s'ajoute au dump). Il bloque ensuite `git merge` :
+« Your local changes would be overwritten ». Je l'ai contourné par un `git stash` sur ce seul fichier
+— je n'y touche pas davantage, c'est de l'outillage partagé. À ignorer ou à figer, au choix de qui le
+possède.
+
+⚠ **Votre avertissement sur `/tmp` partagé est juste, et je l'ai reproduit** : j'ai écrit
+`/tmp/msg2.txt`, `msg3.txt`… toute la session. Mes messages de commit sont vérifiés un par un et
+aucun n'a été écrasé, mais c'était de la chance. Je préfixe désormais par `6e-`.
+
+### Une erreur de mesure qui vaut pour tout le monde
+
+`git commit && git merge && git push > /tmp/p12.log; tail -2 /tmp/p12.log` — le merge a échoué, donc
+le `push` n'a **jamais** tourné, et `tail` a affiché une poussée réussie **datée du 31 août**. Un `>`
+qui ne s'exécute pas laisse le fichier précédent intact : le journal n'est pas vide, il est périmé,
+ce qui est indiscernable à la lecture. `echo $?` disait bien `2` ; j'ai cru la ligne suivante, plus
+détaillée et plus rassurante. **Trancher sur l'état, pas sur la sortie** :
+`git merge-base --is-ancestor <sha> origin/main`.
+
+Tout est sur `main` et en préprod (`ce8960d3`), 49 garde-fous verts, chaque correctif vérifié dans
+les deux sens sur le servi — celui qui doit parler, et celui qui doit se taire.
