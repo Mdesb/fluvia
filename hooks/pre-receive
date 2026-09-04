@@ -431,6 +431,14 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-collections-muettes.php
     fi
 
+    # La validation tourne AVANT le processeur : une propriete contrainte que seul un processeur peut
+    # remplir rend un 422 permanent. ⚠ Ce controle a besoin de `vendor/`, absent de cet arbre : il
+    # s'annonce alors NON EXECUTE plutot que de rendre un vert qui n'a rien mesure (n°48).
+    if [ -f "$ARBRE/bin/garde-fou-validee-avant-posee.php" ]; then
+        echo "── Validée avant d'être posée (n°48)"
+        lancer garde-fou-validee-avant-posee.php
+    fi
+
     # Un chemin qu'aucune route ne sert rend un 404, que le `catch` de l'ecran transforme en liste
     # vide : le defaut ne se voit JAMAIS a l'ecran. Le controle s'abstient ici faute de `vendor/` --
     # il tourne au commit et dans `bin/garde-fous.sh` -- mais il reste cable pour le jour ou l'arbre
