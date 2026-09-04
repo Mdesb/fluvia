@@ -398,6 +398,57 @@ d'une cause ne sont pas ses effets. Le chiffre décide si c'est une correction o
 Le patron à imiter existe : `ParametragePadel::$produitTerrainRef`, désormais lu par
 `ReserverTerrainProcessor` (commit `3be5fd2b`).
 
+#### ⛔ MESURÉ PAR `allaccess-a9` LE 04/09 — NE PAS LIVRER LA LEVÉE EN L'ÉTAT
+
+Deux choses ont changé depuis la rédaction, et la seconde renverse la conclusion.
+
+**1. Les deux appelants sont DÉJÀ équipés.** `DebitPmvStrategie:57` et
+`VenteDiffereeAgentStrategie:57` passent tous les deux
+`$reservation->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId()`. La fiche disait
+« n'en passe aucun » ; c'était vrai à l'écriture. Les trois appelants convergent donc désormais sur
+la même source — et tous trois peuvent encore rendre `null` par leur chaîne de `?->`.
+
+**2. ⚠ MAIS AUCUNE ACTIVITÉ N'A DE PRODUIT, ET AUCUN ÉCRAN NE PERMET D'EN METTRE UN.**
+
+    reservation_activite                                   3 lignes
+    dont produit_tarif_reference_id IS NULL                3   ← toutes
+    `produitTarifReference` dans le groupe `activite:write` OUI, écrivable par l'API
+    mentions dans frontend/src/                            0   ← aucun écran
+    `api.reservationActivites()` existe (lecture)          mais Reservation.jsx n'affiche pas
+                                                            les activités du tout
+
+Lever aujourd'hui **bloquerait 100 % des ventes de réservation**, sans aucun moyen de débloquer
+depuis l'interface. Ce n'est pas un correctif latent : c'est une panne immédiate.
+
+**Et le zéro qui rassurait ne prouvait rien.** J'ai d'abord compté les dégâts existants :
+
+    vente_ligne                                            23 lignes
+    dont produit absent du catalogue                       0
+    dont type_tarif absent du catalogue                    0
+    dont libelle_produit vide                              0   (témoin : la jointure marche, 23/23)
+
+Zéro orpheline — non parce que le défaut est inoffensif, mais parce que **ce chemin n'a jamais
+produit de ligne persistée**. Une base propre ne dit pas qu'un code est sain, elle dit qu'il n'a pas
+servi.
+
+**⚠ Et le même défaut est juste en dessous, non mentionné par la fiche :**
+`VenteReservationHandler:44` fait `setTypeTarif(Uuid::v4())` **sans condition** — jamais fourni par
+personne, toujours fantôme. Le corriger demande une source pour le type de tarif, qui n'existe
+nulle part aujourd'hui.
+
+#### CE QU'IL FAUT AVANT LA LEVÉE
+
+1. **Un écran qui permette de poser le produit sur une activité.** C'est le vrai prérequis, et il
+   n'était pas dans la fiche. Les activités ne sont affichées nulle part : c'est un écran à
+   construire, pas un champ à ajouter.
+2. **Les trois activités existantes configurées.**
+3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
+
+Tant que 1 n'existe pas, livrer la levée transforme un défaut comptable invisible en refus de vente
+visible. C'est un mauvais échange, et il est irréversible pour l'exploitant qui le subit.
+
+**Statut : mesuré, bloqué sur le prérequis 1. Non claimé — disponible pour qui prend l'écran.**
+
 ---
 
 ### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — pour `allaccess-df`
