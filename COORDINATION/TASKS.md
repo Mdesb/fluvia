@@ -841,6 +841,34 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ⚠ 8.12 — La préproduction n'a AUCUN produit à vendre pour un terrain de padel
+
+Constaté le 04/09, en posant la garde « produit obligatoire » (§8.8 c). Les trois activités de la
+préproduction n'ont pas de produit tarifaire, et **aucun produit du catalogue ne leur correspond** :
+
+    Padel 90 min          sport      24,00 €   →  aucun produit « padel » n'existe
+    Visite guidée musée   culture    12,00 €   →  rien qui aille (Audioguide est un complément)
+    Créneau libre bassin  natation    0,00 €   →  n'en a pas besoin, aucune vente n'est créée
+
+⚠ **CE N'EST PAS SEULEMENT UN TROU DE DONNÉES DE DÉMONSTRATION.** `ParametragePadel::$produitTerrainRef`
+est vide pour la même raison. La question de fond est : **qu'est-ce qu'on vend quand on réserve un
+terrain ?** Un produit « location de terrain » par établissement, un par durée, un par sport ? Elle
+commande la ventilation comptable de toutes les recettes de réservation.
+
+⚠ **JE N'EN AI ASSIGNÉ AUCUN**, et c'est délibéré : choisir « Entrée unitaire piscine » pour une
+activité de padel mettrait une fausse donnée dans la préproduction et rendrait la ventilation
+comptable menteuse — exactement ce que la garde vient d'empêcher.
+
+**Effet aujourd'hui** : une réservation payante accompagnée d'une session de caisse répond 422 avec
+le message qui nomme le paramétrage manquant. Une réservation SANS caisse passe normalement.
+Le blocage est donc visible et explicite, pas silencieux.
+
+**Ce qu'il faut** : (1) l'arbitrage produit de Maxime, (2) un écran — `produitTarifReference` est
+dans `activite:write` mais **aucun écran ne le propose**, et il n'existe aucun écran de création
+d'activité du tout.
+
+---
+
 ### ⚠ 8.11 — Le TYPE DE TARIF est lui aussi tiré au hasard
 
 Vu en corrigeant D-2, le 04/09. `VenteReservationHandler` ne fait plus `setProduit(Uuid::v4())` —
