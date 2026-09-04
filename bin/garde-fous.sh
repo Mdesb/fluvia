@@ -427,6 +427,7 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Entités rattachables hors liste (n°35)" php_racine bin/garde-fou-entite-rattachable-hors-liste.php "--contre=$REFERENCE"
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
+    executer "Collections muettes (n°47)" php_racine bin/garde-fou-collections-muettes.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
     executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
     executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"
@@ -439,6 +440,7 @@ else
     executer "Entités rattachables hors liste (n°35)" php_racine bin/garde-fou-entite-rattachable-hors-liste.php
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
+    executer "Collections muettes (n°47)" php_racine bin/garde-fou-collections-muettes.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
     executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
     executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"

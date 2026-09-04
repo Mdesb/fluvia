@@ -209,6 +209,37 @@ class DossierGroupeScolaire
         return $this->guidesAffectes;
     }
 
+    /**
+     * Remplace la liste des guides affectés.
+     *
+     * ⚠ MÊME DÉFAUT QUE `ProfilExploitant::$etablissementsRattaches`, et même remède : l'accesseur
+     * cherchait `addGuidesAffecte` (singulier anglais de la chaîne entière) quand l'entité offre
+     * `addGuideAffecte`, sans remover. Le champ était dans `dossier:write` et n'écrivait rien.
+     *
+     * @param iterable<Guide> $guides
+     */
+    public function setGuidesAffectes(iterable $guides): self
+    {
+        $voulus = [];
+        foreach ($guides as $guide) {
+            $voulus[(string) $guide->getId()] = $guide;
+        }
+
+        foreach ($this->guidesAffectes->toArray() as $present) {
+            if (!isset($voulus[(string) $present->getId()])) {
+                $this->guidesAffectes->removeElement($present);
+            }
+        }
+
+        foreach ($voulus as $guide) {
+            if (!$this->guidesAffectes->contains($guide)) {
+                $this->guidesAffectes->add($guide);
+            }
+        }
+
+        return $this;
+    }
+
     public function addGuideAffecte(Guide $guide): self
     {
         if (!$this->guidesAffectes->contains($guide)) {
