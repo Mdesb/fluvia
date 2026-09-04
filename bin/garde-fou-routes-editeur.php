@@ -53,6 +53,8 @@ const EXCEPTIONS = [
     '/editor/plans' => 'ED-5 — le catalogue des formules, lu sans compte par le site vitrine.',
     '/editor/plan-options' => 'ED-5 — les options en vente, lues sans compte par le site vitrine.',
     '/editor/carts' => 'ED-5 — première étape du tunnel : un prospect compose son panier avant d’avoir un compte.',
+    '/editor/trial-requests' => 'ED-5 — deuxième étape : le prospect demande son essai, un courriel de confirmation part. Appartenance prouvée par l’adresse saisie, pas par un périmètre — voir RequestTrialProcessor.',
+    '/editor/trial-confirmations' => 'ED-5 — troisième étape : le lien du courriel ouvre l’essai. Le jeton de 32 octets est la preuve ; il n’existe pas de compte à ce stade.',
 ];
 
 // ── Lecture ─────────────────────────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ use App\Subscription\Exception\InvoicingRefusedException;
 use App\Subscription\Exception\UnknownCustomerException;
 use App\Subscription\Security\BillingServiceAccount;
 use App\Subscription\Service\SubscriptionInvoicer;
+use App\Subscription\Service\SubscriptionMandates;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -55,6 +56,7 @@ final class FacturerAbonnementsCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly SubscriptionInvoicer $facturier,
         private readonly BillingServiceAccount $compteDeService,
+        private readonly SubscriptionMandates $mandats,
     ) {
         parent::__construct();
     }
@@ -155,7 +157,28 @@ final class FacturerAbonnementsCommand extends Command
         return Command::SUCCESS;
     }
 
-    /** @return list<Subscription> */
+    /**
+     * Les abonnements que ce mois doit facturer.
+     *
+     * ⚠ **UN ESSAI GRATUIT N'EST PAS FACTURABLE, ET LE CRITÈRE N'EST PAS LA DATE.** L'essai
+     * libre-service (ED-5) active l'abonnement sans mandat : sans cette garde, il tomberait dans la
+     * sélection ci-dessus dès le premier passage de la commande — une facture mensuelle à un client
+     * qui n'a rien signé, puis une relance de `Recouvrement` pour un impayé qui n'existe pas.
+     *
+     * **Deux exclusions, et la seconde est celle qui protège vraiment.**
+     * 1. L'essai court encore : c'est gratuit, il n'y a rien à facturer.
+     * 2. L'essai est échu **et aucun mandat actif n'a été signé** : on ne facture pas quelqu'un dont
+     *    on n'a aucune autorisation de prélèvement. Cette seconde règle ne dépend d'aucune tâche
+     *    planifiée — si `subscription:trials:expire` ne tourne pas, la conséquence est un essai
+     *    gratuit qui dure trop, jamais une facture fausse.
+     *
+     * **Un abonnement payant n'est pas concerné** : `isTrial()` est faux dès que `trialEndsAt` est
+     * nul, ce qui est le cas de tout ce qui est passé par le tunnel SEPA. La garde ne peut donc pas
+     * faire disparaître une facture due — c'est le sens dans lequel un contrôle trop large ne se
+     * verrait pas.
+     *
+     * @return list<Subscription>
+     */
     private function abonnementsFacturables(): array
     {
         /** @var list<Subscription> $abonnements */
@@ -163,7 +186,13 @@ final class FacturerAbonnementsCommand extends Command
             ['status' => [SubscriptionStatus::Active, SubscriptionStatus::Suspended]],
         );
 
-        return $abonnements;
+        $maintenant = new \DateTimeImmutable();
+
+        return array_values(array_filter(
+            $abonnements,
+            fn (Subscription $abonnement): bool => !$abonnement->isTrial()
+                || (!$abonnement->isInTrial($maintenant) && null !== $this->mandats->active($abonnement)),
+        ));
     }
 
     private function mois(mixed $brut): ?\DateTimeImmutable
