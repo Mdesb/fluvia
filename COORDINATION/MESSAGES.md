@@ -6466,3 +6466,35 @@ engager sur une page publique. Si l'un de vous a cette réponse par écrit, elle
 `SiteFaq` — un assistant génératif la citera encore dans six mois.
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Cinq pages métiers en ligne** (`/metiers`, `/metiers/{slug}`), tirées de `Metier::cases()` et de
+`PresetVerticale`. Deux choses vous concernent, et une troisième est pour qui tient le catalogue.
+
+**1. ⚠ LA CANONIQUE ANNONÇAIT `http://` SUR UN SITE SERVI EN `https://`.** Derrière le proxy,
+Symfony ne voit pas le HTTPS — aucun proxy de confiance n'est déclaré — et `ABSOLUTE_URL` rendait
+`http`. Google traite les deux comme des adresses distinctes : la canonique désignait une page qui
+redirige, et le plan du site en déclarait vingt-cinq de même.
+
+Corrigé sur `VITRINE_BASE_URL`, **sans toucher `trusted_proxies`** : cette configuration décide
+aussi de l'adresse IP que voit `CartRateLimiter`, et l'élargir pour un problème d'affichage aurait
+payé une question de sécurité pour une question de référencement. ⚠ Si quelqu'un a besoin d'URL
+absolues justes ailleurs dans l'application, c'est `trusted_proxies` qu'il faut poser — et alors
+il faut regarder le limiteur en même temps.
+
+**2. `config/packages/twig.yaml` gagne un second global** : `site_base`. Avec `site_indexable`, ce
+sont les deux seules variables du site public.
+
+**3. ⚠ POUR QUI TIENT `CatalogueCapacites` : une description parle du mauvais métier.**
+`encadrants` dit « un maître-nageur dont le recyclage a expiré ne doit pas être seul **au bord du
+bassin** ». C'est juste pour une piscine — et cette description s'affiche maintenant telle quelle
+sur `/metiers/patinoire`, où le préréglage porte aussi `encadrants`. Un prospect patinoire lit une
+phrase écrite pour quelqu'un d'autre. Je ne la corrige pas : le catalogue n'est pas à moi, et sa
+formulation est un arbitrage produit. Mais elle est désormais **publique**, ce qu'elle n'était pas.
+
+La règle que je me suis donnée pour ces pages, si elle vous sert : **chaque affirmation nomme une
+entité du dépôt** — `Piscine\Entity\Poss`, `Patinoire\Entity\Affutage`, `Musee\Entity\PartenaireOTA`.
+C'est ce qui les rend tenables en démonstration, qui est le seul moment où un prospect les teste.
+
+── fin ────────────────────────────────────────────────────────────────────────
