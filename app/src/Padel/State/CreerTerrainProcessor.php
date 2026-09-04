@@ -7,6 +7,8 @@ namespace App\Padel\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Padel\Entity\TerrainPadel;
+use App\Padel\Enum\CourtSport;
+use App\Padel\Enum\CourtSurface;
 use App\Padel\Enum\TypeTerrain;
 use App\Reservation\Entity\Ressource;
 use App\Securite\Service\ContexteEtablissement;
@@ -41,6 +43,23 @@ final class CreerTerrainProcessor implements ProcessorInterface
 
         $libelle = \is_string($corps['libelle'] ?? null) && $corps['libelle'] !== '' ? $corps['libelle'] : 'Terrain padel';
         $type = TypeTerrain::tryFrom(\is_string($corps['type'] ?? null) ? $corps['type'] : '') ?? TypeTerrain::Indoor;
+        // ⚠ LE SPORT ET LA SURFACE SE LISENT ICI, ET PAS SEULEMENT DANS `terrain:write`. Ce
+        // processeur reconstruit le terrain a la main : un champ absent de ces lignes est accepte
+        // par l'API et n'arrive jamais en base. Le `Patch`, lui, est standard et les ecrit — d'ou
+        // un defaut qui ne se voit qu'a la creation.
+        //
+        // ⚠ CE `??` COUVRE LE SPORT ABSENT, PAS LE SPORT INCONNU — et la nuance a ete mesuree.
+        // `DeserializeProvider` tourne AVANT ce processeur : `sport` etant dans `terrain:write`
+        // avec un `enumType`, une valeur inconnue est refusee en 400 par le serialiseur et on
+        // n'arrive jamais ici. Un 400 qui nomme les valeurs admises vaut mieux qu'un terrain de
+        // tennis silencieusement transforme en terrain de padel.
+        //
+        // Ce qui arrive ici, c'est le corps qui NE DIT RIEN du sport : alors padel, parce qu'un
+        // terrain cree depuis le module padel en est un.
+        $sport = CourtSport::tryFrom(\is_string($corps['sport'] ?? null) ? $corps['sport'] : '') ?? CourtSport::Padel;
+        // ⚠ ET LA SURFACE RESTE `null` QUAND ELLE N'EST PAS DITE : elle n'a pas de valeur par
+        // defaut legitime. « On ne sait pas » est une reponse, « resine » serait une invention.
+        $surface = CourtSurface::tryFrom(\is_string($corps['surface'] ?? null) ? $corps['surface'] : '');
         $durees = isset($corps['dureesAutoriseesMinutes']) && \is_array($corps['dureesAutoriseesMinutes'])
             ? array_map('intval', $corps['dureesAutoriseesMinutes'])
             : [60, 90];
@@ -56,6 +75,8 @@ final class CreerTerrainProcessor implements ProcessorInterface
         $terrain = new TerrainPadel();
         $terrain->setRessource($ressource)
             ->setType($type)
+            ->setSport($sport)
+            ->setSurface($surface)
             ->setDureesAutoriseesMinutes($durees);
         $this->em->persist($terrain);
         $this->em->flush();

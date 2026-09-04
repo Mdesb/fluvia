@@ -624,3 +624,68 @@ fil.
 **Un garde-fou serait possible** (comparer chaque collection écrivable à son adder après
 singularisation) et n'a pas été posé : le balayage ne laisse aucun cas ouvert, et un garde-fou pour
 zéro occurrence coûte trois listes à câbler. À reprendre le jour où un deuxième cas apparaît.
+
+### 8.8 — R15 : le créneau de padel devient une écriture, et trois trous restent nommés
+
+Maxime demandait de « vérifier que la durée des parties permet de faire un produit qui rentre bien
+dans la comptabilité ». Mesuré de bout en bout, et **corrigé pour la porte principale** : depuis
+`9f2a67e3+`, `ReserverTerrainProcessor` crée la `Vente` et la rattache à la réservation, avec le
+produit de `ParametragePadel::$produitTerrainRef` — un champ qui existait depuis toujours, avec
+getter, setter, et deux docblocks le citant en exemple, **que personne ne lisait**.
+
+Ce qui reste ouvert, mesuré et non corrigé — chacun demande un arbitrage produit, pas du code :
+
+**(a) Sans caisse ouverte, la réservation reste une dette que rien ne peut encaisser.**
+Toute `Vente` de ce produit exige une `SessionCaisse` ouverte : « différée » (`VenteDiffereeAgentStrategie`)
+veut dire *plus tard depuis un guichet*, jamais *sans guichet*. Le processeur générique
+(`ReserverProcessor`) lève donc un 422 quand une réservation payante n'a pas de session. On ne l'a
+**pas** appliqué au padel : aucun des trois tests qui empruntent la route n'en passe une, et l'écran
+ne sait pas en envoyer — le 422 aurait refusé toute réservation faite ailleurs qu'au comptoir.
+Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` sans vente.
+⚠ Et il n'existe **aucune porte** pour encaisser une réservation due après coup : les opérations de
+`Reservation` sont réserver, annuler, affecter, participants, émarger. Rien d'autre.
+→ Décider : une opération `encaisser` sur la réservation, ou rendre la session obligatoire et
+équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
+`QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
+
+**(b) `RejoindrePartieProcessor:88` marque un joueur `Paye` sans créer la moindre vente.**
+Le commentaire dit « paiement à l'inscription (§4.3) ». Il n'y a pas de paiement : juste un statut.
+⚠ À distinguer de `PayerPartProcessor`, qui ne fait lui aussi qu'un changement de statut mais **le
+documente comme voulu** — « vente/paiement standard M2, déclenché séparément par l'agent/le client ».
+Le premier est un trou, le second une convention. Les traiter pareil serait une erreur.
+
+**(c) `VenteReservationHandler:42` — `setProduit($produitRef ?? Uuid::v4())`.**
+Sans produit fourni, la ligne désigne un produit **tiré au hasard**, donc inexistant, donc sans
+catégorie comptable, donc absent de la ventilation ; `LineLabelStamper` laisse alors le libellé nul,
+et le dit explicitement. Sur les trois appelants, **un seul** passe un produit (`ReserverProcessor`,
+et encore : `$activite?->getProduitTarifReference()?->getId()`, deux `?->` qui retombent sur `null`).
+`DebitPmvStrategie` et `VenteDiffereeAgentStrategie` n'en passent aucun.
+→ Décider : un produit obligatoire (et lever si absent), ou un produit « divers » par établissement.
+⚠ Ne pas compter les 3 sites d'appel comme 3 défauts : reste à mesurer combien d'écritures réelles
+sont concernées — les occurrences d'une cause ne sont pas ses effets.
+
+**Ce qui protège aujourd'hui la porte principale** : `VenteReservationTerrainTest` (3 tests). Le
+témoin décisif est l'ÉGALITÉ entre le produit de la ligne et `produitTerrainRef` — vérifié en
+cassant le correctif : sans lui, l'échec affiche l'UUID au hasard. Un test qui se contenterait de
+« une vente existe » passerait dans les deux cas.
+
+### 8.9 — R13/R14 : le terrain se décline, sans renommage
+
+Maxime a tranché : padel, tennis, squash et badminton sont **une seule verticale**. `padel_terrain`
+porte désormais `sport` (défaut `padel`) et `surface` (nullable), avec écran et tests.
+
+⚠ **Le renommage n'a pas été fait, et c'est délibéré.** `TerrainPadel`, la table `padel_terrain` et
+la route `/api/padel/terrains` gardent leur nom : renommer toucherait l'entité, la table, les routes,
+les groupes de sérialisation, l'écran et les tests qui empruntent la route, pour zéro gain
+fonctionnel tant qu'aucun club non-padel n'est signé. Le jour venu, ce sera mécanique.
+
+⚠ **Le piège qu'il a fallu éviter** : `CreerTerrainProcessor` ne désérialise pas, il reconstruit un
+`TerrainPadel` à la main depuis le corps. Poser les deux colonnes dans `terrain:write` et s'arrêter
+là aurait donné une **création qui répond 201 et n'enregistre rien**, pendant que le `Patch`,
+standard, les écrirait très bien — un défaut visible seulement à la création. Même forme que
+`Produit::$categories` (267a735b).
+
+⚠ **Et une chose apprise en la cassant** : `DeserializeProvider` tourne AVANT le processeur. Un
+`sport` hors énumération part en 400 par le sérialiseur, et le repli `?? CourtSport::Padel` du
+processeur ne couvre que le sport **absent**. Mon premier commentaire annonçait l'inverse ; il a été
+corrigé, et un test fige la frontière.

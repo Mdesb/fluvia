@@ -103,6 +103,31 @@ class ArticleStock
     #[Groups(['article:read', 'article:write', 'ligne_commande_achat:read', 'mouvement:read'])]
     private string $libelle = '';
 
+    /**
+     * OU L'ARTICLE SE TROUVE — et non ou il s'affiche.
+     *
+     * ⚠ CE N'EST PAS LE RAYON DE CAISSE, et Maxime a distingue les deux lui-meme : « il y a une
+     * distinction a faire entre un rayonnage physique et un rayonnage sur la caisse qui est
+     * purement un systeme d'affichage » (R3).
+     *
+     *     rayon de CAISSE   une categorie d'axe `rayon`, PLUSIEURS par produit, qui range un ecran
+     *     ce champ          un LIEU, UN seul, qui repond a « ou vais-je le chercher »
+     *
+     * Les confondre donnerait un champ qui ment dans les deux sens : un article range en reserve
+     * mais affiche dans deux rayons de caisse n'aurait plus de lieu, et un rayon de caisse
+     * pretendrait dire ou aller.
+     *
+     * ⚠ TEXTE LIBRE, ET C'EST UN CHOIX. Pas de referentiel de lieux : un referentiel qu'il faut
+     * alimenter avant de pouvoir ecrire « Reserve » se contourne en ecrivant n'importe quoi
+     * dedans. Un texte se trie et se cherche, et se remplace par un referentiel le jour ou
+     * quelqu'un en aura besoin — l'inverse coute beaucoup plus cher.
+     *
+     * Nom anglais (D5) : la colonne est ajoutee apres la decision du 19/08.
+     */
+    #[ORM\Column(length: 80, nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
+    private ?string $storageLocation = null;
+
     #[ORM\Column(length: 10, enumType: Unite::class)]
     #[Assert\NotNull]
     #[Groups(['article:read', 'article:write'])]
@@ -386,5 +411,21 @@ class ArticleStock
                 ->atPath('seuilMin')
                 ->addViolation();
         }
+    }
+
+    public function getStorageLocation(): ?string
+    {
+        return $this->storageLocation;
+    }
+
+    public function setStorageLocation(?string $storageLocation): self
+    {
+        $nettoye = $storageLocation === null ? null : trim($storageLocation);
+        // ⚠ UNE CHAINE VIDE N'EST PAS UN LIEU. La laisser passer ferait afficher un emplacement
+        // blanc, indiscernable d'un article dont on connait la place mais dont le libelle est
+        // vide. `null` dit « on ne sait pas », et c'est ce qu'on veut dire.
+        $this->storageLocation = ($nettoye === null || $nettoye === '') ? null : $nettoye;
+
+        return $this;
     }
 }

@@ -9,6 +9,8 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Padel\Enum\CourtSport;
+use App\Padel\Enum\CourtSurface;
 use App\Padel\Enum\TypeTerrain;
 use App\Padel\State\CreerTerrainProcessor;
 use App\Padel\State\ForcerEclairageManuelProcessor;
@@ -76,6 +78,28 @@ class TerrainPadel
     #[ORM\Column(length: 10, enumType: TypeTerrain::class)]
     #[Groups(['terrain:read', 'terrain:write'])]
     private TypeTerrain $type = TypeTerrain::Indoor;
+
+    /**
+     * LE SPORT PRATIQUÉ ICI (R13) — la déclinaison, plutôt qu'un module jumeau.
+     *
+     * ⚠ `options: ['default' => …]` EST OBLIGATOIRE, ET PAS DÉCORATIF. Le garde-fou n°10 (D32)
+     * refuse un `DEFAULT` posé en migration qui ne serait pas déclaré au mapping : sans lui, un
+     * `migrations:diff` ultérieur croirait la colonne dérivée et proposerait de la « corriger ».
+     */
+    #[ORM\Column(length: 20, enumType: CourtSport::class, options: ['default' => 'padel'])]
+    #[Groups(['terrain:read', 'terrain:write'])]
+    private CourtSport $sport = CourtSport::Padel;
+
+    /**
+     * LA SURFACE DE JEU (R14) — distincte de `type`, qui dit couvert ou découvert.
+     *
+     * ⚠ NULLABLE, ET C'EST LE FOND DE LA CHOSE. Personne n'a jamais relevé la surface des terrains
+     * existants. `null` dit « on ne sait pas » ; poser « résine » par défaut inventerait une donnée
+     * métier qu'aucun relevé n'a constatée (D66-ter).
+     */
+    #[ORM\Column(length: 20, nullable: true, enumType: CourtSurface::class)]
+    #[Groups(['terrain:read', 'terrain:write'])]
+    private ?CourtSurface $surface = null;
 
     /** @var list<int> ⊆ {60, 90} */
     #[ORM\Column]
@@ -174,5 +198,29 @@ class TerrainPadel
     public function getLibelle(): ?string
     {
         return $this->ressource?->getLibelle();
+    }
+
+    public function getSport(): CourtSport
+    {
+        return $this->sport;
+    }
+
+    public function setSport(CourtSport $sport): self
+    {
+        $this->sport = $sport;
+
+        return $this;
+    }
+
+    public function getSurface(): ?CourtSurface
+    {
+        return $this->surface;
+    }
+
+    public function setSurface(?CourtSurface $surface): self
+    {
+        $this->surface = $surface;
+
+        return $this;
     }
 }

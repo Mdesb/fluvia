@@ -2297,6 +2297,14 @@ export const api = {
     request(`/api/padel/terrains/${id}/reservations`, { method: 'POST', body: corps }),
   padelRejoindrePartie: (id, corps) =>
     request(`/api/padel/parties-ouvertes/${id}/rejoindre`, { method: 'POST', body: corps }),
+  // SORTIR DU MATERIEL — l'ecran savait le rendre, pas le louer.
+  //
+  // ⚠ `article` EST UNE REFERENCE AU CATALOGUE (M1), en uuid nu — pas une IRI, pas une entite de
+  // stock. Le processeur le nomme ainsi : « champ article obligatoire (reference catalogue M1) ».
+  // `quantite` doit valoir au moins 1, et `caution` est facultative (consignation deleguee au
+  // service de caution generique).
+  padelLouerMateriel: (corps) =>
+    request('/api/padel/locations', { method: 'POST', body: corps }),
   padelRetournerMateriel: (id, corps) =>
     request(`/api/padel/locations/${id}/retour`, { method: 'POST', body: corps }),
   // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
