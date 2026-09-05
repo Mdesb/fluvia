@@ -1603,3 +1603,85 @@ input:focus-visible {
   .pied-corps { grid-template-columns: minmax(0, 1fr); }
   .tarifs-grille .formules { position: static; }
 }
+
+
+/* ══ DEFAUTS VUS EN LIGNE (05/09, seconde revue) ══════════════════════════════════════════════
+
+   Quatre defauts de mise en page, tous mesures au navigateur sur la page servie avant d'etre
+   corriges ici. Aucun n'etait visible dans le code : ils naissent tous du nombre reel d'elements
+   que le catalogue produit — deux modules dans une rubrique, trois articles, sept rubriques.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── UNE BOITE D'ETAT VIDE RESTE UNE BOITE ────────────────────────────────────────────────────
+
+   `#tunnel-message` mesurait 550 x 30 px, en pointilles, sans une lettre dedans, juste au-dessus
+   du bouton qui declenche la vente. Un cadre vide sur un formulaire se lit comme un defaut, pas
+   comme une place reservee.
+
+   ⚠ `:empty` PLUTOT QU'UN `hidden` POSE PAR LE SCRIPT : la regle vaut pour les trois zones d'etat
+   de la page, y compris celles qu'on ajoutera, et elle ne peut pas se desynchroniser d'un script. */
+.etat:empty { display: none; }
+
+/* ── LES ETIQUETTES DE RUBRIQUE SE RATTACHAIENT AU GROUPE PRECEDENT ───────────────────────────
+
+   22 px au-dessus de l'etiquette, 12 px en dessous : trop proche pour que l'oeil tranche, et il
+   tranche toujours en faveur de ce qui precede. « Controler les acces » avait l'air d'etre le
+   pied de la rubrique « Vendre ». L'ecart entre groupes passe donc a quatre fois l'ecart
+   interne — c'est le rapport qui separe, pas la valeur absolue. */
+.tarifs-options { gap: 40px; }
+.tarifs-options .famille-tarif { gap: 10px; }
+
+/* ── UNE GRILLE A COLONNES FIXES LAISSE DES CASES VIDES ───────────────────────────────────────
+
+   `repeat(auto-fill, minmax(196px, 1fr))` posait quatre colonnes de 203 px quel que soit le
+   nombre de modules : la rubrique « Vendre », qui en compte deux, occupait une demi-ligne et
+   laissait deux trous. On passe a un rangement qui s'adapte au contenu — les cartes grandissent
+   pour finir leur ligne au lieu de laisser des vides. */
+.tarifs-options .options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tarifs-options .options li {
+  flex: 1 1 190px;
+  max-width: 100%;
+}
+
+/* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
+
+   Meme cause, deux endroits : sept rubriques dans une grille qui en pose cinq par ligne, trois
+   articles dans une grille qui en pose quatre. Le trou tombe toujours a droite, la ou l'oeil
+   finit sa ligne — c'est l'endroit ou il se voit le plus.
+
+   ⚠ ON GARDE LA HAUTEUR EGALE DANS UNE LIGNE. Des cartes bordees de hauteurs differentes cote a
+   cote font moins bien que du vide : c'est la LIGNE qu'on remplit, pas la carte qu'on retaille. */
+.familles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.familles .famille { flex: 1 1 240px; min-width: 0; }
+
+.grille {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.grille > * { flex: 1 1 260px; min-width: 0; }
+
+/* ── L'ANNONCE DU MONTANT UNIQUE, SUR LA BANDE SOMBRE ─────────────────────────────────────────
+
+   Le pendant de `.tarifs-uniforme`, qui vit lui sur fond clair. */
+.tunnel-uniforme {
+  margin: 0 0 16px;
+  padding: 11px 15px;
+  border: 1px solid rgba(39, 217, 208, .30);
+  border-radius: 10px;
+  background: rgba(39, 217, 208, .10);
+  color: var(--hero-encre);
+  font-size: 15px;
+}
+.tunnel-uniforme strong { font-weight: 700; }
+
+/* Sans le prix a leur droite, les libelles tiennent sur une ligne : on peut resserrer. */
+.bande-sombre .choix-liste { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
