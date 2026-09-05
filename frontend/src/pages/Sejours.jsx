@@ -21,38 +21,36 @@ import { idDe } from '../api/iri.js'
 // et une ligne de bar à 9,00 €. Mesuré en base le 05/09. Ce n'est pas un module en attente de son
 // premier usage : c'est un module dont l'état courant n'était visible de nulle part.
 //
-// ── LE PIÈGE QUI ENFERME UN SÉJOUR, ET IL EST DÉFINITIF ─────────────────────────────────────────
+// ── LES TROIS ÉTATS, ET CE QUE CHACUN AUTORISE ──────────────────────────────────────────────────
 //
-// Trois règles du serveur se combinent en un cul-de-sac :
+//   ouvert   le client est là — tout s'ajoute ;
+//   clos     le client est parti — on peut encore encaisser, et corriger une ligne contestée ;
+//   soldé    terminé — plus rien ne bouge.
 //
-//   1. une ligne ne s'ajoute qu'à un séjour OUVERT (`Stay::acceptsCharges()`) ;
-//   2. régler exige que le séjour soit CLOS **et** que son solde soit NUL
-//      (`SettleStayProcessor`, `stay.error.balance_not_zero`) ;
-//   3. le solde est la simple SOMME des lignes (`StayBalance`) — le mettre à zéro demande donc une
-//      ligne négative, c'est-à-dire un règlement enregistré comme une ligne.
+// ⚠ CE N'ÉTAIT PAS LE CAS AVANT LE 05/09, ET ÇA ENFERMAIT LES SÉJOURS. Une ligne ne s'ajoutait
+// qu'à un séjour OUVERT ; régler exige un solde NUL ; le solde est la somme des lignes, donc le
+// mettre à zéro demande une ligne négative — un règlement. Clôturer avant d'encaisser rendait donc
+// le séjour impossible à régler, définitivement : rien ne rouvre un séjour, vérifié sur tout
+// `app/src/Stay` (`StayStatus::Open` n'est jamais réassigné).
 //
-// Donc : clôturer avant d'avoir enregistré le règlement rend le séjour IMPOSSIBLE à régler. Plus
-// aucune ligne n'est acceptée, et le solde ne redescendra jamais à zéro.
+// Le modèle voulait déjà l'inverse et se contredisait : `close()` est documenté « départ du
+// client », et son test dit que « partir et payer sont deux faits distincts — facturation différée
+// à un comité d'entreprise, litige sur une ligne ». Maxime a tranché dans ce sens.
 //
-// ⚠ ET IL N'Y A AUCUNE RÉOUVERTURE. Mesuré sur tout `app/src/Stay` : `StayStatus::Open` n'est
-// jamais RÉASSIGNÉ — c'est la valeur initiale de la propriété, et rien d'autre. Témoin positif dans
-// la même recherche : `Closed` et `Settled`, eux, sont bien posés par `Stay::close()` et
-// `Stay::settle()`. Le cul-de-sac est donc sans issue, et aucune route ne le rouvre.
+// L'invariant n'a pas disparu, il s'est déplacé d'un cran : c'est `Settled` qui porte le « réglé
+// une fois » de D16, parce qu'une ligne postérieure au règlement rendrait faux un encaissement déjà
+// passé en comptabilité.
 //
-// L'écran ne l'interdit pas — le serveur l'autorise, et un écran qui refuse ce que le serveur
-// accepte finit par faire croire que le logiciel est comme ça. Il met le règlement EN PREMIER quand
-// il reste quelque chose à payer, il pré-remplit la ligne au centime près, et la clôture d'un
-// séjour non soldé demande une confirmation qui nomme la conséquence.
+// ── LE TITULAIRE, ET POURQUOI IL A FALLU UN LOT SERVEUR POUR L'AFFICHER ─────────────────────────
 //
-// ── CE QUE L'API NE DIT PAS, ET QUE L'ÉCRAN NE PEUT DONC PAS AFFICHER ────────────────────────────
+// `Stay::$customer` ne portait AUCUN groupe de sérialisation : on ouvrait un séjour POUR un client
+// — le `POST` l'exige — et plus aucune lecture ne disait lequel. Cet écran a donc vécu ses
+// premières heures en affichant la seule référence `SEJ-…`, avec une phrase qui l'expliquait.
 //
-// `Stay::$customer` n'a AUCUN groupe de sérialisation — ni la collection, ni l'item, ni la note ne
-// l'exposent. On ouvre donc un séjour POUR un client (le `POST` l'exige), et plus rien ensuite ne
-// dit de qui il s'agit. La référence (`SEJ-…`) est le seul identifiant lisible, et c'est bien ce
-// que le modèle annonce : « affichée au comptoir ».
-//
-// C'est une limite du serveur, pas un choix d'affichage. L'écran le dit là où ça compte plutôt que
-// d'inventer un nom qu'il n'a pas.
+// Le groupe `stay:read` a été posé le 05/09 sur `customer`, et en retour sur les quatre champs
+// d'IDENTITÉ de `Client` (id, nom, prénom, raison sociale) — la convention du dépôt, que `Client`
+// suivait déjà pour six autres modules. La phrase d'excuse a disparu avec le défaut : c'est la
+// seule façon de ne pas la laisser mentir.
 //
 // ── LA RÉFÉRENCE N'EST PAS SÉQUENTIELLE, ET C'EST VOULU ─────────────────────────────────────────
 //
@@ -214,6 +212,7 @@ export default function Sejours({ etabActif, droits }) {
                 <thead>
                   <tr>
                     <th>Référence</th>
+                    <th>Titulaire</th>
                     <th>Arrivée</th>
                     <th>Départ prévu</th>
                     <th>Statut</th>
@@ -224,6 +223,9 @@ export default function Sejours({ etabActif, droits }) {
                   {affiches.map((s) => (
                     <tr key={idDe(s)}>
                       <td className="mono">{s.reference}</td>
+                      {/* `customer` arrive imbriqué avec son identité depuis le lot du 05/09 ;
+                          `nomClient` sait déjà rendre une personne comme une société. */}
+                      <td>{s.customer ? nomClient(s.customer) : <span className="sub">—</span>}</td>
                       <td>{dateFr(s.arrivalDate)}</td>
                       <td>{dateFr(s.expectedDepartureDate)}</td>
                       <td>{badgeStatut(s.status)}</td>
@@ -240,9 +242,8 @@ export default function Sejours({ etabActif, droits }) {
           )}
 
           <p className="hint">
-            Le nom du client n&rsquo;apparaît pas dans cette liste : l&rsquo;API ne l&rsquo;expose
-            sur aucune de ses lectures. La référence <span className="mono">SEJ-…</span> est
-            l&rsquo;identifiant prévu pour le comptoir.
+            La référence <span className="mono">SEJ-…</span> reste l&rsquo;identifiant qu&rsquo;on
+            annonce au comptoir : elle est courte, lisible, et volontairement non séquentielle.
           </p>
         </div>
       </div>
@@ -330,15 +331,14 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
   }
 
   async function cloturer() {
-    // ⚠ LA CONFIRMATION NOMME LA CONSÉQUENCE, elle ne demande pas « êtes-vous sûr ». Un séjour clos
-    // n'accepte plus aucune ligne et ne se rouvre pas : s'il reste quelque chose à payer, il ne
-    // pourra plus jamais être réglé.
+    // La confirmation dit ce qui change, et ce qui ne change pas. Clôturer n'enferme plus rien
+    // depuis le 05/09 : on peut encore encaisser après le départ. Ce qui devient irréversible, c'est
+    // « marquer réglé ».
     const message = soldeNul
-      ? 'Clôturer ce séjour ? Plus aucune ligne ne pourra y être ajoutée.'
+      ? 'Clôturer ce séjour ? Il restera modifiable jusqu’à ce que vous le marquiez réglé.'
       : `Clôturer ce séjour alors qu’il reste ${euros(solde)} à régler ?\n\n`
-        + '⚠ Un séjour clos n’accepte plus aucune ligne, et rien ne permet de le rouvrir. '
-        + 'Comme le règlement s’enregistre justement comme une ligne, ce séjour ne pourra plus '
-        + 'jamais être réglé : il restera clos avec son solde.'
+        + 'Le départ sera enregistré, et vous pourrez toujours encaisser ensuite — un séjour clos '
+        + 'accepte encore des lignes. Seul « marquer réglé » ferme la note pour de bon.'
     if (!await confirmer(message)) return
     await geste(() => api.cloturerSejour(idDe(sejour)), 'Séjour clôturé.')
   }
@@ -356,6 +356,7 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
       ) : (
         <>
           <div className="deflist">
+            <div><span>Titulaire</span><span>{sejour.customer ? nomClient(sejour.customer) : '—'}</span></div>
             <div><span>Statut</span><span>{badgeStatut(statut)}</span></div>
             <div>
               <span>Reste dû</span>
@@ -405,7 +406,9 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
           {/* ⚠ EN LIGNE, PAS DANS UNE SECONDE FENETRE. Une modale dans une modale superpose deux
               pieges a focus, et l'on ne sait plus laquelle repond a Echap. Ce formulaire ajoute une
               ligne a ce qu'on regarde deja : sa place est ici. */}
-          {ajout && note && statut === 'open' && (
+          {/* `!== 'settled'` et non `=== 'open'` : encaisser après le départ est justement le
+              geste que le correctif du 05/09 a rendu possible. */}
+          {ajout && note && statut !== 'settled' && (
             <AjouterLigne
               reglement={ajout === 'reglement'}
               solde={solde}
@@ -421,14 +424,20 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
             />
           )}
 
-          {statut === 'open' && !ajout && (
+          {/* ⚠ UN SEUL BLOC POUR « OUVERT » ET « CLOS ». Les deux offrent désormais les mêmes
+              gestes — ajouter une ligne, encaisser — et ne diffèrent que par leur bouton de
+              transition. Les garder séparés aurait dupliqué la barre, donc garanti qu'elles
+              divergent au prochain changement. */}
+          {statut !== 'settled' && !ajout && (
             <>
               {!soldeNul && (
                 <div className="banner banner-info">
-                  Un règlement s&rsquo;enregistre comme une ligne négative sur la note.{' '}
-                  <strong>Faites-le avant de clôturer</strong> : un séjour clos n&rsquo;accepte plus
-                  aucune ligne et ne se rouvre pas.
+                  Il reste <strong>{euros(solde)}</strong> à encaisser. Un règlement s&rsquo;enregistre
+                  comme une ligne négative sur la note — il n&rsquo;a pas de geste à lui.
                 </div>
+              )}
+              {soldeNul && statut === 'closed' && (
+                <p className="hint">Le solde est nul : le séjour peut être marqué réglé.</p>
               )}
               <div className="bar">
                 <button type="button" className="btn" onClick={onFermer}>Fermer</button>
@@ -442,7 +451,7 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
                     Enregistrer un règlement
                   </button>
                 )}
-                {peutCloturer && (
+                {statut === 'open' && peutCloturer && (
                   <button
                     type="button"
                     className={soldeNul ? 'btn primary' : 'btn'}
@@ -452,29 +461,13 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
                     Clôturer
                   </button>
                 )}
-              </div>
-            </>
-          )}
-
-          {statut === 'closed' && (
-            <>
-              {soldeNul ? (
-                <p className="hint">Le solde est nul : le séjour peut être réglé.</p>
-              ) : (
-                <div className="banner banner-warn">
-                  Ce séjour est clos avec {euros(solde)} restant dû, et il ne peut plus être réglé :
-                  une ligne ne s&rsquo;ajoute qu&rsquo;à un séjour ouvert, le règlement en est une, et
-                  aucune route ne rouvre un séjour. Le rattrapage se fait hors de cet écran.
-                </div>
-              )}
-              <div className="bar">
-                <button type="button" className="btn" onClick={onFermer}>Fermer</button>
-                {peutRegler && (
+                {statut === 'closed' && peutRegler && (
                   <button
                     type="button"
                     className="btn primary"
                     onClick={regler}
                     disabled={enCours || !soldeNul}
+                    title={soldeNul ? undefined : 'Le serveur exige un solde nul'}
                   >
                     Marquer réglé
                   </button>

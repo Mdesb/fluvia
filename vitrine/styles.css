@@ -572,48 +572,18 @@ input:focus-visible {
 .page-accueil .entete nav a:hover { color: #e7ecf7; background: rgba(231, 236, 247, .08); }
 .page-accueil .entete nav a.btn-primaire { color: var(--sur-accent); }
 
-/* `animation-timeline: scroll()` n'est pas partout ; la regle ci-dessous est donc une AMELIORATION
-   progressive. La ou elle ne s'applique pas, le menu reste transparent en haut de l'accueil — ce
-   qui est exactement l'etat voulu au chargement. */
-@supports (animation-timeline: scroll()) {
-  .page-accueil .entete {
-    animation: entete-poser linear both;
-    animation-timeline: scroll();
-    animation-range: 0 220px;
-  }
-  @keyframes entete-poser {
-    from { background: #050914; border-bottom-color: transparent; }
-    to {
-      background: color-mix(in srgb, var(--bg) 88%, transparent);
-      border-bottom-color: var(--line);
-    }
-  }
+/* ⚠ LA BASCULE DE COULEUR A ETE RETIREE (05/09, arbitrage de Maxime : « la barre du haut est
+   toujours en clair »).
 
-  /* ⚠ L'ENCRE SUIT LE FOND, SINON LE MENU DEVIENT ILLISIBLE EN DESCENDANT.
-     Je n'avais anime que le FOND : au defilement il revenait au theme clair pendant que « Fluvia »
-     et la navigation restaient clairs — clair sur clair. C'est l'erreur classique quand on traite
-     une seule moitie du couple couleur/fond. Les deux voyagent desormais ensemble, sur la meme
-     ligne de defilement. */
-  .page-accueil .entete .marque,
-  .page-accueil .entete nav a:not(.btn-primaire) {
-    animation: entete-encre linear both;
-    animation-timeline: scroll();
-    animation-range: 0 220px;
-  }
-  @keyframes entete-encre {
-    from { color: #e7ecf7; }
-    to { color: var(--ink); }
-  }
+   Ce qu'il y avait ici : `entete-poser`, une animation liee au defilement qui faisait passer la
+   barre du navy au fond clair entre 0 et 220 px, avec l'encre qui suivait. L'intention etait bonne
+   — une barre sombre sur le bandeau, claire sur le reste — mais le reste n'est pas clair : le
+   tunnel est une bande sombre, et la barre y arrivait claire.
 
-  /* La navigation secondaire reste plus discrete que la marque, dans les deux etats. */
-  .page-accueil .entete nav a:not(.btn-primaire) {
-    animation-name: entete-encre-douce;
-  }
-  @keyframes entete-encre-douce {
-    from { color: #a3aec8; }
-    to { color: var(--ink-soft); }
-  }
-}
+   ⚠ ET ELLE EXPLIQUE POURQUOI UNE REGLE POSEE PAR-DESSUS NE CHANGEAIT RIEN. Une animation gagne
+   contre toute declaration normale, quelle que soit sa specificite. Une barre qui change de camp
+   demande de savoir ce qu'il y a dessous a chaque instant ; une barre d'une seule couleur ne le
+   demande jamais. C'est la deuxieme qu'on garde. */
 
 /* Le badge se cassait en deux lignes dans la colonne etroite. */
 .hero-jeton { white-space: nowrap; }
@@ -1148,13 +1118,22 @@ input:focus-visible {
 .bande-sombre .etapes li { color: var(--hero-encre-douce); }
 .bande-sombre .etapes strong { color: var(--hero-encre); }
 
-/* Le formulaire vit sur des panneaux clairs : encre sombre, quoi que dise la bande. */
-.bande-sombre .tunnel { color: var(--ink); }
-.bande-sombre .tunnel .choix { color: var(--ink); }
-.bande-sombre .tunnel .choix-prix { color: var(--ink-soft); }
-.bande-sombre .tunnel label { color: var(--ink); }
-.bande-sombre .tunnel .aide { color: var(--ink-faint); }
-.bande-sombre .tunnel .total { color: var(--ink); }
+/* ⚠ CE BLOC A ETE RETOURNE LE 05/09, ET C'EST LE MEME PIEGE QU'IL Y A UNE SEMAINE, PRIS PAR
+   L'AUTRE BOUT.
+
+   Il disait : « le formulaire vit sur des panneaux CLAIRS : encre sombre, quoi que dise la bande ».
+   C'etait juste tant que les panneaux etaient blancs. Ils sont devenus du verre sur le navy — la
+   compensation s'est donc mise a produire exactement le defaut qu'elle avait ete ecrite pour
+   corriger, du noir sur du sombre, et personne n'aurait su qu'elle etait la.
+
+   ⚠ ON LA CORRIGE ICI, PAS PAR UNE REGLE PLUS SPECIFIQUE PLUS BAS. Deux blocs qui decrivent la
+   meme encre en se contredisant, c'est le prochain quart d'heure perdu a chercher lequel gagne. */
+.bande-sombre .tunnel { color: var(--hero-encre); }
+.bande-sombre .tunnel .choix { color: var(--hero-encre); }
+.bande-sombre .tunnel .choix-prix { color: var(--hero-encre-douce); }
+.bande-sombre .tunnel label { color: var(--hero-encre); }
+.bande-sombre .tunnel .aide { color: var(--hero-encre-douce); }
+.bande-sombre .tunnel .total { color: var(--hero-encre); }
 
 /* ⚠ LA LEGENDE REPOSE SUR LE PANNEAU, PAS SUR LA BANDE.
    Je l'avais eclaircie en croyant qu'elle debordait sur le fond sombre : elle chevauche en realite
@@ -1164,10 +1143,14 @@ input:focus-visible {
    ⚠ LA SORTIE N'EST PAS DE CHOISIR LA BONNE ENCRE, C'EST DE NE PLUS DEPENDRE DU FOND. La legende
    porte desormais SON PROPRE fond clair : elle se lit sur la bande comme sur le panneau, et la
    question ne se reposera pas au prochain changement de section. */
+/* ⚠ LE FOND CLAIR N'A PLUS LIEU D'ETRE, ET LE RAISONNEMENT CI-DESSUS RESTE VRAI.
+   Il avait ete pose pour que la legende ne depende plus de ce qu'il y a derriere elle — bande
+   sombre d'un cote, panneau clair de l'autre. Les deux cotes sont desormais sombres : elle ne
+   depend plus de rien, et une pastille claire y ferait une tache. */
 .bande-sombre .tunnel legend {
-  color: var(--ink);
-  background: var(--panel);
-  border-radius: 6px;
+  color: var(--hero-encre-douce);
+  background: none;
+  border-radius: 0;
 }
 
 /* Les messages d'etat du tunnel sont poses sur la bande, pas dans un panneau. */
@@ -1439,7 +1422,6 @@ input:focus-visible {
   font-weight: 600;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: #a3aec8;
 }
 
 .bande-sombre .choix-liste {
@@ -1453,7 +1435,6 @@ input:focus-visible {
   border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 12px;
   background: rgba(255, 255, 255, .05);
-  color: #e7ecf7;
   transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
 }
 .bande-sombre .choix:hover {
@@ -1472,16 +1453,16 @@ input:focus-visible {
   height: 17px;
   accent-color: var(--marque-cyan);
 }
-.bande-sombre .choix-prix { color: #a3aec8; }
 
-.bande-sombre .champ label { color: #e7ecf7; }
+
+
 .bande-sombre .champ input {
   border-color: rgba(255, 255, 255, .16);
   background: rgba(255, 255, 255, .06);
   color: #e7ecf7;
 }
 .bande-sombre .champ input::placeholder { color: #8b96b2; }
-.bande-sombre .aide { color: #a3aec8; }
+
 
 .bande-sombre .total {
   border: 1px solid rgba(39, 217, 208, .38);
@@ -1622,3 +1603,93 @@ input:focus-visible {
   .pied-corps { grid-template-columns: minmax(0, 1fr); }
   .tarifs-grille .formules { position: static; }
 }
+
+
+/* ══ DEFAUTS VUS EN LIGNE (05/09, seconde revue) ══════════════════════════════════════════════
+
+   Quatre defauts de mise en page, tous mesures au navigateur sur la page servie avant d'etre
+   corriges ici. Aucun n'etait visible dans le code : ils naissent tous du nombre reel d'elements
+   que le catalogue produit — deux modules dans une rubrique, trois articles, sept rubriques.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── UNE BOITE D'ETAT VIDE RESTE UNE BOITE ────────────────────────────────────────────────────
+
+   `#tunnel-message` mesurait 550 x 30 px, en pointilles, sans une lettre dedans, juste au-dessus
+   du bouton qui declenche la vente. Un cadre vide sur un formulaire se lit comme un defaut, pas
+   comme une place reservee.
+
+   ⚠ `:empty` PLUTOT QU'UN `hidden` POSE PAR LE SCRIPT : la regle vaut pour les trois zones d'etat
+   de la page, y compris celles qu'on ajoutera, et elle ne peut pas se desynchroniser d'un script. */
+.etat:empty { display: none; }
+
+/* ── LES ETIQUETTES DE RUBRIQUE SE RATTACHAIENT AU GROUPE PRECEDENT ───────────────────────────
+
+   22 px au-dessus de l'etiquette, 12 px en dessous : trop proche pour que l'oeil tranche, et il
+   tranche toujours en faveur de ce qui precede. « Controler les acces » avait l'air d'etre le
+   pied de la rubrique « Vendre ». L'ecart entre groupes passe donc a quatre fois l'ecart
+   interne — c'est le rapport qui separe, pas la valeur absolue. */
+.tarifs-options { gap: 40px; }
+.tarifs-options .famille-tarif { gap: 10px; }
+
+/* ── UNE GRILLE A COLONNES FIXES LAISSE DES CASES VIDES ───────────────────────────────────────
+
+   `repeat(auto-fill, minmax(196px, 1fr))` posait quatre colonnes de 203 px quel que soit le
+   nombre de modules : la rubrique « Vendre », qui en compte deux, occupait une demi-ligne et
+   laissait deux trous. On passe a un rangement qui s'adapte au contenu — les cartes grandissent
+   pour finir leur ligne au lieu de laisser des vides. */
+.tarifs-options .options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tarifs-options .options li {
+  flex: 1 1 190px;
+  max-width: 100%;
+}
+
+/* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
+
+   Meme cause, deux endroits : sept rubriques dans une grille qui en pose cinq par ligne, trois
+   articles dans une grille qui en pose quatre. Le trou tombe toujours a droite, la ou l'oeil
+   finit sa ligne — c'est l'endroit ou il se voit le plus.
+
+   ⚠ ON GARDE LA HAUTEUR EGALE DANS UNE LIGNE. Des cartes bordees de hauteurs differentes cote a
+   cote font moins bien que du vide : c'est la LIGNE qu'on remplit, pas la carte qu'on retaille. */
+.familles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.familles .famille { flex: 1 1 240px; min-width: 0; }
+
+.grille {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.grille > * { flex: 1 1 260px; min-width: 0; }
+
+/* ── L'ANNONCE DU MONTANT UNIQUE, SUR LA BANDE SOMBRE ─────────────────────────────────────────
+
+   Le pendant de `.tarifs-uniforme`, qui vit lui sur fond clair. */
+.tunnel-uniforme {
+  margin: 0 0 16px;
+  padding: 11px 15px;
+  border: 1px solid rgba(39, 217, 208, .30);
+  border-radius: 10px;
+  background: rgba(39, 217, 208, .10);
+  color: var(--hero-encre);
+  font-size: 15px;
+}
+.tunnel-uniforme strong { font-weight: 700; }
+
+/* Sans le prix a leur droite, les libelles tiennent sur une ligne : on peut resserrer. */
+/* ⚠ QUATRIEME INSTANCE DU MEME DEFAUT, corrigee avec les trois autres. La derniere rangee
+   d'options laissait un vide a droite, exactement comme les rubriques, les articles et les groupes
+   de tarifs. Un defaut corrige a trois endroits sur quatre se voit PLUS au quatrieme, pas moins. */
+.bande-sombre .choix-liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.bande-sombre .choix-liste > * { flex: 1 1 200px; min-width: 0; }

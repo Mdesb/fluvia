@@ -10,6 +10,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
 use App\Reporting\Entity\Export;
+use App\Reporting\Entity\Indicateur;
 use App\Reporting\Enum\FormatExport;
 use App\Reporting\Enum\NiveauEntite;
 use App\Reporting\Enum\StatutExport;
@@ -57,11 +58,18 @@ final class ExportManuelProcessor implements ProcessorInterface
         \assert($utilisateur instanceof Utilisateur);
 
         $niveau = NiveauEntite::tryFrom((string) ($corps['niveau'] ?? ''));
+        // On accepte l'IRI comme l'identifiant nu : l'ecran envoie l'une, un script d'integration
+        // envoie souvent l'autre, et les processeurs voisins de ce module font deja les deux.
+        // Auparavant `Uuid::isValid()` refusait l'IRI avec « niveau et entiteId requis », message
+        // qui ne disait rien de la vraie cause.
         $entiteIdBrut = $corps['entiteId'] ?? null;
-        if ($niveau === null || !\is_string($entiteIdBrut) || !Uuid::isValid($entiteIdBrut)) {
+        $entiteIdNu = \is_string($entiteIdBrut) && str_contains($entiteIdBrut, '/')
+            ? substr((string) strrchr($entiteIdBrut, '/'), 1)
+            : $entiteIdBrut;
+        if ($niveau === null || !\is_string($entiteIdNu) || !Uuid::isValid($entiteIdNu)) {
             throw new UnprocessableEntityHttpException('niveau et entiteId requis (etablissement|region|groupe).');
         }
-        $entiteId = Uuid::fromString($entiteIdBrut);
+        $entiteId = Uuid::fromString($entiteIdNu);
 
         $perimetre = $this->resolver->perimetreEffectif($utilisateur, 'lire');
         $autorise = match ($niveau) {
@@ -78,22 +86,51 @@ final class ExportManuelProcessor implements ProcessorInterface
         $codes = $corps['indicateurs'] ?? null;
         $codes = \is_array($codes) && $codes !== [] ? array_map('strval', $codes) : $this->codesActifs();
 
-        $periode = Periode::jour();
-        $entetes = ['indicateur', 'valeur', 'statutCompletude'];
+        // ── LA PERIODE, ET NON PLUS « AUJOURD'HUI » ─────────────────────────────────────
+        //
+        // Cette methode posait `Periode::jour()` en dur : l'export ne couvrait que la journee en
+        // cours, ce qui ne sert a rien a qui doit produire un etat mensuel ou annuel. Les deux
+        // dates sont desormais lues dans le corps, et restent facultatives — un appel qui n'en
+        // envoie pas obtient la journee, comme avant.
+        $jours = $this->joursDemandes($corps);
+
+        $entetes = ['jour', 'indicateur', 'valeur', 'unite', 'etat', 'statutCompletude'];
         $lignes = [];
-        foreach ($codes as $code) {
-            $mesure = $this->lookup->trouver($code, $niveau, $entiteId, $periode);
-            $lignes[] = [
-                'indicateur' => $code,
-                'valeur' => $mesure?->getValeur() ?? '',
-                'statutCompletude' => $mesure?->getStatutCompletude()->value ?? '',
-            ];
+        $unites = $this->unitesParCode();
+
+        foreach ($jours as $jour) {
+            $periode = Periode::jour($jour);
+            foreach ($codes as $code) {
+                $mesure = $this->lookup->trouver($code, $niveau, $entiteId, $periode);
+
+                // ⚠ UN JOUR NON AGREGE N'EST PAS UN ZERO, ET LE FICHIER DOIT LE DIRE LUI-MEME.
+                // La version precedente sortait une valeur vide. Dans un tableur, une cellule vide
+                // prise dans une somme vaut zero : le fichier aurait fait mentir un total chez son
+                // destinataire, hors de toute application et sans que rien ne le rattrape. La
+                // colonne `etat` porte la distinction, et la valeur reste vide.
+                $lignes[] = [
+                    'jour' => $jour->format('Y-m-d'),
+                    'indicateur' => $code,
+                    'valeur' => $mesure?->getValeur() ?? '',
+                    'unite' => $unites[$code] ?? '',
+                    'etat' => $mesure === null ? 'non agrege' : 'mesure',
+                    'statutCompletude' => $mesure?->getStatutCompletude()->value ?? '',
+                ];
+            }
         }
 
         $export = new Export();
         $export->setFormat($format);
         $export->setDemandePar($utilisateur);
-        $export->setAxesAppliques(['indicateurs' => $codes, 'periodeDebut' => $periode->debut->format('Y-m-d'), 'periodeFin' => $periode->fin->format('Y-m-d')]);
+        // ⚠ LA PLAGE DEMANDEE, PAS LA VARIABLE DE BOUCLE. Cette ligne lisait `$periode`,
+        // devenue la variable du `foreach` : elle enregistrait le dernier jour comme si
+        // c'etait toute la periode. Le fichier etait juste, sa fiche mentait — et c'est la
+        // fiche que l'ecran affiche dans la liste des exports demandes.
+        $export->setAxesAppliques([
+            'indicateurs' => $codes,
+            'periodeDebut' => $jours[0]->format('Y-m-d'),
+            'periodeFin' => $jours[array_key_last($jours)]->format('Y-m-d'),
+        ]);
         $this->rattacher($export, $niveau, $entiteId);
 
         try {
@@ -145,4 +182,85 @@ final class ExportManuelProcessor implements ProcessorInterface
 
         return array_map(static fn ($i): string => $i->getCode(), $indicateurs);
     }
+
+    /** Nombre de jours qu'un seul export peut couvrir. Au-dela, on refuse en le nommant. */
+    private const JOURS_MAX = 366;
+
+    /**
+     * Les jours couverts par l'export, du plus ancien au plus recent.
+     *
+     * ⚠ UNE REQUETE PAR JOUR ET PAR INDICATEUR. C'est le prix de la granularite reelle des
+     * mesures — `MesureLookupService::trouver` compare une cle d'agregation qui inclut les dates
+     * exactes, donc demander une plage d'un coup ne trouve rien. D'ou la borne : sans elle, une
+     * demande de dix ans sur neuf indicateurs lancerait plus de trente mille requetes.
+     *
+     * \param array<string, mixed> $corps
+     *
+     * \return list<\DateTimeImmutable>
+     */
+    private function joursDemandes(array $corps): array
+    {
+        $debut = $this->dateOuNull($corps['periodeDebut'] ?? null, 'periodeDebut');
+        $fin = $this->dateOuNull($corps['periodeFin'] ?? null, 'periodeFin');
+
+        if ($debut === null && $fin === null) {
+            return [new \DateTimeImmutable('today')];
+        }
+        $debut ??= $fin;
+        $fin ??= $debut;
+        \assert($debut instanceof \DateTimeImmutable && $fin instanceof \DateTimeImmutable);
+
+        if ($fin < $debut) {
+            throw new UnprocessableEntityHttpException('periodeFin anterieure a periodeDebut.');
+        }
+
+        $nombre = (int) $debut->diff($fin)->days + 1;
+        if ($nombre > self::JOURS_MAX) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Periode trop longue : %d jours demandes, %d au maximum par export. '
+                . 'Decoupez en plusieurs exports.',
+                $nombre,
+                self::JOURS_MAX,
+            ));
+        }
+
+        $jours = [];
+        for ($i = 0; $i < $nombre; ++$i) {
+            $jours[] = $debut->modify(sprintf('+%d days', $i));
+        }
+
+        return $jours;
+    }
+
+    private function dateOuNull(mixed $brut, string $champ): ?\DateTimeImmutable
+    {
+        if (!\is_string($brut) || trim($brut) === '') {
+            return null;
+        }
+        try {
+            return new \DateTimeImmutable(substr(trim($brut), 0, 10));
+        } catch (\Exception) {
+            throw new UnprocessableEntityHttpException(sprintf('%s illisible : attendu AAAA-MM-JJ.', $champ));
+        }
+    }
+
+    /**
+     * L'unite de chaque indicateur, par code.
+     *
+     * Elle est dans le fichier parce que le destinataire n'a pas l'application sous les yeux :
+     * une colonne de nombres sans unite se lit de travers, et une somme d'euros melangee a des
+     * pourcentages ne se voit pas.
+     *
+     * \return array<string, string>
+     */
+    private function unitesParCode(): array
+    {
+        $par = [];
+        foreach ($this->em->getRepository(Indicateur::class)->findAll() as $indicateur) {
+            $par[$indicateur->getCode()] = $indicateur->getUnite()->value;
+        }
+
+        return $par;
+    }
+
 }

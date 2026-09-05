@@ -109,6 +109,14 @@ class Stay
      */
     #[ORM\ManyToOne(targetEntity: Client::class)]
     #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
+    // ⚠ SANS CE GROUPE, AUCUNE LECTURE NE DISAIT DE QUI ETAIT LE SEJOUR. Le `POST` exige un client,
+    // et plus rien ensuite ne le nommait : ni la collection, ni l'item, ni la note. L'ecran ne
+    // pouvait afficher que la reference `SEJ-...`, ce que le modele annonce comme « affichee au
+    // comptoir » — vrai pour appeler quelqu'un, faux pour savoir qui c'est.
+    //
+    // Les champs d'identite de `Client` portent `stay:read` en retour, comme ils portent deja
+    // `beneficiaire:read` pour la meme raison exactement.
+    #[Groups(['stay:read'])]
     private Client $customer;
 
     /** Référence lisible par l'exploitant, unique par établissement (affichée au comptoir). */
@@ -222,10 +230,25 @@ class Stay
         return $this->settledAt;
     }
 
-    /** Un séjour clos ou soldé n'accepte plus de ligne — c'est l'invariant que `StayCharge` suppose. */
+    /**
+     * Un séjour SOLDÉ n'accepte plus de ligne — c'est l'invariant que `StayCharge` suppose.
+     *
+     * ⚠ UN SÉJOUR CLOS EN ACCEPTE ENCORE, ET C'EST LE CORRECTIF DU 05/09. Le refuser fermait un
+     * cul-de-sac sans issue : régler exige un solde nul, le solde est la somme des lignes, et un
+     * règlement EST une ligne. Clôturer avant d'encaisser rendait donc le séjour impossible à
+     * régler — définitivement, puisque rien ne rouvre un séjour.
+     *
+     * Le modèle voulait déjà l'inverse : `close()` est « le départ du client », et
+     * `testReglementPosterieurAuDepart` dit que « partir et payer sont deux faits distincts —
+     * facturation différée à un comité d'entreprise, litige sur une ligne ».
+     *
+     * L'invariant ne disparaît pas, il se déplace d'un cran : c'est `Settled` qui porte le « réglé
+     * une fois » de D16, parce qu'une ligne postérieure au règlement rendrait faux un encaissement
+     * déjà passé en comptabilité.
+     */
     public function acceptsCharges(): bool
     {
-        return StayStatus::Open === $this->status;
+        return StayStatus::Settled !== $this->status;
     }
 
     /**

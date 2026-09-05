@@ -42,7 +42,10 @@ final class AddStayChargeProcessor implements ProcessorInterface
         $sejour = $this->sejours->resolve($uriVariables);
 
         if (!$sejour->acceptsCharges()) {
-            throw new ConflictHttpException('stay.error.stay_closed');
+            // ⚠ `stay_settled` ET NON `stay_closed` DEPUIS LE 05/09 : un séjour clos accepte encore
+            // des lignes — c'est ainsi qu'on encaisse après le départ. Seul un séjour soldé refuse.
+            // Garder l'ancien code aurait fait chercher un défaut de clôture là où il n'y en a pas.
+            throw new ConflictHttpException('stay.error.stay_settled');
         }
 
         $libelle = $corps['label'] ?? null;
