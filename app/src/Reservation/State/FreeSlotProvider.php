@@ -73,6 +73,16 @@ final class FreeSlotProvider implements ProviderInterface
                     'fin' => $creneau['fin']->format(\DATE_ATOM),
                     'ressource' => (string) $resource->getId(),
                     'ressourceLibelle' => $resource->getLibelle(),
+                    // LE PRIX SE DIT ICI OU IL NE SE DIRA NULLE PART. Quand on propose « avec qui
+                    // est libre », deux praticiens peuvent ne pas couter la meme chose : afficher
+                    // des heures sans leur prix laisse le client decouvrir l'ecart a la caisse.
+                    'tarif' => number_format(
+                        (float) $activity->getTarifReferenceMontant() + (float) $resource->getSupplementTarifMontant(),
+                        2,
+                        '.',
+                        '',
+                    ),
+                    'supplement' => $resource->getSupplementTarifMontant(),
                 ];
             }
         }

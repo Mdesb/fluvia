@@ -170,6 +170,20 @@ export default function Disponibilites({ droits = [] }) {
                     agir(() => api.majRessourceReservation(r.id, { capacitePropre: capacite }))
                   }
                 />
+                {/* ⚠ UN SUPPLÉMENT, PAS UN PRIX. Il s'ajoute au tarif de la prestation : « junior »
+                    est simplement le supplément à zéro. Un prix absolu ici créerait une seconde
+                    source pour le même chiffre, et changer le tarif de la prestation laisserait ces
+                    praticiens en arrière, en silence.
+                    ⚠ Et il compte AUSSI dans la facturation d'une non-présentation, ce qu'aucun
+                    écran ne montre — d'où la mention sous le champ. */}
+                <SupplementEditable
+                  ressource={r}
+                  peutGerer={peutGerer}
+                  busy={busy}
+                  onEnregistrer={(montant) =>
+                    agir(() => api.majRessourceReservation(r.id, { supplementTarifMontant: montant }))
+                  }
+                />
                 {journees.length === 0 && (
                   <span className="badge warn" style={{ marginLeft: 8 }}>aucun horaire</span>
                 )}
@@ -505,5 +519,64 @@ function DeclarerAbsence({ busy, onDeclarer }) {
         </button>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * LE SUPPLÉMENT TARIFAIRE D'UN PRATICIEN — « avec Sophie, +15 € ».
+ *
+ * ⚠ ZÉRO EST UNE VALEUR, PAS UN VIDE. Un praticien sans supplément coûte le prix de la prestation :
+ * l'écran l'écrit (« au tarif de la prestation ») au lieu de laisser une case vide, qui se lirait
+ * comme « pas encore réglé ».
+ */
+function SupplementEditable({ ressource, peutGerer, busy, onEnregistrer }) {
+  const [edition, setEdition] = useState(false)
+  const [valeur, setValeur] = useState(String(ressource.supplementTarifMontant ?? '0.00'))
+
+  const courant = Number(ressource.supplementTarifMontant ?? 0)
+
+  if (!edition) {
+    return (
+      <span className="badge mut" style={{ marginLeft: 'var(--esp-normal)' }}>
+        {courant > 0 ? `+${ressource.supplementTarifMontant} €` : 'au tarif de la prestation'}
+        {peutGerer && (
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ marginLeft: 'var(--esp-serre)' }}
+            disabled={busy}
+            onClick={() => { setValeur(String(ressource.supplementTarifMontant ?? '0.00')); setEdition(true) }}
+          >
+            Supplément
+          </button>
+        )}
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ marginLeft: 'var(--esp-normal)', display: 'inline-flex', gap: 'var(--esp-serre)', alignItems: 'center' }}>
+      <input
+        className="input"
+        type="number"
+        min="0"
+        step="0.01"
+        value={valeur}
+        aria-label={`Supplément tarifaire de ${ressource.libelle || 'la ressource'}`}
+        onChange={(e) => setValeur(e.target.value)}
+        style={{ width: 96 }}
+      />
+      <button type="button" className="btn primary sm" disabled={busy}
+        onClick={() => { onEnregistrer(Number(valeur) < 0 ? '0.00' : valeur); setEdition(false) }}>
+        Enregistrer
+      </button>
+      <button type="button" className="btn ghost sm" disabled={busy} onClick={() => setEdition(false)}>
+        Annuler
+      </button>
+      <span className="sub" style={{ fontSize: 11 }}>
+        S’ajoute au tarif de la prestation, et compte aussi dans la facturation d’une absence.
+      </span>
+    </span>
   )
 }
