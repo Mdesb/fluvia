@@ -38,6 +38,7 @@ final class SlotWaitlistPromotionService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ClientNotifierInterface $notifier,
+        private readonly ReservationSlotReader $slotReader,
         private readonly ?LoggerInterface $logger = null,
     ) {
     }
@@ -53,10 +54,75 @@ final class SlotWaitlistPromotionService
      * (l'expiration constatée déclenche elle-même la promotion suivante, il n'existe pas d'instant
      * antérieur plus légitime).
      */
+    /**
+     * Clot une proposition et TENTE DE SERVIR LE SUIVANT (RG-SF-07).
+     *
+     * Extrait de `ExpireSlotWaitlistPromotionsCommand`, qui portait seule cette sequence : la route
+     * `POST .../decline` se contentait de basculer le statut, donc un client qui repondait
+     * « non merci » bloquait la place pour tous les suivants.
+     *
+     * ⚠ LE `flush` INTERCALE N'EST PAS DECORATIF. `promoteNext()` relit les inscriptions `waiting`
+     * par une requete DQL fraiche : sans lui, l'inscription qu'on vient de consommer serait encore
+     * `waiting` en base et pourrait etre REPROMUE elle-meme. C'est precisement ce qu'on oublierait
+     * en recopiant cette sequence ailleurs.
+     *
+     * `$statutInscription` distingue les deux issues, qui ne sont pas le meme fait : `Expired` quand
+     * personne n'a repondu, `Cancelled` quand la personne a refuse.
+     *
+     * Une proposition I1 (report de no-show) n'a pas de `sourceWaitlistEntryRef` : il n'y a alors
+     * aucune inscription a consommer ni personne a servir ensuite.
+     */
+    public function closeAndPromoteNext(
+        RescheduleProposal $proposal,
+        SlotWaitlistEntryStatus $statutInscription,
+        \DateTimeImmutable $occurredAt,
+    ): ?RescheduleProposal {
+        $proposal->setStatus(RescheduleProposalStatus::Expired);
+
+        $entryRef = $proposal->getSourceWaitlistEntryRef();
+        $entry = $entryRef !== null
+            ? $this->em->getRepository(SlotWaitlistEntry::class)->find($entryRef)
+            : null;
+
+        if (!$entry instanceof SlotWaitlistEntry) {
+            $this->em->flush();
+
+            return null;
+        }
+
+        $entry->setStatus($statutInscription);
+        $establishment = $entry->getEstablishment();
+        $this->em->flush();
+
+        if ($establishment === null) {
+            return null;
+        }
+
+        return $this->promoteNext($establishment, $entry->getResourceId(), $proposal->getOriginSlotId(), $occurredAt);
+    }
+
     public function promoteNext(Etablissement $establishment, Uuid $resourceId, Uuid $slotId, \DateTimeImmutable $occurredAt): ?RescheduleProposal
     {
-        /** @var SlotWaitlistEntry|null $entry */
-        $entry = $this->em->getRepository(SlotWaitlistEntry::class)->createQueryBuilder('e')
+        // ⚠ LA FENETRE DE RECHERCHE EST HONOREE DEPUIS LE 05/09 — elle ne l'etait pas avant.
+        //
+        // `searchWindowStart`/`End` etaient exiges a l'inscription, stockes, et jamais lus : on
+        // pouvait proposer un creneau de decembre a quelqu'un qui avait demande la semaine
+        // prochaine. Le filtre a besoin de la DATE du creneau, que cette methode ne recoit pas —
+        // elle ne recoit qu'un identifiant — d'ou cette relecture.
+        $creneau = $this->slotReader->snapshotCreneau($slotId, $establishment->getId());
+
+        if ($creneau === null) {
+            // ⚠ REPLI BRUYANT, JAMAIS SILENCIEUX. Sans la date, la fenetre est inapplicable.
+            // Refuser toute promotion priverait quelqu'un d'une vraie place sur un echec de
+            // lecture ; on retombe donc sur le comportement d'avant, en le DISANT. Un repli muet
+            // serait indiscernable d'un filtre qui fonctionne.
+            $this->logger?->warning('smart_flow.promotion.slot_illisible', [
+                'slot' => (string) $slotId,
+                'consequence' => 'fenetre de recherche non appliquee pour cette promotion',
+            ]);
+        }
+
+        $requete = $this->em->getRepository(SlotWaitlistEntry::class)->createQueryBuilder('e')
             ->andWhere('e.establishment = :establishment')
             ->andWhere('e.resourceId = :resourceId')
             ->andWhere('e.status = :status')
@@ -64,9 +130,20 @@ final class SlotWaitlistPromotionService
             ->setParameter('resourceId', $resourceId, 'uuid')
             ->setParameter('status', SlotWaitlistEntryStatus::Waiting->value)
             ->orderBy('e.rank', 'ASC')
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult();
+            ->setMaxResults(1);
+
+        if ($creneau !== null) {
+            // La comparaison porte sur le DEBUT du creneau : « je cherche entre le 10 et le 15 »
+            // veut dire qu'un creneau COMMENCANT dans cette plage convient, pas qu'il doive s'y
+            // terminer.
+            $requete
+                ->andWhere('e.searchWindowStart <= :debutCreneau')
+                ->andWhere('e.searchWindowEnd >= :debutCreneau')
+                ->setParameter('debutCreneau', $creneau->start, 'datetime_immutable');
+        }
+
+        /** @var SlotWaitlistEntry|null $entry */
+        $entry = $requete->getQuery()->getOneOrNullResult();
 
         if (!$entry instanceof SlotWaitlistEntry) {
             return null;

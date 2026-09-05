@@ -8,7 +8,8 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\SmartFlow\Entity\RescheduleProposal;
 use App\SmartFlow\Enum\RescheduleProposalStatus;
-use Doctrine\ORM\EntityManagerInterface;
+use App\SmartFlow\Enum\SlotWaitlistEntryStatus;
+use App\SmartFlow\Service\SlotWaitlistPromotionService;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
@@ -28,7 +29,7 @@ final class DeclineRescheduleProposalProcessor implements ProcessorInterface
     private const NON_TERMINAL_STATUSES = [RescheduleProposalStatus::Searching, RescheduleProposalStatus::Proposed];
 
     public function __construct(
-        private readonly EntityManagerInterface $em,
+        private readonly SlotWaitlistPromotionService $promotionService,
     ) {
     }
 
@@ -40,8 +41,17 @@ final class DeclineRescheduleProposalProcessor implements ProcessorInterface
             throw new ConflictHttpException('smart_flow.error.reschedule_proposal_already_terminal');
         }
 
-        $data->setStatus(RescheduleProposalStatus::Expired);
-        $this->em->flush();
+        // ⚠ ON NE SE CONTENTE PLUS DE CLORE. Jusqu'au 05/09, cette route basculait le statut et
+        // s'arrêtait là : l'inscription restait « promue » et personne d'autre n'était servi. Un
+        // client qui répondait « non merci » bloquait donc la place pour tous les suivants.
+        //
+        // `Cancelled` et non `Expired` sur l'inscription : refuser n'est pas ne pas avoir répondu,
+        // et l'enum portait ce cas sans que rien ne le pose.
+        $this->promotionService->closeAndPromoteNext(
+            $data,
+            SlotWaitlistEntryStatus::Cancelled,
+            new \DateTimeImmutable(),
+        );
 
         return $data;
     }
