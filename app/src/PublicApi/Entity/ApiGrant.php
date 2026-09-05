@@ -38,11 +38,13 @@ class ApiGrant
     private Uuid $id;
 
     #[ORM\ManyToOne(targetEntity: PartnerApplication::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
     private ?PartnerApplication $application = null;
 
+    // CASCADE : un etablissement supprime emporte les consentements qu'il avait donnes — ils
+    // n'ont plus d'objet, et les laisser ferait pointer un acces vers rien.
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?Etablissement $etablissement = null;
 
     /** @var list<string> les valeurs de {@see ApiScope} */
@@ -55,8 +57,10 @@ class ApiGrant
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $grantedAt;
 
+    // SET NULL : qui a accorde reste une information utile, mais le depart d'un salarie ne doit
+    // pas retirer un acces que l'etablissement a consenti.
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Utilisateur $grantedBy = null;
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]

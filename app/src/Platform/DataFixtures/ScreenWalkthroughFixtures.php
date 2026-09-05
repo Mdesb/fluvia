@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Platform\DataFixtures;
 
 use App\DataFixtures\SocleFixtures;
+use App\Crm\DataFixtures\CrmFixtures;
+use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Organisation\Entity\Etablissement;
 use App\Piscine\DataFixtures\PiscineFixtures;
@@ -17,7 +19,7 @@ use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
-use App\Reservation\Entity\Beneficiaire;
+use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\StatutCreneau;
@@ -35,6 +37,7 @@ use App\SmartFlow\Entity\SlotWaitlistEntry;
 use App\SmartFlow\Enum\SlotWaitlistEntryStatus;
 use App\Stay\Entity\Stay;
 use App\Stay\Entity\StayCharge;
+use App\Vente\DataFixtures\VenteFixtures;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\Vente;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -96,10 +99,25 @@ final class ScreenWalkthroughFixtures extends Fixture implements DependentFixtur
     ) {
     }
 
-    /** @return list<class-string> */
+    /**
+     * ⚠ ON DECLARE TOUT CE QU'ON LIT, PAS SEULEMENT CE QU'ON PROLONGE.
+     *
+     * Cette classe cherche des ventes, des clients, des beneficiaires et des ressources. Sans ces
+     * dependances, l'ordre de chargement n'est pas garanti : « aucune vente trouvee » ne veut alors
+     * pas dire qu'il n'y en a pas, mais qu'elle n'est pas encore ecrite. Sur la preproduction, ou
+     * les 41 ventes existent deja, le defaut restait invisible.
+     *
+     * @return list<class-string>
+     */
     public function getDependencies(): array
     {
-        return [SocleFixtures::class, PiscineFixtures::class];
+        return [
+            SocleFixtures::class,
+            CrmFixtures::class,
+            VenteFixtures::class,
+            ReservationFixtures::class,
+            PiscineFixtures::class,
+        ];
     }
 
     public function load(ObjectManager $manager): void
@@ -387,19 +405,24 @@ final class ScreenWalkthroughFixtures extends Fixture implements DependentFixtur
             return;
         }
 
+        // ⚠ `venteOrigine` EST NOT NULL : sans vente, on ne crée pas l'avoir. Un avoir sans origine
+        // ne ressemble d'ailleurs à rien de ce qu'un exploitant verra — il naît toujours d'une vente
+        // qu'on annule ou qu'on rembourse.
         $vente = $manager->getRepository(Vente::class)->findOneBy(['etablissement' => $etab]);
+        if (!$vente instanceof Vente) {
+            return;
+        }
+
         $auteur = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => SocleFixtures::ADMIN_EMAIL]);
 
         $avoir = (new Avoir())
             ->setNumero(self::AVOIR_NUMERO)
+            ->setVenteOrigine($vente)
             ->setMontant('19.90')
             ->setMotif('Article rendu en bon état — à réintégrer en stock')
             ->setNature('remboursement')
             ->setEtablissement($etab);
 
-        if ($vente instanceof Vente) {
-            $avoir->setVenteOrigine($vente);
-        }
         if ($auteur instanceof Utilisateur) {
             $avoir->setAuteur($auteur);
         }
