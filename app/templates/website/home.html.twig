@@ -315,9 +315,18 @@
 
       <ul class="grille" role="list">
         {% for article in derniers %}
-          <li class="carte">
-            <h3><a href="{{ path('website_blog_post', {slug: article.slug}) }}">{{ article.title }}</a></h3>
-            <p>{{ article.excerpt }}</p>
+          {#
+            ⚠ LE VISUEL EST DÉCORATIF, ET IL LE DIT. Aucune image n'existe pour ces articles ; en
+            fabriquer une qui ressemble à une photo laisserait croire à un contenu qu'on n'a pas.
+            C'est donc le dégradé de marque, décliné par rang, et `aria-hidden` : il donne le rythme
+            visuel qui manquait sans rien affirmer.
+          #}
+          <li class="carte carte-article">
+            <span class="carte-visuel" aria-hidden="true"></span>
+            <div class="carte-corps">
+              <h3><a href="{{ path('website_blog_post', {slug: article.slug}) }}">{{ article.title }}</a></h3>
+              <p>{{ article.excerpt }}</p>
+            </div>
           </li>
         {% endfor %}
       </ul>

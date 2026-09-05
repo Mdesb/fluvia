@@ -95,18 +95,43 @@ function carteFormule(formule) {
   return carte
 }
 
+/**
+ * Vrai quand TOUTES les options vendues sont au meme prix.
+ *
+ * ⚠ DIX-SEPT FOIS « 19 € / mois » DANS LA MEME GRILLE N'INFORME PLUS, IL ENCOMBRE. Quand le
+ * catalogue pratique un prix unique, on l'annonce UNE fois au-dessus de la grille et les cartes ne
+ * portent plus que le nom du module. Des que deux prix different, chaque carte reprend le sien —
+ * c'est mesure a l'execution sur le catalogue reel, jamais suppose.
+ */
+let prixUniforme = false
+
 function ligneOption(option) {
   const ligne = document.createElement('li')
 
   const libelle = document.createElement('span')
   libelle.textContent = option.label
+  ligne.append(libelle)
 
-  const montant = document.createElement('span')
-  montant.className = 'option-prix'
-  montant.textContent = `${prix(option.monthlyPriceCents)} / mois`
+  if (!prixUniforme) {
+    const montant = document.createElement('span')
+    montant.className = 'option-prix'
+    montant.textContent = `${prix(option.monthlyPriceCents)} / mois`
+    ligne.append(montant)
+  }
 
-  ligne.append(libelle, montant)
   return ligne
+}
+
+/** L'annonce du prix unique, posee au-dessus de la grille — et seulement s'il y en a un. */
+function annonceDuPrixUnique(centimes) {
+  const p = document.createElement('p')
+  p.className = 'tarifs-uniforme'
+
+  const fort = document.createElement('strong')
+  fort.textContent = `${prix(centimes)} / mois`
+
+  p.append('Chaque module : ', fort, '. Vous ne payez que ceux que vous activez.')
+  return p
 }
 
 /**
@@ -195,6 +220,11 @@ async function afficherOptions() {
       return
     }
 
+    // ⚠ MESURE, PAS SUPPOSITION : on regarde les prix reellement servis avant de decider si la
+    //   grille peut se passer de les repeter.
+    const montants = new Set(options.map((o) => o.monthlyPriceCents))
+    prixUniforme = montants.size === 1 && options.length > 1
+
     const table = tableDesRubriques()
 
     if (table === null) {
@@ -203,7 +233,10 @@ async function afficherOptions() {
       simple.className = 'options'
       simple.setAttribute('role', 'list')
       simple.append(...options.map(ligneOption))
-      liste.replaceChildren(simple)
+      liste.replaceChildren(
+        ...(prixUniforme ? [annonceDuPrixUnique(options[0].monthlyPriceCents)] : []),
+        simple,
+      )
       liste.hidden = false
       return
     }
@@ -236,7 +269,10 @@ async function afficherOptions() {
       groupes.push(groupeDeRubrique({ titre: 'Autres modules', teinte: '#7a2ee6' }, orphelines))
     }
 
-    liste.replaceChildren(...groupes)
+    liste.replaceChildren(
+      ...(prixUniforme ? [annonceDuPrixUnique(options[0].monthlyPriceCents)] : []),
+      ...groupes,
+    )
     liste.hidden = false
   } catch {
     echec(etat)
