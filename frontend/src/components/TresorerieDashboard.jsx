@@ -214,7 +214,10 @@ function Ecarts() {
     let vivant = true
     api.ecartsTresorerie()
       .then((r) => { if (vivant) setLignes(Array.isArray(r) ? r : []) })
-      .catch((e) => { if (vivant) { setErreur(e.message); setLignes([]) } })
+      // ⚠ ON NE RETOMBE PAS SUR []. `null` porte « pas lu », `[]` porte « lu et vide ».
+      // Le `setLignes([])` d'origine transformait un refus en « aucun écart », c'est-à-dire en
+      // affirmation que tout est rapproché — la plus rassurante des phrases, tirée de rien.
+      .catch((e) => { if (vivant) setErreur(e.message) })
     return () => { vivant = false }
   }, [])
 
@@ -228,7 +231,12 @@ function Ecarts() {
       </div>
       <div className="card-b">
         {erreur && <div className="banner banner-error">{erreur}</div>}
-        {lignes === null ? (
+        {lignes === null && erreur ? (
+          <div className="empty">
+            Les écarts n’ont pas pu être lus. On ne sait pas s’il y en a — ne lisez pas ce vide
+            comme « tout est rapproché ».
+          </div>
+        ) : lignes === null ? (
           <div className="center"><div className="spinner" /></div>
         ) : triees.length === 0 ? (
           <div className="empty">Aucun écart : tout est rapproché ou ignoré.</div>

@@ -765,7 +765,12 @@ input:focus-visible {
 }
 .preuve-items li { font-size: 13.5px; color: var(--hero-encre-faible); }
 
-/* ── les familles de modules ────────────────────────────────────────────────────────────────── */
+/* ── les cartes de rubrique ──────────────────────────────────────────────────────────────────────
+
+   ⚠ `.famille-*` EST UN NOM VISUEL, PAS UN CONCEPT DU DOMAINE. Il a d'abord designe un rangement
+   editorial (`ModuleFamilies`) que j'ai ecrit puis supprime, parce qu'il faisait double emploi avec
+   les rubriques du catalogue. Les classes sont restees : elles nomment une CARTE QUI GROUPE DES
+   MODULES, ce qu'elles font toujours. Ne cherchez pas de `ModuleFamilies`, il n'y en a plus. */
 .familles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1027,13 +1032,18 @@ input:focus-visible {
    Maxime : « non, c'est pas bon comme ca » — et il avait raison : j'avais echange un defaut
    d'alignement contre un defaut d'equilibre, avec un tiers d'ecran vide a droite.
    La maquette validee tient les deux : un bloc centre, dont le contenu partage un seul bord. */
-.page-accueil .bande > * {
+.page-accueil .bande > *,
+.page-catalogue .bande > * {
   max-width: 1280px;
   margin-inline: auto;
 }
-.page-accueil .bande > .mesure { max-width: 1280px; }
+.page-accueil .bande > .mesure,
+.page-catalogue .bande > .mesure { max-width: 1280px; }
 .page-accueil .mesure > h2,
-.page-accueil .mesure > p { max-width: var(--mesure); }
+.page-accueil .mesure > p,
+.page-catalogue .mesure > h1,
+.page-catalogue .mesure > h2,
+.page-catalogue .mesure > p { max-width: var(--mesure); }
 
 /* ══ LES ANIMATIONS ═══════════════════════════════════════════════════════════════════════════
 

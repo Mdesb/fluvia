@@ -215,6 +215,18 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $reminderSentAt = null;
 
+    /**
+     * Ce qui a REELLEMENT ete encaisse a la reservation. Un FAIT, pas une declaration.
+     *
+     * C'EST LUI QU'ON DEDUIT, jamais le montant declare sur la prestation. Deduire un montant
+     * declare mais jamais encaisse ferait perdre de l'argent a chaque absence, en silence.
+     *
+     * En lecture seule : la plateforme le constate au moment de la vente.
+     */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
+    #[Groups(['reservation:read'])]
+    private string $versementRetenuMontant = '0.00';
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $dateLimiteAnnulation = null;
@@ -573,6 +585,18 @@ class Reservation
     public function getReminderSentAt(): ?\DateTimeImmutable
     {
         return $this->reminderSentAt;
+    }
+
+    public function getVersementRetenuMontant(): string
+    {
+        return $this->versementRetenuMontant;
+    }
+
+    public function setVersementRetenuMontant(string $montant): self
+    {
+        $this->versementRetenuMontant = $montant;
+
+        return $this;
     }
 
     public function setReminderSentAt(?\DateTimeImmutable $quand): self

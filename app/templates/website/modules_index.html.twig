@@ -12,6 +12,8 @@
 {% block description %}Tous les modules de Fluvia, activables séparément : contrôle d'accès, réservation de créneaux, caisse, boutique en ligne, prélèvement SEPA, comptabilité, stock. Vous ne payez que ce que vous activez.{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_modules') }}">{% endblock %}
 
+{% block corps_classe %}page-catalogue{% endblock %}
+
 {% block body %}
   <section class="bande hero">
     <div class="mesure">
@@ -27,9 +29,13 @@
 
   {% for rubrique in rubriques %}
     <section class="bande{{ loop.index is odd ? '' : ' bande-creuse' }}">
-      <div class="mesure">
-        <h2 class="rubrique-titre">{{ rubrique.titre }}</h2>
-      </div>
+      {#
+        ⚠ LE TITRE N'EST PAS DANS UN CONTENEUR DE LECTURE, ET C'EST VOULU.
+        Enferme dans `.mesure` (68ch, centre), il commencait au milieu de la page pendant que les
+        cartes commencaient au bord du conteneur large : deux bords gauches dans la meme section.
+        Un titre de rubrique n'est pas de la prose — il etiquette une grille, il s'aligne dessus.
+      #}
+      <h2 class="rubrique-titre">{{ rubrique.titre }}</h2>
 
       <ul class="grille" role="list">
         {% for module in rubrique.modules %}

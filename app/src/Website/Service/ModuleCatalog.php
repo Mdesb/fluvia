@@ -47,6 +47,28 @@ final readonly class ModuleCatalog
         'metier' => 'Outils spécialisés',
     ];
 
+    /**
+     * La teinte de chaque rubrique, prise sur le dégradé de marque.
+     *
+     * Elle sert de repère visuel, jamais de porteur d'information : une rubrique se lit à son titre.
+     * Les couleurs se répètent au-delà de quatre — le dégradé n'en compte pas plus, et en inventer
+     * une cinquième sortirait de la charte pour un gain nul.
+     *
+     * @var array<string, string>
+     */
+    private const TEINTES = [
+        'vente' => '#27d9d0',
+        'acces' => '#168ceb',
+        'planning' => '#3755e8',
+        'finance' => '#7a2ee6',
+        'securite' => '#27d9d0',
+        'confort' => '#168ceb',
+        'metier' => '#3755e8',
+    ];
+
+    /** La teinte d'une rubrique inconnue : celle du dernier arrêt du dégradé. */
+    private const TEINTE_PAR_DEFAUT = '#7a2ee6';
+
     public function __construct(private CatalogueCapacites $capacites)
     {
     }
@@ -54,13 +76,24 @@ final readonly class ModuleCatalog
     /**
      * Tous les modules vendables, rubrique par rubrique, dans l'ordre de présentation.
      *
-     * @return list<array{cle: string, titre: string, modules: list<array{slug: string, code: string, libelle: string, description: string}>}>
+     * @param list<string>|null $codesRetenus les codes a garder, ou `null` pour tout rendre
+     *
+     * @return list<array{cle: string, titre: string, teinte: string, modules: list<array{slug: string, code: string, libelle: string, description: string}>}>
      */
-    public function parRubrique(): array
+    public function parRubrique(?array $codesRetenus = null): array
     {
         $parCle = [];
 
         foreach ($this->modules() as $module) {
+            // ⚠ ON NE MONTRE QUE CE QUI EST EN VENTE quand l'appelant le demande. Une capacité qui
+            //   existe n'est pas une capacité vendable : trois d'entre elles n'ont aucune option
+            //   active. Sans ce filtre, le site vante des modules qu'un visiteur ne peut pas
+            //   acheter — et se contredit d'une page à l'autre, puisque la section Tarifs, elle,
+            //   lit le catalogue de vente.
+            if (null !== $codesRetenus && !\in_array($module['code'], $codesRetenus, true)) {
+                continue;
+            }
+
             $parCle[$module['categorie']][] = $module;
         }
 
@@ -71,7 +104,12 @@ final readonly class ModuleCatalog
                 continue;
             }
 
-            $rubriques[] = ['cle' => $cle, 'titre' => $titre, 'modules' => $parCle[$cle]];
+            $rubriques[] = [
+                'cle' => $cle,
+                'titre' => $titre,
+                'teinte' => self::TEINTES[$cle] ?? self::TEINTE_PAR_DEFAUT,
+                'modules' => $parCle[$cle],
+            ];
             unset($parCle[$cle]);
         }
 
@@ -79,7 +117,12 @@ final readonly class ModuleCatalog
         // ci-dessus disparaîtrait de la page en silence — un module vendu, invisible du site. On la
         // rend sous son propre code plutôt que de la perdre : c'est laid, et ça se voit.
         foreach ($parCle as $cle => $modules) {
-            $rubriques[] = ['cle' => $cle, 'titre' => ucfirst($cle), 'modules' => $modules];
+            $rubriques[] = [
+                'cle' => $cle,
+                'titre' => ucfirst($cle),
+                'teinte' => self::TEINTE_PAR_DEFAUT,
+                'modules' => $modules,
+            ];
         }
 
         return $rubriques;

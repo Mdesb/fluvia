@@ -93,15 +93,15 @@
     la section Tarifs n'en proposait que dix-sept. La même page se contredisait.
 
     ⚠ ET SI RIEN N'EST EN VENTE, LA SECTION DISPARAÎT. Un catalogue en préparation est un état
-    légitime ; une grille vide sous un titre qui annonce des familles ressemble à une panne.
+    légitime ; une grille vide sous un titre qui annonce des rubriques ressemble à une panne.
   #}
-  {% set nbModules = modulesParFamille|reduce((total, m) => total + m|length, 0) %}
+  {% set nbModules = rubriques|reduce((total, r) => total + r.modules|length, 0) %}
   {% if nbModules > 0 %}
   <section class="bande bande-sombre" id="familles">
     <div class="section-tete">
       <div>
         <p class="sur-titre">Les modules</p>
-        <h2>{{ familles|length }} familles, {{ nbModules }} modules.</h2>
+        <h2>{{ rubriques|length }} rubriques, {{ nbModules }} modules.</h2>
       </div>
       <p class="section-tete-note">
         Rangés par ce qu'ils vous font faire, pas par ordre alphabétique. Chacun s'active seul.
@@ -109,17 +109,19 @@
     </div>
 
     <div class="familles">
-      {# Une famille sans module en vente ne s'affiche pas : une carte vide n'annonce rien. #}
-      {% for famille in familles|filter(f => modulesParFamille[f.cle]|default([]) is not empty) %}
+      {#
+        `parRubrique()` ne rend jamais une rubrique vide : elle en saute les clés sans module. Rien
+        a filtrer ici, et surtout rien a filtrer DEUX FOIS — c'est le catalogue qui decide.
+      #}
+      {% for rubrique in rubriques %}
         <div class="famille">
-          <span class="famille-trait" style="background: {{ famille.teinte }}"></span>
-          <h3>{{ famille.titre }}</h3>
-          <p class="famille-propos">{{ famille.propos }}</p>
+          <span class="famille-trait" style="background: {{ rubrique.teinte }}"></span>
+          <h3>{{ rubrique.titre }}</h3>
           <ul class="famille-modules">
-            {% for module in modulesParFamille[famille.cle]|default([]) %}
+            {% for module in rubrique.modules %}
               <li>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="{{ famille.teinte }}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="{{ rubrique.teinte }}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
                 </svg>
                 <a href="{{ path('website_module', {slug: module.slug}) }}">{{ module.libelle }}</a>
               </li>
@@ -323,7 +325,7 @@
   chaque option. Une seconde table écrite en JavaScript divergerait au premier module ajouté, et la
   page afficherait un rangement différent de celui que le serveur croit avoir décidé.
 #}
-<script type="application/json" id="familles-modules">{{ famillesPourLeNavigateur|json_encode(constant('JSON_HEX_TAG'))|raw }}</script>
+<script type="application/json" id="rubriques-modules">{{ rubriquesPourLeNavigateur|json_encode(constant('JSON_HEX_TAG'))|raw }}</script>
 <script src="/tarifs.js" defer></script>
 <script src="/tunnel.js" defer></script>
 {% endblock %}
