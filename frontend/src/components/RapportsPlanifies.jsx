@@ -39,7 +39,7 @@ function jour(iso) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
 }
 
-export default function RapportsPlanifies({ etabActif, droits }) {
+export default function RapportsPlanifies({ etabActif, droits, versionTableaux }) {
   const [rapportsLus, setRapportsLus] = useState(null)
   const rapports = rapportsLus || []
   const [tableauxLus, setTableauxLus] = useState(null)
@@ -71,7 +71,10 @@ export default function RapportsPlanifies({ etabActif, droits }) {
       .then((r) => { if (!annule) setTableauxLus(membres(r).filter((t) => t.actif !== false)) })
       .catch(() => { if (!annule) setTableauxLus(null) })
     return () => { annule = true }
-  }, [])
+    // ⚠ `versionTableaux` change quand l'ecran voisin ecrit un tableau. Sans cette dependance, le
+    // menu reste vide et la banniere continue de dire qu'il n'y en a aucun — une absence affirmee
+    // que la page dementait deja quelques centimetres plus haut.
+  }, [versionTableaux])
 
   async function creer(e) {
     e.preventDefault()
