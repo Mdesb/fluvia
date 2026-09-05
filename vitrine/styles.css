@@ -335,7 +335,9 @@ input:focus-visible {
 @media (max-width: 640px) {
   .bande { padding: 44px 18px; }
   .hero { padding-top: 56px; padding-bottom: 56px; }
-  .entete nav a:not(.btn) { display: none; }
+  /* ⚠ ON NE CACHE PAS LA NAVIGATION : voir le bloc « téléphone » en fin de fichier.
+     Cette règle masquait Modules, Métiers, Tarifs et Blog en étroit — le site n'avait plus aucune
+     navigation sur le terminal majoritaire d'une première visite. */
   .tunnel fieldset { padding: 14px 14px; }
 }
 
@@ -807,8 +809,17 @@ input:focus-visible {
   overflow: hidden;
   background: var(--line);
 }
-.metiers-liste li { padding: 15px 22px; background: var(--panel); }
-.metiers-liste a { color: var(--ink); text-decoration: none; font-weight: 500; }
+.metiers-liste li { padding: 0; background: var(--panel); }
+/* ⚠ LE LIEN REMPLIT SA LIGNE. Le texte seul faisait une cible de 23 px de haut : on la rate au
+   doigt. En donnant le retrait au lien plutot qu'a la ligne, c'est toute la rangee qui devient
+   cliquable — et la cible passe a 50 px sans rien changer a l'apparence. */
+.metiers-liste a {
+  display: block;
+  padding: 15px 22px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 500;
+}
 .metiers-liste a:hover { color: var(--accent); }
 
 /* ── les tarifs ─────────────────────────────────────────────────────────────────────────────── */
@@ -1161,3 +1172,63 @@ input:focus-visible {
    La regle vaut pour toute la vitrine : c'est le genre de defaut qui revient a chaque nouvel
    element masque. */
 [hidden] { display: none !important; }
+
+/* ══ TELEPHONE ════════════════════════════════════════════════════════════════════════════════
+
+   ⚠ LE SITE N'AVAIT AUCUNE NAVIGATION EN ETROIT. Une regle masquait les liens de l'en-tete et ne
+   laissait que le bouton d'essai : depuis un telephone, aucune autre page n'etait atteignable
+   depuis le haut du site. Ce n'est pas une mise en page compacte, c'est une page amputee.
+
+   La sortie se passe de JavaScript : l'en-tete passe sur deux rangees, la marque seule sur la
+   premiere, les liens et le bouton sur la seconde. Un menu cache derriere un bouton se clique
+   moins qu'un menu visible — et il faudrait du script pour l'ouvrir. */
+@media (max-width: 720px) {
+  /* ⚠ L'EN-TETE CESSE DE FLOTTER, ET CE N'EST PAS UN DETAIL.
+     Sur 375 px, les liens et le bouton passent sur trois rangees : l'en-tete fait 224 px de haut,
+     alors que le bandeau n'en degageait que 168. Le badge  14 jours d'essai  se retrouvait CACHE
+     DESSOUS. La sortie n'est pas d'ajuster le nombre magique — il dependrait de la longueur des
+     libelles — mais de ne plus en avoir besoin : rendu au flux, l'en-tete pousse le contenu au lieu
+     de le recouvrir. Les deux fonds etant sombres, la jonction ne se voit pas. */
+  .page-accueil .entete { position: static; }
+  .page-accueil .hero { padding-top: 40px; }
+
+  .entete-corps { flex-wrap: wrap; row-gap: 10px; }
+
+  .entete nav {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* 12 px de retrait portent chaque lien a ~42 px de haut : en dessous de 44, on rate sa cible. */
+  .entete nav a:not(.btn) { padding: 12px 10px; font-size: 14.5px; }
+
+  /* Le bouton d'essai reste l'action mise en avant, a droite de la rangee. */
+  .entete nav a.btn-primaire { margin-left: auto; }
+
+  /* ⚠ LES ECRANS PRODUIT PERDENT LEUR BARRE LATERALE. Elle mangeait la moitie de la largeur pour un
+     decor, et le planning s'y ecrasait au point d'etre illisible — un visuel illisible ne montre
+     plus le produit, il encombre. */
+  .ecran-menu { display: none; }
+  .ecran-corps { grid-template-columns: minmax(0, 1fr); }
+
+  /* Le planning garde ses quatre terrains, mais resserres. */
+  .planning { grid-template-columns: 34px repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .planning-case { padding: 6px 3px; font-size: 9.5px; }
+
+  /* La caisse passe ses moyens de paiement sous les lignes plutot qu'a cote. */
+  .caisse { grid-template-columns: minmax(0, 1fr); }
+  .caisse-paiements { flex-direction: row; flex-wrap: wrap; }
+  .caisse-paiement { flex: 1 1 auto; }
+}
+
+/* ⚠ LES CIBLES TACTILES DES LISTES DE MODULES.
+   Mesure sur telephone : les dix-sept liens de modules faisaient 23 px de haut. En dessous de 44,
+   on rate sa cible une fois sur trois — et ce sont les liens vers les pages qui vendent chaque
+   module. Le retrait vertical les porte a ~43 px sans changer la mise en page. */
+@media (max-width: 720px) {
+  .famille-modules a { display: inline-block; padding-block: 10px; }
+  .pied a { display: inline-block; padding: 8px 4px; }
+}
