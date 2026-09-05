@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Piscine\Enum\TypeEncadrement;
+use App\Piscine\State\EstablishmentStampProcessor;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -30,7 +31,14 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'piscine.lire')"),
         new Get(security: "is_granted('PERM', 'piscine.lire')"),
-        new Post(security: "is_granted('PERM', 'piscine.gerer')"),
+        // ⚠ L'ETABLISSEMENT EST HORS DU GROUPE D'ECRITURE ET `NOT NULL` : sans ce processeur, la
+        // creation mourait au `flush` en 500. C'etait la seule issue au refus RG-PISC-02, donc le
+        // message « aucun encadrant qualifie » n'en avait aucune (D41, meme patron que
+        // `App\Reservation` et `App\Patinoire`).
+        new Post(
+            security: "is_granted('PERM', 'piscine.gerer')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'piscine.gerer')"),
     ],
     normalizationContext: ['groups' => ['qualif:read']],

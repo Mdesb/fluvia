@@ -2376,6 +2376,25 @@ export const api = {
   piscineEtatPoss: (id) => request(`/api/piscine/poss/${id}/etat`),
   piscineValiderCreneauBassin: (id) =>
     request(`/api/piscine/creneaux-bassin/${id}/valider`, { method: 'POST', body: {} }),
+  // LA MOITIE AMONT DE RG-PISC-02, sans laquelle « valider » ne peut que refuser.
+  //
+  // ⚠ LA CREATION D'UNE QUALIFICATION RENDAIT 500 jusqu'au 05/09 : son etablissement est `NOT NULL`
+  // et hors du groupe d'ecriture, et rien ne le posait. Corrige cote serveur en etendant
+  // `App\Piscine\State\EstablishmentStampProcessor`, qui ne couvrait que `Casier`.
+  qualificationsEncadrant: () =>
+    request('/api/qualification_encadrants', { query: { itemsPerPage: 200 } }),
+  creerQualificationEncadrant: (corps) =>
+    request('/api/qualification_encadrants', { method: 'POST', body: corps, ld: true }),
+  majQualificationEncadrant: (id, corps) =>
+    request(`/api/qualification_encadrants/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ AUCUN FILTRE DECLARE sur cette ressource : on ne peut pas demander les affectations d'un
+  // creneau, il faut charger et regrouper. D48 interdit de PRETENDRE filtrer cote serveur.
+  affectationsEncadrant: () =>
+    request('/api/affectation_encadrants', { query: { itemsPerPage: 200 } }),
+  affecterEncadrant: (corps) =>
+    request('/api/affectation_encadrants', { method: 'POST', body: corps, ld: true }),
+  retirerAffectationEncadrant: (id) =>
+    request(`/api/affectation_encadrants/${id}`, { method: 'DELETE' }),
   // Patinoire
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>

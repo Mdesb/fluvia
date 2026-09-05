@@ -70,16 +70,47 @@ final class UuidReferenceFilter extends AbstractFilter
         }
 
         $metadata = $this->getClassMetadata($resourceClass);
-        $estAssociation = $metadata->hasAssociation($property);
-        if (!$estAssociation && !$metadata->hasField($property)) {
+        $alias = $queryBuilder->getRootAliases()[0];
+        $terminal = $property;
+
+        // ── UN SEUL SAUT D'ASSOCIATION, ET DELIBEREMENT UN SEUL ─────────────────────────────
+        //
+        // `statementImport.bankAccount` rendait zero : `UuidAwareSearchFilter` repare la
+        // comparaison chaine/BINARY(16) sur les proprietes de la classe racine, mais sa notice dit
+        // qu'il DELEGUE les proprietes imbriquees — « on n'intercepte que ce qu'on sait mieux
+        // traiter ». Ce filtre-ci ne les traitait pas davantage. La famille exemptee contenait donc
+        // le cas casse, et c'etait celui de l'ecran de rapprochement bancaire : apres un import
+        // reussi de quatre lignes, il affichait « Aucune ligne a rapprocher ».
+        //
+        // Deux sauts et plus ne sont PAS traites : on ne s'en saisit pas plutot que de les traiter
+        // a moitie. Un chemin plus long passe donc au filtre standard, avec son comportement connu
+        // — c'est un choix visible ici, pas un oubli.
+        if (str_contains($property, '.')) {
+            $segments = explode('.', $property);
+            if (\count($segments) !== 2) {
+                return;
+            }
+            [$relation, $terminal] = $segments;
+            if (!$metadata->hasAssociation($relation)) {
+                return;
+            }
+
+            $metadata = $this->getClassMetadata($metadata->getAssociationTargetClass($relation));
+            $aliasJointure = $queryNameGenerator->generateJoinAlias($relation);
+            // `innerJoin` : une ligne sans son association n'a de toute facon rien a comparer.
+            // La relation est un `ManyToOne`, donc la jointure ne multiplie aucune ligne.
+            $queryBuilder->innerJoin(sprintf('%s.%s', $alias, $relation), $aliasJointure);
+            $alias = $aliasJointure;
+        }
+
+        $estAssociation = $metadata->hasAssociation($terminal);
+        if (!$estAssociation && !$metadata->hasField($terminal)) {
             return;
         }
 
         // L'écran envoie une IRI, un script envoie souvent l'identifiant nu : on accepte les deux
         // plutôt que d'imposer une forme. Le dernier segment fait foi.
         $identifiant = str_contains($value, '/') ? substr($value, (int) strrpos($value, '/') + 1) : $value;
-
-        $alias = $queryBuilder->getRootAliases()[0];
 
         if (!Uuid::isValid($identifiant)) {
             // ⚠ On ferme, on n'ouvre pas. Une valeur illisible qui rendrait toute la collection
@@ -89,13 +120,13 @@ final class UuidReferenceFilter extends AbstractFilter
             return;
         }
 
-        $parametre = $queryNameGenerator->generateParameterName($property);
+        $parametre = $queryNameGenerator->generateParameterName(str_replace('.', '_', $property));
 
         // `IDENTITY()` sur une association, la colonne elle-même sur une référence libre : dans les
         // deux cas la comparaison porte sur l'identifiant, et le type `uuid` fait la conversion.
         $chemin = $estAssociation
-            ? sprintf('IDENTITY(%s.%s)', $alias, $property)
-            : sprintf('%s.%s', $alias, $property);
+            ? sprintf('IDENTITY(%s.%s)', $alias, $terminal)
+            : sprintf('%s.%s', $alias, $terminal);
 
         $queryBuilder
             ->andWhere(sprintf('%s = :%s', $chemin, $parametre))

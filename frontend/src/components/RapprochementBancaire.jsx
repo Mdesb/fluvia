@@ -27,6 +27,7 @@ export default function RapprochementBancaire({ etabActif, droits }) {
   const [statut, setStatut] = useState('unmatched')
   const [lignes, setLignes] = useState([])
   const [lignesLues, setLignesLues] = useState(false)
+  const [comptesLus, setComptesLus] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -39,9 +40,11 @@ export default function RapprochementBancaire({ etabActif, droits }) {
     try {
       const c = membres(await api.comptesBancaires())
       setComptes(c)
+      setComptesLus(true)
       setCompte((prec) => prec || c[0]?.id || '')
     } catch (e) {
       setErreur(e.message)
+      setComptesLus(false)
     }
   }, [etabActif])
 
@@ -84,14 +87,16 @@ export default function RapprochementBancaire({ etabActif, droits }) {
       <section className="card">
         <div className="card-h">
           <h3>Rapprochement</h3>
-          <span className="sub">{lignes.length} ligne{lignes.length > 1 ? 's' : ''}</span>
+          <span className="sub">{lignesLues ? `${lignes.length} ligne${lignes.length > 1 ? 's' : ''}` : 'non lues'}</span>
         </div>
         <div className="card-b">
           <div className="row row-champs" style={{ gap: 'var(--esp-large)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className="field" style={{ flex: 1, marginBottom: 0 }}>
               <label htmlFor="rap-compte">Compte bancaire</label>
               <select id="rap-compte" className="input" value={compte} onChange={(e) => setCompte(e.target.value)}>
-                {comptes.length === 0 && <option value="">— aucun compte —</option>}
+                {comptes.length === 0 && (
+                  <option value="">{comptesLus ? '— aucun compte —' : '— liste non lue —'}</option>
+                )}
                 {comptes.map((c) => (
                   <option key={c.id} value={c.id}>{c.label}{c.ibanLast4 ? ` — •••• ${c.ibanLast4}` : ''}</option>
                 ))}
