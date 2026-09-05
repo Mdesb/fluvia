@@ -8,6 +8,7 @@ use App\Website\Entity\BlogCategory;
 use App\Website\Service\BlogReader;
 use App\Website\Service\ContentBlocks;
 use App\Website\Service\MetierCatalog;
+use App\Website\Port\SellableModulesSource;
 use App\Website\Service\ModuleCatalog;
 use App\Website\Service\ModuleFamilies;
 use App\Website\Service\SiteFaq;
@@ -47,6 +48,7 @@ final class WebsiteController extends AbstractController
         private readonly ContentBlocks $blocs,
         private readonly ModuleCatalog $modules,
         private readonly ModuleFamilies $familles,
+        private readonly SellableModulesSource $vendables,
         private readonly MetierCatalog $metiers,
         private readonly StructuredData $donnees,
         private readonly EntityManagerInterface $em,
@@ -82,7 +84,10 @@ final class WebsiteController extends AbstractController
             'questions' => $questions,
             'jsonld' => [
                 $this->donnees->organisation(),
-                $this->donnees->application(array_column($this->modules->modules(), 'libelle')),
+                // ⚠ LE BALISAGE ANNONCE CE QUE L'ECRAN ANNONCE. Sans ce filtre, `featureList` vantait
+                //   aux moteurs trois modules absents de la page — et c'est le public qu'on ne
+                //   regarde jamais qui aurait propage l'ecart.
+                $this->donnees->application(array_column($this->modulesVendables(), 'libelle')),
                 $this->donnees->questions($questions),
             ],
         ]);
@@ -376,6 +381,35 @@ final class WebsiteController extends AbstractController
     }
 
     /**
+     * Les modules que l'éditeur vend RÉELLEMENT.
+     *
+     * ⚠ **UNE CAPACITÉ QUI EXISTE N'EST PAS UNE CAPACITÉ EN VENTE.** `ModuleCatalog` liste les
+     * capacités du produit ; trois d'entre elles — hébergement, restauration, séjours — n'ont
+     * aucune option active. La page annonçait donc « 20 modules » et en vantait trois qu'un
+     * visiteur ne pouvait pas acheter, pendant que la section Tarifs n'en proposait que dix-sept :
+     * la même page se contredisait.
+     *
+     * Le lien est désormais automatique, sur `OfferCatalog::activeOptions()` — le point de passage
+     * unique de la vente. Plus aucune liste à tenir à la main, et le site ne peut plus diverger du
+     * tunnel puisque les deux lisent la même chose.
+     *
+     * ⚠ **AUCUN REPLI SUR « TOUT MONTRER ».** Si rien n'est en vente, on ne montre rien : un
+     * catalogue en préparation est un état légitime, et retomber sur la liste complète
+     * ramènerait exactement le défaut qu'on vient de supprimer — silencieusement.
+     *
+     * @return list<array{slug: string, code: string, libelle: string, description: string, categorie: string}>
+     */
+    private function modulesVendables(): array
+    {
+        $vendables = array_flip($this->vendables->sellableCapabilities());
+
+        return array_values(array_filter(
+            $this->modules->modules(),
+            static fn (array $module): bool => isset($vendables[$module['code']]),
+        ));
+    }
+
+    /**
      * Les modules vendables, groupés par famille éditoriale.
      *
      * ⚠ **AUCUN MODULE NE DOIT SE PERDRE ICI.** `ModuleFamilies::pour()` range tout code inconnu
@@ -393,7 +427,7 @@ final class WebsiteController extends AbstractController
             $parFamille[$famille['cle']] = [];
         }
 
-        foreach ($this->modules->modules() as $module) {
+        foreach ($this->modulesVendables() as $module) {
             $parFamille[$this->familles->pour($module['code'])][] = $module;
         }
 
