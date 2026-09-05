@@ -7,12 +7,31 @@ namespace App\Piscine\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Piscine\Entity\Casier;
+use App\Piscine\Entity\QualificationEncadrant;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
- * D41 — l'etablissement de `Casier` vient de la **session serveur**, jamais du corps de la requete.
+ * D41 — l'etablissement de `Casier` et de `QualificationEncadrant` vient de la **session serveur**,
+ * jamais du corps de la requete.
+ *
+ * ⚠ LA QUALIFICATION A ETE AJOUTEE LE 05/09 PARCE QUE SA CREATION RENDAIT 500. Son etablissement
+ * est `NOT NULL` en base et hors du groupe d'ecriture, et rien ne le posait : tout
+ * `POST /api/qualification_encadrants` mourait au `flush` sur
+ * « Column 'etablissement_id' cannot be null ». Observe en executant la route
+ * (`SupervisorQualificationCreationTest`), pas deduit de sa forme.
+ *
+ * Ce n'etait pas cosmetique : c'etait la SEULE issue au refus RG-PISC-02.
+ * `ValiderCreneauBassinHandler` refuse de valider un creneau exigeant un encadrement sans
+ * affectation qualifiee a diplome valide — et le message « aucun encadrant qualifie a diplome
+ * valide affecte a ce creneau » n'avait donc aucune sortie.
+ *
+ * ⚠ ET LES DEUX AUTRES ENTITES DU MODULE QUI PORTENT UN ETABLISSEMENT N'EN ONT PAS BESOIN : `Bassin`
+ * et `Poss` le DERIVENT de l'espace qu'on leur donne (`setEspace()`, `setEspaceAcces()`). Verifie en
+ * executant `POST /api/bassins`, qui rend bien 201. La ressemblance de forme entre les trois etait
+ * trompeuse — une qualification, elle, n'a aucun parent porteur : son seul candidat serait
+ * l'encadrant, or un `Utilisateur` peut etre affecte a plusieurs etablissements.
  *
  * Repris de `App\Reservation\State\EstablishmentStampProcessor`, y compris ses deux enseignements, qui
  * ne sont pas devinables : la validation s'execute **entre** la deserialisation et l'ecriture, donc
@@ -41,7 +60,7 @@ final class EstablishmentStampProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
-        if ($data instanceof Casier
+        if (($data instanceof Casier || $data instanceof QualificationEncadrant)
             && $data->getEtablissement() === null) {
             $etablissement = $this->contexte->etablissementActif();
             if ($etablissement === null) {

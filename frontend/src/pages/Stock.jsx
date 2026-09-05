@@ -4,6 +4,7 @@ import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import InventaireStock from '../components/InventaireStock.jsx'
 import AchatsStock from '../components/AchatsStock.jsx'
 import ValorisationStock from '../components/ValorisationStock.jsx'
+import RetoursStock from '../components/RetoursStock.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
@@ -158,6 +159,7 @@ export default function Stock({ etabActif, droits }) {
           ['etat', 'Ce qu’il reste'],
           ['achats', 'Achats'],
           ['transferts', 'Transferts entre sites'],
+          ['retours', 'Retours clients'],
           ...(peutValoriser ? [['valorisation', 'Valeur du stock']] : []),
         ]}
         actif={onglet}
@@ -168,6 +170,14 @@ export default function Stock({ etabActif, droits }) {
         <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
       ) : onglet === 'valorisation' && peutValoriser ? (
         <ValorisationStock etabActif={etabActif} onErreur={setErreur} />
+      ) : onglet === 'retours' ? (
+        <RetoursStock
+          etabActif={etabActif}
+          articles={articles}
+          peutAjuster={peutAjuster}
+          onErreur={setErreur}
+          onFait={apres}
+        />
       ) : onglet === 'transferts' ? (
         <TransfertsSection
           articles={articles}

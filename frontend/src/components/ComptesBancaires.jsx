@@ -15,6 +15,11 @@ import { euros } from '../api/produit.js'
 export default function ComptesBancaires({ etabActif, droits }) {
   const [comptes, setComptes] = useState([])
   const [comptesComptables, setComptesComptables] = useState([])
+  // ⚠ « LU » N'EST PAS « VIDE ». Sans ce témoin, un refus laissait la liste à [] et l'écran
+  // affirmait « Aucun compte bancaire, créez-en un » JUSTE SOUS le bandeau disant qu'il n'avait
+  // pas pu lire. Deux affirmations opposées à l'écran en même temps ; observé en forçant un 403.
+  const [comptesLus, setComptesLus] = useState(false)
+  const [planLu, setPlanLu] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -30,9 +35,12 @@ export default function ComptesBancaires({ etabActif, droits }) {
         api.comptesComptables().catch(() => null),
       ])
       setComptes(membres(c))
+      setComptesLus(true)
       setComptesComptables(cc ? membres(cc) : [])
+      setPlanLu(cc !== null)
     } catch (e) {
       setErreur(e.message)
+      setComptesLus(false)
     } finally {
       setChargement(false)
     }
@@ -72,9 +80,14 @@ export default function ComptesBancaires({ etabActif, droits }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h3>Comptes bancaires</h3><span className="sub">{comptes.length} compte{comptes.length > 1 ? 's' : ''}</span></div>
+        <div className="card-h"><h3>Comptes bancaires</h3><span className="sub">{comptesLus ? `${comptes.length} compte${comptes.length > 1 ? 's' : ''}` : 'non lu'}</span></div>
         <div className="card-b">
-          {comptes.length === 0 ? (
+          {!comptesLus ? (
+            <div className="empty">
+              La liste des comptes bancaires n’a pas pu être lue. Ce qui existe n’est pas affiché
+              ici — n’en concluez pas qu’il n’y a aucun compte.
+            </div>
+          ) : comptes.length === 0 ? (
             <div className="empty">Aucun compte bancaire. {peutGerer ? 'Créez-en un pour importer des relevés.' : ''}</div>
           ) : (
             <table className="tbl">
@@ -116,6 +129,7 @@ export default function ComptesBancaires({ etabActif, droits }) {
           compte={edition}
           etabActif={etabActif}
           comptesComptables={comptesComptables}
+          planLu={planLu}
           onAnnuler={() => setEdition(null)}
           onEnregistre={async (msg) => {
             setEdition(null)
@@ -129,7 +143,7 @@ export default function ComptesBancaires({ etabActif, droits }) {
   )
 }
 
-function FormulaireCompte({ compte, etabActif, comptesComptables, onAnnuler, onEnregistre }) {
+function FormulaireCompte({ compte, etabActif, comptesComptables, planLu, onAnnuler, onEnregistre }) {
   const creation = !compte.id
   const [label, setLabel] = useState(compte.label || '')
   const [iban, setIban] = useState('')
@@ -191,14 +205,33 @@ function FormulaireCompte({ compte, etabActif, comptesComptables, onAnnuler, onE
         </div>
         <div className="field">
           <label htmlFor="ba-ledger">Compte comptable 512 (rapprochement)</label>
+          {/* ⚠ LE LIBELLÉ DIT 512, LA LISTE DOIT DIRE 512. Elle proposait les dix-sept comptes du
+              plan — 401000 Fournisseurs, 706100 Redevances, 445710 TVA. Ce n'était pas cosmétique :
+              le compte choisi sert à désigner, dans une écriture déjà scellée, quelle ligne est la
+              ligne de banque. Avec un compte de produits, les suggestions ET la confirmation
+              s'accordaient sur le mauvais compte, et la ligne de relevé se serait lettrée contre
+              une recette. Le serveur le refuse désormais aussi — ici on ne le propose plus. */}
           <select id="ba-ledger" className="input" value={ledger} onChange={(e) => setLedger(e.target.value)}>
             <option value="">— aucun (rapprochement indisponible) —</option>
-            {comptesComptables.map((cc) => (
-              <option key={cc.id} value={`/api/compte_comptables/${cc.id}`}>
-                {cc.numero ? `${cc.numero} — ${cc.libelle}` : cc.libelle || cc.id}
-              </option>
-            ))}
+            {comptesComptables
+              .filter((cc) => String(cc.numero || '').startsWith('512'))
+              .map((cc) => (
+                <option key={cc.id} value={`/api/compte_comptables/${cc.id}`}>
+                  {cc.numero ? `${cc.numero} — ${cc.libelle}` : cc.libelle || cc.id}
+                </option>
+              ))}
           </select>
+          {!planLu ? (
+            <span className="hint">
+              Le plan comptable n’a pas pu être lu : la liste est vide parce que la lecture a
+              échoué, pas parce qu’il n’existe aucun compte 512.
+            </span>
+          ) : comptesComptables.filter((cc) => String(cc.numero || '').startsWith('512')).length === 0 && (
+            <span className="hint">
+              Aucun compte de classe 512 au plan comptable. Sans lui le rapprochement ne peut rien
+              suggérer — créez-le en comptabilité.
+            </span>
+          )}
         </div>
         {creation && (
           <div className="row row-champs" style={{ gap: 'var(--esp-large)' }}>

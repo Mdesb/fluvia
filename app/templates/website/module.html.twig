@@ -16,6 +16,8 @@
 {% block description %}{{ module.description|slice(0, 300) }}{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_module', {slug: module.slug}) }}">{% endblock %}
 
+{% block corps_classe %}page-catalogue{% endblock %}
+
 {% block body %}
   <article class="bande">
     <div class="mesure">
@@ -50,7 +52,12 @@
   {% if voisins|length > 0 %}
     <section class="bande bande-creuse">
       <div class="mesure">
-        <h2>Dans la même famille</h2>
+        {#
+          ⚠ « RUBRIQUE », PAS « FAMILLE ». Le mot survivait au rangement editorial que j'avais
+          invente puis supprime : la page nommait une taxonomie qui n'existe plus. Une phrase qui
+          decrit une organisation disparue envoie le lecteur chercher ce qu'il ne trouvera pas.
+        #}
+        <h2>Dans la même rubrique</h2>
       </div>
       <ul class="grille" role="list">
         {% for autre in voisins %}

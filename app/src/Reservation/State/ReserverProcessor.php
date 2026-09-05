@@ -13,6 +13,7 @@ use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutCreneau;
+use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\ConsumedSlotResolver;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Reservation\Service\JaugeRessourceMereHandler;
@@ -151,6 +152,20 @@ final class ReserverProcessor implements ProcessorInterface
             ->setOrganisateur($organisateur)
             ->setQuantity($quantite)
             ->setEtablissement($creneau->getEtablissement());
+
+        // CHAINAGE : cette reservation prolonge-t-elle un rendez-vous deja pose ?
+        $precedente = $this->resoudreRattachement($corps['rattacherA'] ?? null, $organisateur, $creneau);
+        if ($precedente !== null) {
+            $groupe = $precedente->getGroupeRendezVous();
+            if ($groupe === null) {
+                // Le groupe nait au SECOND acte : un rendez-vous d'un seul acte n'a pas besoin d'en
+                // porter un, et en creer un a chaque reservation remplirait la colonne de valeurs
+                // qui ne relient rien.
+                $groupe = Uuid::v4();
+                $precedente->setGroupeRendezVous($groupe);
+            }
+            $reservation->setGroupeRendezVous($groupe);
+        }
         foreach ($consommes as $consomme) {
             $reservation->addConsumedSlot($consomme);
         }
@@ -212,9 +227,12 @@ final class ReserverProcessor implements ProcessorInterface
                     ));
                 }
 
+                // ARRHES OU ACOMPTE : on encaisse le versement, pas le prix plein. Le calcul
+                // vit sur l'activite parce que `ConfirmerReservationProcessor` en a besoin aussi.
+                $aEncaisser = $activite?->versementAEncaisser($tarif) ?? $tarif;
                 $vente = $this->venteHandler->creerVente(
                     $session,
-                    $tarif,
+                    $aEncaisser,
                     $clientRef,
                     'Réservation ' . (string) $creneau->getId(),
                     $produitRef,
@@ -226,7 +244,12 @@ final class ReserverProcessor implements ProcessorInterface
                 );
                 $reservation->setModeDecompte(ModeDecompteReservation::VenteUnite);
                 $reservation->setVenteRattachee($vente);
+                // `montantDu` RESTE LE PRIX ENTIER, et ce n'est pas un oubli : il a des lecteurs
+                // hors de ce module -- le padel le divise par quatre pour partager entre joueurs.
+                // Le redefinir en << solde >> changerait ce partage sans que rien ne le dise. Le
+                // solde se calcule : `montantDu - versementRetenu`.
                 $reservation->setMontantDu($tarif);
+                $reservation->setVersementRetenuMontant($aEncaisser === $tarif ? '0.00' : $aEncaisser);
             }
         }
 
@@ -256,6 +279,54 @@ final class ReserverProcessor implements ProcessorInterface
         $this->projectionAcces->projeterSiApplicable($reservation);
 
         return $reservation;
+    }
+
+    /**
+     * La reservation que celle-ci prolonge, ou `null`.
+     *
+     * D8 -- UN IDENTIFIANT VENU DU CORPS NE SE RESOUT PAS PAR UN `find()` NU. Trois controles, et
+     * chacun ferme une porte differente :
+     *
+     *   1. MEME ETABLISSEMENT que le creneau vise. Sans lui, on rattache un rendez-vous a celui
+     *      d'un autre site -- et l'existence meme de cette reservation devient observable depuis
+     *      l'exterieur, ce qui est deja une fuite.
+     *   2. MEME BENEFICIAIRE. Chainer le rendez-vous de quelqu'un d'autre au sien n'a aucun sens
+     *      metier, et rendrait ses horaires lisibles a travers le groupe.
+     *   3. PAS DEJA ANNULEE. Prolonger un rendez-vous qui n'existe plus fabriquerait un groupe dont
+     *      le premier acte a disparu -- l'ecran afficherait << 2 prestations >> pour une seule.
+     *
+     * Un identifiant qui ne passe pas un de ces controles est traite comme ABSENT, pas comme une
+     * erreur : la reservation se pose seule. Refuser toute la demande ferait perdre au client un
+     * creneau valide a cause d'un lien accessoire.
+     */
+    private function resoudreRattachement(mixed $reference, Beneficiaire $organisateur, Creneau $creneau): ?Reservation
+    {
+        $uuid = $this->uuid($reference);
+        if ($uuid === null) {
+            return null;
+        }
+
+        $precedente = $this->em->getRepository(Reservation::class)->find($uuid);
+        if (!$precedente instanceof Reservation) {
+            return null;
+        }
+
+        $etabPrecedente = $precedente->getEtablissement()?->getId();
+        $etabCreneau = $creneau->getEtablissement()?->getId();
+        if ($etabPrecedente === null || $etabCreneau === null || (string) $etabPrecedente !== (string) $etabCreneau) {
+            return null;
+        }
+
+        $benefPrecedente = $precedente->getOrganisateur()?->getId();
+        if ($benefPrecedente === null || (string) $benefPrecedente !== (string) $organisateur->getId()) {
+            return null;
+        }
+
+        if (!$precedente->getStatut()->occupePlace() && $precedente->getStatut() !== StatutReservation::AConfirmer) {
+            return null;
+        }
+
+        return $precedente;
     }
 
     private function resoudreSessionOptionnelle(mixed $reference): ?SessionCaisse

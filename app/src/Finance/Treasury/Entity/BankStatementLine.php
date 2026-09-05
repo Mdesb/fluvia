@@ -6,6 +6,7 @@ namespace App\Finance\Treasury\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -67,7 +68,13 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['bank_statement_line:read']],
     denormalizationContext: ['groups' => ['bank_statement_line:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['status' => 'exact', 'statementImport' => 'exact', 'statementImport.bankAccount' => 'exact'])]
+// `statementImport.bankAccount` a quitte le `SearchFilter` : sur un identifiant Uuid il
+// rendait TOUJOURS zero, et c'est ce filtre-la que l'ecran de rapprochement emploie — apres
+// un import de quatre lignes, il affichait « Aucune ligne a rapprocher ». Le decorateur
+// `UuidAwareSearchFilter` repare ce defaut sur les proprietes de la classe racine mais delegue
+// les proprietes imbriquees ; `UuidReferenceFilter` les traite desormais, sur un saut.
+#[ApiFilter(SearchFilter::class, properties: ['status' => 'exact', 'statementImport' => 'exact'])]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['statementImport.bankAccount'])]
 class BankStatementLine
 {
     #[ORM\Id]

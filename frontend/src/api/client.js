@@ -2376,6 +2376,25 @@ export const api = {
   piscineEtatPoss: (id) => request(`/api/piscine/poss/${id}/etat`),
   piscineValiderCreneauBassin: (id) =>
     request(`/api/piscine/creneaux-bassin/${id}/valider`, { method: 'POST', body: {} }),
+  // LA MOITIE AMONT DE RG-PISC-02, sans laquelle « valider » ne peut que refuser.
+  //
+  // ⚠ LA CREATION D'UNE QUALIFICATION RENDAIT 500 jusqu'au 05/09 : son etablissement est `NOT NULL`
+  // et hors du groupe d'ecriture, et rien ne le posait. Corrige cote serveur en etendant
+  // `App\Piscine\State\EstablishmentStampProcessor`, qui ne couvrait que `Casier`.
+  qualificationsEncadrant: () =>
+    request('/api/qualification_encadrants', { query: { itemsPerPage: 200 } }),
+  creerQualificationEncadrant: (corps) =>
+    request('/api/qualification_encadrants', { method: 'POST', body: corps, ld: true }),
+  majQualificationEncadrant: (id, corps) =>
+    request(`/api/qualification_encadrants/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ AUCUN FILTRE DECLARE sur cette ressource : on ne peut pas demander les affectations d'un
+  // creneau, il faut charger et regrouper. D48 interdit de PRETENDRE filtrer cote serveur.
+  affectationsEncadrant: () =>
+    request('/api/affectation_encadrants', { query: { itemsPerPage: 200 } }),
+  affecterEncadrant: (corps) =>
+    request('/api/affectation_encadrants', { method: 'POST', body: corps, ld: true }),
+  retirerAffectationEncadrant: (id) =>
+    request(`/api/affectation_encadrants/${id}`, { method: 'DELETE' }),
   // Patinoire
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>
@@ -2455,6 +2474,20 @@ export const api = {
   stockMouvements: () =>
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
+  // LES RETOURS CLIENTS — le geste que le serveur attend d'un humain, sans bouton jusqu'ici.
+  //
+  // ⚠ PAS D'`order[...]` ICI : `Avoir` ne declare AUCUN filtre. Un parametre d'ordre serait ignore
+  // en silence et la liste aurait l'air triee. Le tri se fait dans le composant, qui le sait.
+  avoirs: () => request('/api/avoirs', { query: { itemsPerPage: 200 } }),
+  // Sert a savoir ce qui a DEJA ete reintegre : le mouvement genere porte `referenceType: 'Avoir'`
+  // et `referenceId`. `type` est l'un des trois seuls filtres declares sur `MouvementStock` — il
+  // n'y en a aucun sur la reference, d'ou la lecture large et le controle de troncature.
+  stockAjustementsPositifs: () =>
+    request('/api/stock_mouvements', { query: { type: 'ajustement_positif', itemsPerPage: 500 } }),
+  // ⚠ RIEN N'EMPECHE DE LA REJOUER : le processeur verifie le perimetre et les champs, pas
+  // l'unicite. Deux appels font entrer la marchandise deux fois, sans erreur.
+  reintegrerRetour: (corps) =>
+    request('/api/stock/mouvements/reintegration-retour', { method: 'POST', body: corps }),
   stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
   // Valorisation : droit distinct (`stock.lire_valorisation`). Le total de l'etablissement n'accepte
   // PAS de date ; seule la valorisation par article la reconstruit.

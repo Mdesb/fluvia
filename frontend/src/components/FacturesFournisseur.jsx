@@ -143,7 +143,9 @@ export default function FacturesFournisseur({ etabActif, droits }) {
       <TableauFactures
         fournisseurs={fournisseurs}
         titre="À approuver"
-        sous={aTraiter.length === 0 ? 'aucune en attente' : `${aTraiter.length} en attente`}
+        sous={facturesLu === null
+          ? 'état inconnu — la lecture n’a pas abouti'
+          : aTraiter.length === 0 ? 'aucune en attente' : `${aTraiter.length} en attente`}
         factures={aTraiter}
         vide={facturesLu === null
           ? "La liste des factures n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien."
