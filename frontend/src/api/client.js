@@ -1497,6 +1497,18 @@ export const api = {
   supprimerObjectif: (id) =>
     request(`/api/objectif_indicateurs/${id}`, { method: 'DELETE' }),
 
+  // Tableaux de bord (M7, RG-M7-06). `Post` et `Patch` passent par un processeur : le corps est
+  // du JSON simple, jamais du ld+json a relations — le rattachement se donne par le couple
+  // `niveau` + `entiteId`, parce que les proprietes de perimetre n'ont pas de setter.
+  tableauxDeBord: () => request('/api/tableau_de_bords', { query: { itemsPerPage: 100 } }),
+  creerTableauDeBord: (corps) =>
+    request('/api/tableau_de_bords', { method: 'POST', body: corps, ld: true }),
+  modifierTableauDeBord: (id, corps) =>
+    request(`/api/tableau_de_bords/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ AUCUNE SUPPRESSION : la ressource n'expose pas de `Delete`, par choix de la spec (§7, meme
+  // patron qu'`Indicateur`). On retire de la circulation par `modifierTableauDeBord(id, { actif:
+  // false })`. Une fonction de suppression ici rendrait un 405 a tous les coups.
+
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),

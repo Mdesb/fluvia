@@ -4,6 +4,7 @@ import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 import ExplorateurIndicateurs from '../components/ExplorateurIndicateurs.jsx'
+import TableauxDeBord from '../components/TableauxDeBord.jsx'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges, nonLu }) {
@@ -248,6 +249,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           etait declare dans le client HTTP, appele par zero ecran. La route de l'explorateur
           existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
       <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
+      <TableauxDeBord etabActif={etabActif} etablissements={etablissements} droits={droits} />
 
       <EcartsCaisse etabActif={etabActif} droits={droits} />
 
