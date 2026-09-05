@@ -13,8 +13,14 @@ declare(strict_types=1);
  * écrans) :
  *
  *     lodging   0 entité · 0 ressource API · 0 écran   il ne peut pas enregistrer une chambre
- *     stay      2 entités · 2 ressources    · 0 écran   le serveur existe, personne ne s'en sert
+ *     stay      2 entités · 2 ressources    · 0 écran   ⚠ PÉRIMÉ — cf. ci-dessous
  *     dining    2 entités · 1 ressource     · 0 écran   même situation
+ *
+ * ⚠ **`stay` A UN ÉCRAN DEPUIS LE 05/09** (`pages/Sejours.jsx`, câblé dans la navigation avec ses
+ * quatre permissions). La mesure ci-dessus est celle du 04/09 et elle est fausse depuis. Ce contrôle
+ * ne l'a pas vu pendant des heures — son signal frontal exigeait un séparateur que les vraies formes
+ * ne portent jamais. Corrigé ; il crie désormais, et c'est à l'arbitrage §8.1 de trancher si `stay`
+ * redevient vendable.
  *
  * ⚠ CES CHIFFRES SONT CEUX D'UNE DÉFINITION REPRODUCTIBLE : les occurrences de `#[ORM\Entity]` et
  * de `#[ApiResource]`, ce que `bin/garde-fou-modules-non-servables.php` recompte à chaque passage.
@@ -41,6 +47,17 @@ declare(strict_types=1);
  * il dit « ce module a bougé, la décision de 8.1 repose sur une mesure périmée, refais-la ». La
  * différence compte — un contrôle qui déciderait tout seul remettrait en vente un module à moitié
  * fait.
+ *
+ * ── ⚠ SON ANGLE MORT, DECLARE ───────────────────────────────────────────────────────────────────
+ *
+ * Le signal frontal cherche le NOM DU MODULE dans les sources du frontal. Un ecran dont le fichier
+ * porte un nom FRANCAIS lui est invisible par ce chemin : `pages/Sejours.jsx` ne contient pas la
+ * chaine `stay`. Il ne voit ce module que par ses PERMISSIONS (`stay.read` dans `AppShell.jsx`) et
+ * ses ROUTES (`/api/stays/`) — ce qui a suffi ici, mais ne suffira pas a un ecran qui n'appellerait
+ * ni l'un ni l'autre.
+ *
+ * Cette limite a ete apprise en ecrivant le temoin : la liste des « formes que le compteur doit
+ * voir » contenait le nom de fichier de l'ecran, et le temoin est tombe.
  *
  * ── CE QU'IL NE PROUVE PAS ──────────────────────────────────────────────────────────────────────
  *
@@ -131,27 +148,48 @@ function peser(string $module): array
     // ⚠ C'EST LE SIGNAL QUI COMPTE LE PLUS, et c'est celui qui manquait à la mesure d'origine.
     //   `stay` et `dining` ont NEUF entités chacun et ne servent toujours à rien : c'est l'écran qui
     //   fait la différence entre « du code existe » et « quelqu'un peut s'en servir ».
+    // ⚠ « LE FRONTAL SAIT-IL PILOTER CE MODULE ? » — TROISIÈME VERSION DE CE SIGNAL.
+    //
+    // La première version demandait `/\bstay[_\/-]/i` — le nom du module SUIVI de `_`, `/` ou `-`.
+    // Les vraies formes ne le portent jamais : `stays/` (le pluriel intercale un `s`), `stay.read`
+    // (un point), `StayStatus` (camel), `Sejours` (le nom français de l'écran).
+    //
+    // Le 05/09 à 01h10, l'écran `pages/Sejours.jsx` est arrivé — câblé dans la navigation avec ses
+    // quatre permissions, routé, servi. **Ce contrôle est resté vert**, quatre heures après avoir
+    // été écrit pour crier exactement à ce moment-là.
+    //
+    //     v1  nom + séparateur     lodging 0   stay  0   dining 0   padel  21   piscine  18
+    //     v2  nom seul              lodging 1   stay 29   dining 0   padel 113   piscine 129
+    //     v3  pilotage              lodging 0   stay  7   dining 0   padel  14   piscine   8
+    //
+    // ⚠ LA v1 N'ÉTAIT PAS CASSÉE — padel et piscine répondaient — ELLE ÉTAIT AVEUGLE À UNE FORME.
+    //   C'est pire qu'un détecteur muet : celui-là trouve des choses ailleurs, donc on lui fait
+    //   confiance.
+    //
+    // ⚠ ET LA v2, QUI VOYAIT ENFIN `stay`, COMPTAIT UN LIBELLÉ POUR `lodging` : la ligne
+    //   `lodging: 'Hébergement'` d'un écran de paramètres. Élargir un motif ne suffit pas — il faut
+    //   mesurer LA BONNE CHOSE. Ce qui fait qu'un module sert, c'est que le frontal l'APPELLE : une
+    //   route `/api/<module>` dans `api/client.js`, ou une entrée de navigation dans `AppShell.jsx`.
+    //   Un libellé ne pilote rien.
     $frontal = 0;
-    $motif = '/\b' . preg_quote(strtolower($module), '/') . '[_\/-]/i';
+    $nom = strtolower($module);
 
-    if (is_dir(RACINE_FRONT)) {
-        $entrees = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator(RACINE_FRONT, FilesystemIterator::SKIP_DOTS)
-        );
+    foreach ([
+        RACINE_FRONT . '/api/client.js' => '#/api/' . preg_quote($nom, '#') . '#i',
+        RACINE_FRONT . '/components/AppShell.jsx' => "#'" . preg_quote($nom, '#') . "\\.|ic: '" . preg_quote($nom, '#') . "'#i",
+    ] as $fichier => $motifPilotage) {
+        $source = @file_get_contents($fichier);
 
-        foreach ($entrees as $entree) {
-            if (!$entree->isFile() || !in_array($entree->getExtension(), ['js', 'jsx'], true)) {
-                continue;
-            }
-
-            $source = @file_get_contents($entree->getPathname());
-
-            if ($source === false) {
-                continue;
-            }
-
-            $frontal += preg_match_all($motif, $source);
+        // ⚠ UN FICHIER DE PILOTAGE INTROUVABLE N'EST PAS « ZÉRO PILOTAGE » : c'est une mesure qui
+        //   n'a pas eu lieu. On refuse, plutôt que de rendre un zéro qui ressemble à une réponse.
+        if ($source === false) {
+            fwrite(STDERR, sprintf("\n=== ERREUR — fichier de pilotage introuvable : %s ===\n", $fichier));
+            fwrite(STDERR, "  Ce contrôle mesure si le frontal sait piloter un module. Sans ce fichier,\n");
+            fwrite(STDERR, "  il ne mesure rien — et un zéro se lirait comme « le module ne sert pas ».\n\n");
+            exit(2);
         }
+
+        $frontal += preg_match_all($motifPilotage, $source);
     }
 
     return ['entites' => $entites, 'ressources' => $ressources, 'frontal' => $frontal];
@@ -204,6 +242,38 @@ if (comparer('temoin', ['entites' => 1, 'ressources' => 4, 'frontal' => 0], $ref
 // (2) Un écran de plus doit être vu — c'est LE signal qui distingue « du code » de « ça sert ».
 if (comparer('temoin', ['entites' => 0, 'ressources' => 4, 'frontal' => 3], $reference) === []) {
     $faux[] = 'une trace dans le frontal n’est pas détectée';
+} else {
+    ++$temoins;
+}
+
+// (2 bis) ⚠ LE TÉMOIN QUI MANQUAIT, ET SON ABSENCE A COÛTÉ LE DÉFAUT CI-DESSUS.
+//
+// Les quatre témoins d'origine testaient le COMPARATEUR — « une entité de plus est-elle vue ? » —
+// et jamais l'ORGANE QUI MESURE. Le comparateur marchait parfaitement ; c'est le compteur frontal
+// qui était aveugle. Celui-ci exerce le motif sur les formes réelles qu'il ratait :
+// ⚠ CHACUNE CONTIENT LE NOM DU MODULE. Ma premiere liste y avait mis
+//   `import Sejours from './pages/Sejours.jsx'` — le fichier de l'ecran — et ce temoin-la a
+//   ECHOUE : **l'ecran porte un nom francais et ne contient pas la chaine `stay`**. Le detecteur
+//   ne le voit que par les permissions et les routes. C'est une limite reelle, declaree plus bas,
+//   et c'est mon propre temoin qui me l'a apprise en tombant.
+$formes = ["perms: ['stay.read', 'stay.write']", 'request(`/api/stays/${id}`)', "ic: 'stay'"];
+$vus = 0;
+foreach ($formes as $ligne) {
+    if (preg_match("#/api/stay|'stay\.|ic: 'stay'#i", $ligne) === 1) {
+        ++$vus;
+    }
+}
+if ($vus !== \count($formes)) {
+    $faux[] = sprintf('le compteur frontal rate %d des %d formes réelles de `stay`', \count($formes) - $vus, \count($formes));
+} else {
+    ++$temoins;
+}
+
+// ⚠ ET LE TÉMOIN NÉGATIF DU MÊME ORGANE : un mot qui CONTIENT le nom sans être lui.
+// ⚠ LE TÉMOIN NÉGATIF, ET C'EST LUI QUI A TUÉ LA VERSION PRÉCÉDENTE : un LIBELLÉ n'est pas un
+//   pilotage. `lodging: 'Hébergement'` dans un écran de paramètres ne prouve pas que le module sert.
+if (preg_match("#/api/lodging|'lodging\.|ic: 'lodging'#i", "  lodging: 'Hébergement',") === 1) {
+    $faux[] = 'le compteur frontal prend un libellé de traduction pour un pilotage';
 } else {
     ++$temoins;
 }

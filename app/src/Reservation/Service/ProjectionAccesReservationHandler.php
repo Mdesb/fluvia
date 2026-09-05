@@ -44,13 +44,18 @@ final class ProjectionAccesReservationHandler
             $this->em->lock($reservation, LockMode::PESSIMISTIC_WRITE);
             // Relit l'état COMMITTÉ sous verrou : le processor appelant a `flush()` la réservation AVANT
             // d'appeler cette méthode, laissant une fenêtre où une annulation concurrente a pu la sortir
-            // de `occupePlace()`. Sans ce refresh, l'entité en mémoire resterait `Confirmee` (identity map).
+            // de `donneDroitAcces()`. Sans ce refresh, l'entité en mémoire resterait `Confirmee` (identity map).
             $this->em->refresh($reservation);
 
-            // RG-ACC3-01 : ne projeter QUE si la réservation occupe encore la place. Ferme la course
+            // RG-ACC3-01 : ne projeter QUE si la réservation ouvre un accès. Ferme la course
             // annulation↔projection qui, sinon, créerait un DroitAcces `Valide` pour une réservation déjà
             // annulée — accès fantôme permanent (plus aucun chemin ne rappellerait la révocation).
-            if (!$reservation->getStatut()->occupePlace()) {
+            //
+            // ⚠ `donneDroitAcces()` ET NON `occupePlace()`, DEPUIS LEUR SÉPARATION. Une
+            //   réservation `a_confirmer` OCCUPE sa place — elle compte dans la jauge — mais elle n'a
+            //   rien payé : lui ouvrir le portique serait laisser entrer sur une promesse. C'est la
+            //   seule des quatre questions de l'ancien prédicat dont la réponse diffère.
+            if (!$reservation->getStatut()->donneDroitAcces()) {
                 return null;
             }
 
@@ -101,7 +106,7 @@ final class ProjectionAccesReservationHandler
 
     /**
      * RG-ACC3-05 : dévalide le DroitAcces projeté (s'il existe) quand la Réservation quitte
-     * `occupePlace()`. No-op silencieux si aucune projection (Ressource `ouvreAcces=false` ou jamais
+     * `donneDroitAcces()`. No-op silencieux si aucune projection (Ressource `ouvreAcces=false` ou jamais
      * projetée) — pas une erreur (§8 cas limite spec).
      */
     public function revoquerSiProjete(Reservation $reservation): void

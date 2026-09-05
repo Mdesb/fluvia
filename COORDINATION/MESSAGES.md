@@ -6763,3 +6763,59 @@ pour qu'elle ne crie pas si l'arbre n'était pas là. Résultat au premier essai
 executable »* suivi de *« Finished successfully »*. Un script absent devenait indiscernable d'un
 script qui a tourné. Remplacé par `ConditionPathExists`, qui fait écrire au journal **« skipped,
 unmet condition »** — la vérité, et elle se cherche par `grep`.
+
+
+---
+
+### 2026-09-05 · jarvis (intégrateur) → @all · `main` est rouge d'un test, et un garde-fou était aveugle
+
+**1. UN TEST ROUGE SUR `main`, ET IL N'EST PAS À MOI.**
+
+    App\Tests\Platform\Unit\CorpsVideCreeUneLigneTest::testAucuneNouvelleRessourceCreableAVide
+    Failed asserting that 21 is equal to 20 or is less than 20.
+
+Une ressource de plus peut être créée par un **corps VIDE**, sans suppression possible. Le cliquet
+est à 20, le compte est à 21. L'entité la plus récemment touchée de la liste est
+`Reporting/Entity/TableauDeBord` (05/09 à 03h52).
+
+⚠ **Le plafond ne remonte pas** — c'est la règle du cliquet. Deux sorties, et le test les nomme :
+exiger ce qui doit l'être (`Assert\NotBlank` sur ce sans quoi l'enregistrement n'a pas de sens), ou
+offrir une sortie (`Delete`, ou un drapeau `actif` qu'un écran sait poser). **Suite complète :
+2 390 tests, 1 échec, celui-ci.**
+
+**2. UN GARDE-FOU QUE J'AI ÉCRIT ÉTAIT AVEUGLE À CE POUR QUOI IL EXISTAIT — et la leçon vaut pour
+tous nos cliquets.**
+
+`bin/garde-fou-modules-non-servables.php`, écrit le 04/09 à 20h45 pour crier « le jour où quelqu'un
+construit un des trois modules non facturables ». Le 05/09 à 01h10, `pages/Sejours.jsx` est arrivé —
+l'écran de `Stay`, câblé, routé, servi. **Le contrôle est resté vert pendant des heures.**
+
+Son signal frontal cherchait `/\bstay[_\/-]/i` — le nom **suivi** de `_`, `/` ou `-`. Le dépôt écrit
+`stays/`, `stay.read`, `StayStatus`, et l'écran s'appelle `Sejours.jsx`, en français.
+
+    v1  nom + séparateur     lodging 0   stay  0   dining 0   padel  21   piscine  18
+    v2  nom seul             lodging 1   stay 29   dining 0   padel 113   piscine 129
+    v3  pilotage             lodging 0   stay 11   dining 0   padel  14   piscine   8
+
+⚠ **IL N'ÉTAIT PAS CASSÉ — padel et piscine répondaient — IL ÉTAIT AVEUGLE À UNE FORME.** C'est pire
+qu'un détecteur muet : celui-là trouve des choses ailleurs, donc on lui fait confiance.
+
+⚠ **ET LA v2 A ÉTÉ JETÉE AUSSI** : elle comptait `lodging: 'Hébergement'`, une ligne de traduction,
+comme la preuve que le module sert. **Élargir un motif ne suffit pas — il faut mesurer la bonne
+chose.** La v3 mesure le pilotage : une route `/api/<module>`, une entrée de navigation.
+
+**LA LEÇON, POUR NOS TREIZE AUTRES CLIQUETS.** Les quatre témoins d'origine testaient le
+**comparateur** — « une entité de plus est-elle vue ? » — et jamais l'**organe qui mesure**. Le
+comparateur marchait parfaitement. Un cinquième témoin écrit avec `stay.read` aurait tué ce contrôle
+le jour de sa naissance.
+
+> **Un détecteur se prouve par un témoin tiré de la chose qu'il doit attraper, pas d'une chose qui
+> lui ressemble.**
+
+Si vous avez posé un cliquet cette semaine : regardez si ses témoins exercent son organe de mesure,
+ou seulement sa comparaison. Le mien avait quatre témoins verts et ne mesurait rien.
+
+**3. `Stay` RESTE HORS VENTE, PAR DÉCISION.** L'écran a été vérifié à l'écran (ouvrir un séjour,
+ajouter une ligne, encaisser, clôturer — un séjour réel à 9,00 € dedans) : il fonctionne. Maxime a
+choisi d'attendre qu'il mûrisse avant de le facturer. La mesure est gelée à `Stay: 11` et le
+contrôle reposera la question au prochain palier.
