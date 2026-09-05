@@ -1242,3 +1242,383 @@ input:focus-visible {
   .famille-modules a { display: inline-block; padding-block: 10px; }
   .pied a { display: inline-block; padding: 8px 4px; }
 }
+
+
+/* ══ REPRISE DE DESIGN (05/09) ════════════════════════════════════════════════════════════════
+
+   Six points nommes par Maxime sur la page servie, dans son ordre :
+
+     1. « la barre du haut est toujours en clair »
+     2. « les tarifs, ca ne me convient pas »
+     3. « les formules, on dirait qu'il n'y a pas de design »
+     4. « un peu plus de vie et de dynamisme »
+     5. « sur les articles il manque des visuels »
+     6. « le footer ne va pas »
+
+   ⚠ AUCUNE TEINTE INVENTEE. Tout vient des cinq arrets du degrade (couche 1) ou des encres deja
+   mesurees contre le navy en theme sombre (couche 2). Une couleur neuve ecrite ici passerait sous
+   `verifier-contrastes.mjs` sans etre vue — c'est ce qui avait laisse cinq paires sous le seuil
+   jusqu'au 01/09.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. LA BARRE RESTE SOMBRE, PARTOUT ────────────────────────────────────────────────────────
+
+   Elle etait peinte avec `--bg` : claire en theme clair, y compris posee sur le bandeau
+   d'ouverture et sur le tunnel, tous deux sombres. Une barre qui change de camp au defilement
+   demande un observateur qui sache ce qu'il y a dessous ; une barre qui assume une seule couleur
+   n'en demande aucun et se lit sur toutes les bandes.
+
+   Les encres sont celles deja mesurees contre le navy (theme sombre, couche 2) : meme fond, donc
+   meme rapport de contraste. */
+:root {
+  --entete-fond: rgba(5, 9, 20, .86);
+  --entete-ink: #a3aec8;
+  --entete-ink-fort: #e7ecf7;
+  --entete-ligne: rgba(255, 255, 255, .10);
+  --entete-survol: rgba(255, 255, 255, .08);
+}
+
+.entete {
+  background: var(--entete-fond);
+  border-bottom: 1px solid var(--entete-ligne);
+  backdrop-filter: blur(14px) saturate(150%);
+}
+
+/* Le filet de marque passe SOUS la barre plutot qu'en haut de page : il souligne l'objet fixe au
+   lieu de disparaitre au premier defilement. */
+.entete::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  background: var(--marque-degrade);
+}
+
+.entete .marque { color: var(--entete-ink-fort); }
+.entete nav a {
+  color: var(--entete-ink);
+  transition: color .18s ease, background-color .18s ease;
+}
+.entete nav a:hover { color: var(--entete-ink-fort); background: var(--entete-survol); }
+
+/* ── 2. LA SECTION TARIFS ─────────────────────────────────────────────────────────────────────
+
+   Ce que la page montrait : une boite blanche a gauche, puis dix-sept cartes blanches identiques
+   portant dix-sept fois le meme montant. Rien ne hierarchisait, et le prix — l'information qu'on
+   vient chercher — se diluait a force d'etre repete.
+
+   La colonne de gauche devient l'ancre : un seul objet sombre qui porte le prix, ce qu'il
+   comprend, et l'appel. Les modules deviennent une grille dense de noms, le montant unique etant
+   annonce une fois au-dessus (voir `tarifs.js`). */
+
+.tarifs-grille .formules {
+  position: relative;
+  overflow: hidden;
+  padding: 30px 28px;
+  border-radius: 18px;
+  background: var(--marque-nuit);
+  color: #e7ecf7;
+  box-shadow: 0 20px 44px -26px rgba(5, 9, 20, .7);
+}
+.tarifs-grille .formules::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--marque-degrade);
+}
+
+/* La carte de formule n'est plus une carte : elle est le contenu de l'ancre. */
+.tarifs-grille .carte-formule {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.tarifs-grille .carte-formule h3 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #8b96b2;
+}
+.tarifs-grille .carte-formule .prix {
+  margin: 0;
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: #ffffff;
+}
+.tarifs-grille .carte-formule .prix-unite {
+  font-size: 15px;
+  font-weight: 400;
+  color: #a3aec8;
+  letter-spacing: 0;
+}
+
+.tarifs-grille .socle-inclus {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+}
+.tarifs-grille .socle-inclus li { color: #e7ecf7; }
+.tarifs-grille .socle-inclus li::marker { content: ""; }
+.tarifs-grille .socle-essai { margin: 22px 0 0; }
+.tarifs-grille .socle-essai .btn { display: block; text-align: center; }
+
+/* L'annonce du prix unique : elle remplace dix-sept repetitions. */
+.tarifs-uniforme {
+  margin: 0 0 22px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-size: 15px;
+}
+.tarifs-uniforme strong { font-weight: 700; }
+
+/* Les rubriques : un intitule qui se lit comme une etiquette, souligne sur toute la largeur. */
+.tarifs-options .famille-tarif-tete {
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.tarifs-options .famille-tarif-tete h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.tarifs-options .famille-trait {
+  flex: none;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* Une grille de noms, plus dense : le regard balaie au lieu de lire. */
+.tarifs-options .options {
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 10px;
+  margin-top: 0;
+}
+.tarifs-options .options li {
+  align-items: center;
+  padding: 13px 15px;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.tarifs-options .options li:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.tarifs-options .option-prix { font-size: 13px; font-weight: 500; color: var(--ink-faint); }
+
+/* ── 3. LE TUNNEL ─────────────────────────────────────────────────────────────────────────────
+
+   ⚠ LE DEFAUT ETAIT UN RESTE : la section est devenue une bande sombre sans que les panneaux du
+   formulaire soient revus. Ils sont restes peints avec `--panel`, donc blancs — d'ou trois grandes
+   boites claires posees sur du navy, et l'impression qu'aucun dessin n'avait ete fait.
+
+   Les panneaux deviennent du verre sur la bande, les choix des objets qui montrent leur etat. */
+
+.bande-sombre .tunnel fieldset {
+  padding: 24px 26px 26px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .04);
+}
+.bande-sombre .tunnel legend {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #a3aec8;
+}
+
+.bande-sombre .choix-liste {
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px;
+}
+
+.bande-sombre .choix {
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .05);
+  color: #e7ecf7;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+.bande-sombre .choix:hover {
+  border-color: rgba(255, 255, 255, .30);
+  background: rgba(255, 255, 255, .09);
+  transform: translateY(-1px);
+}
+
+/* L'etat choisi se voit sans qu'on cherche la case : c'est la carte entiere qui bascule. */
+.bande-sombre .choix:has(input:checked) {
+  border-color: var(--marque-cyan);
+  background: rgba(39, 217, 208, .13);
+}
+.bande-sombre .choix input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--marque-cyan);
+}
+.bande-sombre .choix-prix { color: #a3aec8; }
+
+.bande-sombre .champ label { color: #e7ecf7; }
+.bande-sombre .champ input {
+  border-color: rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .06);
+  color: #e7ecf7;
+}
+.bande-sombre .champ input::placeholder { color: #8b96b2; }
+.bande-sombre .aide { color: #a3aec8; }
+
+.bande-sombre .total {
+  border: 1px solid rgba(39, 217, 208, .38);
+  background: rgba(39, 217, 208, .12);
+  color: #ffffff;
+  font-size: 17px;
+}
+
+/* ── 4. LA VIE, LA OU ELLE DIT QUELQUE CHOSE ──────────────────────────────────────────────────
+
+   Pas de mouvement d'ambiance : seulement des reponses au geste. Une carte qui se souleve sous le
+   curseur dit qu'elle est cliquable ; un module qui bascule dit qu'il est pris. */
+
+.carte, .rubrique-carte, .metier-lien {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.carte:hover, .rubrique-carte:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.btn { transition: background-color .18s ease, transform .12s ease; }
+.btn:active { transform: translateY(1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .carte, .rubrique-carte, .metier-lien, .btn,
+  .tarifs-options .options li, .bande-sombre .choix { transition: none; }
+  .carte:hover, .rubrique-carte:hover,
+  .tarifs-options .options li:hover, .bande-sombre .choix:hover { transform: none; }
+}
+
+/* ── 5. LE VISUEL DES ARTICLES ────────────────────────────────────────────────────────────────
+
+   Trois cartes de texte cote a cote, sans rien pour les distinguer au premier coup d'oeil. Le
+   visuel est le degrade de marque, decline par rang — decoratif et annonce comme tel dans le
+   gabarit (`aria-hidden`) : fabriquer quelque chose qui ressemble a une photo ferait croire a un
+   contenu qu'on n'a pas. */
+
+.carte-article {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.carte-visuel {
+  display: block;
+  height: 128px;
+  flex: none;
+  position: relative;
+  background: var(--marque-degrade);
+}
+
+/* Le grain : deux couches tres discretes, qui evitent l'aplat de degrade tel quel. */
+.carte-visuel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 100% at 12% 0%, rgba(255, 255, 255, .38), transparent 62%),
+    repeating-linear-gradient(118deg, rgba(5, 9, 20, .14) 0 1px, transparent 1px 14px);
+}
+.carte-article:nth-child(2) .carte-visuel { background-image: linear-gradient(158deg, var(--marque-bleu) 0%, var(--marque-indigo) 52%, var(--marque-violet) 100%); }
+.carte-article:nth-child(3) .carte-visuel { background-image: linear-gradient(102deg, var(--marque-violet) 0%, var(--marque-indigo) 48%, var(--marque-cyan) 100%); }
+
+.carte-article .carte-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px 24px;
+}
+.carte-article .carte-corps h3 { margin: 0; }
+.carte-article .carte-corps p { margin: 0; }
+
+/* ── 6. LE PIED DE PAGE ───────────────────────────────────────────────────────────────────────
+
+   Il tenait en une ligne de texte gris centre et quatre liens separes par des points. Il devient
+   le socle de la page : fond de marque, quatre colonnes, et la barre du bas.
+
+   ⚠ AUCUNE RUBRIQUE « LEGAL » TANT QUE LES PAGES N'EXISTENT PAS. Voir le gabarit. */
+
+.pied {
+  padding: 52px 24px 28px;
+  border-top: 0;
+  background: var(--marque-nuit);
+  color: #a3aec8;
+  position: relative;
+}
+.pied::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--marque-degrade);
+}
+
+.pied-corps {
+  max-width: 1280px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
+  gap: 36px 40px;
+  align-items: start;
+}
+
+.pied .marque { color: #ffffff; }
+.pied-marque { display: flex; flex-direction: column; gap: 14px; }
+.pied-note { max-width: 46ch; }
+.pied-note p { margin: 0; font-size: 14.5px; color: #8b96b2; text-align: left; }
+
+.pied-col h2 {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #6f7b99;
+}
+.pied-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.pied-col a { color: #a3aec8; text-decoration: none; font-size: 15px; }
+.pied-col a:hover { color: #ffffff; text-decoration: underline; }
+.pied-col p { margin: 0; text-align: left; }
+.pied-appel .btn { display: inline-block; }
+.pied-mention { margin-top: 10px !important; font-size: 13.5px; color: #6f7b99; }
+
+.pied-bas {
+  max-width: 1280px;
+  margin: 36px auto 0;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, .10);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.pied-bas p { margin: 0; font-size: 13.5px; color: #6f7b99; text-align: left; }
+
+@media (max-width: 900px) {
+  .pied-corps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pied-marque { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .pied-corps { grid-template-columns: minmax(0, 1fr); }
+  .tarifs-grille .formules { position: static; }
+}
