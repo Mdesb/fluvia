@@ -100,7 +100,10 @@ const NAV = [
   {
     section: 'Contrôle d’accès',
     items: [
-      { id: 'supervision', ic: 'supervision', label: 'Supervision', cap: 'controle_acces' },
+      // ⚠ LE QUALIFICATIF N'EST PAS UN DOUBLON DE LA SECTION. Cet écran et Pilotage montrent
+      // les MÊMES jauges FMI et la même fréquentation ; seul « accès » dit lequel des deux on ouvre.
+      // L'écran s'appelait déjà « Supervision accès » ; le menu, lui, disait « Supervision ».
+      { id: 'supervision', ic: 'supervision', label: 'Supervision accès', cap: 'controle_acces' },
       // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
@@ -127,7 +130,9 @@ const NAV = [
       // modifier un client, et le droit de contacter mille personnes ne doit pas emporter celui d'en
       // corriger une.
       { id: 'campagnes', ic: 'campaigns', label: 'Campagnes', perms: ['campagne.lire', 'campagne.gerer'] },
-      { id: 'comptabilite', ic: 'accounting', label: 'Comptabilité', perm: 'compta.lire' },
+      // « / Régie » vient du titre de l'écran, et il sert dans le menu : un régisseur cherche son
+      // mot, pas « Comptabilité ». Le sous-titre de l'écran l'annonçait, le menu le cachait.
+      { id: 'comptabilite', ic: 'accounting', label: 'Comptabilité / Régie', perm: 'compta.lire' },
       { id: 'boutique', ic: 'shop', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: 'staff', label: 'Personnel', perm: 'personnel.lire' },
       // Sous Gestion et a cote du Personnel : un projet se distribue a des gens, et c'est la
@@ -252,7 +257,7 @@ const NAV = [
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.
-      { id: 'legal', ic: 'legal', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+      { id: 'legal', ic: 'legal', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
       // La documentation vivante de l'API REST (OpenAPI). `admin: true` et pas une permission metier :
       // ce n'est pas un ecran d'exploitation mais une porte d'integration (bornes ITBOX, developpements
       // tiers). Elle ne montre rien de plus que le contrat deja servi a `/api/docs` ; l'onglet le rend

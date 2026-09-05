@@ -229,7 +229,11 @@ export default function Acces({ etabActif, droits }) {
     <div className="view">
       <div className="view-head">
         <div className="ttl">
-          <h1>Badges &amp; supports</h1>
+          {/* ⚠ « TERMINAUX D'ACCÈS », COMME DANS LE MENU. « Support » ne désigne que la carte ;
+              l'écran enrôle aussi les lecteurs, ce que le sous-titre dit déjà. Et le menu porte le
+              qualificatif « d'accès » à dessein (voir AppShell) : « terminal » désigne aussi le TPE
+              bancaire, réglé ailleurs. Le titre doit répéter le mot sur lequel on a cliqué. */}
+          <h1>Badges &amp; terminaux d’accès</h1>
           <p>Appairer une carte, bloquer un badge perdu, enrôler un lecteur</p>
         </div>
         <div className="actions">
