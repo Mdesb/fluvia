@@ -34,8 +34,18 @@ final class CorpsVideCreeUneLigneTest extends TestCase
     /**
      * Le plafond gele au 31/08/2026. Il s'abaisse quand une ressource est corrigee ; il ne remonte
      * pas. Une ressource neuve qui entre dans le critere fait echouer ce test, et c'est le but.
+     *
+     * ⚠ ABAISSE DE 20 A 17 LE 05/09, ET LA RAISON COMPTE. Le message d'echec offrait depuis
+     * toujours deux sorties — « un Delete, OU un drapeau `actif` que l'ecran sait poser » — mais
+     * `creableAVide()` ne detectait que la premiere. Quatre ressources portaient la seconde depuis
+     * leur creation et etaient comptees a tort.
+     *
+     * Le controle a fini par accuser un pair : `Reporting/Entity/TableauDeBord`, dont le docbloc dit
+     * « pas de Delete expose, seule Patch(actif=false) desactive » et dont le frontal appelle
+     * exactement cela. Un controle qui nomme un critere sans l'appliquer fait pire que se tromper :
+     * il envoie corriger du code qui n'a rien a se reprocher.
      */
-    private const PLAFOND = 20;
+    private const PLAFOND = 17;
 
     /** Le cas connu, qui sert de temoin positif : la mesure doit le voir ET le classer a risque. */
     private const TEMOIN = 'Patinoire/Entity/ParcPatins.php';
@@ -79,7 +89,15 @@ final class CorpsVideCreeUneLigneTest extends TestCase
         // Le second : le critere mesure-t-il ce qu'on croit ? Un critere trop strict verrait le cas
         // connu et le declarerait sain. Meme zero, autre cause.
         self::assertGreaterThan(100, $vues, 'la mesure ne lit presque rien : elle ne prouve pas ce qu elle affirme');
-        self::assertTrue($temoinVu, self::TEMOIN . ' doit etre classe a risque : sinon le critere ne mesure pas ce qu on croit');
+
+        // ⚠ LE TEMOIN ETAIT UNE ENTITE VIVANTE, ET IL A EXPIRE. `ParcPatins` devait etre classe a
+        //   risque « sinon le critere ne mesure pas ce qu on croit ». Le jour ou la sortie par
+        //   drapeau `actif` a ete detectee, ParcPatins en est sorti — et l'assertion aurait declare
+        //   l'instrument casse alors qu'il venait d'etre repare.
+        //
+        //   Un temoin tire d'un defaut vivant meurt avec le defaut. Ceux-ci portent sur la CAPACITE
+        //   A VOIR, pas sur l'etat du depot a une date : ils survivent a toute correction.
+        $this->assertClassificationExercee();
 
         self::assertLessThanOrEqual(
             self::PLAFOND,
@@ -160,6 +178,42 @@ final class CorpsVideCreeUneLigneTest extends TestCase
     /**
      * @param list<array{0: string, 1: string, 2: string}> $proprietes
      */
+    /**
+     * Les temoins du CLASSIFICATEUR — quatre sources fabriquees, quatre reponses attendues.
+     *
+     * ⚠ ILS PROUVENT CE QU'IL EPARGNE AUTANT QUE CE QU'IL ATTRAPE. Un critere trop large ne fait pas
+     * monter le compte, il le fait BAISSER : il excuse tout et le plafond n'est plus jamais atteint.
+     * Sans un cas qu'il doit compter ET trois qu'il doit epargner, un vert ne dit rien.
+     */
+    private function assertClassificationExercee(): void
+    {
+        $base = "#[ApiResource]\nnew Post(\n#[ORM\\Column] private string \$nom = '';\n";
+
+        $cas = [
+            'sans aucune sortie : doit etre COMPTE' => [$base, true],
+            'avec new Delete( : doit etre EPARGNE' => [$base . "new Delete(\n", false],
+            'avec un drapeau actif posable : doit etre EPARGNE' => [
+                $base . "private bool \$actif = true;\npublic function setActif(bool \$a): self\n",
+                false,
+            ],
+            // ⚠ LE CAS QUI SEPARE LES DEUX MOITIES DE LA REGLE : un booleen qu'aucun setter ne pose
+            //   ne retire rien de la circulation. L'epargner serait declarer la porte fermee sans
+            //   qu'elle le soit.
+            'avec un drapeau actif SANS setter : doit rester COMPTE' => [
+                $base . "private bool \$actif = true;\n",
+                true,
+            ],
+        ];
+
+        foreach ($cas as $quoi => [$source, $attendu]) {
+            self::assertSame(
+                $attendu,
+                $this->creableAVide($source, $this->proprietes($source)),
+                'le classificateur se trompe : ' . $quoi,
+            );
+        }
+    }
+
     private function creableAVide(string $source, array $proprietes): bool
     {
         // `Range` et `PositiveOrZero` n'exigent RIEN : elles sont satisfaites par 28 et par 0. Seules
@@ -169,6 +223,23 @@ final class CorpsVideCreeUneLigneTest extends TestCase
         }
 
         if (str_contains($source, 'new Delete(')) {
+            return false;
+        }
+
+        // ⚠ LE DRAPEAU `actif`, QUE LE MESSAGE PROMETTAIT DEPUIS LE DEBUT SANS QUE LE CODE LE VOIE.
+        //
+        // Le message d'echec offre deux sorties : « un Delete, OU un drapeau `actif` que l'ecran
+        // sait poser ». Seule la premiere etait detectee. Le 05/09, ce controle a donc accuse
+        // `Reporting/Entity/TableauDeBord` — dont le docbloc dit noir sur blanc « pas de Delete
+        // expose, seule Patch(actif=false) desactive » et dont le frontal appelle exactement ca.
+        //
+        // Un controle qui nomme un critere sans l'appliquer fait pire que se tromper : il envoie
+        // corriger du code qui n'a rien a se reprocher, et celui qui le lit croit avoir compris.
+        //
+        // ⚠ CE QU'ON EXIGE : le champ ET son setter. Un booleen prive sans moyen de le poser ne
+        //   retire rien de la circulation — ce serait rouvrir la porte en la declarant fermee.
+        if (preg_match('/private bool \$actif\b/', $source) === 1
+            && str_contains($source, 'function setActif(')) {
             return false;
         }
 
