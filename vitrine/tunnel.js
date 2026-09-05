@@ -162,14 +162,38 @@ function choixOption(option) {
   const nom = document.createElement('span')
   nom.textContent = option.label
 
-  const montant = document.createElement('span')
-  montant.className = 'choix-prix'
-  montant.textContent = `+ ${prix(option.monthlyPriceCents)} / mois`
+  texte.append(nom)
 
-  texte.append(nom, montant)
+  // ⚠ LE PRIX NE SE REPETE PAS DIX-HUIT FOIS. Quand toutes les options sont au meme montant, il est
+  //   annonce une seule fois au-dessus de la liste — comme le fait deja la section Tarifs, a
+  //   quelques centimetres d'ici. Deux traitements opposes du meme fait sur la meme page, c'est un
+  //   visiteur qui doute du second. Et le libelle recupere toute la largeur de sa carte, ce qui
+  //   supprime au passage les coupures en deux lignes.
+  if (!prixUniforme) {
+    const montant = document.createElement('span')
+    montant.className = 'choix-prix'
+    montant.textContent = `+ ${prix(option.monthlyPriceCents)} / mois`
+    texte.append(montant)
+  }
+
   etiquette.append(case_, texte)
 
   return etiquette
+}
+
+/** Vrai quand toutes les options vendues sont au meme montant. Mesure, jamais suppose. */
+let prixUniforme = false
+
+/** L'annonce du montant unique, posee au-dessus de la liste — et seulement s'il y en a un. */
+function annonceDuPrixUnique(centimes) {
+  const p = document.createElement('p')
+  p.className = 'tunnel-uniforme'
+
+  const fort = document.createElement('strong')
+  fort.textContent = `${prix(centimes)} / mois`
+
+  p.append('Chaque module ajoute ', fort, ' a votre formule.')
+  return p
 }
 
 /**
@@ -235,7 +259,17 @@ async function monter() {
   const listeOptions = document.getElementById('tunnel-options')
   const blocOptions = document.getElementById('tunnel-bloc-options')
   if (options.length > 0) {
+    const montants = new Set(options.map((o) => o.monthlyPriceCents))
+    prixUniforme = montants.size === 1 && options.length > 1
+
     listeOptions.replaceChildren(...options.map(choixOption))
+
+    if (prixUniforme && null === listeOptions.parentElement.querySelector('.tunnel-uniforme')) {
+      listeOptions.parentElement.insertBefore(
+        annonceDuPrixUnique(options[0].monthlyPriceCents),
+        listeOptions,
+      )
+    }
   } else {
     blocOptions.hidden = true
   }

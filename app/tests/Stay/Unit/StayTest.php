@@ -62,10 +62,61 @@ final class StayTest extends TestCase
         self::assertEquals($premierDepart, $sejour->getClosedAt());
     }
 
-    public function testUnSejourClosNaccepteplusDeLigne(): void
+    /**
+     * ⚠ LE CAS QUI FERME LE CUL-DE-SAC (arbitrage du 05/09).
+     *
+     * Régler exige un solde nul ; le solde est la somme des lignes ; un règlement EST une ligne.
+     * Si un séjour clos refusait les lignes — ce qu'il faisait jusqu'ici — clôturer avant
+     * d'encaisser rendait le séjour impossible à régler, définitivement, puisque rien ne rouvre un
+     * séjour.
+     *
+     * C'est la ligne NÉGATIVE qui compte ici : elle est le règlement, et c'est elle qu'on n'aurait
+     * pas pensé à tester.
+     */
+    public function testUnSejourClosAccepteEncoreLeReglementQuiLeRendSoldable(): void
+    {
+        $sejour = $this->sejourOuvert();
+        new StayCharge(
+            $sejour,
+            'Bar — 2 demis',
+            '9.00',
+            new \DateTimeImmutable('2026-08-28 09:00:00'),
+            'vente',
+            'sale.completed',
+            'sale-123',
+        );
+        $sejour->close(new \DateTimeImmutable('2026-08-28 10:00:00'));
+
+        self::assertTrue($sejour->acceptsCharges(), 'Le client est parti ; il peut encore payer.');
+
+        $reglement = new StayCharge(
+            $sejour,
+            'Règlement carte bancaire',
+            '-9.00',
+            new \DateTimeImmutable('2026-09-15 09:00:00'),
+            'manual',
+            'manual.entry',
+            'reglement-1',
+        );
+
+        self::assertSame('-9.00', $reglement->getAmount());
+
+        // Et il devient alors soldable, ce qui est tout l'objet du correctif.
+        $sejour->settle(new \DateTimeImmutable('2026-09-15 09:05:00'));
+        self::assertSame(StayStatus::Settled, $sejour->getStatus());
+    }
+
+    /**
+     * L'invariant n'a pas disparu, il s'est déplacé d'un cran : un séjour SOLDÉ refuse tout.
+     *
+     * C'est lui qui porte le « réglé une fois » de D16 — une ligne postérieure au règlement rendrait
+     * faux un encaissement déjà passé en comptabilité.
+     */
+    public function testUnSejourSoldeNaccepteplusDeLigne(): void
     {
         $sejour = $this->sejourOuvert();
         $sejour->close(new \DateTimeImmutable('2026-08-28 10:00:00'));
+        $sejour->settle(new \DateTimeImmutable('2026-08-28 10:05:00'));
 
         self::assertFalse($sejour->acceptsCharges());
 

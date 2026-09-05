@@ -230,10 +230,25 @@ class Stay
         return $this->settledAt;
     }
 
-    /** Un séjour clos ou soldé n'accepte plus de ligne — c'est l'invariant que `StayCharge` suppose. */
+    /**
+     * Un séjour SOLDÉ n'accepte plus de ligne — c'est l'invariant que `StayCharge` suppose.
+     *
+     * ⚠ UN SÉJOUR CLOS EN ACCEPTE ENCORE, ET C'EST LE CORRECTIF DU 05/09. Le refuser fermait un
+     * cul-de-sac sans issue : régler exige un solde nul, le solde est la somme des lignes, et un
+     * règlement EST une ligne. Clôturer avant d'encaisser rendait donc le séjour impossible à
+     * régler — définitivement, puisque rien ne rouvre un séjour.
+     *
+     * Le modèle voulait déjà l'inverse : `close()` est « le départ du client », et
+     * `testReglementPosterieurAuDepart` dit que « partir et payer sont deux faits distincts —
+     * facturation différée à un comité d'entreprise, litige sur une ligne ».
+     *
+     * L'invariant ne disparaît pas, il se déplace d'un cran : c'est `Settled` qui porte le « réglé
+     * une fois » de D16, parce qu'une ligne postérieure au règlement rendrait faux un encaissement
+     * déjà passé en comptabilité.
+     */
     public function acceptsCharges(): bool
     {
-        return StayStatus::Open === $this->status;
+        return StayStatus::Settled !== $this->status;
     }
 
     /**
