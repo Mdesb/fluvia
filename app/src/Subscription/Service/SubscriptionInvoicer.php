@@ -145,6 +145,18 @@ final class SubscriptionInvoicer
                 continue;
             }
 
+            // ⚠ LA MÊME GARDE QUE `lignes()`, ET ELLE MANQUAIT ICI (§8.1). Un module qui ne peut
+            //   rien servir n'est pas facturé — mais cette méthode-ci calcule le montant AFFICHÉ,
+            //   et elle lisait les mêmes items sans le filtre. Une facture à 0 € pour une ligne
+            //   annoncée à 19 €, ou l'inverse : les deux chemins doivent répondre pareil.
+            //
+            // ⚠ ET LE COMMIT QUI A POSÉ L'AUTRE GARDE AFFIRMAIT « point de passage UNIQUE ». Une
+            //   affirmation d'unicité se prouve en cherchant les CONCURRENTS du chemin qu'on
+            //   corrige, pas en relisant celui-là. Celle-ci a été trouvée par un audit, pas par moi.
+            if ($this->capacites->trouve($item->getCapability())?->peutServir === false) {
+                continue;
+            }
+
             $total += $item->getActiveFrom() > $mois
                 ? $this->prorata->forPartialPeriod($item->getUnitPriceCents(), $item->getActiveFrom(), $mois, $fin)
                 : $item->getUnitPriceCents();

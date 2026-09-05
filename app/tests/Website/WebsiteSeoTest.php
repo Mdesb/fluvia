@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Website;
 
+use App\Subscription\Entity\PlanOption;
 use App\Tests\SocleApiTestCase;
 use App\Website\Entity\ContentBlock;
 use App\Website\Service\ModuleCatalog;
@@ -19,12 +20,39 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class WebsiteSeoTest extends SocleApiTestCase
 {
+
+    /**
+     * Met tout le catalogue en vente, pour que la page ait quelque chose à montrer.
+     *
+     * ⚠ **LE SITE NE MONTRE PLUS SON CATALOGUE TECHNIQUE, MAIS SON CATALOGUE DE VENTE.** Une
+     * capacité qui existe n'est pas une capacité vendable : sans option active, la page n'affiche
+     * aucun module — et elle a raison de le faire. Le harnais n'en sème aucune ; les témoins qui
+     * vérifient un affichage doivent donc d'abord créer la condition qui le déclenche.
+     *
+     * L'écrire ici plutôt que dans un jeu de données rend cette dépendance visible dans le test.
+     */
+    private function rendreLeCatalogueVendable(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $catalogue = static::getContainer()->get(ModuleCatalog::class);
+
+        foreach ($catalogue->modules() as $module) {
+            $em->persist((new PlanOption())
+                ->setCapability($module['code'])
+                ->setLabel($module['libelle'])
+                ->setMonthlyPriceCents(1900)
+                ->setActive(true));
+        }
+
+        $em->flush();
+    }
     /** La liste des modules vient du catalogue, et elle ne montre aucune verticale. */
     public function testLaListeDesModulesVientDuCatalogueEtExclutLesVerticales(): void
     {
         $this->sauterSiRouteAbsente('website_modules');
 
         $client = static::createClient();
+        $this->rendreLeCatalogueVendable();
         $reponse = $client->request('GET', '/modules');
 
         self::assertResponseIsSuccessful();
@@ -127,6 +155,7 @@ final class WebsiteSeoTest extends SocleApiTestCase
         // ── Fermé ──
         $this->indexable(false);
         $client = static::createClient();
+        $this->rendreLeCatalogueVendable();
 
         self::assertStringContainsString('name="robots" content="noindex', (string) $client->request('GET', '/')->getContent());
         self::assertStringContainsString('Disallow: /', (string) $client->request('GET', '/robots.txt')->getContent());
