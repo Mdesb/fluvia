@@ -48,10 +48,34 @@ final class DeclencherFacturationNoShowHandler
             return null;
         }
 
+        $retenu = (float) $reservation->getVersementRetenuMontant();
+        $nature = $creneau?->getActivite()?->getNatureVersement();
+
+        // ARRHES : LE DEDIT EST LA COMPENSATION, ON NE RECLAME RIEN DE PLUS.
+        //
+        // `RegleAnnulation` calcule deja une indemnite. Laisser les deux mecanismes s'appliquer
+        // ferait payer au client son absence DEUX FOIS -- une fois en perdant ses arrhes, une fois
+        // par cette facturation. Personne ne l'aurait vu avant une reclamation.
+        //
+        // Et la condition porte sur ce qui a ETE RETENU, pas sur la nature declaree : un montant
+        // annonce mais jamais encaisse n'engage aucun regime, sinon une prestation mal configuree
+        // offrirait l'absence a tous ses clients.
+        if ($nature !== null && $nature->eteintLaCreance() && $retenu > 0.0) {
+            $this->em->flush();
+
+            return null;
+        }
+
+        $duTotal = (float) $regle->montantCalcule($creneau?->tarifReference() ?? '0.00');
+
+        // ACOMPTE : le versement s'impute sur ce qui reste du. Jamais en dessous de zero -- un
+        // acompte superieur a l'indemnite ne cree pas une dette de l'etablissement envers le client.
+        $solde = max(0.0, $duTotal - $retenu);
+
         $facturation = new FacturationNoShow();
         $facturation->setReservation($reservation)
             ->setRegleAppliquee($regle)
-            ->setMontant($regle->montantCalcule($creneau?->tarifReference() ?? '0.00'))
+            ->setMontant(number_format($solde, 2, '.', ''))
             ->setStatut(StatutFacturationNoShow::AFacturer);
         $this->em->persist($facturation);
         // RG-CQ5-07 — POINT D'IDEMPOTENCE (plan-cq5.md §3.6) : ce flush() exécute l'INSERT et fait
