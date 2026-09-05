@@ -43,6 +43,28 @@ security:
             custom_authenticators:
                 - App\Acces\Security\TerminalAuthenticator
 
+        # Authentification d'une APPLICATION TIERCE sur l'API publique (T1, D101/D102, arbitrage
+        # Maxime du 06/09). Même patron que « terminal » ci-dessus, et pour la même raison :
+        # pare-feu dédié, placé AVANT « api ». Symfony évalue les pare-feux dans l'ordre et s'arrête
+        # au premier `pattern` qui correspond — `^/v1` capture donc toute l'API publique avant que
+        # l'authenticator JWT humain ne la voie.
+        #
+        # ⚠ SI L'ORDRE S'INVERSAIT, un JWT humain serait RESOLU sur `/v1` — mesuré le 06/09 en
+        #   inversant volontairement les deux blocs : la requête n'est plus refusée par le pare-feu
+        #   (401) mais par `access_control` (403, « The user doesn't have ROLE_PARTNER »).
+        #
+        #   Autrement dit il y a DEUX barrières indépendantes, et il faut les nommer séparément :
+        #   l'ORDRE décide qui authentifie, `access_control` décide qui passe. Perdre l'ordre seul
+        #   ne donne donc pas l'accès à un humain — mais ça fait dépendre toute l'isolation d'une
+        #   seule ligne d'`access_control`, et ça rend le refus indiscernable d'un problème de
+        #   droits. Les deux se gardent, et le témoin
+        #   `testUnJetonHumainNeVautRienSurLApiPublique` tombe si l'une des deux cède.
+        public_api:
+            pattern: ^/v1
+            stateless: true
+            custom_authenticators:
+                - App\PublicApi\Security\PublicApiAuthenticator
+
         # API protégée par jeton JWT.
         api:
             pattern: ^/
@@ -53,6 +75,9 @@ security:
 
     access_control:
         - { path: ^/health, roles: PUBLIC_ACCESS }
+        # L'API publique n'accepte QUE le rôle machine des partenaires : un JWT humain, même
+        # valide, n'ouvre rien ici (le pare-feu `public_api` ne le résout même pas).
+        - { path: ^/v1, roles: ROLE_PARTNER }
         # AVANT la règle générique ^/auth (PUBLIC_ACCESS) : /auth/mfa-verifier exige le jeton
         # pré-authentifié (§2.3 plan-backoffice.md, CA-5).
         - { path: ^/auth/mfa-verifier, roles: IS_AUTHENTICATED_FULLY }
