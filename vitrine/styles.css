@@ -765,7 +765,12 @@ input:focus-visible {
 }
 .preuve-items li { font-size: 13.5px; color: var(--hero-encre-faible); }
 
-/* ── les familles de modules ────────────────────────────────────────────────────────────────── */
+/* ── les cartes de rubrique ──────────────────────────────────────────────────────────────────────
+
+   ⚠ `.famille-*` EST UN NOM VISUEL, PAS UN CONCEPT DU DOMAINE. Il a d'abord designe un rangement
+   editorial (`ModuleFamilies`) que j'ai ecrit puis supprime, parce qu'il faisait double emploi avec
+   les rubriques du catalogue. Les classes sont restees : elles nomment une CARTE QUI GROUPE DES
+   MODULES, ce qu'elles font toujours. Ne cherchez pas de `ModuleFamilies`, il n'y en a plus. */
 .familles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
