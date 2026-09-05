@@ -5,6 +5,7 @@ import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 import ExplorateurIndicateurs from '../components/ExplorateurIndicateurs.jsx'
 import TableauxDeBord from '../components/TableauxDeBord.jsx'
+import RapportsPlanifies from '../components/RapportsPlanifies.jsx'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges, nonLu }) {
@@ -250,6 +251,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
       <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
       <TableauxDeBord etabActif={etabActif} etablissements={etablissements} droits={droits} />
+      <RapportsPlanifies etabActif={etabActif} droits={droits} />
 
       <EcartsCaisse etabActif={etabActif} droits={droits} />
 

@@ -1560,6 +1560,16 @@ export const api = {
   // patron qu'`Indicateur`). On retire de la circulation par `modifierTableauDeBord(id, { actif:
   // false })`. Une fonction de suppression ici rendrait un 405 a tous les coups.
 
+  // Rapports planifies (M7, RG-M7-07). Le corps est du JSON simple : le processeur lit
+  // `destinataires` comme une liste de { email, niveau, etablissement|region|groupe }, et chaque
+  // destinataire est confronte au perimetre du CREATEUR, pas a celui de la cible.
+  rapportsPlanifies: () => request('/api/rapport_planifies', { query: { itemsPerPage: 100 } }),
+  creerRapportPlanifie: (corps) =>
+    request('/api/rapport_planifies', { method: 'POST', body: corps, ld: true }),
+  modifierRapportPlanifie: (id, corps) =>
+    request(`/api/rapport_planifies/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ Pas de suppression non plus ici : on suspend par `etat: 'suspendu'`.
+
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),

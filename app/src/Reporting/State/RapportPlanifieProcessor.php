@@ -84,17 +84,41 @@ final class RapportPlanifieProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('tableauDeBord requis (RG-M7-06).');
         }
 
+        // ⚠ `tryFrom`, PAS `from` : `from()` lève une `ValueError`, qui n'est pas une
+        // HttpException et remonte donc en 500. Une faute de frappe du client vaut un 422 qui
+        // nomme les valeurs acceptées, pas une erreur serveur muette.
         if (isset($corps['format'])) {
-            $rapport->setFormat(FormatExport::from((string) $corps['format']));
+            $format = FormatExport::tryFrom((string) $corps['format']);
+            if ($format === null) {
+                throw new UnprocessableEntityHttpException('format invalide (pdf|xlsx|csv).');
+            }
+            $rapport->setFormat($format);
         }
         if (isset($corps['periodicite'])) {
-            $rapport->setPeriodicite(PeriodiciteRapport::from((string) $corps['periodicite']));
+            $periodicite = PeriodiciteRapport::tryFrom((string) $corps['periodicite']);
+            if ($periodicite === null) {
+                throw new UnprocessableEntityHttpException(
+                    'periodicite invalide (quotidienne|hebdomadaire|mensuelle).',
+                );
+            }
+            $rapport->setPeriodicite($periodicite);
         }
+        // La colonne fait 5 caractères : une chaîne plus longue échoue à l'insertion, ce qui
+        // est encore un 500. Et une heure impossible qui tient en 5 caractères se rangerait sans
+        // que rien ne le signale — personne ne lit encore ce champ, donc rien ne le démasquerait.
         if (isset($corps['heureEnvoi'])) {
-            $rapport->setHeureEnvoi((string) $corps['heureEnvoi']);
+            $heure = (string) $corps['heureEnvoi'];
+            if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $heure) !== 1) {
+                throw new UnprocessableEntityHttpException('heureEnvoi attendue au format HH:MM.');
+            }
+            $rapport->setHeureEnvoi($heure);
         }
         if (isset($corps['etat'])) {
-            $rapport->setEtat(EtatRapportPlanifie::from((string) $corps['etat']));
+            $etat = EtatRapportPlanifie::tryFrom((string) $corps['etat']);
+            if ($etat === null) {
+                throw new UnprocessableEntityHttpException('etat invalide (actif|suspendu).');
+            }
+            $rapport->setEtat($etat);
         }
 
         if (isset($corps['destinataires']) || $id === null) {
