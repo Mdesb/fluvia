@@ -1684,4 +1684,12 @@ input:focus-visible {
 .tunnel-uniforme strong { font-weight: 700; }
 
 /* Sans le prix a leur droite, les libelles tiennent sur une ligne : on peut resserrer. */
-.bande-sombre .choix-liste { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+/* ⚠ QUATRIEME INSTANCE DU MEME DEFAUT, corrigee avec les trois autres. La derniere rangee
+   d'options laissait un vide a droite, exactement comme les rubriques, les articles et les groupes
+   de tarifs. Un defaut corrige a trois endroits sur quatre se voit PLUS au quatrieme, pas moins. */
+.bande-sombre .choix-liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.bande-sombre .choix-liste > * { flex: 1 1 200px; min-width: 0; }
