@@ -260,7 +260,12 @@ final class WebsiteController extends AbstractController
             // articles. La borne existe pour que la page ne devienne jamais une requête sans limite.
             'articles' => $this->blog->publies(new \DateTimeImmutable(), 5000),
             'rubriques' => $this->em->getRepository(BlogCategory::class)->findBy([], ['name' => 'ASC']),
-            'modules' => $this->modules->modules(),
+            // ⚠ CE QU'ON NE VEND PAS N'A RIEN A FAIRE DANS LE PLAN DU SITE. Il listait les
+            //   vingt pages de modules, dont trois qu'aucune option n'ouvre a la vente,
+            //   pendant que le site n'en montre plus que dix-sept. Annoncer aux moteurs
+            //   une page qu'on ne relie de nulle part, pour un produit qu'on ne vend pas,
+            //   c'est demander a etre trouve sur une promesse qu'on ne tient pas.
+            'modules' => $this->modulesVendables(),
             'metiers' => $this->metiers->tous(),
         ]);
         $reponse->headers->set('Content-Type', 'application/xml; charset=UTF-8');

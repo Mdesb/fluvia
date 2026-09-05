@@ -125,12 +125,20 @@ final class WebsiteSeoTest extends SocleApiTestCase
         self::assertSame(404, $reponse->getStatusCode());
     }
 
-    /** Le plan du site déclare les pages de modules. */
+    /**
+     * Le plan du site déclare les pages de modules — celles qu'on vend.
+     *
+     * ⚠ **IL FAUT VENDRE QUELQUE CHOSE POUR QUE LE PLAN LE DÉCLARE.** Le plan ne liste plus le
+     * catalogue technique mais le catalogue de vente : annoncer aux moteurs une page qu'on ne relie
+     * de nulle part, pour un produit qu'on ne vend pas, c'est demander à être trouvé sur une
+     * promesse qu'on ne tient pas.
+     */
     public function testLePlanDuSiteDeclareLesModules(): void
     {
         $this->sauterSiRouteAbsente('website_sitemap');
 
         $client = static::createClient();
+        $this->rendreLeCatalogueVendable();
         $xml = (string) $client->request('GET', '/sitemap.xml')->getContent();
 
         self::assertResponseIsSuccessful();

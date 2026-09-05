@@ -18,7 +18,24 @@
   rythme. Le reste — largeurs, alignements — découle de ça.
 #}
 
-{% block title %}{{ b.ligne(blocs['home.hero.title']|default(null))|striptags|trim ?: 'Fluvia' }}{% endblock %}
+{#
+  ⚠ LA MARQUE EST AJOUTEE SI ELLE MANQUE, ET SEULEMENT DANS CE CAS.
+
+  Le titre vient du bloc éditable : quand il a pris la formulation de la maquette — « Le logiciel de
+  votre établissement, réduit à ce qui vous sert. » — le mot « Fluvia » a disparu de la balise
+  `<title>` de la page d'accueil. C'est la page dont le titre porte le nom de la marque dans un
+  résultat de recherche ; toutes les autres l'ont déjà (« Casiers — Fluvia »).
+
+  On ne fige pas le titre pour autant : c'est le SUFFIXE qui s'ajoute, et uniquement si le nom n'y
+  est pas déjà. Un titre qui contient « Fluvia » ne devient pas « Fluvia … — Fluvia ».
+#}
+{% block title %}
+  {%- set titre = b.ligne(blocs['home.hero.title']|default(null))|striptags|trim -%}
+  {%- if titre is empty -%}Fluvia
+  {%- elseif 'Fluvia' in titre -%}{{ titre }}
+  {%- else -%}{{ titre }} — Fluvia
+  {%- endif -%}
+{% endblock %}
 {% block description %}{{ blocs['home.hero.lead'].text|default('')|slice(0, 300) }}{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_home') }}">{% endblock %}
 
