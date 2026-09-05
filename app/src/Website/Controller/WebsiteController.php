@@ -10,7 +10,6 @@ use App\Website\Service\ContentBlocks;
 use App\Website\Service\MetierCatalog;
 use App\Website\Port\SellableModulesSource;
 use App\Website\Service\ModuleCatalog;
-use App\Website\Service\ModuleFamilies;
 use App\Website\Service\SiteFaq;
 use App\Website\Service\StructuredData;
 use Doctrine\ORM\EntityManagerInterface;
@@ -47,7 +46,6 @@ final class WebsiteController extends AbstractController
         private readonly BlogReader $blog,
         private readonly ContentBlocks $blocs,
         private readonly ModuleCatalog $modules,
-        private readonly ModuleFamilies $familles,
         private readonly SellableModulesSource $vendables,
         private readonly MetierCatalog $metiers,
         private readonly StructuredData $donnees,
@@ -74,11 +72,12 @@ final class WebsiteController extends AbstractController
 
         return $this->render('website/home.html.twig', [
             'blocs' => $this->blocs->valeurs(),
-            'familles' => $this->familles->familles(),
-            'modulesParFamille' => $this->modulesParFamille(),
+            'rubriques' => $this->rubriquesVendables(),
             'metiers' => $this->metiers->tous(),
-            // La table de rangement descend jusqu'au navigateur : voir {@see self::modulesParFamille}.
-            'famillesPourLeNavigateur' => $this->familles->pourLeNavigateur(),
+            // La table de rangement descend jusqu'au navigateur : `tarifs.js` doit poser chaque
+            // option lue du catalogue dans la bonne rubrique. Une seconde table ecrite en
+            // JavaScript divergerait au premier module ajoute.
+            'rubriquesPourLeNavigateur' => $this->rubriquesPourLeNavigateur(),
             // Trois articles au plus : l'accueil vend la plateforme, il ne remplace pas le blog.
             'derniers' => $this->blog->publies(new \DateTimeImmutable(), 3),
             'questions' => $questions,
@@ -100,7 +99,7 @@ final class WebsiteController extends AbstractController
         $questions = SiteFaq::generales();
 
         return $this->render('website/modules_index.html.twig', [
-            'rubriques' => $this->modules->parRubrique(),
+            'rubriques' => $this->rubriquesVendables(),
             'questions' => $questions,
             'jsonld' => [
                 $this->donnees->organisation(),
@@ -307,7 +306,7 @@ final class WebsiteController extends AbstractController
     {
         $reponse = $this->render('website/llms.txt.twig', [
             'indexable' => $this->indexable,
-            'rubriques' => $this->modules->parRubrique(),
+            'rubriques' => $this->rubriquesVendables(),
             'metiers' => $this->metiers->tous(),
             'questions' => SiteFaq::generales(),
             'articles' => $this->blog->publies(new \DateTimeImmutable(), 20),
@@ -381,6 +380,45 @@ final class WebsiteController extends AbstractController
     }
 
     /**
+     * Les rubriques du catalogue, restreintes à ce que l'éditeur vend réellement.
+     *
+     * @return list<array{cle: string, titre: string, teinte: string, modules: list<array{slug: string, code: string, libelle: string, description: string}>}>
+     */
+    private function rubriquesVendables(): array
+    {
+        return $this->modules->parRubrique($this->vendables->sellableCapabilities());
+    }
+
+    /**
+     * La table que `tarifs.js` utilise pour ranger les options qu'il lit du catalogue.
+     *
+     * ⚠ **ELLE VIENT DU SERVEUR, ELLE N'EST PAS RECOPIÉE EN JAVASCRIPT.** Deux tables — une en PHP,
+     * une dans le script — divergeraient au premier module ajouté, et la page rangerait les options
+     * autrement que le serveur ne le croit.
+     *
+     * @return array{rubriques: list<array{cle: string, titre: string, teinte: string}>, rangement: array<string, string>}
+     */
+    private function rubriquesPourLeNavigateur(): array
+    {
+        $rubriques = [];
+        $rangement = [];
+
+        foreach ($this->rubriquesVendables() as $rubrique) {
+            $rubriques[] = [
+                'cle' => $rubrique['cle'],
+                'titre' => $rubrique['titre'],
+                'teinte' => $rubrique['teinte'],
+            ];
+
+            foreach ($rubrique['modules'] as $module) {
+                $rangement[$module['code']] = $rubrique['cle'];
+            }
+        }
+
+        return ['rubriques' => $rubriques, 'rangement' => $rangement];
+    }
+
+    /**
      * Les modules que l'éditeur vend RÉELLEMENT.
      *
      * ⚠ **UNE CAPACITÉ QUI EXISTE N'EST PAS UNE CAPACITÉ EN VENTE.** `ModuleCatalog` liste les
@@ -409,30 +447,6 @@ final class WebsiteController extends AbstractController
         ));
     }
 
-    /**
-     * Les modules vendables, groupés par famille éditoriale.
-     *
-     * ⚠ **AUCUN MODULE NE DOIT SE PERDRE ICI.** `ModuleFamilies::pour()` range tout code inconnu
-     * dans une famille de refuge plutôt que de rendre `null` : un module vendable — donc facturé —
-     * absent de la page qui liste ce qu'on vend serait invisible comme défaut, puisqu'il ne
-     * manquerait nulle part. Le test `ModuleFamiliesTest` vérifie l'égalité des comptes.
-     *
-     * @return array<string, list<array{slug: string, code: string, libelle: string, description: string, categorie: string}>>
-     */
-    private function modulesParFamille(): array
-    {
-        $parFamille = [];
-
-        foreach ($this->familles->familles() as $famille) {
-            $parFamille[$famille['cle']] = [];
-        }
-
-        foreach ($this->modulesVendables() as $module) {
-            $parFamille[$this->familles->pour($module['code'])][] = $module;
-        }
-
-        return $parFamille;
-    }
 
     /**
      * L'adresse publique d'une page — construite sur `VITRINE_BASE_URL`, jamais sur la requête.
