@@ -58,11 +58,18 @@ final class ExportManuelProcessor implements ProcessorInterface
         \assert($utilisateur instanceof Utilisateur);
 
         $niveau = NiveauEntite::tryFrom((string) ($corps['niveau'] ?? ''));
+        // On accepte l'IRI comme l'identifiant nu : l'ecran envoie l'une, un script d'integration
+        // envoie souvent l'autre, et les processeurs voisins de ce module font deja les deux.
+        // Auparavant `Uuid::isValid()` refusait l'IRI avec « niveau et entiteId requis », message
+        // qui ne disait rien de la vraie cause.
         $entiteIdBrut = $corps['entiteId'] ?? null;
-        if ($niveau === null || !\is_string($entiteIdBrut) || !Uuid::isValid($entiteIdBrut)) {
+        $entiteIdNu = \is_string($entiteIdBrut) && str_contains($entiteIdBrut, '/')
+            ? substr((string) strrchr($entiteIdBrut, '/'), 1)
+            : $entiteIdBrut;
+        if ($niveau === null || !\is_string($entiteIdNu) || !Uuid::isValid($entiteIdNu)) {
             throw new UnprocessableEntityHttpException('niveau et entiteId requis (etablissement|region|groupe).');
         }
-        $entiteId = Uuid::fromString($entiteIdBrut);
+        $entiteId = Uuid::fromString($entiteIdNu);
 
         $perimetre = $this->resolver->perimetreEffectif($utilisateur, 'lire');
         $autorise = match ($niveau) {
@@ -115,7 +122,15 @@ final class ExportManuelProcessor implements ProcessorInterface
         $export = new Export();
         $export->setFormat($format);
         $export->setDemandePar($utilisateur);
-        $export->setAxesAppliques(['indicateurs' => $codes, 'periodeDebut' => $periode->debut->format('Y-m-d'), 'periodeFin' => $periode->fin->format('Y-m-d')]);
+        // ⚠ LA PLAGE DEMANDEE, PAS LA VARIABLE DE BOUCLE. Cette ligne lisait `$periode`,
+        // devenue la variable du `foreach` : elle enregistrait le dernier jour comme si
+        // c'etait toute la periode. Le fichier etait juste, sa fiche mentait — et c'est la
+        // fiche que l'ecran affiche dans la liste des exports demandes.
+        $export->setAxesAppliques([
+            'indicateurs' => $codes,
+            'periodeDebut' => $jours[0]->format('Y-m-d'),
+            'periodeFin' => $jours[array_key_last($jours)]->format('Y-m-d'),
+        ]);
         $this->rattacher($export, $niveau, $entiteId);
 
         try {

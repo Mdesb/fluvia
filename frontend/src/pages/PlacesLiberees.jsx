@@ -43,10 +43,11 @@ import { idDe } from '../api/iri.js'
 //    ligne pour elle — jamais exécutée. Une proposition non traitée reste donc « proposée » au-delà
 //    de son échéance, indéfiniment, et le suivant n'est jamais servi.
 //
-// 2. DÉCLINER NE PASSE PAS LA MAIN. `DeclineRescheduleProposalProcessor` bascule la proposition en
-//    « expirée » et s'arrête là : l'inscription reste « promue » et personne d'autre n'est promu.
-//    Seuls l'expiration planifiée (qui ne tourne pas) et une NOUVELLE libération de créneau font
-//    avancer la file.
+// 2. DÉCLINER PASSE LA MAIN DEPUIS LE 05/09 — et ne le faisait pas avant. La route se contentait
+//    de clore la proposition : l'inscription restait « promue » et personne d'autre n'était servi,
+//    donc un « non merci » bloquait la place pour toute la file. Elle consomme désormais
+//    l'inscription (en « refusée », pas en « expirée » : ce n'est pas le même fait) et tente la
+//    promotion suivante, exactement comme le fait l'expiration planifiée.
 //
 // ⚠ AUCUN DE CES DEUX CONSTATS N'EST ÉCRIT EN DUR DANS UN BANDEAU. Une phrase qui décrit un défaut
 // devient un mensonge le jour où on le corrige, et rien ne relie les deux. L'écran COMPTE les
@@ -74,7 +75,10 @@ const STATUTS_INSCRIPTION = {
   waiting: ['En attente', 'warn'],
   promoted: ['Place proposée', 'good'],
   expired: ['Expirée', 'mut'],
-  cancelled: ['Annulée', 'mut'],
+  // « Refusée » et non « Annulée » : ce statut n'avait aucun écrivain avant le 05/09, et c'est
+  // désormais le refus explicite d'une place proposée — à distinguer de « expirée », qui est
+  // l'absence de réponse.
+  cancelled: ['Refusée', 'mut'],
 }
 
 function badge(table, code) {
@@ -196,8 +200,8 @@ export default function PlacesLiberees({ etabActif, droits }) {
   async function decliner(proposition) {
     const ok = await confirmer(
       'Décliner cette proposition ?\n\n'
-      + "Elle sera close. ⚠ Cela ne propose PAS la place au suivant sur la liste : seule une "
-      + 'nouvelle libération de créneau fait avancer la file.',
+      + 'Elle sera close, et la place sera aussitôt proposée à la personne suivante sur la liste '
+      + "d'attente de cette ressource — s'il y en a une.",
     )
     if (!ok) return
     setErreur(null)

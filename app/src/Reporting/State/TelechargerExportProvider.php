@@ -64,8 +64,16 @@ final class TelechargerExportProvider implements ProviderInterface
         $utilisateur = $this->security->getUser();
         \assert($utilisateur instanceof Utilisateur);
 
+        // API Platform convertit l'identifiant selon le type de la propriete : `Export::$id` est
+        // un `Uuid`, donc ce que l'on recoit ici est un OBJET, pas une chaine. La premiere version
+        // testait `is_string()` et rendait 404 sur toute demande — le `GET` unitaire de la meme
+        // ligne repondait pourtant 200. On accepte les deux formes.
         $idBrut = $uriVariables['id'] ?? null;
-        $id = \is_string($idBrut) && Uuid::isValid($idBrut) ? Uuid::fromString($idBrut) : null;
+        $id = match (true) {
+            $idBrut instanceof Uuid => $idBrut,
+            \is_string($idBrut) && Uuid::isValid($idBrut) => Uuid::fromString($idBrut),
+            default => null,
+        };
         if ($id === null) {
             throw new NotFoundHttpException('Export introuvable.');
         }
