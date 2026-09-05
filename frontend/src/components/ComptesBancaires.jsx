@@ -80,7 +80,7 @@ export default function ComptesBancaires({ etabActif, droits }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h3>Comptes bancaires</h3><span className="sub">{comptes.length} compte{comptes.length > 1 ? 's' : ''}</span></div>
+        <div className="card-h"><h3>Comptes bancaires</h3><span className="sub">{comptesLus ? `${comptes.length} compte${comptes.length > 1 ? 's' : ''}` : 'non lu'}</span></div>
         <div className="card-b">
           {!comptesLus ? (
             <div className="empty">

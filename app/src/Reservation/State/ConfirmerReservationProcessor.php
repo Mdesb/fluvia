@@ -96,9 +96,12 @@ final class ConfirmerReservationProcessor implements ProcessorInterface
                 );
             }
 
+            // MEME CALCUL QU'A LA RESERVATION. Sans cette ligne, une reservation confirmee apres
+            // coup encaisserait le prix plein, versement ignore.
+            $aEncaisser = $data->getCreneau()?->getActivite()?->versementAEncaisser($montant) ?? $montant;
             $vente = $this->venteHandler->creerVente(
                 $session,
-                $montant,
+                $aEncaisser,
                 $data->getOrganisateur()?->getClient()?->getId(),
                 'Confirmation réservation ' . (string) $data->getId(),
                 $produitRef,
@@ -106,6 +109,7 @@ final class ConfirmerReservationProcessor implements ProcessorInterface
                 $data->getCreneau()?->getRessource()?->getId(),
             );
             $data->setVenteRattachee($vente);
+            $data->setVersementRetenuMontant($aEncaisser === $montant ? '0.00' : $aEncaisser);
         }
 
         $data->setConfirmedAt(new \DateTimeImmutable());

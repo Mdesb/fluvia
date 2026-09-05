@@ -212,9 +212,12 @@ final class ReserverProcessor implements ProcessorInterface
                     ));
                 }
 
+                // ARRHES OU ACOMPTE : on encaisse le versement, pas le prix plein. Le calcul
+                // vit sur l'activite parce que `ConfirmerReservationProcessor` en a besoin aussi.
+                $aEncaisser = $activite?->versementAEncaisser($tarif) ?? $tarif;
                 $vente = $this->venteHandler->creerVente(
                     $session,
-                    $tarif,
+                    $aEncaisser,
                     $clientRef,
                     'Réservation ' . (string) $creneau->getId(),
                     $produitRef,
@@ -226,7 +229,12 @@ final class ReserverProcessor implements ProcessorInterface
                 );
                 $reservation->setModeDecompte(ModeDecompteReservation::VenteUnite);
                 $reservation->setVenteRattachee($vente);
+                // `montantDu` RESTE LE PRIX ENTIER, et ce n'est pas un oubli : il a des lecteurs
+                // hors de ce module -- le padel le divise par quatre pour partager entre joueurs.
+                // Le redefinir en << solde >> changerait ce partage sans que rien ne le dise. Le
+                // solde se calcule : `montantDu - versementRetenu`.
                 $reservation->setMontantDu($tarif);
+                $reservation->setVersementRetenuMontant($aEncaisser === $tarif ? '0.00' : $aEncaisser);
             }
         }
 
