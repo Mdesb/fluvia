@@ -1111,3 +1111,53 @@ input:focus-visible {
 .socle-inclus svg { flex: none; color: var(--accent); }
 .socle-essai { margin: 22px 0 0; }
 .socle-essai .btn { display: block; text-align: center; }
+
+/* ══ DEUX SURFACES DANS UNE MEME SECTION ══════════════════════════════════════════════════════
+
+   La section d'essai est une bande SOMBRE qui porte un formulaire sur des panneaux CLAIRS. Sans
+   ces regles, l'heritage donne l'encre de la bande au contenu des panneaux : les libelles des
+   modules passaient clair sur clair, et les titres d'etapes sombre sur sombre. On ne lisait plus
+   que les prix, sur la section qui vend.
+
+   ⚠ NI `verifier-contrastes` NI `verifier-encre-sur-fond` NE POUVAIENT L'ATTRAPER : deux jetons
+   valides se retrouvaient face a face par heritage, sans qu'aucune regle ne les mette en rapport.
+   Il fallait regarder la page. */
+
+/* Les etapes vivent sur la bande : encre claire. */
+.bande-sombre .etapes li { color: var(--hero-encre-douce); }
+.bande-sombre .etapes strong { color: var(--hero-encre); }
+
+/* Le formulaire vit sur des panneaux clairs : encre sombre, quoi que dise la bande. */
+.bande-sombre .tunnel { color: var(--ink); }
+.bande-sombre .tunnel .choix { color: var(--ink); }
+.bande-sombre .tunnel .choix-prix { color: var(--ink-soft); }
+.bande-sombre .tunnel label { color: var(--ink); }
+.bande-sombre .tunnel .aide { color: var(--ink-faint); }
+.bande-sombre .tunnel .total { color: var(--ink); }
+
+/* ⚠ LA LEGENDE REPOSE SUR LE PANNEAU, PAS SUR LA BANDE.
+   Je l'avais eclaircie en croyant qu'elle debordait sur le fond sombre : elle chevauche en realite
+   la bordure du fieldset — donc son fond est la BANDE, sombre, pas le panneau. Elle est ainsi
+   redevenue invisible dans l'autre sens : j'ai corrige le piege en le reprenant par l'autre bout.
+
+   ⚠ LA SORTIE N'EST PAS DE CHOISIR LA BONNE ENCRE, C'EST DE NE PLUS DEPENDRE DU FOND. La legende
+   porte desormais SON PROPRE fond clair : elle se lit sur la bande comme sur le panneau, et la
+   question ne se reposera pas au prochain changement de section. */
+.bande-sombre .tunnel legend {
+  color: var(--ink);
+  background: var(--panel);
+  border-radius: 6px;
+}
+
+/* Les messages d'etat du tunnel sont poses sur la bande, pas dans un panneau. */
+.bande-sombre > .mesure .etat,
+.bande-sombre .tunnel > .etat { color: var(--hero-encre-douce); }
+
+/* ⚠ `hidden` NE TIENT PAS FACE A UN `display` D'AUTEUR — ET UN BOUTON S'AFFICHAIT TROP TOT.
+   L'attribut `hidden` n'est qu'un `display: none` de la feuille du navigateur : n'importe quelle
+   regle qui pose un `display` l'ecrase. `.btn` en pose un, donc  Recevoir mon acces  s'affichait
+   AVANT qu'un panier existe — un bouton qui envoie 'cartId: undefined' et rend un refus
+   incomprehensible. Le bloc du total apparaissait vide pour la meme raison.
+   La regle vaut pour toute la vitrine : c'est le genre de defaut qui revient a chaque nouvel
+   element masque. */
+[hidden] { display: none !important; }
