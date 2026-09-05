@@ -1110,7 +1110,15 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                         Confirmer
                                       </button>
                                       <span className="hint">
-                                        {r.confirmationDueAt ? `avant ${heure(r.confirmationDueAt)}` : ''}
+                                        {/* ⚠ LE JOUR ET L'HEURE, PAS L'HEURE SEULE. Rendre
+                                            `heure()` seul donnait « avant 11:00 » pour une échéance
+                                            au 23 septembre — ça se lit « avant 11 h aujourd'hui »,
+                                            l'inverse du vrai. L'idiome voisin (`dateExpirationPromotion`)
+                                            se contente de l'heure parce que son échéance tient dans
+                                            la journée ; celle-ci se compte en jours. */}
+                                        {r.confirmationDueAt
+                                          ? `avant ${jourLabel(jourCle(r.confirmationDueAt))} ${heure(r.confirmationDueAt)}`
+                                          : ''}
                                         {session?.id ? ' · encaissée sur la caisse ouverte' : ' · sans encaissement'}
                                       </span>
                                     </div>
