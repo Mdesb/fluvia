@@ -1196,6 +1196,23 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ⚠ LA ROUTE EXISTAIT DEPUIS LE 04/09 ET AUCUN ÉCRAN NE L'APPELAIT — c'est le geste central de
+  // R15(a). Une réservation « à confirmer » ne pouvait donc être ni confirmée ni (avant le 05/09)
+  // annulée : elle occupait un créneau jusqu'à l'expiration, et le mécanisme a dû être éteint en
+  // préproduction faute de pouvoir le mener à terme.
+  //
+  // ⚠ LA SESSION DE CAISSE EST FACULTATIVE, ET CE N'EST PAS UN DÉTAIL. Le processeur n'encaisse que
+  // si on lui en passe une : sans elle il confirme sans créer de vente — ce qui est le cas d'un
+  // paiement déjà reçu, ou d'une confirmation faite hors comptoir. Le serveur refuse lui-même la
+  // combinaison impossible (session + activité sans produit tarifaire) ; on n'énonce pas la règle
+  // ici, on affiche son refus.
+  confirmerReservation: (id, session) =>
+    request(`/api/reservation/reservations/${id}/confirmer`, {
+      method: 'POST',
+      body: session ? { session: `/api/session_caisses/${session}` } : {},
+      ld: true,
+    }),
+
   // ── FUSION DE FICHES CLIENTS (US-L5-08, RG-M4-06) ─────────────────────────────────────────────
   //
   // ⚠ TROIS TEMPS, ET LE PREMIER EST CE QUI REND LE GESTE PRATICABLE. On ne fusionne pas a
@@ -2493,6 +2510,20 @@ export const api = {
   stockMouvements: () =>
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
+  // LES RETOURS CLIENTS — le geste que le serveur attend d'un humain, sans bouton jusqu'ici.
+  //
+  // ⚠ PAS D'`order[...]` ICI : `Avoir` ne declare AUCUN filtre. Un parametre d'ordre serait ignore
+  // en silence et la liste aurait l'air triee. Le tri se fait dans le composant, qui le sait.
+  avoirs: () => request('/api/avoirs', { query: { itemsPerPage: 200 } }),
+  // Sert a savoir ce qui a DEJA ete reintegre : le mouvement genere porte `referenceType: 'Avoir'`
+  // et `referenceId`. `type` est l'un des trois seuls filtres declares sur `MouvementStock` — il
+  // n'y en a aucun sur la reference, d'ou la lecture large et le controle de troncature.
+  stockAjustementsPositifs: () =>
+    request('/api/stock_mouvements', { query: { type: 'ajustement_positif', itemsPerPage: 500 } }),
+  // ⚠ RIEN N'EMPECHE DE LA REJOUER : le processeur verifie le perimetre et les champs, pas
+  // l'unicite. Deux appels font entrer la marchandise deux fois, sans erreur.
+  reintegrerRetour: (corps) =>
+    request('/api/stock/mouvements/reintegration-retour', { method: 'POST', body: corps }),
   stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
   // Valorisation : droit distinct (`stock.lire_valorisation`). Le total de l'etablissement n'accepte
   // PAS de date ; seule la valorisation par article la reconstruit.

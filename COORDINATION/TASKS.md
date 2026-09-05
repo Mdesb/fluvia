@@ -721,6 +721,64 @@ Aucun n'est une tâche : ce sont des constats qui changent ce qu'on a le droit d
 > et **l'écran de création d'activité**, qui n'existe pas — un exploitant ne peut pas refaire par
 > l'interface ce que §8.12 a fait par l'API.
 
+### ⚠ 9 bis — `Stay` A UN ÉCRAN, ET LE GARDE-FOU N°52 NE L'AVAIT PAS VU
+
+**Le constat le plus grave de l'audit, confirmé par trois réfutateurs et re-mesuré à la main.**
+
+`bin/garde-fou-modules-non-servables.php` a été écrit le 04/09 à 20h45 pour crier « le jour où
+quelqu'un construit un de ces modules ». Le 05/09 à 01h10, un pair a livré
+`frontend/src/pages/Sejours.jsx` — l'écran du module `Stay`, câblé dans la navigation avec ses
+quatre permissions, routé, servi. **Le contrôle est resté vert.**
+
+⚠ **SON SIGNAL FRONTAL EXIGEAIT UN SÉPARATEUR QUE LES VRAIES FORMES NE PORTENT JAMAIS.** Le motif
+était `/\bstay[_\/-]/i` ; le dépôt écrit `stays/` (le pluriel intercale un `s`), `stay.read` (un
+point), `StayStatus` (camel), et l'écran s'appelle `Sejours.jsx` — en français.
+
+    v1  nom + séparateur     lodging 0   stay  0   dining 0   padel  21   piscine  18
+    v2  nom seul             lodging 1   stay 29   dining 0   padel 113   piscine 129
+    v3  pilotage             lodging 0   stay 11   dining 0   padel  14   piscine   8
+
+⚠ **IL N'ÉTAIT PAS CASSÉ — padel et piscine répondaient — IL ÉTAIT AVEUGLE À UNE FORME.** C'est pire
+qu'un détecteur muet : celui-là trouve des choses ailleurs, donc on lui fait confiance.
+
+⚠ **ET LA v2 A ÉTÉ JETÉE AUSSI.** Elle voyait enfin `stay`, mais comptait `lodging: 'Hébergement'` —
+une ligne de traduction dans un écran de paramètres — comme la preuve que le module sert. **Élargir
+un motif ne suffit pas : il faut mesurer la bonne chose.** La v3 mesure le PILOTAGE : une route
+`/api/<module>` dans `api/client.js`, une entrée de navigation dans `AppShell.jsx`. Un libellé ne
+pilote rien.
+
+⚠ **LA LEÇON, ET ELLE VAUT POUR LES TREIZE AUTRES CLIQUETS.** Les quatre témoins d'origine testaient
+le COMPARATEUR — « une entité de plus est-elle vue ? » — et jamais l'ORGANE QUI MESURE. Le
+comparateur marchait parfaitement. Un cinquième témoin, écrit avec `stay.read` ou `/api/stays/`,
+aurait tué ce contrôle le jour de sa naissance. **Un détecteur se prouve par un témoin tiré de la
+chose qu'il doit attraper, pas d'une chose qui lui ressemble.**
+
+⚠ **ET MON PROPRE TÉMOIN M'A CORRIGÉ EN TOMBANT.** J'avais mis `import Sejours from
+'./pages/Sejours.jsx'` dans la liste des formes que le compteur doit voir. Il a échoué : **l'écran
+porte un nom français et ne contient pas la chaîne `stay`**. Le détecteur ne le voit que par les
+permissions et les routes — limite désormais déclarée dans le fichier.
+
+── L'ARBITRAGE ─────────────────────────────────────────────────────────────────────────────────
+
+**Écran vérifié à l'écran, sur la préproduction servie**, avant de demander quoi que ce soit :
+
+    Note du séjour SEJ-TEST-A    Statut Ouvert · Reste dû 9,00 € · 1 ligne
+    Détail                       « Bar - 2 demis », 9,00 €, 25/08 21:00, saisie au comptoir
+    Actions                      Ajouter une ligne · Enregistrer un règlement · Clôturer
+
+Ce n'est pas une coquille : un exploitant peut ouvrir un séjour, y ajouter des consommations,
+encaisser et clôturer, avec des données réelles dedans.
+
+**Maxime a tranché : ATTENDRE.** Le module marche, mais il veut le voir mûrir avant de le facturer.
+La mesure est donc gelée à `Stay: 11 mentions de pilotage`, et **le contrôle reposera la question au
+prochain palier** — c'est la différence entre geler et faire taire.
+
+⚠ **`Stay` reste donc livré gratuitement, et c'est assumé.** La ligne à surveiller est
+`CatalogueCapacites::peutServir()` : le jour où la réponse change, l'option désactivée se réactive
+au prix déjà saisi.
+
+---
+
 ### ⚠ 9 — AUDIT ADVERSARIAL DU 04/09 : ce que la journée a laissé derrière
 
 **Trente-six constats levés, cinq vérifiés à la main, cinq justes.** Un audit à huit lecteurs

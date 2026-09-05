@@ -81,15 +81,50 @@
 {% block body %}{% endblock %}
 </main>
 
-<footer class="bande pied">
-  <div class="mesure">
-    {% block footer %}{% endblock %}
-    <p>
-      <a href="{{ path('website_metiers') }}">Métiers</a> ·
-      <a href="{{ path('website_modules') }}">Tous les modules</a> ·
-      <a href="{{ path('website_blog_index') }}">Blog</a> ·
-      <a href="/blog/rss.xml">RSS</a>
-    </p>
+{#
+  ⚠ AUCUN LIEN MORT ICI. Les mentions légales et les CGV n'existent pas encore ; tant qu'elles ne
+  sont pas écrites, elles ne figurent pas au pied. Un lien qui mène à une 404 sur la page où l'on
+  vérifie qui édite le site coûte plus cher que l'absence de la rubrique.
+#}
+<footer class="pied">
+  <div class="pied-corps">
+
+    <div class="pied-marque">
+      <a class="marque" href="/">
+        <img class="marque-logo" src="/marque/FLUVIA_Icon_Color.svg" alt="" width="26" height="26">
+        <span>Fluvia</span>
+      </a>
+      <div class="pied-note">{% block footer %}{% endblock %}</div>
+    </div>
+
+    <div class="pied-col">
+      <h2>Produit</h2>
+      <ul role="list">
+        <li><a href="{{ path('website_modules') }}">Tous les modules</a></li>
+        <li><a href="{{ path('website_metiers') }}">Métiers</a></li>
+        <li><a href="/#tarifs">Tarifs</a></li>
+      </ul>
+    </div>
+
+    <div class="pied-col">
+      <h2>Ressources</h2>
+      <ul role="list">
+        <li><a href="{{ path('website_blog_index') }}">Blog</a></li>
+        <li><a href="/blog/rss.xml">Flux RSS</a></li>
+      </ul>
+    </div>
+
+    <div class="pied-col pied-appel">
+      <h2>Commencer</h2>
+      <p><a class="btn btn-primaire" href="/#souscrire">Essayer 14 jours</a></p>
+      <p class="pied-mention">Sans carte bancaire.</p>
+    </div>
+
+  </div>
+
+  <div class="pied-bas">
+    <p>&copy; {{ "now"|date("Y") }} Fluvia</p>
+    <p>Logiciel de gestion pour les lieux qui accueillent du public.</p>
   </div>
 </footer>
 

@@ -80,33 +80,12 @@ final class SiteBlocks
                     ."là ; le reste s'active à la demande.\n\nUn module éteint n'est pas un module absent : vos données "
                     ."restent, l'accès seul se ferme. Le jour où vous le rallumez, vous retrouvez tout."]),
 
-            self::bloc('home.modules.cards', BlockType::Cards, 'Les quatre cartes',
-                'Un titre court et une phrase. Quatre en général — la grille en accepte d’autres.',
-                ['items' => [
-                    ['title' => 'Vendre', 'text' => 'Catalogue et tarifs, caisse guichet, boutique en ligne, options et suppléments, stock.'],
-                    ['title' => 'Accueillir', 'text' => "Réservation par créneau, gestion du no-show, contrôle d'accès, cartes multi-entrées et cautions."],
-                    ['title' => 'Facturer', 'text' => 'Devis, factures client et fournisseur, comptabilité et FEC, prélèvement SEPA, relances d’impayés.'],
-                    ['title' => 'Piloter', 'text' => "Tableaux de bord, personnel et planning, base de connaissance, droits gradués, journal d'audit."],
-                ]]),
-
             self::bloc('home.trades.title', BlockType::Line, 'Titre — section Métiers', '',
                 ['text' => 'Le même socle, votre vocabulaire']),
 
             self::bloc('home.trades.lead', BlockType::Paragraph, 'Texte — section Métiers', '',
                 ['text' => "Un créneau n'est pas la même chose partout : c'est une réservation de terrain au padel, une "
                     ."séance à la piscine, une visite au musée. Le logiciel parle votre langue plutôt que de vous imposer la sienne."]),
-
-            self::bloc('home.trades.items', BlockType::Items, 'La liste des métiers',
-                'Une entrée par ligne dans l’écran d’administration.',
-                ['items' => [
-                    'Piscines et centres aquatiques',
-                    'Padel et sports de raquette',
-                    'Patinoires',
-                    'Salles de sport et fitness',
-                    'Musées et sites de visite',
-                    'Campings et hôtellerie de plein air',
-                    'Restauration',
-                ]]),
 
             self::bloc('home.trades.note', BlockType::Paragraph, 'Note — section Métiers', '',
                 ['text' => "Votre métier n'est pas dans la liste ? Le socle ne suppose aucune activité particulière : "

@@ -168,6 +168,10 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-capacites-de-module.php
     fi
 
+    if [ -f "$ARBRE/bin/garde-fou-blocs-orphelins.php" ]; then
+        lancer garde-fou-blocs-orphelins.php
+    fi
+
     # Numeros de decision (n°46) — un numero est une poignee citee 887 fois dans app/src.
     if [ -f "$ARBRE/bin/garde-fou-numeros-de-decision.php" ]; then
         lancer garde-fou-numeros-de-decision.php
