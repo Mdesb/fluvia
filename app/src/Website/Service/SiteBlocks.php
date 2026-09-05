@@ -120,6 +120,23 @@ final class SiteBlocks
                 ['text' => "Une formule mensuelle, plus les options que vous ajoutez. Pas d'engagement de durée, pas de "
                     ."facturation au billet vendu ni au visiteur : vous payez des modules, pas des volumes."]),
 
+            /*
+             * ⚠ CE BLOC NE PORTE AUCUN PRIX, et il ne doit jamais en porter. Les montants viennent
+             * du catalogue reel ; un tarif saisi ici divergerait de celui qui est facture, et c'est
+             * le prospect qui releverait l'ecart au premier prelevement.
+             *
+             * Il dit ce que la FORMULE comprend — ce que `Plan::includedCapabilities` ne peut pas
+             * dire, puisque CRM, facturation et statistiques ne sont pas des capacites du catalogue.
+             */
+            self::bloc('home.pricing.socle', BlockType::Items, 'Ce que comprend la formule de base',
+                'Une ligne par element. N\'y mettez PAS de prix : ils sont lus sur le catalogue.',
+                ['items' => [
+                    'Gestion client (CRM)',
+                    'Facturation',
+                    'Statistiques et tableaux de bord',
+                    'Comptes, etablissements, droits, journal',
+                ]]),
+
             self::bloc('home.funnel.title', BlockType::Line, 'Titre — section Essai', '',
                 ['text' => "Quatorze jours d'essai, sans carte bancaire"]),
 

@@ -1,0 +1,28 @@
+{# Rappel de rendez-vous. Volontairement sobre : pas d'image, pas de police distante, styles en
+   ligne — un client de messagerie sur trois n'en charge aucune, et un rappel doit rester lisible
+   même dépouillé. Le texte brut de `AppointmentReminderMailer` dit déjà l'essentiel à lui seul. #}
+<div style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #0b1020; max-width: 520px;">
+    <p style="margin: 0 0 16px;">Bonjour,</p>
+
+    <p style="margin: 0 0 20px;">Nous vous rappelons votre rendez-vous&nbsp;:</p>
+
+    <div style="border-left: 3px solid #3755e8; padding: 4px 0 4px 16px; margin: 0 0 20px;">
+        <div style="font-size: 17px; font-weight: 600;">{{ prestation }}</div>
+        <div style="margin-top: 4px;">
+            {{ debut|date('l j F Y') }} à {{ debut|date('H\\hi') }}
+            {%- if dureeMinutes %} · {{ dureeMinutes }} minutes{% endif %}
+        </div>
+        {% if lieu %}
+            <div style="margin-top: 2px; color: #4b5675;">{{ lieu }}</div>
+        {% endif %}
+    </div>
+
+    {# Le seul message utile après la date : ce que la personne doit faire si elle ne vient pas.
+       Un rappel qui ne dit pas ça se contente de prévenir, au lieu de libérer la place. #}
+    <p style="margin: 0 0 16px;">
+        Si vous ne pouvez pas venir, prévenez-nous au plus tôt&nbsp;: cela libère la place pour
+        quelqu'un d'autre.
+    </p>
+
+    <p style="margin: 0; color: #5e6884; font-size: 13px;">À bientôt.</p>
+</div>

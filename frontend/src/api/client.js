@@ -1087,6 +1087,57 @@ export const api = {
   majRessourceReservation: (id, corps) =>
     request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+
+  // --- Sejours (App\Stay) ---
+  //
+  // La note d'un sejour : on l'ouvre pour un client, les lignes s'y accumulent, puis on cloture,
+  // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
+  // que personne ne pouvait lire.
+  sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
+  // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
+  ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
+  // La note est une vue CALCULEE a chaque lecture, jamais un total entretenu : elle rend `balance`,
+  // `lineCount` et le detail des lignes.
+  noteSejour: (id) => request(`/api/stays/${id}/folio`),
+  // ⚠ `amount` EST UNE CHAINE, et le negatif est accepte : c'est ainsi que s'enregistre un
+  // reglement, faute d'un geste dedie. Un nombre JSON serait refuse (perte du centime).
+  ajouterLigneSejour: (id, corps) =>
+    request(`/api/stays/${id}/charges`, { method: 'POST', body: corps }),
+  // ⚠ CLOTURER EST SANS RETOUR. Un sejour clos n'accepte plus de ligne, et rien ne le rouvre :
+  // s'il reste un solde, il ne pourra plus jamais etre regle (le reglement EST une ligne).
+  cloturerSejour: (id) => request(`/api/stays/${id}/close`, { method: 'POST', body: {} }),
+  // Exige un sejour CLOS et un solde NUL, sinon 409.
+  reglerSejour: (id) => request(`/api/stays/${id}/settle`, { method: 'POST', body: {} }),
+
+  // --- Places liberees (App\SmartFlow) ---
+  //
+  // La liste d'attente PAR RESSOURCE, a distinguer de `inscrireListeAttente` (par creneau precis,
+  // App\Reservation) et de `patinoireInscrireListeAttente`. Trois files coexistent dans le produit.
+  propositionsReport: () =>
+    request('/api/smart-flow/reschedule-proposals', { query: { itemsPerPage: 100 } }),
+  // ⚠ ET LE GARDE-FOU DES FORMATS NE DIT RIEN DE CES TROIS ECRITURES. `verifier-formats.mjs` fait
+  // `continue` sur toute operation portant `input: false` : mes trois routes sont dans la famille
+  // qu'il saute. Son exemption est juste — une operation qui ne desserialise pas ne controle pas le
+  // type — mais un vert obtenu par exemption n'est pas une verification. Ce qui fonde le choix ici,
+  // c'est la lecture des declarations d'operations, pas un outil.
+  //
+  // ⚠ `confirmedReservationRef` EST OBLIGATOIRE : le module ne cree jamais de reservation, il clot
+  // la proposition en la rattachant a une reservation deja creee par le chemin normal. Le serveur
+  // revalide qu'elle appartient au meme etablissement ET au meme client (IDOR, RG-SF-16).
+  accepterPropositionReport: (id, confirmedReservationRef) =>
+    request(`/api/smart-flow/reschedule-proposals/${id}/accept`, {
+      method: 'POST',
+      body: { confirmedReservationRef },
+    }),
+  declinerPropositionReport: (id) =>
+    request(`/api/smart-flow/reschedule-proposals/${id}/decline`, { method: 'POST', body: {} }),
+  inscriptionsPlaceLiberee: () =>
+    request('/api/smart-flow/waitlist-entries', { query: { itemsPerPage: 100 } }),
+  // Corps : { resourceId, beneficiaryId, searchWindowStart, searchWindowEnd } — les quatre sont
+  // exiges (422 sinon), et la fenetre doit finir apres son debut.
+  inscrirePlaceLiberee: (corps) =>
+    request('/api/smart-flow/waitlist-entries', { method: 'POST', body: corps }),
   // HORAIRES ET ABSENCES D'UNE RESSOURCE -- exposes en CRUD complet depuis le debut, sans un
   // seul appelant. Un coiffeur ne pouvait pas declarer qu'il travaille le mardi.
   //

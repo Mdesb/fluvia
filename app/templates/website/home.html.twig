@@ -84,12 +84,24 @@
     </div>
   </section>
 
-  {# ══ 3. LES MODULES, RANGÉS PAR USAGE ═════════════════════════════════════════════════════ #}
+  {#
+    ══ 3. LES MODULES, RANGÉS PAR USAGE ═════════════════════════════════════════════════════
+
+    ⚠ ON NE MONTRE QUE CE QUI EST VENDABLE, et le lien est automatique sur le catalogue éditeur
+    (`SellableModulesSource`). Auparavant la liste venait du catalogue des CAPACITÉS : la page
+    annonçait vingt modules et en vantait trois qu'un visiteur ne pouvait pas acheter, pendant que
+    la section Tarifs n'en proposait que dix-sept. La même page se contredisait.
+
+    ⚠ ET SI RIEN N'EST EN VENTE, LA SECTION DISPARAÎT. Un catalogue en préparation est un état
+    légitime ; une grille vide sous un titre qui annonce des familles ressemble à une panne.
+  #}
+  {% set nbModules = modulesParFamille|reduce((total, m) => total + m|length, 0) %}
+  {% if nbModules > 0 %}
   <section class="bande bande-sombre" id="familles">
     <div class="section-tete">
       <div>
         <p class="sur-titre">Les modules</p>
-        <h2>{{ familles|length }} familles, {{ modulesParFamille|reduce((total, m) => total + m|length, 0) }} modules.</h2>
+        <h2>{{ familles|length }} familles, {{ nbModules }} modules.</h2>
       </div>
       <p class="section-tete-note">
         Rangés par ce qu'ils vous font faire, pas par ordre alphabétique. Chacun s'active seul.
@@ -97,7 +109,8 @@
     </div>
 
     <div class="familles">
-      {% for famille in familles %}
+      {# Une famille sans module en vente ne s'affiche pas : une carte vide n'annonce rien. #}
+      {% for famille in familles|filter(f => modulesParFamille[f.cle]|default([]) is not empty) %}
         <div class="famille">
           <span class="famille-trait" style="background: {{ famille.teinte }}"></span>
           <h3>{{ famille.titre }}</h3>
@@ -116,6 +129,7 @@
       {% endfor %}
     </div>
   </section>
+  {% endif %}
 
   {# ══ 4. MÉTIERS ═══════════════════════════════════════════════════════════════════════════ #}
   <section class="bande section-duo" id="metiers">
@@ -153,7 +167,28 @@
     <div id="tarifs-etat" class="etat" role="status">Chargement des tarifs…</div>
 
     <div class="tarifs-grille">
-      <div id="tarifs-formules" class="formules" hidden></div>
+      <div class="formules">
+        <div id="tarifs-formules" hidden></div>
+
+        {#
+          Ce que la formule comprend — en toutes lettres, parce que le catalogue ne peut pas le dire.
+          `Plan::includedCapabilities` est vide a dessein : CRM, facturation et statistiques ne sont
+          pas des capacites, et le domaine refuse d'inscrire une capacite fantome dans une formule.
+        #}
+        {% if blocs['home.pricing.socle'].items|default([]) is not empty %}
+          <ul class="socle-inclus" role="list">
+            {% for item in blocs['home.pricing.socle'].items %}
+              <li>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>{{ item }}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <p class="socle-essai"><a class="btn btn-primaire" href="#souscrire">Essayer 14 jours</a></p>
+      </div>
 
       <div class="tarifs-options">
         <div id="tarifs-options-etat" class="etat" role="status" hidden></div>

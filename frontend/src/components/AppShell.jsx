@@ -83,6 +83,14 @@ const NAV = [
       { id: 'patinoire', ic: 'rink', label: 'Patinoire', perm: 'patinoire.lire' },
       { id: 'padel', ic: 'padel', label: 'Padel', perm: 'padel.lire' },
       { id: 'musee', ic: 'museum', label: 'Musée', perm: 'musee.lire' },
+      // Ouvert le 05/09 : sept routes servies, aucun ecran, et DEUX SEJOURS DEJA OUVERTS en base
+      // depuis le 24/08 avec une ligne de bar — un module dont l'etat courant n'etait visible de
+      // nulle part.
+      //
+      // Contrairement a `relance_recettes` et `places_liberees` livres le meme jour, les quatre
+      // permissions `stay.*` SONT attribuees : « Administrateur groupe » et « Responsable de site »
+      // les portent. Cette entree-la se verra tout de suite.
+      { id: 'sejours', ic: 'stay', label: 'Séjours', perms: ['stay.read', 'stay.write', 'stay.charge', 'stay.settle'] },
       // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.
@@ -162,6 +170,16 @@ const NAV = [
       // bloques, celui-ci relance par courriel apres un no-show, une annulation ou un paiement
       // refuse.
       { id: 'relance_recettes', ic: 'settlements', label: 'Relance des recettes', perms: ['revenue_recovery.read', 'revenue_recovery.configure', 'revenue_recovery.manage'] },
+      // Ouvert le 05/09 : sept routes servies, aucun ecran, et un mecanisme qui tournait dans le
+      // vide. Six liberations de creneau tracees, zero inscription en liste d'attente — la chaine
+      // cherchait a qui offrir une place et ne trouvait personne, faute de la porte qui remplit la
+      // liste.
+      //
+      // ⚠ SA PROPRE PORTE, ET PAS UN ONGLET DE << Reservation >>. C'est une file de travail avec
+      // une HORLOGE : une place proposee expire, et le suivant attend. Le meme argument qui a
+      // ouvert une porte au recouvrement vaut ici — une file rangee au cinquieme onglet d'un ecran
+      // de planning ne se regarde que quand on y pense.
+      { id: 'places_liberees', ic: 'subscriptions', label: 'Places libérées', perms: ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
