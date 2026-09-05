@@ -721,6 +721,95 @@ Aucun n'est une tâche : ce sont des constats qui changent ce qu'on a le droit d
 > et **l'écran de création d'activité**, qui n'existe pas — un exploitant ne peut pas refaire par
 > l'interface ce que §8.12 a fait par l'API.
 
+### ⚠ 9 — AUDIT ADVERSARIAL DU 04/09 : ce que la journée a laissé derrière
+
+**Trente-six constats levés, cinq vérifiés à la main, cinq justes.** Un audit à huit lecteurs
+indépendants a relu le travail du jour avec pour consigne explicite de ne PAS résumer ce que la
+session affirme avoir fait, mais de le vérifier dans le code.
+
+⚠ **ET L'AUDIT S'EST MENTI À LUI-MÊME EN PREMIER.** Cent quinze agents sur cent dix-neuf sont morts
+sur une limite de session ; **aucun réfutateur n'a tourné**. Or le script disait
+`survit = (votes > 0 && refutations < 2)` : zéro vote → `survit = false` → les trente-six constats
+sont tombés dans **« écartés »**, exactement comme s'ils avaient été réfutés. Lu tel quel, le
+résultat annonçait « 0 constat confirmé » pour un audit qui n'avait rien pu vérifier.
+
+C'est le défaut nommé le jour même dans une fiche de méthode : *la prudence et l'aveuglement rendent
+la même sortie*. Un harnais qui distingue « réfuté » de « non vérifié » ne l'aurait pas dit.
+
+── LES CINQ VÉRIFIÉS À LA MAIN ─────────────────────────────────────────────────────────────────
+
+**1. ⚠ UNE RÉSERVATION `a_confirmer` EST UN CUL-DE-SAC.** Vérifié en exécutant :
+
+    POST /api/reservation/reservations/{id}/annuler
+    → 409  « Cette réservation n'est plus annulable (statut actuel : a_confirmer). »
+
+Aucun écran ne peut la confirmer (`client.js` n'a aucune méthode pour cette route), l'API refuse de
+l'annuler, et si l'exploitant n'a pas armé de délai elle n'expire jamais. **Elle occupe un créneau
+pour toujours.** Il en reste une en préproduction : `9078b920`, créée par mes essais.
+
+**2. LA CAUSE : `occupePlace()` RÉPOND À QUATRE QUESTIONS AVEC UN SEUL PRÉDICAT.**
+
+    tient-elle un créneau ?              a_confirmer → OUI
+    est-elle annulable ?                 a_confirmer → OUI   (AnnulerReservationProcessor:56)
+    peut-on lui affecter une ressource ? a_confirmer → OUI   (AssignResourceProcessor:53)
+    ouvre-t-elle le portique ?           a_confirmer → NON   (ProjectionAccesReservationHandler:53)
+
+`occupePlace()` rend `true` pour `Confirmee` et `Honoree` seulement. L'élargir à `a_confirmer`
+réparerait les trois premières et **casserait la quatrième** : une réservation non payée ouvrirait
+la porte. ⚠ **Le remède est de SÉPARER le prédicat, pas de l'élargir** — et ça demande un arbitrage
+et la suite complète, pas une correction de minuit.
+
+**3. `montantDuMois()` NE FILTRAIT PAS LES MODULES NON SERVABLES — CORRIGÉ.** Le commit `dccc8d2e`
+affirmait « `OfferCatalog::activeOptions()`, le point de passage UNIQUE ». Faux : cette méthode-là
+lisait les mêmes items sans la garde. Une affirmation d'unicité se prouve en cherchant les
+**concurrents** du chemin qu'on corrige, pas en relisant celui-là. 152 tests `Subscription` verts.
+
+**4. DEUX REGISTRES DE TÂCHES, UN SEUL VÉRIFIÉ.** `reservation:confirmations:expirer` est dans
+`infra/ordonnanceur.sh`, **absente de `app/src/Platform/Scheduling/ScheduleCatalog.php`** — où
+`reservation:no-show:basculer`, elle, figure. Lancée à la main elle marche ; qu'elle tourne seule
+n'est pas établi. À trancher.
+
+**5. LA CONFIRMATION A ÉTÉ ÉTEINTE EN PRÉPRODUCTION.** Je l'avais activée pour la démontrer, sans
+avoir vérifié qu'un exploitant pouvait la mener à terme. Les deux `RegleAnnulation` sont revenues à
+`confirmationDelayMinutes: null`. ⚠ **À ne rallumer qu'une fois l'écran de confirmation posé.**
+
+── LES TRENTE ET UN AUTRES, LEVÉS ET NON VÉRIFIÉS ──────────────────────────────────────────────
+
+⚠ **Aucun réfutateur n'a tourné sur ceux-ci.** Ils viennent de lecteurs qui ont ouvert le code
+(résumés circonstanciés, chiffres recomptés) mais **rien ne les a contredits ni confirmés**. Les
+traiter comme des pistes, pas comme des faits.
+
+**Confirmation** — confirmer une réservation déjà libérée la ressusciterait (créneau pris deux
+fois) · annuler un créneau laisse ses `a_confirmer` derrière · la route `/confirmer` oublierait le
+voter d'appartenance · le décompte `release_and_charge` n'est persisté nulle part · l'inventaire
+« quatre endroits » des listes d'occupation en oubliait deux, dont l'autorité déclarée · l'expiration
+libère la réservation et **laisse la vente due** (vérifié partiellement : la commande ne mentionne
+la vente que dans un commentaire).
+
+**§8.1** — la garde serait contournable par les capacités **comprises dans une formule** · le filtre
+d'`activeOptions()` ferait tomber des écrans éditeur en 500 · la décision n'a **aucun test** · le
+docbloc de classe de `CatalogueCapacites` dit encore que les trois modules sont vendus.
+
+**Garde-fous** — n°52 : ses quatre témoins testeraient le comparateur et jamais l'organe qui mesure ;
+une liste vide se conclurait par un vert · n°53 : son autotest de crédibilité le condamnerait à
+l'échec le jour où le dépôt devient propre.
+
+**Infra** — le récupérateur ne voit que les conteneurs **qui tournent**, or les bases ont la
+politique `no` · aucune liste protégée : il adopte tout conteneur en `-db` · `/var/lib/piles-test`
+n'est créé par rien de versionné · le contrôle « une suite tourne » est fait au scan, le démontage
+après.
+
+── CE QU'IL FAUT FAIRE ─────────────────────────────────────────────────────────────────────────
+
+1. **Rejouer l'audit** avec un harnais qui distingue « réfuté » de « non vérifié », pour trancher
+   les trente et un.
+2. **Séparer `occupePlace()`** en prédicats nommés, après arbitrage sur l'accès au portique.
+3. **Poser l'écran de confirmation** avant de rallumer le mécanisme.
+4. **Ne rien conclure des garde-fous n°52/53** avant vérification : les constats visent leurs
+   TÉMOINS, c'est-à-dire exactement ce qui est censé les rendre dignes de confiance.
+
+---
+
 ### ~~⚠ 8.1~~ — TRANCHÉ LE 04/09 : « les rendre non facturables », appliqué
 
 **Maxime : « Les rendre non facturables ».** Ils restent au catalogue avec leur mention « en
