@@ -227,6 +227,22 @@ class Reservation
     #[Groups(['reservation:read'])]
     private string $versementRetenuMontant = '0.00';
 
+    /**
+     * Les reservations qui forment UN SEUL rendez-vous : << coupe avec Sophie, puis couleur avec
+     * Marie >>. `null` = un rendez-vous d'un seul acte, c'est-a-dire le cas courant.
+     *
+     * CHAQUE ACTE RESTE UNE RESERVATION ENTIERE. Ce champ ne porte que le lien : la jauge, la
+     * projection d'acces, la regle d'annulation et la facturation de non-presentation continuent de
+     * raisonner sur un creneau, sans rien savoir du groupe.
+     *
+     * ANNULER UN ACTE N'ANNULE PAS LES AUTRES -- le client qui renonce a sa couleur garde sa coupe.
+     * C'est voulu dans un salon, mais personne ne doit croire qu'annuler << le rendez-vous >> libere
+     * les deux creneaux.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?Uuid $groupeRendezVous = null;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $dateLimiteAnnulation = null;
@@ -590,6 +606,18 @@ class Reservation
     public function getVersementRetenuMontant(): string
     {
         return $this->versementRetenuMontant;
+    }
+
+    public function getGroupeRendezVous(): ?Uuid
+    {
+        return $this->groupeRendezVous;
+    }
+
+    public function setGroupeRendezVous(?Uuid $groupe): self
+    {
+        $this->groupeRendezVous = $groupe;
+
+        return $this;
     }
 
     public function setVersementRetenuMontant(string $montant): self

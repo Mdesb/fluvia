@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { idDe } from '../api/iri.js'
 
 /**
  * PRENDRE UN RENDEZ-VOUS — le second modèle, celui du coiffeur et du masseur.
@@ -50,6 +51,9 @@ export default function PriseRendezVous({ onReserve }) {
   const [pose, setPose] = useState(null) // proposition en cours de confirmation
   const [organisateur, setOrganisateur] = useState('')
   const [enCours, setEnCours] = useState(false)
+  // Le rendez-vous qu'on vient de poser, tant qu'on peut encore lui ajouter une prestation.
+  // `null` = aucun chainage en cours, et c'est l'etat normal.
+  const [suite, setSuite] = useState(null)
 
   useEffect(() => {
     let annule = false
@@ -107,16 +111,27 @@ export default function PriseRendezVous({ onReserve }) {
         fin: proposition.fin,
         capacite: 1,
       })
-      await api.reserverCreneau({
+      const reservation = await api.reserverCreneau({
         creneau: creneau['@id'] || `/api/reservation_creneaus/${creneau.id}`,
         organisateur: `/api/beneficiaires/${organisateur}`,
+        // ⚠ LE SERVEUR DÉCIDE SI LE RATTACHEMENT EST LÉGITIME, pas cet écran : même établissement,
+        // même bénéficiaire, rendez-vous encore vivant. Un identifiant refusé est traité comme
+        // absent — la prestation se pose seule plutôt que de faire perdre un créneau valide.
+        ...(suite ? { rattacherA: suite.reservation } : {}),
       })
       setSucces(
         `Rendez-vous posé le ${new Date(proposition.debut).toLocaleDateString('fr-FR')} à `
         + `${hhmm(proposition.debut)} avec ${proposition.ressourceLibelle}.`,
       )
       setPose(null)
-      setOrganisateur('')
+      // ⚠ ON NE VIDE PAS LE BÉNÉFICIAIRE QUAND ON ENCHAÎNE : c'est la même personne, et le
+      // reprendre à chaque acte est la façon la plus sûre de se tromper de client au troisième.
+      setSuite({
+        reservation: idDe(reservation),
+        fin: proposition.fin,
+        libelle: proposition.ressourceLibelle,
+        beneficiaire: organisateur,
+      })
       await chercher()
       onReserve?.()
     } catch (e) {
@@ -188,6 +203,31 @@ export default function PriseRendezVous({ onReserve }) {
               {resultat.battementMinutes > 0 ? ` + ${resultat.battementMinutes} min de remise en état` : ''}
             </span>
           </div>
+
+          {suite && (
+            <div className="banner" style={{ margin: 'var(--esp-normal)' }}>
+              <b>Rendez-vous posé.</b> Vous pouvez lui ajouter une prestation à la suite — un autre
+              soin, un autre praticien. Les deux formeront un seul rendez-vous.
+              {/* ⚠ ANNULER UN ACTE N'ANNULE PAS L'AUTRE, et ça se dit ici : personne ne doit croire
+                  qu'annuler « le rendez-vous » libère les deux créneaux. */}
+              <div className="sub">
+                Chaque prestation garde son créneau, son prix et sa règle d’annulation&nbsp;:
+                annuler l’une ne libère pas l’autre.
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--esp-normal)', marginTop: 'var(--esp-normal)' }}>
+                <button
+                  type="button"
+                  className="btn primary sm"
+                  onClick={() => { setDate(String(suite.fin).slice(0, 10)); setSucces(null) }}
+                >
+                  Ajouter une prestation à la suite
+                </button>
+                <button type="button" className="btn ghost sm" onClick={() => { setSuite(null); setOrganisateur('') }}>
+                  Terminer ce rendez-vous
+                </button>
+              </div>
+            </div>
+          )}
 
           {propositions.length === 0 ? (
             // D54 : le fait sur la donnee, et la cause probable. << Aucune proposition >> ne dit pas
