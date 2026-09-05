@@ -1570,6 +1570,25 @@ export const api = {
     request(`/api/rapport_planifies/${id}`, { method: 'PATCH', body: corps }),
   // ⚠ Pas de suppression non plus ici : on suspend par `etat: 'suspendu'`.
 
+  // EXPORTS D'ANALYSE (M7). Ce que le destinataire emporte : un fichier, pour une periode.
+  //
+  // ⚠ `/reporting/exports` prend `periodeDebut`/`periodeFin` DEPUIS le 05/09 — avant, il etait fige
+  // sur la journee en cours. Sans dates, il rend toujours la journee, ce qui reste vrai pour un
+  // appel ancien.
+  exportsAnalyse: (params) =>
+    request('/api/exports', { query: { itemsPerPage: 50, ...(params || {}) } }),
+  creerExportAnalyse: (corps) =>
+    request('/api/reporting/exports', { method: 'POST', body: corps, ld: true }),
+  // Le contenu n'est servi QUE par cette route, et en base64 : la collection ne le porte pas,
+  // sans quoi lister vingt exports rendrait vingt fichiers.
+  telechargerExportAnalyse: (id) =>
+    request(`/api/reporting/exports/${id}/telecharger`),
+
+  // Le referentiel des indicateurs s'edite : `Patch` existait cote serveur et aucun ecran ne
+  // l'appelait — un seuil de completude ou une unite se corrigeaient en base.
+  modifierIndicateur: (id, corps) =>
+    request(`/api/indicateurs/${id}`, { method: 'PATCH', body: corps }),
+
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
