@@ -1027,13 +1027,18 @@ input:focus-visible {
    Maxime : « non, c'est pas bon comme ca » — et il avait raison : j'avais echange un defaut
    d'alignement contre un defaut d'equilibre, avec un tiers d'ecran vide a droite.
    La maquette validee tient les deux : un bloc centre, dont le contenu partage un seul bord. */
-.page-accueil .bande > * {
+.page-accueil .bande > *,
+.page-catalogue .bande > * {
   max-width: 1280px;
   margin-inline: auto;
 }
-.page-accueil .bande > .mesure { max-width: 1280px; }
+.page-accueil .bande > .mesure,
+.page-catalogue .bande > .mesure { max-width: 1280px; }
 .page-accueil .mesure > h2,
-.page-accueil .mesure > p { max-width: var(--mesure); }
+.page-accueil .mesure > p,
+.page-catalogue .mesure > h1,
+.page-catalogue .mesure > h2,
+.page-catalogue .mesure > p { max-width: var(--mesure); }
 
 /* ══ LES ANIMATIONS ═══════════════════════════════════════════════════════════════════════════
 
