@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Reporting\State\TelechargerExportProvider;
 use App\Reporting\Entity\Trait\RattachementNiveauInterface;
 use App\Reporting\Entity\Trait\RattachementNiveauTrait;
 use App\Reporting\Enum\FormatExport;
@@ -37,6 +38,16 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'reporting.lire')",
             processor: ExportManuelProcessor::class,
+        ),
+        // ⚠ LA MOITIE QUI MANQUAIT. Le fichier etait genere, ecrit sur disque et son chemin
+        // enregistre — et aucune route ne permettait de le lire. Meme patron que
+        // `/compta/exports/{id}/telecharger` : une operation dediee, son propre groupe de
+        // serialisation, et le contenu qui n'apparait QUE la.
+        new Get(
+            uriTemplate: '/reporting/exports/{id}/telecharger',
+            security: "is_granted('PERM', 'reporting.lire')",
+            provider: TelechargerExportProvider::class,
+            normalizationContext: ['groups' => ['export:read', 'export:telecharger']],
         ),
     ],
     normalizationContext: ['groups' => ['export:read']],
@@ -92,6 +103,16 @@ class Export implements RattachementNiveauInterface
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['export:read'])]
     private ?Utilisateur $demandePar = null;
+
+    /**
+     * Le contenu du fichier, encode en base64 — NON PERSISTE.
+     *
+     * Il n'a pas de colonne : le fichier vit dans le stockage, et `TelechargerExportProvider` le
+     * pose ici a la demande. Il n'apparait que dans le groupe `export:telecharger`, donc jamais
+     * dans la collection — sans quoi lister vingt exports rendrait vingt fichiers.
+     */
+    #[Groups(['export:telecharger'])]
+    private ?string $contenuBase64 = null;
 
     public function __construct()
     {
@@ -218,4 +239,17 @@ class Export implements RattachementNiveauInterface
 
         return $this;
     }
+
+    public function getContenuBase64(): ?string
+    {
+        return $this->contenuBase64;
+    }
+
+    public function setContenuBase64(?string $contenuBase64): self
+    {
+        $this->contenuBase64 = $contenuBase64;
+
+        return $this;
+    }
+
 }

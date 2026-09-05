@@ -44,6 +44,43 @@ final class AnnulationVenteReservationHandler
         };
     }
 
+    /**
+     * LA VENTE D'UNE RÉSERVATION QUI EXPIRE FAUTE DE CONFIRMATION.
+     *
+     * ⚠ CE N'EST PAS `traiter()`, ET LA DIFFÉRENCE EST L'AUTEUR. `traiter()` exige un `Utilisateur`
+     * parce que son chemin de remboursement en pose un sur l'avoir. Une tâche planifiée n'a pas
+     * d'auteur — et n'en a pas besoin : une réservation qui expire n'a rien réglé, donc il n'y a
+     * rien à rembourser.
+     *
+     * ⚠ ET UNE VENTE `Validee` QUI EXPIRE EST UNE CONTRADICTION, PAS UN CAS À TRAITER. Elle veut
+     * dire que l'encaissement et la confirmation ont divergé. Rembourser d'autorité depuis une
+     * tâche de nuit déciderait à la place de quelqu'un ; l'ignorer en silence serait pire. On la
+     * laisse intacte et on la NOMME, pour que l'appelant la compte et la donne à voir.
+     *
+     * @return 'aucune_vente'|'annulee'|'deja_traitee'|'reglee_conservee'
+     */
+    public function expirer(Reservation $reservation): string
+    {
+        $vente = $reservation->getVenteRattachee();
+
+        if ($vente === null) {
+            return 'aucune_vente';
+        }
+
+        return match ($vente->getStatut()) {
+            StatutVente::EnCours => $this->nettoyerEtDire($vente),
+            StatutVente::Validee => 'reglee_conservee',
+            StatutVente::Annulee, StatutVente::AvoirEmis => 'deja_traitee',
+        };
+    }
+
+    private function nettoyerEtDire(Vente $vente): string
+    {
+        $this->nettoyer($vente);
+
+        return 'annulee';
+    }
+
     /** G1 (RG-RESAENC-09) : avoir de remboursement intégral, même mécanisme qu'un remboursement M2 standard. */
     private function rembourser(Reservation $reservation, Vente $vente, Utilisateur $auteur): void
     {

@@ -7,6 +7,7 @@ namespace App\Reservation\Command;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ConfirmationExpiry;
 use App\Reservation\Enum\StatutReservation;
+use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\ResolveurRegleAnnulation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -49,6 +50,7 @@ final class ExpireReservationConfirmationsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
+        private readonly AnnulationVenteReservationHandler $annulationVente,
     ) {
         parent::__construct();
     }
@@ -74,6 +76,27 @@ final class ExpireReservationConfirmationsCommand extends Command
             $compte['gardees'],
             $compte['sans_regle'],
         ));
+
+        // ⚠ ON DIT CE QU'ON A FAIT DE LA VENTE, PAS SEULEMENT DU CRÉNEAU. Une libération qui
+        //   laisse une vente due est un défaut comptable silencieux ; une libération qui l'annule
+        //   efface une recette attendue, et ça doit se voir aussi.
+        if ($compte['ventes_annulees'] > 0) {
+            $io->writeln(sprintf(
+                '  %d vente(s) rattachée(s) annulée(s) : rien n\'y avait été encaissé.',
+                $compte['ventes_annulees'],
+            ));
+        }
+
+        // ⚠ CELLE-CI EST UNE CONTRADICTION, ET ELLE DOIT CRIER. Une réservation payée qui expire
+        //   faute de confirmation veut dire que l'encaissement et la confirmation ont divergé. La
+        //   tâche ne rembourse pas d'autorité : elle laisse la vente intacte et la nomme.
+        if ($compte['ventes_reglees_conservees'] > 0) {
+            $io->warning(sprintf(
+                '%d réservation(s) expirée(s) portaient une vente DÉJÀ RÉGLÉE, laissée intacte. '
+                . 'Un paiement encaissé sans confirmation : à regarder une par une.',
+                $compte['ventes_reglees_conservees'],
+            ));
+        }
 
         if ($compte['a_facturer'] > 0) {
             $io->warning(sprintf(
@@ -106,7 +129,14 @@ final class ExpireReservationConfirmationsCommand extends Command
             ->getQuery()
             ->getResult();
 
-        $compte = ['liberees' => 0, 'gardees' => 0, 'a_facturer' => 0, 'sans_regle' => 0];
+        $compte = [
+            'liberees' => 0,
+            'gardees' => 0,
+            'a_facturer' => 0,
+            'sans_regle' => 0,
+            'ventes_annulees' => 0,
+            'ventes_reglees_conservees' => 0,
+        ];
 
         foreach ($candidates as $reservation) {
             $creneau = $reservation->getCreneau();
@@ -138,6 +168,22 @@ final class ExpireReservationConfirmationsCommand extends Command
     {
         $reservation->setStatut(StatutReservation::AnnuleeLibre);
         ++$compte['liberees'];
+
+        // ⚠ LIBÉRER LE CRÉNEAU SANS TOUCHER LA VENTE LAISSAIT UNE DETTE DERRIÈRE.
+        //
+        // L'annulation traite la vente rattachée depuis toujours (`AnnulerReservationProcessor` →
+        // `AnnulationVenteReservationHandler::traiter()`). L'expiration ne faisait que changer le
+        // statut : le créneau repartait à la vente, et la vente de la réservation libérée restait
+        // EN COURS, due par un client qui n'avait rien confirmé.
+        //
+        // ⚠ CE N'EST PAS THÉORIQUE : sur le chemin padel, `ReserverTerrainProcessor` crée la Vente
+        //   À LA RÉSERVATION, pas à la confirmation. Toute réservation padel qui expirait laissait
+        //   donc une vente derrière elle.
+        match ($this->annulationVente->expirer($reservation)) {
+            'annulee' => $compte['ventes_annulees']++,
+            'reglee_conservee' => $compte['ventes_reglees_conservees']++,
+            default => null,
+        };
     }
 
     /** @param array{liberees: int, gardees: int, a_facturer: int, sans_regle: int} $compte */
