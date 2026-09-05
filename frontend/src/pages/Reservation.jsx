@@ -419,6 +419,38 @@ export default function Reservation({ etabActif, droits = [], session }) {
     }
   }
 
+  // ── CONFIRMER UNE RÉSERVATION (R15 a) ──────────────────────────────────────────────────────
+  //
+  // ⚠ SANS CE GESTE, « À CONFIRMER » EST UN CUL-DE-SAC. La route existe depuis le 04/09 et aucun
+  // écran ne l'appelait : la réservation ne pouvait qu'attendre son expiration. Le mécanisme a dû
+  // être éteint en préproduction pour cette raison.
+  //
+  // ⚠ ON PASSE LA SESSION DE CAISSE QUAND IL Y EN A UNE, ET RIEN SINON. Le serveur n'encaisse que
+  // si on lui en donne une ; confirmer sans caisse est un cas légitime — paiement déjà reçu, ou
+  // confirmation hors comptoir. On ne réénonce pas la règle ici : le refus du serveur s'affiche tel
+  // quel, comme pour l'annulation, parce qu'un second énoncé divergerait du premier.
+  // ⚠ PAS `confirmer` : ce nom est DEJA PRIS dans ce fichier par l'utilitaire de dialogue
+  //   `import { confirmer } from '../components/Confirmation.jsx'`. Une fonction locale du meme nom
+  //   l'aurait masque et casse toutes les demandes de confirmation de l'ecran, sans erreur.
+  async function confirmerReservation(reservation) {
+    setGesteEnCours(reservation.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.confirmerReservation(reservation.id, session?.id)
+      setSucces(
+        session?.id
+          ? 'Réservation confirmée, et l’encaissement rattaché à la session de caisse.'
+          : 'Réservation confirmée. Aucune vente créée : il n’y avait pas de session de caisse.',
+      )
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'La confirmation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
   // ── DÉPLACER UNE SEULE SÉANCE (RG-M5-07, CA-6) ─────────────────────────────────────────────
   //
   // ⚠ LA CONFIRMATION DIT CE QU'ON NE FERA PAS. Déplacer une séance déjà réservée ne prévient
@@ -1063,6 +1095,27 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                       </span>
                                     )}
                                   </div>
+                                  {/* ⚠ LE BOUTON N'APPARAÎT QUE POUR `a_confirmer`, et c'est le
+                                      seul état d'où il mène quelque part : le processeur refuse
+                                      une réservation qui ne demande aucune confirmation, et rend
+                                      la réservation inchangée si elle l'est déjà. */}
+                                  {r.statut === 'a_confirmer' && aLeDroit(droits, 'reservation.reserver') && (
+                                    <div className="row" style={{ marginTop: 'var(--esp-serre)' }}>
+                                      <button
+                                        className="btn primary sm"
+                                        type="button"
+                                        disabled={gesteEnCours === r.id}
+                                        onClick={() => confirmerReservation(r)}
+                                      >
+                                        Confirmer
+                                      </button>
+                                      <span className="hint">
+                                        {r.confirmationDueAt ? `avant ${heure(r.confirmationDueAt)}` : ''}
+                                        {session?.id ? ' · encaissée sur la caisse ouverte' : ' · sans encaissement'}
+                                      </span>
+                                    </div>
+                                  )}
+
                                   {r.quantity > 1 && <div className="hint">{r.quantity} places</div>}
 
                                   {/* ── AFFECTER UNE INSTANCE (ACT-1, D16) ────────────────────
