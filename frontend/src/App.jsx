@@ -54,6 +54,9 @@ const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 // financière qu'un caissier n'ouvrira jamais n'ont pas à peser sur le premier chargement.
 const Sepa = lazy(() => import('./pages/Sepa.jsx'))
 const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
+const RelanceRecettes = lazy(() => import('./pages/RelanceRecettes.jsx'))
+const PlacesLiberees = lazy(() => import('./pages/PlacesLiberees.jsx'))
+const Sejours = lazy(() => import('./pages/Sejours.jsx'))
 const JournalPassages = lazy(() => import('./pages/JournalPassages.jsx'))
 const Casiers = lazy(() => import('./pages/Casiers.jsx'))
 
@@ -523,6 +526,9 @@ export default function App() {
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
       {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
       {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
+      {onglet === 'relance_recettes' && <RelanceRecettes etabActif={etabActif} droits={droits} />}
+      {onglet === 'places_liberees' && <PlacesLiberees etabActif={etabActif} droits={droits} />}
+      {onglet === 'sejours' && <Sejours etabActif={etabActif} droits={droits} />}
       {onglet === 'journal_passages' && <JournalPassages etabActif={etabActif} />}
       {onglet === 'casiers' && <Casiers etabActif={etabActif} droits={droits} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}

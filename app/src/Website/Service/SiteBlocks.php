@@ -52,6 +52,24 @@ final class SiteBlocks
                     ."activez ce dont vous avez besoin, laissez le reste éteint. Vous ne payez que ce que vous activez, "
                     ."et vous pouvez changer d'avis en cours de mois. Quatorze jours d'essai pour vous en assurer, sans carte bancaire."]),
 
+            /*
+             * ⚠ LES REPERES ENTRE CROCHETS SONT VOLONTAIRES, ET ILS DOIVENT LE RESTER JUSQU'A CE
+             * QUE MAXIME LES REMPLACE.
+             *
+             * C'est la seule bande de la page qui parle de preuve : des clients, un nombre
+             * d'etablissements. Personne d'autre que lui ne peut la remplir. Y mettre un chiffre
+             * plausible en attendant serait un mensonge sur une page de vente — et le genre de
+             * mensonge qu'on oublie d'enlever.
+             */
+            self::bloc('home.proof.items', BlockType::Items, 'Bande de preuve — sous le bandeau',
+                'Vos clients et vos chiffres. Remplacez les reperes entre crochets ; une entree par ligne.',
+                ['items' => [
+                    '[ VOS CLIENTS ]',
+                    '[ N ] etablissements',
+                    '17 modules activables',
+                    '14 jours d\'essai sans carte',
+                ]]),
+
             self::bloc('home.modules.title', BlockType::Line, 'Titre — section Modules', '',
                 ['text' => 'Un socle commun, des modules à la carte']),
 
@@ -101,6 +119,23 @@ final class SiteBlocks
                 '⚠ Les PRIX ne se saisissent pas ici : ils sont lus sur le catalogue réel. Ce bloc n’en porte aucun.',
                 ['text' => "Une formule mensuelle, plus les options que vous ajoutez. Pas d'engagement de durée, pas de "
                     ."facturation au billet vendu ni au visiteur : vous payez des modules, pas des volumes."]),
+
+            /*
+             * ⚠ CE BLOC NE PORTE AUCUN PRIX, et il ne doit jamais en porter. Les montants viennent
+             * du catalogue reel ; un tarif saisi ici divergerait de celui qui est facture, et c'est
+             * le prospect qui releverait l'ecart au premier prelevement.
+             *
+             * Il dit ce que la FORMULE comprend — ce que `Plan::includedCapabilities` ne peut pas
+             * dire, puisque CRM, facturation et statistiques ne sont pas des capacites du catalogue.
+             */
+            self::bloc('home.pricing.socle', BlockType::Items, 'Ce que comprend la formule de base',
+                'Une ligne par element. N\'y mettez PAS de prix : ils sont lus sur le catalogue.',
+                ['items' => [
+                    'Gestion client (CRM)',
+                    'Facturation',
+                    'Statistiques et tableaux de bord',
+                    'Comptes, etablissements, droits, journal',
+                ]]),
 
             self::bloc('home.funnel.title', BlockType::Line, 'Titre — section Essai', '',
                 ['text' => "Quatorze jours d'essai, sans carte bancaire"]),

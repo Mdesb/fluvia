@@ -1,0 +1,59 @@
+{#
+  L'ÉCRAN DE CAISSE — une reconstitution, pas une capture.
+
+  Il est dessiné aux jetons réels du frontal (`frontend/src/styles.css`) : barre latérale #050914,
+  encre #d3dcf0 et #8e9bbc, panneau #ffffff, filet #dde3f0, encre #0b1020 et #4b5675, accent #3755e8
+  et #e8ecfd, rayon 12 px. Les couleurs et les proportions sont donc justes ; l'écran, lui, ne
+  prétend pas être exact au pixel.
+
+  ⚠ POURQUOI PAS UNE VRAIE CAPTURE. Il aurait fallu se connecter à l'application avec un compte
+  réel. Une reconstitution assumée vaut mieux qu'une capture prise dans une session qui n'est pas la
+  nôtre — et elle ne vieillit pas au premier changement d'écran.
+
+  L'appelant pose `aria-hidden` : ce bloc ne porte aucune information que le texte ne dise déjà, et
+  ses montants sont un décor.
+#}
+<div class="ecran">
+  <div class="ecran-barre">
+    <span class="ecran-pastille"></span>
+    <span class="ecran-pastille"></span>
+    <span class="ecran-pastille"></span>
+    <span class="ecran-titre">Fluvia — Caisse guichet</span>
+  </div>
+
+  <div class="ecran-corps">
+    <div class="ecran-menu">
+      <p class="ecran-etab"><span class="ecran-logo"></span>Piscine Aqualude</p>
+      <p class="ecran-entree ecran-entree-active">Caisse</p>
+      <p class="ecran-entree">Réservations</p>
+      <p class="ecran-entree">Contrôle d'accès</p>
+      <p class="ecran-entree">Clients</p>
+      <p class="ecran-entree">Facturation</p>
+      <p class="ecran-entree">Statistiques</p>
+      <p class="ecran-entree">Paramètres</p>
+    </div>
+
+    <div class="ecran-panneau">
+      <div class="ecran-panneau-tete">
+        <span class="ecran-panneau-titre">Vente en cours</span>
+        <span class="ecran-etiquette">Caisse 1 ouverte</span>
+      </div>
+
+      <div class="caisse">
+        <div class="caisse-lignes">
+          <div class="caisse-ligne"><span class="caisse-qte">2</span>Entrée adulte<span class="caisse-prix">11,00 €</span></div>
+          <div class="caisse-ligne"><span class="caisse-qte">1</span>Entrée enfant<span class="caisse-prix">4,20 €</span></div>
+          <div class="caisse-ligne"><span class="caisse-qte">1</span>Location casier<span class="caisse-prix">2,00 €</span></div>
+          <div class="caisse-total"><span>Total</span><strong class="caisse-somme"><span class="caisse-chiffres"><span>11,00 €</span><span>15,20 €</span><span>17,20 €</span></span></strong></div>
+        </div>
+
+        <div class="caisse-paiements">
+          <span class="caisse-paiement caisse-paiement-actif">Carte</span>
+          <span class="caisse-paiement">Espèces</span>
+          <span class="caisse-paiement">Chèque</span>
+          <span class="caisse-paiement">Porte-monnaie</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

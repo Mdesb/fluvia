@@ -1800,9 +1800,24 @@ produit hors périmètre rend 500 au lieu de 404** — trouvé en passant, non c
 
 **Ce qui reste :**
 
-1. « Créneau libre bassin » n'a **aucun** produit — aucune réservation payante n'y passe. Le compte
-   de fin `SELECT COUNT(*) FROM reservation_activite WHERE produit_tarif_reference_id IS NULL;`
-   rend donc encore **1**.
+1. ✅ **LE COMPTE DU D-2 REND 0** (05/09). `SELECT COUNT(*) FROM reservation_activite WHERE
+   produit_tarif_reference_id IS NULL;` → **0**. Les trois activités portent un produit de type
+   `prestation`.
+
+   ⚠ **MAIS « Créneau libre bassin » RESTE GRATUIT, ET LE PRODUIT N'Y SERT À RIEN.** Mesuré :
+   `Creneau::tarifReference()` rend le `tarifReferenceMontant` de l'ACTIVITÉ, et
+   `ReserverProcessor:193` bascule en `ModeDecompte::Gratuit` dès que ce montant est ≤ 0 — **sans
+   jamais lire le produit**. Le rattachement est structurellement juste et fonctionnellement inerte
+   tant que le prix vaut `0.00`. Le prix est une décision commerciale, pas un oubli technique : je
+   ne l'ai pas inventé.
+
+   ⚠ **ET C'EST CE MÊME MÉCANISME QUI VENDAIT LA VISITE GUIDÉE À ZÉRO EURO.** Tant que ses créneaux
+   n'étaient rattachés à aucune activité, `tarifReference()` rendait `'0.00'` et la réservation
+   partait en **Gratuit silencieux** — pas en refus, comme je l'avais d'abord annoncé. Depuis le
+   rattachement des 14 créneaux, elle est à **12,00 €**.
+
+   ⚠ **Le produit du musée est `PRD-BOU-TIMED`**, un produit de fixture BOUTIQUE réutilisé pour une
+   visite guidée. C'est ce qui explique son rattachement à Piscine A. Non touché.
 2. ⚠ **Le produit du musée est rattaché à Piscine A**, pas à Musée C. Anomalie du jeu de
    démonstration, repérée en cherchant qui avait le droit de convertir. Non touchée.
 3. La ressource « Trésors d'Égypte » ne porte pas `ouvreAcces` : le réservant du musée n'a

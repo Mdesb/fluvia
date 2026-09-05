@@ -83,6 +83,24 @@ class Ressource
     #[Groups(['ressource:read', 'ressource:write'])]
     private int $capacitePropre = 1;
 
+    /**
+     * Ce que cette ressource ajoute au tarif de la prestation. `0.00` = rien.
+     *
+     * UN SUPPLEMENT, JAMAIS UN PRIX ABSOLU. Un prix absolu sur la ressource creerait une SECONDE
+     * source pour le meme chiffre : le jour ou l'exploitant change le tarif de la prestation, les
+     * praticiens qui portent un prix absolu ne bougeraient pas, en silence. Avec un supplement, il
+     * n'y a jamais qu'une grille -- et << junior >> est simplement le supplement a zero.
+     *
+     * Meme precision et meme echelle que `Activite::tarifReferenceMontant` : deux montants qui
+     * s'additionnent et qui ne se stockent pas pareil finissent par diverger a l'arrondi.
+     *
+     * Defaut a 0.00 : les lignes d'eau, terrains et bassins existants n'ont aucun supplement, et
+     * rien ne change pour eux.
+     */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
+    #[Groups(['ressource:read', 'ressource:write'])]
+    private string $supplementTarifMontant = '0.00';
+
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['ressource:read', 'ressource:write'])]
     private bool $partageable = false;
@@ -175,6 +193,20 @@ class Ressource
     public function setCapacitePropre(int $capacitePropre): self
     {
         $this->capacitePropre = $capacitePropre;
+
+        return $this;
+    }
+
+    public function getSupplementTarifMontant(): string
+    {
+        return $this->supplementTarifMontant;
+    }
+
+    public function setSupplementTarifMontant(string $montant): self
+    {
+        // Un supplement negatif ferait une REMISE deguisee en supplement : le libelle de l'ecran
+        // mentirait, et une remise se decide autrement (promotion, type de tarif). On borne ici.
+        $this->supplementTarifMontant = (float) $montant < 0.0 ? '0.00' : $montant;
 
         return $this;
     }

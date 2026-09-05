@@ -1,0 +1,74 @@
+{#
+  L'ÉCRAN DE RÉSERVATION — même reconstitution que `_ecran_caisse.html.twig`, mêmes jetons.
+
+  ⚠ DEUX MODULES Y SONT MARQUÉS « ÉTEINT », ET C'EST TOUT SON PROPOS. La section qui l'entoure dit
+  qu'un module éteint n'est pas un module absent : le planning continue de fonctionner pendant que
+  la boutique en ligne et le contrôle d'accès sont fermés. Le montrer vaut mieux que le répéter.
+
+  L'appelant pose `aria-hidden` : décoratif.
+#}
+<div class="ecran ecran-clair">
+  <div class="ecran-corps">
+    <div class="ecran-menu">
+      <p class="ecran-etab"><span class="ecran-logo"></span>Padel du Parc</p>
+      <p class="ecran-entree ecran-entree-active">Réservations</p>
+      <p class="ecran-entree">Terrains</p>
+      <p class="ecran-entree">Clients</p>
+      <p class="ecran-entree">Facturation</p>
+      <p class="ecran-entree ecran-entree-eteinte">Boutique en ligne<span class="ecran-eteint">éteint</span></p>
+      <p class="ecran-entree ecran-entree-eteinte">Contrôle d'accès<span class="ecran-eteint">éteint</span></p>
+      <p class="ecran-entree">Paramètres</p>
+    </div>
+
+    <div class="ecran-panneau ecran-panneau-creux">
+      <div class="ecran-panneau-tete">
+        <span class="ecran-panneau-titre">Mardi 8 septembre</span>
+        <span class="ecran-panneau-note">4 terrains</span>
+      </div>
+
+      <div class="planning">
+        <span></span>
+        <span class="planning-tete">T1</span>
+        <span class="planning-tete">T2</span>
+        <span class="planning-tete">T3</span>
+        <span class="planning-tete">T4</span>
+
+        <span class="planning-heure">09:00</span>
+        <span class="planning-case planning-case-prise">Martin</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-prise">Cours</span>
+        <span class="planning-case"></span>
+
+        <span class="planning-heure">10:30</span>
+        <span class="planning-case planning-case-prise">Cours</span>
+        <span class="planning-case planning-case-prise">Duval</span>
+        <span class="planning-case planning-case-prise">Cours</span>
+        <span class="planning-case"></span>
+
+        <span class="planning-heure">12:00</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-anime">Dupont</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-prise">Leroy</span>
+
+        <span class="planning-heure">13:30</span>
+        <span class="planning-case planning-case-prise">Ligue</span>
+        <span class="planning-case planning-case-prise">Ligue</span>
+        <span class="planning-case"></span>
+        <span class="planning-case"></span>
+
+        <span class="planning-heure">15:00</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-prise">Bernard</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-prise">Cours</span>
+
+        <span class="planning-heure">16:30</span>
+        <span class="planning-case planning-case-prise">Cours</span>
+        <span class="planning-case"></span>
+        <span class="planning-case planning-case-prise">Petit</span>
+        <span class="planning-case"></span>
+      </div>
+    </div>
+  </div>
+</div>

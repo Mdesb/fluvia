@@ -1087,6 +1087,57 @@ export const api = {
   majRessourceReservation: (id, corps) =>
     request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+
+  // --- Sejours (App\Stay) ---
+  //
+  // La note d'un sejour : on l'ouvre pour un client, les lignes s'y accumulent, puis on cloture,
+  // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
+  // que personne ne pouvait lire.
+  sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
+  // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
+  ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
+  // La note est une vue CALCULEE a chaque lecture, jamais un total entretenu : elle rend `balance`,
+  // `lineCount` et le detail des lignes.
+  noteSejour: (id) => request(`/api/stays/${id}/folio`),
+  // ⚠ `amount` EST UNE CHAINE, et le negatif est accepte : c'est ainsi que s'enregistre un
+  // reglement, faute d'un geste dedie. Un nombre JSON serait refuse (perte du centime).
+  ajouterLigneSejour: (id, corps) =>
+    request(`/api/stays/${id}/charges`, { method: 'POST', body: corps }),
+  // ⚠ CLOTURER EST SANS RETOUR. Un sejour clos n'accepte plus de ligne, et rien ne le rouvre :
+  // s'il reste un solde, il ne pourra plus jamais etre regle (le reglement EST une ligne).
+  cloturerSejour: (id) => request(`/api/stays/${id}/close`, { method: 'POST', body: {} }),
+  // Exige un sejour CLOS et un solde NUL, sinon 409.
+  reglerSejour: (id) => request(`/api/stays/${id}/settle`, { method: 'POST', body: {} }),
+
+  // --- Places liberees (App\SmartFlow) ---
+  //
+  // La liste d'attente PAR RESSOURCE, a distinguer de `inscrireListeAttente` (par creneau precis,
+  // App\Reservation) et de `patinoireInscrireListeAttente`. Trois files coexistent dans le produit.
+  propositionsReport: () =>
+    request('/api/smart-flow/reschedule-proposals', { query: { itemsPerPage: 100 } }),
+  // ⚠ ET LE GARDE-FOU DES FORMATS NE DIT RIEN DE CES TROIS ECRITURES. `verifier-formats.mjs` fait
+  // `continue` sur toute operation portant `input: false` : mes trois routes sont dans la famille
+  // qu'il saute. Son exemption est juste — une operation qui ne desserialise pas ne controle pas le
+  // type — mais un vert obtenu par exemption n'est pas une verification. Ce qui fonde le choix ici,
+  // c'est la lecture des declarations d'operations, pas un outil.
+  //
+  // ⚠ `confirmedReservationRef` EST OBLIGATOIRE : le module ne cree jamais de reservation, il clot
+  // la proposition en la rattachant a une reservation deja creee par le chemin normal. Le serveur
+  // revalide qu'elle appartient au meme etablissement ET au meme client (IDOR, RG-SF-16).
+  accepterPropositionReport: (id, confirmedReservationRef) =>
+    request(`/api/smart-flow/reschedule-proposals/${id}/accept`, {
+      method: 'POST',
+      body: { confirmedReservationRef },
+    }),
+  declinerPropositionReport: (id) =>
+    request(`/api/smart-flow/reschedule-proposals/${id}/decline`, { method: 'POST', body: {} }),
+  inscriptionsPlaceLiberee: () =>
+    request('/api/smart-flow/waitlist-entries', { query: { itemsPerPage: 100 } }),
+  // Corps : { resourceId, beneficiaryId, searchWindowStart, searchWindowEnd } — les quatre sont
+  // exiges (422 sinon), et la fenetre doit finir apres son debut.
+  inscrirePlaceLiberee: (corps) =>
+    request('/api/smart-flow/waitlist-entries', { method: 'POST', body: corps }),
   // HORAIRES ET ABSENCES D'UNE RESSOURCE -- exposes en CRUD complet depuis le debut, sans un
   // seul appelant. Un coiffeur ne pouvait pas declarer qu'il travaille le mardi.
   //
@@ -1496,6 +1547,28 @@ export const api = {
     request('/api/objectif_indicateurs', { method: 'POST', body: corps, ld: true }),
   supprimerObjectif: (id) =>
     request(`/api/objectif_indicateurs/${id}`, { method: 'DELETE' }),
+
+  // Tableaux de bord (M7, RG-M7-06). `Post` et `Patch` passent par un processeur : le corps est
+  // du JSON simple, jamais du ld+json a relations — le rattachement se donne par le couple
+  // `niveau` + `entiteId`, parce que les proprietes de perimetre n'ont pas de setter.
+  tableauxDeBord: () => request('/api/tableau_de_bords', { query: { itemsPerPage: 100 } }),
+  creerTableauDeBord: (corps) =>
+    request('/api/tableau_de_bords', { method: 'POST', body: corps, ld: true }),
+  modifierTableauDeBord: (id, corps) =>
+    request(`/api/tableau_de_bords/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ AUCUNE SUPPRESSION : la ressource n'expose pas de `Delete`, par choix de la spec (§7, meme
+  // patron qu'`Indicateur`). On retire de la circulation par `modifierTableauDeBord(id, { actif:
+  // false })`. Une fonction de suppression ici rendrait un 405 a tous les coups.
+
+  // Rapports planifies (M7, RG-M7-07). Le corps est du JSON simple : le processeur lit
+  // `destinataires` comme une liste de { email, niveau, etablissement|region|groupe }, et chaque
+  // destinataire est confronte au perimetre du CREATEUR, pas a celui de la cible.
+  rapportsPlanifies: () => request('/api/rapport_planifies', { query: { itemsPerPage: 100 } }),
+  creerRapportPlanifie: (corps) =>
+    request('/api/rapport_planifies', { method: 'POST', body: corps, ld: true }),
+  modifierRapportPlanifie: (id, corps) =>
+    request(`/api/rapport_planifies/${id}`, { method: 'PATCH', body: corps }),
+  // ⚠ Pas de suppression non plus ici : on suspend par `etat: 'suspendu'`.
 
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
@@ -2085,6 +2158,29 @@ export const api = {
     request('/api/politique_recouvrements', { method: 'POST', body: corps, ld: true }),
   majPolitiqueRecouvrement: (id, corps) =>
     request(`/api/politique_recouvrements/${id}`, { method: 'PATCH', body: corps }),
+
+  // --- Relance des recettes (App\RevenueRecovery) ---
+  //
+  // A NE PAS CONFONDRE AVEC LE RECOUVREMENT CI-DESSUS, malgre la parente des noms. Le recouvrement
+  // traite des IMPAYES : representations bancaires, acces bloques, exemptions. La relance des
+  // recettes est un mecanisme EVENEMENTIEL : un no-show, une annulation, un paiement refuse ouvrent
+  // un dossier, et des courriels partent selon une politique. Les deux modules sont distincts cote
+  // serveur (`App\Recouvrement` et `App\RevenueRecovery`, repliques et jamais importes l'un dans
+  // l'autre) : ce sont deux ecrans, et ce doit rester deux jeux d'appels.
+  dossiersRelance: () => request('/api/revenue-recovery/cases', { query: { itemsPerPage: 100 } }),
+  // Le motif est FACULTATIF et n'a rien d'evident : la route est declaree `input: false`, mais son
+  // processeur lit le corps brut et y cherche `reason`. Sans cet appel-la, `stopReason` resterait
+  // vide sur tous les arrets manuels.
+  arreterDossierRelance: (id, reason) =>
+    request(`/api/revenue-recovery/cases/${id}/stop`, { method: 'POST', body: { reason } }),
+  tentativesRelance: () => request('/api/revenue-recovery/attempts', { query: { itemsPerPage: 200 } }),
+  politiquesRelance: () => request('/api/revenue-recovery/sequences', { query: { itemsPerPage: 100 } }),
+  // ⚠ `ld: true` OBLIGATOIRE ICI : l'operation desserialise le corps, donc elle n'accepte que
+  // `application/ld+json` et repondrait 415 a du JSON simple.
+  creerPolitiqueRelance: (corps) =>
+    request('/api/revenue-recovery/sequences', { method: 'POST', body: corps, ld: true }),
+  majPolitiqueRelance: (id, corps) =>
+    request(`/api/revenue-recovery/sequences/${id}`, { method: 'PATCH', body: corps }),
 
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les

@@ -357,6 +357,18 @@ final class ScheduleCatalog
                 . "de date et pilote un relais physique — signalé par claude-G. À borner dans le temps "
                 . "(périmètre claude-I) avant de la déclarer sûre.",
             ),
+            new ScheduledTask(
+                'reservation:reminders:send',
+                15,
+                "Sans rappel, un client oublie son rendez-vous et la place reste vide : on facture "
+                . "l'absence au lieu de l'eviter. C'etait le seul manque bloquant du module pour un "
+                . "metier de rendez-vous.",
+                // PAS SUR AU PREMIER PASSAGE, malgre ses deux bornes de date. La commande n'ecrit
+                // pas dans un coin de la base : elle envoie de VRAIS messages a de VRAIES personnes,
+                // et c'est irreversible. `--simuler` liste ce qui partirait sans rien envoyer ni
+                // estampiller : c'est par la que se regarde le premier passage.
+                safeOnFirstRun: false,
+            ),
         ];
     }
 
