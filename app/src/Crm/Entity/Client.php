@@ -124,7 +124,7 @@ class Client
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    #[Groups(['client:read', 'client:list', 'famille:read', 'beneficiaire:read', 'fiche360:read', 'pmv:read', 'consentement:read', 'rgpd:read', 'fusion:read'])]
+    #[Groups(['client:read', 'client:list', 'famille:read', 'beneficiaire:read', 'fiche360:read', 'pmv:read', 'consentement:read', 'rgpd:read', 'fusion:read', 'stay:read'])]
     private Uuid $id;
 
     #[ORM\ManyToOne(targetEntity: Groupe::class)]
@@ -151,15 +151,19 @@ class Client
     // est. Trouvé par `claude-H` en branchant la sortie de patins de la patinoire, qui exige un
     // bénéficiaire. Elle recoupait localement avec `/api/clients`, ce qui marche jusqu'au centième
     // client et échoue silencieusement après.
-    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read'])]
+    // `stay:read` pour la meme raison que `beneficiaire:read` juste au-dessus : un sejour qui ne
+    // nomme pas son titulaire n'est pas exploitable au comptoir.
+    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read', 'stay:read'])]
     private ?string $nom = null;
 
     #[ORM\Column(length: 120, nullable: true)]
-    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read'])]
+    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read', 'stay:read'])]
     private ?string $prenom = null;
 
     #[ORM\Column(length: 180, nullable: true)]
-    #[Groups(['client:read', 'client:list', 'client:write'])]
+    // Une societe tient un sejour aussi bien qu'une personne — un groupe scolaire, un comite
+    // d'entreprise. Sans elle, ces sejours-la resteraient anonymes.
+    #[Groups(['client:read', 'client:list', 'client:write', 'stay:read'])]
     private ?string $raisonSociale = null;
 
     #[ORM\Column(length: 14, nullable: true)]

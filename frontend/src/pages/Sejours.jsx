@@ -44,15 +44,16 @@ import { idDe } from '../api/iri.js'
 // il reste quelque chose à payer, il pré-remplit la ligne au centime près, et la clôture d'un
 // séjour non soldé demande une confirmation qui nomme la conséquence.
 //
-// ── CE QUE L'API NE DIT PAS, ET QUE L'ÉCRAN NE PEUT DONC PAS AFFICHER ────────────────────────────
+// ── LE TITULAIRE, ET POURQUOI IL A FALLU UN LOT SERVEUR POUR L'AFFICHER ─────────────────────────
 //
-// `Stay::$customer` n'a AUCUN groupe de sérialisation — ni la collection, ni l'item, ni la note ne
-// l'exposent. On ouvre donc un séjour POUR un client (le `POST` l'exige), et plus rien ensuite ne
-// dit de qui il s'agit. La référence (`SEJ-…`) est le seul identifiant lisible, et c'est bien ce
-// que le modèle annonce : « affichée au comptoir ».
+// `Stay::$customer` ne portait AUCUN groupe de sérialisation : on ouvrait un séjour POUR un client
+// — le `POST` l'exige — et plus aucune lecture ne disait lequel. Cet écran a donc vécu ses
+// premières heures en affichant la seule référence `SEJ-…`, avec une phrase qui l'expliquait.
 //
-// C'est une limite du serveur, pas un choix d'affichage. L'écran le dit là où ça compte plutôt que
-// d'inventer un nom qu'il n'a pas.
+// Le groupe `stay:read` a été posé le 05/09 sur `customer`, et en retour sur les quatre champs
+// d'IDENTITÉ de `Client` (id, nom, prénom, raison sociale) — la convention du dépôt, que `Client`
+// suivait déjà pour six autres modules. La phrase d'excuse a disparu avec le défaut : c'est la
+// seule façon de ne pas la laisser mentir.
 //
 // ── LA RÉFÉRENCE N'EST PAS SÉQUENTIELLE, ET C'EST VOULU ─────────────────────────────────────────
 //
@@ -214,6 +215,7 @@ export default function Sejours({ etabActif, droits }) {
                 <thead>
                   <tr>
                     <th>Référence</th>
+                    <th>Titulaire</th>
                     <th>Arrivée</th>
                     <th>Départ prévu</th>
                     <th>Statut</th>
@@ -224,6 +226,9 @@ export default function Sejours({ etabActif, droits }) {
                   {affiches.map((s) => (
                     <tr key={idDe(s)}>
                       <td className="mono">{s.reference}</td>
+                      {/* `customer` arrive imbriqué avec son identité depuis le lot du 05/09 ;
+                          `nomClient` sait déjà rendre une personne comme une société. */}
+                      <td>{s.customer ? nomClient(s.customer) : <span className="sub">—</span>}</td>
                       <td>{dateFr(s.arrivalDate)}</td>
                       <td>{dateFr(s.expectedDepartureDate)}</td>
                       <td>{badgeStatut(s.status)}</td>
@@ -240,9 +245,8 @@ export default function Sejours({ etabActif, droits }) {
           )}
 
           <p className="hint">
-            Le nom du client n&rsquo;apparaît pas dans cette liste : l&rsquo;API ne l&rsquo;expose
-            sur aucune de ses lectures. La référence <span className="mono">SEJ-…</span> est
-            l&rsquo;identifiant prévu pour le comptoir.
+            La référence <span className="mono">SEJ-…</span> reste l&rsquo;identifiant qu&rsquo;on
+            annonce au comptoir : elle est courte, lisible, et volontairement non séquentielle.
           </p>
         </div>
       </div>
@@ -356,6 +360,7 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
       ) : (
         <>
           <div className="deflist">
+            <div><span>Titulaire</span><span>{sejour.customer ? nomClient(sejour.customer) : '—'}</span></div>
             <div><span>Statut</span><span>{badgeStatut(statut)}</span></div>
             <div>
               <span>Reste dû</span>

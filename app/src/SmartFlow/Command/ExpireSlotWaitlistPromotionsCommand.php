@@ -72,31 +72,17 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
 
         $traites = 0;
         foreach ($propositions as $proposition) {
-            $proposition->setStatus(RescheduleProposalStatus::Expired);
-
-            // I2 uniquement (`sourceWaitlistEntryRef` renseigné) : la SlotWaitlistEntry associée est
-            // marquée expired et l'inscription suivante est tentée (RG-SF-07). Une proposition I1
-            // (report de no-show, RG-SF-11) n'a aucune inscription à traiter ici.
-            $entryRef = $proposition->getSourceWaitlistEntryRef();
-            $entry = $entryRef !== null
-                ? $this->em->getRepository(SlotWaitlistEntry::class)->find($entryRef)
-                : null;
-
-            if ($entry instanceof SlotWaitlistEntry) {
-                $entry->setStatus(SlotWaitlistEntryStatus::Expired);
-                $establissement = $entry->getEstablishment();
-
-                // Flush avant de tenter la promotion suivante : `SlotWaitlistPromotionService` relit
-                // les inscriptions `waiting` par une requête DQL fraîche — sans ce flush, l'entrée que
-                // l'on vient d'expirer resterait `waiting` en base et pourrait être repromue elle-même.
-                $this->em->flush();
-
-                if ($establissement !== null) {
-                    // D37 : l'expiration constatée à `$maintenant` déclenche elle-même la promotion
-                    // suivante (RG-SF-07) — il n'existe pas d'instant métier antérieur plus légitime.
-                    $this->promotionService->promoteNext($establissement, $entry->getResourceId(), $proposition->getOriginSlotId(), $maintenant);
-                }
-            }
+            // La séquence complète — clore, consommer l'inscription, servir le suivant — vit
+            // désormais dans `SlotWaitlistPromotionService` : `POST .../decline` en avait besoin
+            // elle aussi, et deux copies auraient divergé sur le `flush` intercalé.
+            //
+            // D37 : l'expiration constatée à `$maintenant` déclenche elle-même la promotion suivante
+            // (RG-SF-07) — il n'existe pas d'instant métier antérieur plus légitime.
+            $this->promotionService->closeAndPromoteNext(
+                $proposition,
+                SlotWaitlistEntryStatus::Expired,
+                $maintenant,
+            );
 
             ++$traites;
         }

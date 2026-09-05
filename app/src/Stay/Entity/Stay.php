@@ -109,6 +109,14 @@ class Stay
      */
     #[ORM\ManyToOne(targetEntity: Client::class)]
     #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
+    // ⚠ SANS CE GROUPE, AUCUNE LECTURE NE DISAIT DE QUI ETAIT LE SEJOUR. Le `POST` exige un client,
+    // et plus rien ensuite ne le nommait : ni la collection, ni l'item, ni la note. L'ecran ne
+    // pouvait afficher que la reference `SEJ-...`, ce que le modele annonce comme « affichee au
+    // comptoir » — vrai pour appeler quelqu'un, faux pour savoir qui c'est.
+    //
+    // Les champs d'identite de `Client` portent `stay:read` en retour, comme ils portent deja
+    // `beneficiaire:read` pour la meme raison exactement.
+    #[Groups(['stay:read'])]
     private Client $customer;
 
     /** Référence lisible par l'exploitant, unique par établissement (affichée au comptoir). */
