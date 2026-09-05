@@ -35,8 +35,10 @@ class ApiCredential
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     private Uuid $id;
 
+    // RESTRICT : supprimer une application dont des cles vivent ferait disparaitre en silence
+    // des acces actifs. La desactivation est le geste normal ; la suppression doit echouer.
     #[ORM\ManyToOne(targetEntity: PartnerApplication::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
     private ?PartnerApplication $application = null;
 
     #[ORM\Column(length: 64)]
@@ -61,8 +63,9 @@ class ApiCredential
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $revokedAt = null;
 
+    // SET NULL : le depart d'un salarie ne doit pas effacer la trace d'une revocation.
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Utilisateur $revokedBy = null;
 
     public function __construct()

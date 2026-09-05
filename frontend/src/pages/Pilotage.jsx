@@ -127,7 +127,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
   if (chargement) {
     return (
       <div className="view">
-        <div className="view-head"><div className="ttl"><h1>Pilotage</h1><p>{nomEtab}</p></div></div>
+        <div className="view-head"><div className="ttl"><h1>Reporting</h1><p>{nomEtab}</p></div></div>
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
       </div>
     )
@@ -147,7 +147,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
     <div className="view">
       <div className="view-head">
         <div className="ttl">
-          <h1>Pilotage</h1>
+          <h1>Reporting</h1>
           <p>{dash?.etablissementNom || nomEtab} · indicateurs du jour</p>
         </div>
         <div className="actions">
