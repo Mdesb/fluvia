@@ -122,7 +122,15 @@ final class ExportManuelProcessor implements ProcessorInterface
         $export = new Export();
         $export->setFormat($format);
         $export->setDemandePar($utilisateur);
-        $export->setAxesAppliques(['indicateurs' => $codes, 'periodeDebut' => $periode->debut->format('Y-m-d'), 'periodeFin' => $periode->fin->format('Y-m-d')]);
+        // ⚠ LA PLAGE DEMANDEE, PAS LA VARIABLE DE BOUCLE. Cette ligne lisait `$periode`,
+        // devenue la variable du `foreach` : elle enregistrait le dernier jour comme si
+        // c'etait toute la periode. Le fichier etait juste, sa fiche mentait — et c'est la
+        // fiche que l'ecran affiche dans la liste des exports demandes.
+        $export->setAxesAppliques([
+            'indicateurs' => $codes,
+            'periodeDebut' => $jours[0]->format('Y-m-d'),
+            'periodeFin' => $jours[array_key_last($jours)]->format('Y-m-d'),
+        ]);
         $this->rattacher($export, $niveau, $entiteId);
 
         try {
