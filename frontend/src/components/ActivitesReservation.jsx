@@ -31,6 +31,8 @@ const VIDE = {
   dureeMinutes: '60',
   battementMinutes: '0',
   rappelHeuresAvant: '0',
+  natureVersement: 'none',
+  versementMontant: '0.00',
   niveauRequis: '',
   competenceExigee: '',
   tarifReferenceMontant: '0.00',
@@ -168,6 +170,11 @@ export default function ActivitesReservation({ droits = [] }) {
                         {a.rappelHeuresAvant > 0
                           ? <div className="sub">rappel {a.rappelHeuresAvant} h avant</div>
                           : <div className="sub">aucun rappel</div>}
+                        {a.natureVersement && a.natureVersement !== 'none' && (
+                          <div className="sub">
+                            {a.natureVersement === 'earnest_money' ? 'arrhes' : 'acompte'} {a.versementMontant} €
+                          </div>
+                        )}
                       </td>
                       <td className="num">{a.tarifReferenceMontant}</td>
                       <td>
@@ -199,6 +206,8 @@ export default function ActivitesReservation({ droits = [] }) {
                               dureeMinutes: String(a.dureeMinutes ?? 60),
                               battementMinutes: String(a.battementMinutes ?? 0),
                               rappelHeuresAvant: String(a.rappelHeuresAvant ?? 0),
+                              natureVersement: a.natureVersement || 'none',
+                              versementMontant: String(a.versementMontant ?? '0.00'),
                               niveauRequis: a.niveauRequis || '',
                               competenceExigee: a.competenceExigee || '',
                               tarifReferenceMontant: a.tarifReferenceMontant || '0.00',
@@ -263,6 +272,8 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
         dureeMinutes: Number(v.dureeMinutes) || 0,
         battementMinutes: Number(v.battementMinutes) || 0,
         rappelHeuresAvant: Number(v.rappelHeuresAvant) || 0,
+        natureVersement: v.natureVersement,
+        versementMontant: v.natureVersement === 'none' ? '0.00' : String(v.versementMontant || '0.00'),
         niveauRequis: v.niveauRequis.trim() || null,
         competenceExigee: v.competenceExigee.trim() || null,
         tarifReferenceMontant: String(v.tarifReferenceMontant || '0.00'),
@@ -321,6 +332,38 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
           {/* ⚠ ZÉRO VEUT DIRE « AUCUN RAPPEL », ET C'EST LE DÉFAUT. Toute autre valeur par défaut
               enverrait des courriels aux clients d'établissements qui n'ont rien demandé. Le libellé
               doit donc dire ce que fait zéro, sinon un exploitant croit le rappel actif. */}
+          {/* ⚠ ARRHES ET ACOMPTE NE SONT PAS LA MÊME CHOSE, et le choix engage l'exploitant.
+              L'écran dit donc la conséquence, pas seulement le nom du régime : sur des arrhes,
+              le client absent perd son versement et RIEN de plus ne lui est réclamé — l'indemnité
+              d'annulation ne s'applique plus, sous peine de facturer deux fois le même dédit. */}
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Versement à la réservation</span>
+            <select className="select" value={v.natureVersement} onChange={(e) => champ('natureVersement', e.target.value)}>
+              <option value="none">Aucun</option>
+              <option value="part_payment">Acompte — avance sur le prix</option>
+              <option value="earnest_money">Arrhes — faculté de dédit</option>
+            </select>
+            <span className="sub">
+              {v.natureVersement === 'earnest_money'
+                ? 'Le client qui ne vient pas perd son versement, et rien d’autre ne lui est réclamé : la règle d’annulation ne s’applique plus. ⚠ Et si vous annulez, vous lui devez le double — Fluvia ne sait pas encore le faire.'
+                : v.natureVersement === 'part_payment'
+                  ? 'Avance sur le prix. En cas d’absence, elle s’impute sur l’indemnité d’annulation, et seul le solde est facturé.'
+                  : 'Le prix entier est encaissé à la réservation, comme aujourd’hui.'}
+            </span>
+          </label>
+
+          {v.natureVersement !== 'none' && (
+            <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              <span className="sub">Montant du versement (€)</span>
+              <input className="input" type="number" min="0" step="0.01" value={v.versementMontant}
+                onChange={(e) => champ('versementMontant', e.target.value)} />
+              <span className="sub">
+                Un montant, jamais un pourcentage&nbsp;: quelle part, arrondie comment, est une
+                décision commerciale. Au-dessus du tarif, c’est le tarif entier qui est encaissé.
+              </span>
+            </label>
+          )}
+
           <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
             <span className="sub">Rappel au client (heures avant)</span>
             <input className="input" type="number" min="0" value={v.rappelHeuresAvant} onChange={(e) => champ('rappelHeuresAvant', e.target.value)} />

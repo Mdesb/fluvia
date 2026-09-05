@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
+use App\Reservation\Enum\DepositKind;
 use App\Reservation\State\EstablishmentStampProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -116,6 +117,25 @@ class Activite
     #[Groups(['activite:read', 'activite:write'])]
     private int $rappelHeuresAvant = 0;
 
+    /**
+     * ARRHES OU ACOMPTE ? La difference n'est pas de vocabulaire, elle commande le code : sur des
+     * arrhes, le client qui ne vient pas perd son versement et on ne lui reclame RIEN de plus ;
+     * sur un acompte, il reste devoir le solde. Voir `DepositKind`.
+     */
+    #[ORM\Column(length: 16, enumType: DepositKind::class, options: ['default' => 'none'])]
+    #[Groups(['activite:read', 'activite:write'])]
+    private DepositKind $natureVersement = DepositKind::None;
+
+    /**
+     * Le montant demande a la reservation. `0.00` = aucun versement.
+     *
+     * UN MONTANT FOURNI, JAMAIS UN CALCUL. Quel pourcentage, arrondi comment, a partir de quel
+     * prix sont des decisions commerciales : une regle inventee s'appliquerait en silence partout.
+     */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
+    #[Groups(['activite:read', 'activite:write'])]
+    private string $versementMontant = '0.00';
+
     #[ORM\Column(length: 60, nullable: true)]
     #[Groups(['activite:read', 'activite:write'])]
     private ?string $niveauRequis = null;
@@ -202,6 +222,55 @@ class Activite
     public function getRappelHeuresAvant(): int
     {
         return $this->rappelHeuresAvant;
+    }
+
+    public function getNatureVersement(): DepositKind
+    {
+        return $this->natureVersement;
+    }
+
+    public function setNatureVersement(DepositKind $nature): self
+    {
+        $this->natureVersement = $nature;
+
+        return $this;
+    }
+
+    public function getVersementMontant(): string
+    {
+        return $this->versementMontant;
+    }
+
+    public function setVersementMontant(string $montant): self
+    {
+        $this->versementMontant = (float) $montant < 0.0 ? '0.00' : $montant;
+
+        return $this;
+    }
+
+    /**
+     * Combien encaisser MAINTENANT pour un rendez-vous a ce tarif ?
+     *
+     * UN SEUL ENDROIT, DEUX APPELANTS. `ReserverProcessor` encaisse a la reservation et
+     * `ConfirmerReservationProcessor` plus tard, quand rien ne l'a ete. Placer ce calcul dans l'un
+     * des deux laisserait l'autre encaisser le prix plein, versement ignore -- et personne ne
+     * verrait la difference avant de comparer deux tickets.
+     *
+     * Un versement SUPERIEUR OU EGAL au tarif n'est pas un versement, c'est le prix : on encaisse
+     * alors le tarif. Sans cette borne, une saisie trop haute ferait payer plus que la prestation.
+     */
+    public function versementAEncaisser(string $tarif): string
+    {
+        if ($this->natureVersement === DepositKind::None) {
+            return $tarif;
+        }
+
+        $versement = (float) $this->versementMontant;
+        if ($versement <= 0.0 || $versement >= (float) $tarif) {
+            return $tarif;
+        }
+
+        return number_format($versement, 2, '.', '');
     }
 
     public function setRappelHeuresAvant(int $heures): self
