@@ -35,7 +35,7 @@ function libellePerimetre(tdb) {
   return 'Site'
 }
 
-export default function TableauxDeBord({ etabActif, etablissements, droits }) {
+export default function TableauxDeBord({ etabActif, etablissements, droits, onChangement }) {
   const [tableauxLus, setTableauxLus] = useState(null)
   const tableaux = tableauxLus || []
   const [indicateursLus, setIndicateursLus] = useState(null)
@@ -55,11 +55,16 @@ export default function TableauxDeBord({ etabActif, etablissements, droits }) {
   const groupeId = (groupesLus || [])[0]?.id || null
   const entiteId = niveau === 'etablissement' ? etabActif : niveau === 'region' ? regionId : groupeId
 
+  // ⚠ ON PREVIENT LE VOISIN. `RapportsPlanifies` lit la meme liste pour son menu, et il l'avait
+  // lue au montage : apres une creation ici, il affichait encore « aucun tableau de bord actif »
+  // et renvoyait l'utilisateur composer ce qu'il venait de composer. Mesure faite en exécutant
+  // l'écran, pas en le lisant.
   const recharger = useCallback(() => {
     api.tableauxDeBord()
       .then((r) => setTableauxLus(membres(r)))
       .catch(() => setTableauxLus(null))
-  }, [])
+      .finally(() => { if (onChangement) onChangement() })
+  }, [onChangement])
 
   useEffect(() => {
     let annule = false
