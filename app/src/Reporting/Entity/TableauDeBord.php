@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Reporting\Entity\Trait\RattachementNiveauInterface;
+use App\Reporting\State\TableauDeBordProcessor;
 use App\Reporting\Entity\Trait\RattachementNiveauTrait;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -17,7 +18,6 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
-use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Modèle de tableau de bord (§1.6 plan-reporting.md) : composition d'indicateurs référencée par un
@@ -32,8 +32,18 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'reporting.lire')"),
         new Get(security: "is_granted('PERM', 'reporting.lire')"),
-        new Post(security: "is_granted('PERM', 'reporting.configurer')"),
-        new Patch(security: "is_granted('PERM', 'reporting.configurer')"),
+        // Le rattachement ne peut pas passer par la deserialisation : les quatre proprietes du
+        // trait sont privees et sans setter. Voir TableauDeBordProcessor pour la mesure.
+        new Post(
+            security: "is_granted('PERM', 'reporting.configurer')",
+            input: false,
+            processor: TableauDeBordProcessor::class,
+        ),
+        new Patch(
+            security: "is_granted('PERM', 'reporting.configurer')",
+            input: false,
+            processor: TableauDeBordProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['tdb:read']],
     denormalizationContext: ['groups' => ['tdb:write']],
@@ -47,15 +57,26 @@ class TableauDeBord implements RattachementNiveauInterface
     #[Groups(['tdb:read', 'rapport:read'])]
     private Uuid $id;
 
+    /**
+     * Le nom. ⚠ Son `Assert\NotBlank` a été retiré le 05/09 : `input: false` fait que la
+     * validation ne voit plus jamais la charge du client. L’exigence est dans le processeur,
+     * qui refuse aussi un nom présent mais vide — ce que le `NotBlank` ne faisait plus.
+     */
     #[ORM\Column(length: 160)]
-    #[Assert\NotBlank]
     #[Groups(['tdb:read', 'tdb:write', 'rapport:read'])]
     private string $nom = '';
 
-    /** @var Collection<int, Indicateur> RG-M7-06 : ≥ 1 (validé nativement, groupe tdb:write). */
+    /**
+     * @var Collection<int, Indicateur> RG-M7-06 : au moins un indicateur.
+     *
+     * ⚠ LA RÈGLE N’EST PLUS ICI. Elle tenait dans un `Assert\Count(min: 1)`, qui ne s’exécutait
+     * qu’à la désérialisation ; depuis que `Post` et `Patch` sont `input: false`, aucune
+     * validation ne tourne sur cette ressource. `TableauDeBordProcessor` la rejoue, et le
+     * fait sur l’état FINAL de la composition — donc aussi quand la requête ne parle pas
+     * des indicateurs.
+     */
     #[ORM\ManyToMany(targetEntity: Indicateur::class)]
     #[ORM\JoinTable(name: 'report_tableau_de_bord_indicateur')]
-    #[Assert\Count(min: 1, minMessage: 'Un tableau de bord doit référencer au moins un indicateur.')]
     #[Groups(['tdb:read', 'tdb:write'])]
     private Collection $indicateurs;
 
