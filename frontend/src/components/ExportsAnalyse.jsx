@@ -83,6 +83,7 @@ function lireLeFichier(csv) {
 
   const parJour = new Map()
   const indicateurs = new Set()
+  const tousIndicateurs = new Set()
   let trous = 0
   for (const l of lignes.slice(1)) {
     const c = cellules(l)
@@ -90,6 +91,7 @@ function lireLeFichier(csv) {
     if (!parJour.has(jour)) parJour.set(jour, { total: 0, manquants: 0 })
     const j = parJour.get(jour)
     j.total += 1
+    if (iInd >= 0) tousIndicateurs.add(c[iInd])
     if (c[iEtat] === 'non agrege') {
       j.manquants += 1
       trous += 1
@@ -105,6 +107,9 @@ function lireLeFichier(csv) {
     joursVides: jours.filter((j) => j.manquants === j.total).length,
     jours: jours.length,
     indicateurs: [...indicateurs],
+    // ⚠ « ne touchant que N indicateurs » suggère un sous-ensemble. Quand ce sont TOUS, la
+    // tournure minimise le trou au lieu de le décrire — on a besoin du total pour le savoir.
+    tousIndicateurs: tousIndicateurs.size,
   }
 }
 
@@ -329,9 +334,11 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
                 <b>{dernier.resume.lignes.toLocaleString('fr-FR')} ligne(s)</b>, dont{' '}
                 <b>{dernier.resume.trous.toLocaleString('fr-FR')} sans mesure</b>, réparties sur{' '}
                 {dernier.resume.joursTouches} jour(s) sur {dernier.resume.jours}
-                {dernier.resume.indicateurs.length > 0 && (
-                  <> et ne touchant que {dernier.resume.indicateurs.length} indicateur(s)&nbsp;:{' '}
-                    {dernier.resume.indicateurs.join(', ')}</>
+                {dernier.resume.indicateurs.length >= dernier.resume.tousIndicateurs ? (
+                  <> et touchant <b>tous les indicateurs</b></>
+                ) : dernier.resume.indicateurs.length > 0 && (
+                  <> et ne touchant que {dernier.resume.indicateurs.length} indicateur(s) sur{' '}
+                    {dernier.resume.tousIndicateurs}&nbsp;: {dernier.resume.indicateurs.join(', ')}</>
                 )}.
                 {dernier.resume.joursVides > 0 && (
                   <> <b>{dernier.resume.joursVides} jour(s) n’ont aucune mesure du tout.</b></>
