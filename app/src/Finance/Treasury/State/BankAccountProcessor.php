@@ -50,6 +50,32 @@ final class BankAccountProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Compte comptable hors du périmètre de l\'établissement (IDOR inter-profils).');
         }
 
+        // ⚠ LE COMPTE DE RAPPROCHEMENT DOIT ÊTRE UN 512, ET C'EST LE SERVEUR QUI LE GARANTIT.
+        //
+        // L'écran annonçait « Compte comptable 512 » et proposait les dix-sept comptes du plan.
+        // Le contrôle ci-dessus ne regarde que le profil exploitant : 706100 « Redevances » passait.
+        //
+        // Ce n'est pas cosmétique. `ledgerAccount` ne sert pas à imputer une écriture : il sert à
+        // désigner, dans une écriture déjà scellée, QUELLE ligne est la ligne de banque. Avec un
+        // compte de produits, `BankReconciliationSuggestionCalculator` proposerait des lignes de
+        // produits — il filtre sur ce même compte — et `ConfirmReconciliationProcessor` les
+        // accepterait, puisqu'il vérifie seulement que la ligne appartient au compte attendu. Les
+        // deux moitiés seraient d'accord sur le mauvais compte : la ligne de relevé serait lettrée
+        // contre une recette, et le 512 ne le serait jamais. Rien n'aurait signalé quoi que ce soit.
+        //
+        // Le préfixe suit la convention du dépôt, il n'est pas inventé ici :
+        // `ResolveurComptesSupplierInvoice` et `ResolveurComptesExpenseReport` résolvent tous deux
+        // par `compteParPrefixe($profil, '512')`.
+        if ($compteComptable !== null && !str_starts_with($compteComptable->getNumero(), '512')) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Le compte de rapprochement doit être un compte de classe 512 (banque) ; '
+                . '« %s — %s » n\'en est pas un. Sans quoi le rapprochement lettrerait les '
+                . 'mouvements bancaires contre un autre compte, en silence.',
+                $compteComptable->getNumero(),
+                $compteComptable->getLibelle(),
+            ));
+        }
+
         if ($data->getIbanClear() !== '') {
             $ibanNormalise = strtoupper(str_replace(' ', '', $data->getIbanClear()));
             $data->setIbanCipher($this->chiffreurIban->chiffrer($ibanNormalise));

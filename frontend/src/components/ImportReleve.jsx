@@ -15,6 +15,10 @@ const LIBELLE_STATUT = { imported: 'importé', processed: 'traité', error: 'err
 
 export default function ImportReleve({ etabActif, droits }) {
   const [comptes, setComptes] = useState([])
+  // ⚠ Voir le retour anticipé plus bas : sans ce témoin, un refus de lecture affichait « Aucun
+  // compte bancaire, créez-en un » SANS AUCUN bandeau — le retour se faisait avant la ligne qui
+  // rend l'erreur. Le seul des quatre écrans de trésorerie à mentir sans contrepartie.
+  const [comptesLus, setComptesLus] = useState(false)
   const [compte, setCompte] = useState('')
   const [imports, setImports] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -30,9 +34,11 @@ export default function ImportReleve({ etabActif, droits }) {
     try {
       const c = membres(await api.comptesBancaires())
       setComptes(c)
+      setComptesLus(true)
       setCompte((prec) => prec || c[0]?.id || '')
     } catch (e) {
       setErreur(e.message)
+      setComptesLus(false)
     } finally {
       setChargement(false)
     }
@@ -88,6 +94,18 @@ export default function ImportReleve({ etabActif, droits }) {
       <section className="card">
         <div className="card-b center"><div className="spinner" /></div>
       </section>
+    )
+  }
+
+  if (!comptesLus) {
+    return (
+      <>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <div className="empty">
+          La liste des comptes bancaires n’a pas pu être lue. On ne sait pas s’il en existe —
+          n’allez pas en créer un sur la foi de cet écran.
+        </div>
+      </>
     )
   }
 

@@ -5,6 +5,7 @@ import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 import ExplorateurIndicateurs from '../components/ExplorateurIndicateurs.jsx'
 import TableauxDeBord from '../components/TableauxDeBord.jsx'
+import RapportsPlanifies from '../components/RapportsPlanifies.jsx'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges, nonLu }) {
@@ -68,6 +69,9 @@ function Kpi({ label, valeur, accent }) {
 // Écran Reporting / Pilotage (M7) : dashboard établissement (lecture directe des modules
 // producteurs). En l'absence de périmètre Reporting, repli sur la supervision accès accessible.
 export default function Pilotage({ etabActif, etablissements, droits }) {
+  // Un compteur, pas une liste partagee : chaque ecran garde SA lecture et son etat
+  // « pas lu ». Ce signal dit seulement « la liste a bouge, relis-la ».
+  const [versionTableaux, setVersionTableaux] = useState(0)
   const [dash, setDash] = useState(null)
   const [repli, setRepli] = useState(null) // données de supervision si dashboard hors périmètre
   const [chargement, setChargement] = useState(true)
@@ -249,7 +253,13 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           etait declare dans le client HTTP, appele par zero ecran. La route de l'explorateur
           existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
       <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
-      <TableauxDeBord etabActif={etabActif} etablissements={etablissements} droits={droits} />
+      <TableauxDeBord
+        etabActif={etabActif}
+        etablissements={etablissements}
+        droits={droits}
+        onChangement={() => setVersionTableaux((v) => v + 1)}
+      />
+      <RapportsPlanifies etabActif={etabActif} droits={droits} versionTableaux={versionTableaux} />
 
       <EcartsCaisse etabActif={etabActif} droits={droits} />
 

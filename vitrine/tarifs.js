@@ -110,26 +110,26 @@ function ligneOption(option) {
 }
 
 /**
- * La table de rangement, telle que le serveur l'a posee dans la page.
+ * La table de rangement des rubriques, telle que le serveur l'a posee dans la page.
  *
  * ⚠ ON NE LA RECOPIE PAS EN JAVASCRIPT. Deux tables — une en PHP, une ici — divergeraient au
  * premier module ajoute, et la page rangerait les options autrement que le serveur ne le croit.
  * Absente (page ancienne, balise supprimee), on rend `null` et l'affichage retombe sur une liste
  * simple : mieux vaut une liste a plat que pas de tarifs du tout.
  */
-function tableDesFamilles() {
-  const balise = document.getElementById('familles-modules')
+function tableDesRubriques() {
+  const balise = document.getElementById('rubriques-modules')
   if (balise === null) return null
 
   try {
     const table = JSON.parse(balise.textContent)
-    return Array.isArray(table.familles) && table.familles.length > 0 ? table : null
+    return Array.isArray(table.rubriques) && table.rubriques.length > 0 ? table : null
   } catch {
     return null
   }
 }
 
-function groupeDeFamille(famille, options) {
+function groupeDeRubrique(rubrique, options) {
   const groupe = document.createElement('div')
   groupe.className = 'famille-tarif'
 
@@ -138,10 +138,10 @@ function groupeDeFamille(famille, options) {
 
   const trait = document.createElement('span')
   trait.className = 'famille-trait'
-  trait.style.background = famille.teinte
+  trait.style.background = rubrique.teinte
 
   const titre = document.createElement('h3')
-  titre.textContent = famille.titre
+  titre.textContent = rubrique.titre
 
   tete.append(trait, titre)
 
@@ -195,7 +195,7 @@ async function afficherOptions() {
       return
     }
 
-    const table = tableDesFamilles()
+    const table = tableDesRubriques()
 
     if (table === null) {
       // Sans table, on affiche a plat plutot que rien : voir `tableDesFamilles`.
@@ -208,22 +208,35 @@ async function afficherOptions() {
       return
     }
 
-    // ⚠ CHAQUE OPTION TOMBE QUELQUE PART. Le `refuge` reprend celles que la table ne nomme pas —
-    // une option vendable absente de la page des tarifs serait facturee sans etre affichee, et
-    // personne ne le verrait puisqu'elle ne manquerait nulle part.
-    const parFamille = new Map(table.familles.map((f) => [f.cle, []]))
+    // ⚠ CHAQUE OPTION TOMBE QUELQUE PART. Celles que la table ne nomme pas sont regroupees sous
+    // « Autres modules » plutot que tues : une option vendable absente de la page des tarifs serait
+    // facturee sans etre affichee, et personne ne le verrait puisqu'elle ne manquerait nulle part.
+    const parRubrique = new Map(table.rubriques.map((r) => [r.cle, []]))
+    const orphelines = []
 
     for (const option of options) {
-      const cle = table.rangement[option.capability] ?? table.refuge
-      const groupe = parFamille.get(cle) ?? parFamille.get(table.refuge)
-      groupe.push(option)
+      const cle = table.rangement[option.capability]
+      const groupe = cle === undefined ? undefined : parRubrique.get(cle)
+
+      // ⚠ UNE OPTION QUE LA TABLE NE NOMME PAS RESTE AFFICHEE. Elle est vendue et facturee : la
+      //   taire ferait disparaitre de la page des tarifs un module qu'on encaisse, et personne ne
+      //   le verrait puisqu'il ne manquerait nulle part. On la met a part plutot que de la perdre.
+      if (groupe === undefined) {
+        orphelines.push(option)
+      } else {
+        groupe.push(option)
+      }
     }
 
-    liste.replaceChildren(
-      ...table.familles
-        .filter((famille) => parFamille.get(famille.cle).length > 0)
-        .map((famille) => groupeDeFamille(famille, parFamille.get(famille.cle))),
-    )
+    const groupes = table.rubriques
+      .filter((rubrique) => parRubrique.get(rubrique.cle).length > 0)
+      .map((rubrique) => groupeDeRubrique(rubrique, parRubrique.get(rubrique.cle)))
+
+    if (orphelines.length > 0) {
+      groupes.push(groupeDeRubrique({ titre: 'Autres modules', teinte: '#7a2ee6' }, orphelines))
+    }
+
+    liste.replaceChildren(...groupes)
     liste.hidden = false
   } catch {
     echec(etat)
