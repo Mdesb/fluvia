@@ -3,10 +3,27 @@ import Liste, { texte } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { idDe } from '../api/iri.js'
 
 function heure(v) {
   if (!v) return '—'
   return new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function dateFr(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
+}
+
+// Un `Utilisateur` arrive imbriqué ou en IRI selon le groupe de sérialisation du chemin emprunté.
+// `idDe()` accepte les deux — et surtout ne rend jamais la chaîne vide, contrairement à un
+// `.split('/').pop()` qui la rend sur une référence terminée par un slash.
+function libelleEncadrant(q) {
+  const e = q?.encadrant
+  if (e && typeof e === 'object' && (e.email || e.nom)) return e.email || e.nom
+  const id = idDe(e)
+  return id ? `encadrant ${id.slice(0, 8)}…` : 'encadrant'
 }
 
 // Verticale Piscine : bassins, créneaux et jauges grand public (FMI).
@@ -92,6 +109,10 @@ export default function Piscine({ etabActif, droits }) {
 
       <div style={{ marginTop: 16 }}>
         <CreneauxBassins etabActif={etabActif} droits={droits} />
+      </div>
+
+      <div style={{ marginTop: 'var(--esp-bloc)' }}>
+        <QualificationsEncadrants etabActif={etabActif} droits={droits} />
       </div>
     </div>
   )
@@ -279,12 +300,97 @@ function CreneauxBassins({ etabActif, droits = [] }) {
   const [version, setVersion] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [qualifications, setQualifications] = useState([])
+  const [affectations, setAffectations] = useState([])
+  const [tronque, setTronque] = useState(false)
+  const [aAffecter, setAAffecter] = useState(null)
+
+  // ⚠ CES DEUX LECTURES NE SONT PAS DECORATIVES : sans elles, la colonne « Affecté » ne pourrait
+  // qu'afficher un identifiant, et le bouton d'affectation ne saurait pas quoi proposer. Un refus
+  // de lecture est donc dit, jamais avale en liste vide — sinon l'ecran annoncerait « aucun
+  // encadrant affecté » sur des créneaux qui en ont un.
+  useEffect(() => {
+    let vivant = true
+    Promise.all([api.qualificationsEncadrant(), api.affectationsEncadrant()])
+      .then(([q, a]) => {
+        if (!vivant) return
+        const lq = membres(q)
+        const la = membres(a)
+        setQualifications(lq)
+        setAffectations(la)
+        const tq = q?.totalItems ?? q?.['hydra:totalItems']
+        const ta = a?.totalItems ?? a?.['hydra:totalItems']
+        setTronque((typeof tq === 'number' && tq > lq.length) || (typeof ta === 'number' && ta > la.length))
+      })
+      .catch((e) => {
+        if (!vivant) return
+        setQualifications([])
+        setAffectations([])
+        setErreur(e.message || 'Les qualifications d’encadrants n’ont pas pu être lues.')
+      })
+    return () => { vivant = false }
+  }, [etabActif, version])
+
+  const parQualification = {}
+  for (const q of qualifications) parQualification[String(q.id)] = q
+
+  const affectationsParCreneau = {}
+  for (const a of affectations) {
+    const cle = idDe(a.creneauBassin)
+    if (!cle) continue
+    ;(affectationsParCreneau[cle] = affectationsParCreneau[cle] || []).push(a)
+  }
+
+  // La qualification d'une affectation arrive imbriquée (groupe `affect:read`) ou en IRI selon le
+  // chemin. Imbriquée, elle porte déjà tout ; en IRI, on la retrouve dans la table.
+  const qualifDe = (a) => (a && typeof a.qualification === 'object' && a.qualification !== null
+    ? a.qualification
+    : parQualification[idDe(a?.qualification)])
+
+  const nomEncadrant = (a) => libelleEncadrant(qualifDe(a))
+
+  // La MEME regle que `QualificationEncadrant::estValideA()` : `dateValidite >= debut du creneau`,
+  // et le type doit couvrir celui qu'exige le creneau. Recopier la regle du serveur est un risque
+  // assume ici — l'alternative serait de n'afficher aucun verdict, donc de laisser l'exploitant
+  // decouvrir le refus au clic.
+  const estCouvrante = (a, creneau) => {
+    const q = qualifDe(a)
+    if (!q || q.type !== creneau.encadrantRequis) return false
+    if (!q.dateValidite || !creneau.debut) return false
+    return new Date(q.dateValidite) >= new Date(creneau.debut)
+  }
 
   const colonnes = [
     { cle: 'bassin', entete: 'Bassin', rendu: (r) => texte(r.bassin?.libelle, String(r.bassin || '').split('/').pop() || '—') },
     { cle: 'debut', entete: 'Début', rendu: (r) => heure(r.debut) },
     { cle: 'fin', entete: 'Fin', rendu: (r) => heure(r.fin) },
-    { cle: 'encadrantRequis', entete: 'Encadrant', rendu: (r) => (r.encadrantRequis ? 'requis' : '—') },
+    // ⚠ `'aucune'` EST UNE CHAINE, DONC TRUTHY. Cette colonne rendait « requis » pour TOUS les
+    // creneaux, à commencer par ceux qui n'exigent rien — c'est la valeur par defaut de l'enum.
+    // On montre le type, qui est ce sur quoi la regle serveur s'aligne.
+    {
+      cle: 'encadrantRequis',
+      entete: 'Encadrant requis',
+      rendu: (r) => (!r.encadrantRequis || r.encadrantRequis === 'aucune'
+        ? <span className="sub">aucun</span>
+        : <span className="badge info">{r.encadrantRequis}</span>),
+    },
+    {
+      cle: 'affecte',
+      entete: 'Affecté',
+      rendu: (r) => {
+        if (!r.encadrantRequis || r.encadrantRequis === 'aucune') return <span className="sub">—</span>
+        const posees = affectationsParCreneau[String(r.id)] || []
+        const couvrantes = posees.filter((a) => estCouvrante(a, r))
+        if (couvrantes.length > 0) {
+          return <span className="badge good">{couvrantes.map((a) => nomEncadrant(a)).join(', ')}</span>
+        }
+        return (
+          <span className="badge crit" title="Le serveur refusera la validation">
+            {posees.length > 0 ? 'diplôme expiré' : 'aucun'}
+          </span>
+        )
+      },
+    },
     {
       cle: 'statut',
       entete: 'Statut',
@@ -302,8 +408,20 @@ function CreneauxBassins({ etabActif, droits = [] }) {
       entete: '',
       rendu: (r) => {
         if (String(r.statut || '').toLowerCase() !== 'brouillon') return null
+        const exige = r.encadrantRequis && r.encadrantRequis !== 'aucune'
         return (
           <div style={{ textAlign: 'right' }}>
+            {exige && (
+              <button
+                className="btn ghost sm"
+                type="button"
+                disabled={busy}
+                style={{ padding: '1px 8px', fontSize: 11.5, marginRight: 'var(--esp-serre)' }}
+                onClick={() => setAAffecter(r)}
+              >
+                Affecter
+              </button>
+            )}
             <button
               className="btn ghost sm"
               type="button"
@@ -333,6 +451,12 @@ function CreneauxBassins({ etabActif, droits = [] }) {
   return (
     <div>
       {erreur && <div className="banner banner-error">{erreur}</div>}
+      {tronque && (
+        <div className="banner banner-warn">
+          Le serveur détient plus de qualifications ou d’affectations que cette page n’en a lu : la
+          colonne « Affecté » peut annoncer une absence qui n’en est pas une.
+        </div>
+      )}
       <Liste
         titre="Créneaux bassins"
         sous="planning surveillance"
@@ -341,7 +465,258 @@ function CreneauxBassins({ etabActif, droits = [] }) {
         vide="Aucun créneau planifié."
         colonnes={colonnes}
       />
+      {aAffecter && (
+        <AffecterEncadrantModal
+          creneau={aAffecter}
+          qualifications={qualifications}
+          dejaPosees={affectationsParCreneau[String(aAffecter.id)] || []}
+          onFermer={() => setAAffecter(null)}
+          onFait={() => { setAAffecter(null); setVersion((v) => v + 1) }}
+          onErreur={setErreur}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * AFFECTER UN ENCADRANT A UN CRENEAU — le geste qui rend « Valider » possible.
+ *
+ * ⚠ ON NE PROPOSE QUE CE QUE LE SERVEUR ACCEPTERA : type couvrant le besoin du créneau, et diplôme
+ * valide À LA DATE DU CRÉNEAU (`dateValidite >= debut`, la règle exacte de `estValideA`). Proposer
+ * un diplôme expiré ferait cliquer, puis refuser la validation trois écrans plus loin, sans que
+ * rien ne relie les deux.
+ */
+function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer, onFait, onErreur }) {
+  const [choix, setChoix] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+
+  const posees = new Set(dejaPosees.map((a) => idDe(a.qualification)).filter(Boolean))
+
+  const eligibles = qualifications.filter((q) => {
+    if (q.type !== creneau.encadrantRequis) return false
+    if (!q.dateValidite || !creneau.debut) return false
+    if (posees.has(String(q.id))) return false
+    return new Date(q.dateValidite) >= new Date(creneau.debut)
+  })
+
+  async function valider() {
+    setEnvoi(true)
+    onErreur(null)
+    try {
+      await api.affecterEncadrant({
+        creneauBassin: `/api/creneau_bassins/${creneau.id}`,
+        qualification: `/api/qualification_encadrants/${choix}`,
+      })
+      onFait()
+    } catch (e) {
+      onErreur(e.message || 'L’affectation a échoué.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Affecter un encadrant" taille="md">
+      <p className="hint">
+        Ce créneau exige un encadrement <strong>{creneau.encadrantRequis}</strong>. Le serveur
+        refusera de le valider sans un encadrant dont le diplôme couvre ce type et reste valide au{' '}
+        {heure(creneau.debut)}.
+      </p>
+
+      {eligibles.length === 0 ? (
+        <p className="empty">
+          Aucun diplôme <strong>{creneau.encadrantRequis}</strong> valide à cette date n’est
+          enregistré, ou tous sont déjà affectés à ce créneau. Enregistrez-en un dans « Qualifications
+          d’encadrants », plus bas.
+        </p>
+      ) : (
+        <div className="field">
+          <label htmlFor="pi-qual">Encadrant</label>
+          <select id="pi-qual" className="select" value={choix} onChange={(e) => setChoix(e.target.value)}>
+            <option value="">Choisir…</option>
+            {eligibles.map((q) => (
+              <option key={q.id} value={q.id}>
+                {libelleEncadrant(q)} — {q.type}, valide jusqu’au {dateFr(q.dateValidite)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="bar">
+        <button type="button" className="btn" onClick={onFermer}>Annuler</button>
+        <button type="button" className="btn primary" onClick={valider} disabled={envoi || !choix}>
+          {envoi ? 'Affectation…' : 'Affecter'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * LES DIPLÔMES DES ENCADRANTS — ce que « Valider » exige, et qui n'existait nulle part.
+ *
+ * `ValiderCreneauBassinHandler` refuse un créneau exigeant un encadrement sans affectation dont la
+ * qualification couvre le type ET reste valide à la date du créneau (RG-PISC-02). Aucun écran ne
+ * permettait d'enregistrer un diplôme : le refus n'avait donc aucune issue.
+ *
+ * ⚠ ET LA ROUTE DE CRÉATION RENDAIT 500 jusqu'au 05/09 — établissement `NOT NULL` que rien ne
+ * posait. Corrigée côté serveur dans le même lot ; sans cela, ce formulaire aurait été un bouton
+ * mort de plus.
+ *
+ * ⚠ ON N'EFFACE PAS UN DIPLÔME EXPIRÉ. Le handler le dit : « qualification expirée = non prise en
+ * compte, calcul seulement — pas de suppression ». L'API ne l'expose d'ailleurs pas : ni `Delete`,
+ * seulement `Post` et `Patch`. On corrige une date d'échéance, on n'efface pas un historique.
+ */
+function QualificationsEncadrants({ etabActif, droits = [] }) {
+  const peutGerer = aLeDroit(droits, 'piscine.gerer')
+  const [version, setVersion] = useState(0)
+  const [creation, setCreation] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  const maintenant = new Date()
+
+  return (
+    <div>
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      <Liste
+        titre="Qualifications d’encadrants"
+        sous="diplômes et échéances"
+        deps={[etabActif, version]}
+        charger={api.qualificationsEncadrant}
+        vide="Aucun diplôme enregistré. Sans diplôme valide, un créneau exigeant un encadrement ne peut pas être validé."
+        actions={peutGerer ? (
+          <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            ＋ Enregistrer un diplôme
+          </button>
+        ) : null}
+        colonnes={[
+          { cle: 'encadrant', entete: 'Encadrant', rendu: (r) => libelleEncadrant(r) },
+          { cle: 'type', entete: 'Diplôme', rendu: (r) => <span className="badge info">{r.type || '—'}</span> },
+          {
+            cle: 'dateValidite',
+            entete: 'Valide jusqu’au',
+            rendu: (r) => {
+              const expire = r.dateValidite && new Date(r.dateValidite) < maintenant
+              return (
+                <>
+                  {dateFr(r.dateValidite)}
+                  {/* Expiré ne veut pas dire supprimé : la ligne reste, elle cesse simplement de
+                      couvrir un créneau. Le dire évite qu'on la cherche ailleurs. */}
+                  {expire && <div className="sub">expiré — ne couvre plus aucun créneau</div>}
+                </>
+              )
+            },
+          },
+        ]}
+      />
+      {creation && (
+        <QualificationModal
+          onFermer={() => setCreation(false)}
+          onCree={() => { setCreation(false); setVersion((v) => v + 1) }}
+          onErreur={setErreur}
+        />
+      )}
+    </div>
+  )
+}
+
+function QualificationModal({ onFermer, onCree, onErreur }) {
+  const [utilisateurs, setUtilisateurs] = useState(null)
+  const [encadrant, setEncadrant] = useState('')
+  const [type, setType] = useState('MNS')
+  const [validite, setValidite] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    let vivant = true
+    api.utilisateurs()
+      .then((r) => { if (vivant) setUtilisateurs(membres(r)) })
+      .catch((e) => {
+        if (!vivant) return
+        // On distingue « je n'ai pas pu lire » de « il n'y a personne » : sans ça, un refus de
+        // lecture se lirait comme un établissement sans personnel.
+        setUtilisateurs([])
+        onErreur(e.message || 'La liste des utilisateurs n’a pas pu être lue.')
+      })
+    return () => { vivant = false }
+  }, [onErreur])
+
+  async function valider() {
+    setEnvoi(true)
+    onErreur(null)
+    try {
+      await api.creerQualificationEncadrant({
+        encadrant: `/api/utilisateurs/${encadrant}`,
+        type,
+        dateValidite: validite,
+      })
+      onCree()
+    } catch (e) {
+      onErreur(e.message || 'Le diplôme n’a pas pu être enregistré.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Enregistrer un diplôme" taille="md">
+      <div className="field">
+        <label htmlFor="pi-enc">Encadrant</label>
+        {utilisateurs === null ? (
+          <div className="spinner" />
+        ) : (
+          <select id="pi-enc" className="select" value={encadrant} onChange={(e) => setEncadrant(e.target.value)}>
+            <option value="">Choisir…</option>
+            {utilisateurs.map((u) => (
+              <option key={u.id} value={u.id}>{u.email || u.nom || u.id}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="field">
+        <label htmlFor="pi-type">Diplôme</label>
+        <select id="pi-type" className="select" value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="MNS">MNS — maître-nageur sauveteur</option>
+          <option value="BNSSA">BNSSA — surveillant de baignade</option>
+          <option value="autre">Autre</option>
+        </select>
+        <div className="hint">
+          {/* « aucune » existe dans l'enum du serveur mais désigne l'ABSENCE d'exigence sur un
+              créneau : un diplôme « aucune » ne couvrirait rien. On ne le propose donc pas. */}
+          Le diplôme doit couvrir exactement le type exigé par le créneau : un BNSSA ne valide pas un
+          créneau qui demande un MNS.
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="pi-val">Valide jusqu’au</label>
+        <input
+          id="pi-val"
+          className="input"
+          type="date"
+          value={validite}
+          onChange={(e) => setValidite(e.target.value)}
+        />
+        <div className="hint">
+          Un diplôme couvre un créneau tant que cette date n’est pas dépassée par la date du créneau.
+        </div>
+      </div>
+
+      <div className="bar">
+        <button type="button" className="btn" onClick={onFermer}>Annuler</button>
+        <button
+          type="button"
+          className="btn primary"
+          onClick={valider}
+          disabled={envoi || !encadrant || !validite}
+        >
+          {envoi ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+    </Modal>
   )
 }
 
