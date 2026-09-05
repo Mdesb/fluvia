@@ -81,7 +81,12 @@ final class DeclarerRejetSepaProcessor implements ProcessorInterface
         $this->em->persist($rejet);
         $this->em->flush();
 
-        $this->ouvrirIncident($rejet, $ligne, $dateRejet, $codeMotif, $libelle);
+        // ⚠ ON GARDE CE QUE `ouvrirIncident()` A RÉPONDU, ET ON LE SERT. L'écran affichait
+        //   jusqu'ici une phrase figée sur ce que fait le serveur ; deux autres écrans en
+        //   affichaient l'inverse. Le seul qui sache, c'est celui qui vient d'agir.
+        $rejet->setSuiteRecouvrement(
+            $this->ouvrirIncident($rejet, $ligne, $dateRejet, $codeMotif, $libelle),
+        );
 
         return $rejet;
     }
@@ -115,6 +120,10 @@ final class DeclarerRejetSepaProcessor implements ProcessorInterface
      * Le rejet lui-meme est deja ecrit et flushe. Un mandat sans client, ou une remise sans
      * etablissement, ne doit pas faire echouer la saisie : perdre la trace du rejet serait pire que
      * de ne pas ouvrir l'incident.
+     *
+     * @return 'impaye_ouvert'|'impaye_deja_ouvert'|'redevable_non_resolu' ce qui s'est passé,
+     *         servi au client dans `RejetSepa::$suiteRecouvrement` pour qu'aucun écran n'ait
+     *         plus à le deviner.
      */
     private function ouvrirIncident(
         RejetSepa $rejet,
@@ -122,18 +131,18 @@ final class DeclarerRejetSepaProcessor implements ProcessorInterface
         \DateTimeImmutable $dateRejet,
         string $codeMotif,
         ?string $libelleMotif,
-    ): void {
+    ): string {
         $etablissement = $ligne->getRemise()?->getEtablissement();
         $client = $ligne->getMandat()?->getClient();
         if ($etablissement === null || $client === null) {
-            return;
+            return 'redevable_non_resolu';
         }
 
         $reference = (string) $client->getId();
         $origine = $ligne->getReferenceOrigine();
 
         if ($origine !== null && $this->incidentDejaOuvert($origine, $reference)) {
-            return;
+            return 'impaye_deja_ouvert';
         }
 
         $this->recouvrement->detecterRejet(
@@ -147,6 +156,8 @@ final class DeclarerRejetSepaProcessor implements ProcessorInterface
             referenceEcheanceOrigine: $origine,
             rejetSepa: $rejet,
         );
+
+        return 'impaye_ouvert';
     }
 
     /**
