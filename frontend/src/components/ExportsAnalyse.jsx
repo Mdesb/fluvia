@@ -59,30 +59,52 @@ const FORMATS = [
   ['pdf', 'PDF', false, 'Format PDF non disponible dans cette version, utiliser CSV.'],
 ]
 
-/** Compte les lignes et les jours sans mesure dans le CSV rendu, pour le dire avant l'envoi. */
+/**
+ * Ce que le fichier contient vraiment, pour pouvoir le dire avant qu'il parte.
+ *
+ * ⚠ SUR-ESTIMER UNE ABSENCE EST UN MENSONGE COMME LA SOUS-ESTIMER. La première version comptait
+ * les jours portant AU MOINS UN trou et les annonçait « sans aucune mesure ». Sur la période
+ * mesurée, ces jours portaient six indicateurs sur neuf : la phrase aurait fait renoncer à un
+ * fichier utilisable. On compte donc trois choses distinctes — les cellules manquantes, les jours
+ * qu'elles touchent, et les indicateurs concernés — et on ne dit « aucune mesure » que d'un jour
+ * qui n'en porte réellement aucune.
+ */
 function lireLeFichier(csv) {
   const lignes = csv.split(/\r\n|\r|\n/).filter((l) => l.trim() !== '')
-  if (lignes.length < 2) return { lignes: 0, sansMesure: 0, jours: 0 }
-  const entetes = lignes[0].split(';').map((c) => c.replace(/^"|"$/g, ''))
+  const vide = { lignes: 0, trous: 0, joursTouches: 0, joursVides: 0, jours: 0, indicateurs: [] }
+  if (lignes.length < 2) return vide
+
+  const cellules = (l) => l.split(';').map((x) => x.replace(/^"|"$/g, ''))
+  const entetes = cellules(lignes[0])
   const iEtat = entetes.indexOf('etat')
   const iJour = entetes.indexOf('jour')
-  const corps = lignes.slice(1)
-  const joursSansMesure = new Set()
-  const tousJours = new Set()
-  let sansMesure = 0
-  for (const l of corps) {
-    const c = l.split(';').map((x) => x.replace(/^"|"$/g, ''))
-    if (iJour >= 0) tousJours.add(c[iJour])
-    if (iEtat >= 0 && c[iEtat] === 'non agrege') {
-      sansMesure += 1
-      if (iJour >= 0) joursSansMesure.add(c[iJour])
+  const iInd = entetes.indexOf('indicateur')
+  if (iEtat < 0 || iJour < 0) return vide
+
+  const parJour = new Map()
+  const indicateurs = new Set()
+  let trous = 0
+  for (const l of lignes.slice(1)) {
+    const c = cellules(l)
+    const jour = c[iJour]
+    if (!parJour.has(jour)) parJour.set(jour, { total: 0, manquants: 0 })
+    const j = parJour.get(jour)
+    j.total += 1
+    if (c[iEtat] === 'non agrege') {
+      j.manquants += 1
+      trous += 1
+      if (iInd >= 0) indicateurs.add(c[iInd])
     }
   }
+
+  const jours = [...parJour.values()]
   return {
-    lignes: corps.length,
-    sansMesure,
-    joursSansMesure: joursSansMesure.size,
-    jours: tousJours.size,
+    lignes: lignes.length - 1,
+    trous,
+    joursTouches: jours.filter((j) => j.manquants > 0).length,
+    joursVides: jours.filter((j) => j.manquants === j.total).length,
+    jours: jours.length,
+    indicateurs: [...indicateurs],
   }
 }
 
@@ -297,18 +319,26 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
 
         {/* ⚠ LA FIABILITÉ, DITE AU SEUL MOMENT OÙ ELLE PEUT ENCORE SERVIR. */}
         {dernier && (
-          <div className={dernier.resume?.joursSansMesure > 0 ? 'banner banner-warn' : 'banner banner-ok'}
+          <div className={dernier.resume?.trous > 0 ? 'banner banner-warn' : 'banner banner-ok'}
             style={{ marginTop: 'var(--esp-bloc)' }}>
             {dernier.resume === null ? (
               <>L’export est enregistré, mais son contenu n’a pas pu être relu ici. Le fichier est
                 peut-être disponible dans la liste ci-dessous.</>
-            ) : dernier.resume.joursSansMesure > 0 ? (
+            ) : dernier.resume.trous > 0 ? (
               <>
                 <b>{dernier.resume.lignes.toLocaleString('fr-FR')} ligne(s)</b>, dont{' '}
-                <b>{dernier.resume.joursSansMesure} jour(s) sans aucune mesure</b> sur{' '}
-                {dernier.resume.jours}. Ces jours sortent avec une valeur vide et l’état
-                «&nbsp;non agrégé&nbsp;» — <b>ne les additionnez pas comme des zéros</b>, et
-                dites-le si vous transmettez ce fichier.
+                <b>{dernier.resume.trous.toLocaleString('fr-FR')} sans mesure</b>, réparties sur{' '}
+                {dernier.resume.joursTouches} jour(s) sur {dernier.resume.jours}
+                {dernier.resume.indicateurs.length > 0 && (
+                  <> et ne touchant que {dernier.resume.indicateurs.length} indicateur(s)&nbsp;:{' '}
+                    {dernier.resume.indicateurs.join(', ')}</>
+                )}.
+                {dernier.resume.joursVides > 0 && (
+                  <> <b>{dernier.resume.joursVides} jour(s) n’ont aucune mesure du tout.</b></>
+                )}
+                {' '}Ces cellules sortent vides, avec l’état «&nbsp;non agrégé&nbsp;» —{' '}
+                <b>ne les additionnez pas comme des zéros</b>, et dites-le si vous transmettez ce
+                fichier.
               </>
             ) : (
               <><b>{dernier.resume.lignes.toLocaleString('fr-FR')} ligne(s)</b> sur{' '}
