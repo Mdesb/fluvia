@@ -83,6 +83,14 @@ const NAV = [
       { id: 'patinoire', ic: 'rink', label: 'Patinoire', perm: 'patinoire.lire' },
       { id: 'padel', ic: 'padel', label: 'Padel', perm: 'padel.lire' },
       { id: 'musee', ic: 'museum', label: 'Musée', perm: 'musee.lire' },
+      // Ouvert le 05/09 : sept routes servies, aucun ecran, et DEUX SEJOURS DEJA OUVERTS en base
+      // depuis le 24/08 avec une ligne de bar — un module dont l'etat courant n'etait visible de
+      // nulle part.
+      //
+      // Contrairement a `relance_recettes` et `places_liberees` livres le meme jour, les quatre
+      // permissions `stay.*` SONT attribuees : « Administrateur groupe » et « Responsable de site »
+      // les portent. Cette entree-la se verra tout de suite.
+      { id: 'sejours', ic: 'stay', label: 'Séjours', perms: ['stay.read', 'stay.write', 'stay.charge', 'stay.settle'] },
       // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.

@@ -303,8 +303,29 @@ class Creneau
     }
 
     /** Montant de référence (tarif) porté par l'activité, base de la vente unité / no-show (§4.2/4.3). */
+    /**
+     * Le tarif de reference du creneau : celui de la prestation, augmente du supplement du
+     * praticien qui l'assure.
+     *
+     * DEUX LECTEURS, ET LE SUPPLEMENT COULE DANS LES DEUX. `ReserverProcessor` en tire le prix paye,
+     * et `DeclencherFacturationNoShowHandler` le montant d'une non-presentation. Une absence sur un
+     * rendez-vous a 40 EUR se facture donc sur 40, pas sur 25 : une heure de senior perdue coute ce
+     * qu'elle vaut. C'est voulu, et ce n'est visible depuis aucun des deux ecrans -- d'ou cette
+     * phrase.
+     *
+     * PAS DE PRESTATION = PAS DE TARIF, et surtout pas le supplement seul : un creneau sans
+     * activite rend '0.00' et bascule la reservation en gratuit. Rendre le supplement ici ferait
+     * payer 15 EUR pour une prestation qui n'existe pas.
+     */
     public function tarifReference(): string
     {
-        return $this->activite?->getTarifReferenceMontant() ?? '0.00';
+        $base = $this->activite?->getTarifReferenceMontant();
+        if ($base === null) {
+            return '0.00';
+        }
+
+        $supplement = $this->ressource?->getSupplementTarifMontant() ?? '0.00';
+
+        return number_format((float) $base + (float) $supplement, 2, '.', '');
     }
 }

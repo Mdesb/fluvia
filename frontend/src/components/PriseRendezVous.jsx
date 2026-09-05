@@ -213,6 +213,17 @@ export default function PriseRendezVous({ onReserve }) {
                   {/* Le nom du praticien est TOUJOURS affiche, meme quand on en a choisi un :
                       le caissier annonce un nom au client, et il doit le lire, pas s'en souvenir. */}
                   <div className="sub" style={{ fontSize: 11 }}>{p.ressourceLibelle}</div>
+                  {/* ⚠ LE PRIX SE DIT ICI OU IL NE SE DIRA NULLE PART. Quand on propose « avec qui
+                      est libre », deux praticiens peuvent ne pas coûter la même chose : afficher des
+                      heures sans leur prix laisse le client découvrir l’écart à la caisse. Le
+                      supplément n’est signalé que s’il existe — sinon c’est du bruit sur toutes les
+                      lignes. */}
+                  {p.tarif !== undefined && (
+                    <div className="sub" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                      {p.tarif} €
+                      {Number(p.supplement) > 0 ? ` (dont +${p.supplement})` : ''}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
