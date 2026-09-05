@@ -26,6 +26,7 @@ export default function RapprochementBancaire({ etabActif, droits }) {
   const [compte, setCompte] = useState('')
   const [statut, setStatut] = useState('unmatched')
   const [lignes, setLignes] = useState([])
+  const [lignesLues, setLignesLues] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -45,7 +46,7 @@ export default function RapprochementBancaire({ etabActif, droits }) {
   }, [etabActif])
 
   const chargerLignes = useCallback(async () => {
-    if (!compte) { setLignes([]); setChargement(false); return }
+    if (!compte) { setLignes([]); setLignesLues(true); setChargement(false); return }
     setChargement(true)
     try {
       const l = membres(await api.lignesReleve({
@@ -54,8 +55,10 @@ export default function RapprochementBancaire({ etabActif, droits }) {
         itemsPerPage: 100,
       }))
       setLignes(l)
+      setLignesLues(true)
     } catch (e) {
       setErreur(e.message)
+      setLignesLues(false)
     } finally {
       setChargement(false)
     }
@@ -108,6 +111,11 @@ export default function RapprochementBancaire({ etabActif, droits }) {
         <div className="card-b">
           {chargement ? (
             <div className="center"><div className="spinner" /></div>
+          ) : !lignesLues ? (
+            <div className="empty">
+              Les lignes n’ont pas pu être lues. Ce compte a peut-être des mouvements à
+              rapprocher — cet écran ne le sait pas.
+            </div>
           ) : lignes.length === 0 ? (
             <div className="empty">Aucune ligne « {LIBELLE_STATUT[statut]} » sur ce compte.</div>
           ) : (
@@ -184,7 +192,9 @@ function ModaleRapprochement({ ligne, onAnnuler, onFait }) {
     let vivant = true
     api.suggestionsLigneReleve(ligne.id)
       .then((r) => { if (vivant) setCandidats(Array.isArray(r) ? r : (r?.member ?? [])) })
-      .catch((e) => { if (vivant) { setErreur(e.message); setCandidats([]) } })
+      // ⚠ Pas de repli sur [] : « aucune écriture correspondante » est une conclusion, et une
+      // lecture ratée n'en autorise aucune.
+      .catch((e) => { if (vivant) setErreur(e.message) })
     return () => { vivant = false }
   }, [ligne.id])
 
@@ -213,7 +223,11 @@ function ModaleRapprochement({ ligne, onAnnuler, onFait }) {
       {candidats === null ? (
         <div className="center"><div className="spinner" /></div>
       ) : candidats.length === 0 ? (
-        <div className="empty">Aucune écriture correspondante (même compte 512, même montant, dates proches).</div>
+        <div className="empty">
+          {erreur
+            ? 'Les suggestions n’ont pas pu être lues : on ne sait pas s’il existe une écriture correspondante.'
+            : 'Aucune écriture correspondante (même compte 512, même montant, dates proches).'}
+        </div>
       ) : (
         <table className="tbl">
           <thead><tr><th /><th>Date</th><th>Libellé</th><th className="num">Montant</th></tr></thead>
