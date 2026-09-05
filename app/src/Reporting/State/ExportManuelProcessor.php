@@ -58,11 +58,18 @@ final class ExportManuelProcessor implements ProcessorInterface
         \assert($utilisateur instanceof Utilisateur);
 
         $niveau = NiveauEntite::tryFrom((string) ($corps['niveau'] ?? ''));
+        // On accepte l'IRI comme l'identifiant nu : l'ecran envoie l'une, un script d'integration
+        // envoie souvent l'autre, et les processeurs voisins de ce module font deja les deux.
+        // Auparavant `Uuid::isValid()` refusait l'IRI avec « niveau et entiteId requis », message
+        // qui ne disait rien de la vraie cause.
         $entiteIdBrut = $corps['entiteId'] ?? null;
-        if ($niveau === null || !\is_string($entiteIdBrut) || !Uuid::isValid($entiteIdBrut)) {
+        $entiteIdNu = \is_string($entiteIdBrut) && str_contains($entiteIdBrut, '/')
+            ? substr((string) strrchr($entiteIdBrut, '/'), 1)
+            : $entiteIdBrut;
+        if ($niveau === null || !\is_string($entiteIdNu) || !Uuid::isValid($entiteIdNu)) {
             throw new UnprocessableEntityHttpException('niveau et entiteId requis (etablissement|region|groupe).');
         }
-        $entiteId = Uuid::fromString($entiteIdBrut);
+        $entiteId = Uuid::fromString($entiteIdNu);
 
         $perimetre = $this->resolver->perimetreEffectif($utilisateur, 'lire');
         $autorise = match ($niveau) {
