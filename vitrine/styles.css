@@ -1639,10 +1639,11 @@ input:focus-visible {
    pour finir leur ligne au lieu de laisser des vides. */
 .tarifs-options .options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 300px));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   justify-content: start;
   gap: 10px;
 }
+.tarifs-options .options > li { max-width: 320px; }
 
 /* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
 
@@ -1667,19 +1668,26 @@ input:focus-visible {
    `auto-fit` effondre les pistes vides (plus de vide inutile) et le plafond de piste empeche toute
    carte de doubler de largeur (plus d'orphelin etire). `justify-content: start` garde le bloc
    aligne sur le bord gauche du contenu, comme le reste de la page. */
+/* ⚠ LE PLAFOND PORTE SUR L'ELEMENT, PAS SUR LA PISTE — et c'est une mesure, pas un raisonnement.
+   Un plafond de piste fixe (`minmax(240px, 400px)`) fait compter les colonnes sur le MAXIMUM : dans
+   un conteneur de 740 px, une seule piste de 400 px, et les cinq cartes de /metiers se sont
+   empilees en une colonne la ou deux tenaient. `1fr` garde le compte sur le minimum ; le plafond
+   passe sur la carte. */
 .familles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 400px));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   justify-content: start;
   gap: 18px;
 }
+.familles > * { max-width: 420px; }
 
 .grille {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 400px));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   justify-content: start;
   gap: 16px;
 }
+.grille > * { max-width: 420px; }
 
 /* ── L'ANNONCE DU MONTANT UNIQUE, SUR LA BANDE SOMBRE ─────────────────────────────────────────
 
@@ -1701,7 +1709,8 @@ input:focus-visible {
    de tarifs. Un defaut corrige a trois endroits sur quatre se voit PLUS au quatrieme, pas moins. */
 .bande-sombre .choix-liste {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 300px));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   justify-content: start;
   gap: 10px;
 }
+.bande-sombre .choix-liste > * { max-width: 320px; }
