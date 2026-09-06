@@ -287,7 +287,12 @@ final class RecoveryEngineTest extends RevenueRecoveryApiTestCase
 
         $attempt = $this->em()->getRepository(RecoveryAttempt::class)->findOneBy(['recoveryCase' => $case->getId()]);
         self::assertSame(RecoveryAttemptStatus::Skipped, $attempt->getStatus());
-        self::assertSame(RecoveryEngine::SKIP_REASON_NO_CONSENT, $attempt->getSkipReason());
+        // ⚠ `NO_CUSTOMER`, PAS `NO_CONSENT`. Ce test disait l'inverse jusqu'au 06/09, en
+        // contredisant son propre montage : il note lui-même que `resolveCustomerId()` rend `null`
+        // et que le notifieur n'est jamais appelé — donc aucun consentement n'a été demandé, et
+        // encore moins refusé. L'écran affichait « le client n'a pas consenti » sur un dossier qui
+        // ne désigne personne, et envoyait l'exploitant vérifier des préférences intactes.
+        self::assertSame(RecoveryEngine::SKIP_REASON_NO_CUSTOMER, $attempt->getSkipReason());
     }
 
     /** US-RR-04/CA-1, RG-RR-04 : un événement de résolution clôt le dossier actif et annule les tentatives Pending restantes. */

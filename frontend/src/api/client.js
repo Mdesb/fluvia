@@ -2461,6 +2461,17 @@ export const api = {
   // Perte ou vol : le serveur exige un `motif` non vide, et lui seul est lu au corps.
   declarerIncidentBadge: (id, motif) =>
     request(`/api/personnel/badges/${id}/declarer-incident`, { method: 'POST', body: { motif } }),
+  // LE REGISTRE, ET LE RETOUR EN ARRIERE. Declarer marchait ; lire et annuler n'etaient appeles par
+  // personne.
+  //
+  // /!\ `annulee` EST UN DRAPEAU STOCKE sur la declaration, pas un etat derive du badge (mesure
+  // dans `DeclarationIncidentBadgeProvider`). Reactiver un badge depuis la liste des badges ne
+  // referme donc PAS son incident : le badge revient en service et sa declaration reste ouverte.
+  // C'est `annuler` qui fait les deux -- elle delegue a `RevocationBadgeHandler::reactiver()`.
+  declarationsIncidentBadge: () =>
+    request('/api/personnel/declarations-incident', { query: { itemsPerPage: 200 } }),
+  annulerDeclarationIncidentBadge: (id) =>
+    request(`/api/personnel/declarations-incident/${id}/annuler`, { method: 'POST', body: {} }),
 
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine

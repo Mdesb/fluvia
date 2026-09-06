@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import AbsencesSection from '../components/AbsencesSection.jsx'
 import Liste, { dateFr, dateHeureFr, jourLocal } from '../components/Liste.jsx'
 import PlanningTravail from '../components/PlanningTravail.jsx'
+import IncidentsBadge from '../components/IncidentsBadge.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
@@ -52,6 +53,9 @@ export default function Personnel({ etabActif, droits = [] }) {
           ['planning', 'Planning'],
           ['roster', 'Roster'],
           ['badges', 'Badges staff'],
+          // Le registre APRES les badges, et c'est l'ordre du raisonnement : on declare un incident
+          // depuis la liste des badges, on le relit et on le referme ici.
+          ['incidents', 'Incidents de badge'],
         ]}
         actif={sousOnglet}
         onChange={setSousOnglet}
@@ -113,6 +117,7 @@ export default function Personnel({ etabActif, droits = [] }) {
       )}
 
       {sousOnglet === 'badges' && <GestionBadges etabActif={etabActif} droits={droits} />}
+      {sousOnglet === 'incidents' && <IncidentsBadge etabActif={etabActif} droits={droits} />}
 
       {/* Absences : declarer, accepter, refuser. En bas de l'ecran Personnel parce que c'est une
           decision qui porte sur les gens qu'on vient de lire, pas une activite separee. */}

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\RevenueRecovery\Service;
 
+use App\Crm\Recouvrement\ClientDebtorName;
+use App\Recouvrement\Entity\IncidentImpaye;
 use App\Reservation\Entity\Reservation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -41,13 +43,19 @@ final class RecoverySubjectCustomerResolver
 
     public function resolveCustomerId(string $subjectType, string $subjectRef, Uuid $establishmentId): ?Uuid
     {
-        if ('Reservation' !== $subjectType) {
-            return null;
-        }
         if (!Uuid::isValid($subjectRef)) {
             return null;
         }
 
+        return match ($subjectType) {
+            'Reservation' => $this->depuisReservation($subjectRef, $establishmentId),
+            'PaymentIncident' => $this->depuisIncidentImpaye($subjectRef, $establishmentId),
+            default => null,
+        };
+    }
+
+    private function depuisReservation(string $subjectRef, Uuid $establishmentId): ?Uuid
+    {
         $reservation = $this->em->getRepository(Reservation::class)->find(Uuid::fromString($subjectRef));
         if (!$reservation instanceof Reservation) {
             return null;
@@ -61,5 +69,50 @@ final class RecoverySubjectCustomerResolver
         }
 
         return $reservation->getOrganisateur()?->getClient()?->getId();
+    }
+
+    /**
+     * L'IMPAYÉ — la moitié des déclencheurs vivants qui ne pouvait rien envoyer (06/09).
+     *
+     * `payment.failed` et `payment.incident_reopened` portent `EventSubject('PaymentIncident', …)`.
+     * Ce type n'était pas résolu : un impayé ouvrait son dossier, programmait ses relances, et
+     * chacune finissait « ignorée » faute de client identifiable. Or ce sont les deux seuls
+     * déclencheurs à base légale CONTRACTUELLE — la relance d'impayé, celle qui donne son nom au
+     * module, était la seule à ne pas pouvoir partir.
+     *
+     * ⚠ ON NE DEVINE RIEN : on relit ce que l'ouverture a posé. `DeclarerRejetSepaProcessor` crée
+     * l'incident avec `typeRedevable: 'crm.client'` et `referenceRedevable` = l'identifiant du
+     * client du mandat.
+     *
+     * ⚠ ET UN AUTRE TYPE DE REDEVABLE REND `null` PLUTÔT QU'UN IDENTIFIANT AU HASARD. Aujourd'hui
+     * tout rejet SEPA produit `crm.client`, mais le champ est une chaîne libre : le jour où un
+     * redevable d'un autre type apparaît, sa référence ne désigne pas un client et l'écrire
+     * enverrait un courriel à quelqu'un d'autre.
+     *
+     * Même dérogation de lecture cross-module que la branche `Reservation` ci-dessus, et même
+     * revérification d'établissement (RG-RR-07).
+     */
+    private function depuisIncidentImpaye(string $subjectRef, Uuid $establishmentId): ?Uuid
+    {
+        $incident = $this->em->getRepository(IncidentImpaye::class)->find(Uuid::fromString($subjectRef));
+        if (!$incident instanceof IncidentImpaye) {
+            return null;
+        }
+
+        $etablissement = $incident->getEtablissement();
+        if ($etablissement === null || !$etablissement->getId()->equals($establishmentId)) {
+            return null;
+        }
+
+        // `ClientDebtorName::TYPE` plutôt qu'un littéral : une chaîne recopiée qui cesse de
+        // correspondre ne lève pas, elle rend `null` — et la relance redevient silencieusement
+        // insendable, c'est-à-dire exactement le défaut qu'on corrige ici.
+        if (ClientDebtorName::TYPE !== $incident->getTypeRedevable()) {
+            return null;
+        }
+
+        $reference = $incident->getReferenceRedevable();
+
+        return Uuid::isValid($reference) ? Uuid::fromString($reference) : null;
     }
 }
