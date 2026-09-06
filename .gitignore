@@ -27,3 +27,6 @@ Desktop.ini
 
 # Node (outillage build artefacts éventuel)
 node_modules/
+
+# Doc d acces au VPS : sur le serveur, jamais dans le depot (public depuis le 06/09).
+/infra/ACCES-VPS.md
