@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { confirmer } from './Confirmation.jsx'
 
 // L'EXPLORATEUR — le seul endroit d'où l'on peut interroger le moteur d'analyse.
 //
@@ -182,6 +183,28 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   const valeurCible = objectif ? Number(objectif.valeurCible) : null
   const ecart = moyenneMesuree !== null && valeurCible !== null ? moyenneMesuree - valeurCible : null
 
+  async function retirerObjectif() {
+    if (!objectif) return
+    const ok = await confirmer({
+      titre: 'Retirer la cible ?',
+      texte: `Cible de ${formatValeur(objectif.valeurCible, indicateur?.unite)}, du `
+        + `${(objectif.periodeDebut || '').slice(0, 10)} au ${(objectif.periodeFin || '').slice(0, 10)}.`,
+      consequence: 'L’écart cesse d’être calculé. Les mesures, elles, ne changent pas.',
+      libelleOk: 'Retirer',
+    })
+    if (!ok) return
+    setPoseEnCours(true)
+    setErreur(null)
+    try {
+      await api.supprimerObjectif(objectif.id)
+      rechargerObjectifs()
+    } catch (err) {
+      setErreur(err?.message || 'La cible n’a pas pu être retirée.')
+    } finally {
+      setPoseEnCours(false)
+    }
+  }
+
   async function poserObjectif(e) {
     e.preventDefault()
     const v = parseFloat(String(cible).replace(',', '.'))
@@ -345,10 +368,18 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                     {poseEnCours ? 'Enregistrement…' : 'Enregistrer la cible'}
                   </button>
                   {objectif && (
-                    <span className="hint">
-                      Cible actuelle&nbsp;: {formatValeur(objectif.valeurCible, indicateur?.unite)} du{' '}
-                      {(objectif.periodeDebut || '').slice(0, 10)} au {(objectif.periodeFin || '').slice(0, 10)}
-                    </span>
+                    <>
+                      <span className="hint">
+                        Cible actuelle&nbsp;: {formatValeur(objectif.valeurCible, indicateur?.unite)} du{' '}
+                        {(objectif.periodeDebut || '').slice(0, 10)} au {(objectif.periodeFin || '').slice(0, 10)}
+                      </span>
+                      {/* On pouvait poser et remplacer, jamais retirer : une cible mal saisie
+                          restait, et l'ecart se calculait contre elle sans recours. */}
+                      <button className="btn ghost sm" type="button" onClick={retirerObjectif}
+                        disabled={poseEnCours}>
+                        Retirer la cible
+                      </button>
+                    </>
                   )}
                 </form>
 
