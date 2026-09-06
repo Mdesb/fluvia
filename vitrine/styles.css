@@ -623,6 +623,18 @@ input:focus-visible {
 /* Les champs « Vous » gardent une largeur de formulaire, pas de page. */
 .tunnel .champ { max-width: 30em; }
 
+/* ⚠ CÔTE À CÔTE PLUTÔT QU'ÉLARGIS. Empilés, les deux champs faisaient 480 px — leur mesure, celle
+   qui se lit le mieux — dans un panneau de 1150 : deux traits perdus au milieu du vide. Les
+   élargir aurait corrigé le déséquilibre en dégradant la lecture. La rangée repasse seule à une
+   colonne sous 700 px, sans règle de plus. */
+.tunnel .champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 28px;
+  align-items: start;
+}
+.tunnel .champs .champ { max-width: none; }
+
 /* Le total et les actions se lisent au meme endroit que les champs. */
 .tunnel .total,
 .tunnel .actions { max-width: 30em; }
@@ -1643,7 +1655,10 @@ input:focus-visible {
   justify-content: start;
   gap: 10px;
 }
-.tarifs-options .options > li { max-width: 320px; }
+/* ⚠ UNE PASTILLE QUI S'ETIRE NE GENE PAS, UNE CARTE SI — le plafond ne vaut donc pas ici.
+   Pose sur ces pastilles, il les figeait a GAUCHE d'une piste bien plus large : l'ecart entre les
+   deux modules de « Vendre » devenait trois fois celui des quatre d'« Encaisser et facturer ».
+   Elles ne portent qu'un libelle ; les laisser remplir leur piste garde le rythme regulier. */
 
 /* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
 
@@ -1713,4 +1728,4 @@ input:focus-visible {
   justify-content: start;
   gap: 10px;
 }
-.bande-sombre .choix-liste > * { max-width: 320px; }
+/* Meme raison que pour les pastilles de tarifs : un choix ne porte qu'un libelle. */

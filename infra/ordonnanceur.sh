@@ -64,6 +64,21 @@ set -eu
 #                                     Autorisee par Maxime le 01/09. Passage supervise : ZERO
 #                                     abonnement a facturer sur 09/2026.
 #
+#   smart-flow:waitlist:expirer       une place proposee a quelqu'un sur liste d'attente n'expire
+#                                     jamais, donc le suivant n'est JAMAIS servi : la file se bloque
+#                                     sur le premier qui ne repond pas. Le catalogue la declare
+#                                     depuis le 24/08 ; elle n'etait pas dans cette liste, et n'avait
+#                                     donc jamais tourne une seule fois (aucune ligne dans
+#                                     `platform_scheduled_task_run`).
+#                                     Autorisee par Maxime le 06/09.
+#   revenue-recovery:attempts:send    les relances se programment et rien ne part. Elle n'etait meme
+#                                     pas au catalogue : ajoutee dans le meme lot.
+#                                     ⚠ AUCUNE BORNE BASSE, comme `sepa:preavis:annoncer` avant sa
+#                                     correction : elle prend TOUTES les tentatives echues. Le
+#                                     premier passage rattraperait l'historique entier. Elle reste
+#                                     donc `safeOnFirstRun: false` et attend une levee supervisee.
+#                                     Autorisee par Maxime le 06/09.
+#
 # ⚠ CES DEUX-LA NE TOURNENT PAS A CHAQUE CYCLE. Elles portent `nightlyAt: '02:00'` au catalogue : la
 # fenetre nocturne refuse en dehors de 02h00-05h00 LOCALES, et une seule fois par nuit. La boucle les
 # appelle quand meme toutes les minutes ; c'est le catalogue qui tranche, pas cette liste.
@@ -110,7 +125,7 @@ set -eu
 #                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme les deux ci-dessus,
 #                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer"
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
