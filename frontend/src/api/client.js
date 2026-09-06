@@ -955,6 +955,14 @@ export const api = {
   // ⚠ CES TROIS APPELS ONT EXIGE D'OUVRIR DES FILTRES COTE SERVEUR. Ni `AbonnementFitness` ni
   //   `Beneficiaire` n'en declarait : un `?payeur=` etait ignore EN SILENCE et l'endpoint rendait
   //   TOUT. Ca a la forme de donnees filtrees, ca arrive, et personne ne le remet en cause.
+  // UNE OFFRE SUR UN PRÉLÈVEMENT À VENIR — parrainage, geste commercial, mois offert.
+  //
+  // ⚠ `montantCentimes` EST CE QU'ON RETIRE, PAS LE MONTANT D'ARRIVÉE. « moins 10 € » et
+  //   « à 10 € » se confondent dans une tête pressée, et la confusion ne produit ni erreur ni
+  //   message : elle produit un prélèvement faux. Le serveur exige un ENTIER — `(int) '10,50'`
+  //   vaudrait 10, une saisie fausse qui passerait en silence.
+  reduireEcheance: (id, corps) =>
+    request(`/api/sport/echeances/${id}/reduire`, { method: 'POST', body: corps }),
   abonnementsDuPayeur: (clientId) =>
     request('/api/abonnement_fitnesses', { query: { payeur: clientId, itemsPerPage: 100 } }),
   beneficiairesDuClient: (clientId) =>

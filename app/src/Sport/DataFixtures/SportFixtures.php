@@ -152,7 +152,6 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             $payeur,
             $formule,
             $etabA,
-            PeriodiciteAbonnementFitness::Mensuel,
             new \DateTimeImmutable('-1 month'),
             12,
             // ⚠ PLUS DE MONTANT ICI : il est resolu depuis la grille tarifaire du produit qui

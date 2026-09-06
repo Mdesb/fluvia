@@ -96,8 +96,18 @@ final class ClotureCommandeTest extends VenteApiTestCase
         $application = new Application(static::$kernel);
         $planificateur = $application->find('platform:scheduler:run');
 
+        // ⚠ `--only` SANS `--dry-run` : ON EXERCE LE REFUS, PAS LA SIMULATION.
+        //
+        // Ce test portait `--dry-run` seul jusqu'au 06/09, et exigeait que la sortie conseille
+        // `--dry-run`. C'etait circulaire : le passage a blanc etait lui-meme retenu par le verrou,
+        // donc le conseil renvoyait a ce qui ne marchait pas. Depuis, `--dry-run` traverse le verrou
+        // et MONTRE — c'est l'inspection, plus un refus.
+        //
+        // L'exigence de ce test reste entiere, et elle porte sur le vrai refus : celui qu'on obtient
+        // en lancant la tache pour de bon. `--only` le borne a la cloture, donc rien d'autre ne
+        // tourne ; et si le verrou lachait, c'est cette invocation-la qui scellerait.
         $testeur = new CommandTester($planificateur);
-        $testeur->execute(['--dry-run' => true]);
+        $testeur->execute(['--only' => 'vente:cloture:journee']);
         $sortie = $testeur->getDisplay();
 
         self::assertStringContainsString('premier passage', $sortie);
