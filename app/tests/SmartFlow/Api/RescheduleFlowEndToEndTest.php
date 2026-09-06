@@ -6,6 +6,7 @@ namespace App\Tests\SmartFlow\Api;
 
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
+use App\Crm\Entity\Beneficiaire;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
@@ -90,7 +91,25 @@ final class RescheduleFlowEndToEndTest extends SmartFlowApiTestCase
 
         self::assertCount(1, $espion->recues, 'Un créneau compatible existe (RG-SF-10) : une notification doit partir.');
         $notification = $espion->recues[0];
-        self::assertSame($idBeneficiairePayeur, $notification->clientId->toRfc4122());
+
+        // ⚠ LE CLIENT, PAS LE BÉNÉFICIAIRE. Ce test affirmait leur égalité jusqu'au 07/09 — et il
+        // passait malgré un bénéficiaire RÉEL, parce que l'espion enregistre l'appel AVANT la porte
+        // de consentement. `ConsentGatedNotifier` faisait ensuite `Client::find()` sur un
+        // identifiant de bénéficiaire, ne trouvait rien, et rendait `Refusee` : le test était vert
+        // pendant que le système ne délivrait rien. Un espion posé en amont d'un filtre ne mesure
+        // pas ce qui sort.
+        $beneficiaire = $this->em()->getRepository(Beneficiaire::class)->find(Uuid::fromString($idBeneficiairePayeur));
+        self::assertNotNull($beneficiaire?->getClient(), 'Le montage suppose un bénéficiaire rattaché à un client.');
+        self::assertSame(
+            (string) $beneficiaire->getClient()->getId(),
+            $notification->clientId->toRfc4122(),
+            'La notification doit porter le client, sinon personne ne la reçoit.',
+        );
+        self::assertNotSame(
+            $idBeneficiairePayeur,
+            $notification->clientId->toRfc4122(),
+            'Bénéficiaire et client sont deux identités : les confondre rendait le message indélivrable.',
+        );
         self::assertSame(NotificationChannel::Email, $notification->channel);
         self::assertSame('smart_flow.reschedule_proposed', $notification->templateKey);
         self::assertSame('smart_flow', $notification->source);
