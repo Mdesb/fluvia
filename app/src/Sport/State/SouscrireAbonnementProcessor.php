@@ -21,7 +21,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * POST /sport/abonnements/souscrire (US-SPORT-01, CA-1). Corps :
- *   { "adherent": iri|uuid, "payeur": iri|uuid, "formule": iri|uuid, "periodicite": "mensuel"|"hebdomadaire",
+ *   { "adherent": iri|uuid, "payeur": iri|uuid, "formule": iri|uuid,
  *     "dateSouscription"?: "AAAA-MM-JJ", "dureeEngagementMois": int,
  *     "montantPremiereEcheanceCentimes"?: int,  // prorata d’entree ; 0 accepte (mois offert)
  *     "iban": string, "titulaireMandat": string }
@@ -55,9 +55,20 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Établissement actif requis (en-tête X-Etablissement).');
         }
 
-        $periodicite = PeriodiciteAbonnementFitness::tryFrom(\is_string($corps['periodicite'] ?? null) ? $corps['periodicite'] : '');
-        if ($periodicite === null) {
-            throw new UnprocessableEntityHttpException('« periodicite » invalide (mensuel|hebdomadaire).');
+        // ⚠ `periodicite` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
+        //
+        // Arbitrage de Maxime du 06/09 : le contrat gèle les termes de l'offre. La cadence vient
+        // désormais de `Formule::$periodicite` — un champ déjà éditable dans la fiche produit, et
+        // qui n'était lu par personne : une formule ANNUELLE souscrite ici devenait MENSUELLE.
+        //
+        // L'accepter en silence serait pire que de le refuser : un appelant continuerait de
+        // l'envoyer, croirait fixer la cadence, et celle de la formule s'appliquerait à sa place —
+        // sans erreur, sans message, et sur un prélèvement. Même raison que `montantCentimes`.
+        if (isset($corps['periodicite'])) {
+            throw new UnprocessableEntityHttpException(
+                '« periodicite » n\'est plus accepté : la cadence vient de la formule du produit. '
+                . 'Renseignez-la dans la fiche produit.',
+            );
         }
 
         $iban = \is_string($corps['iban'] ?? null) ? $corps['iban'] : '';
@@ -108,7 +119,6 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             $payeur,
             $formule,
             $etablissement,
-            $periodicite,
             $dateSouscription,
             $dureeEngagementMois,
             $iban,
