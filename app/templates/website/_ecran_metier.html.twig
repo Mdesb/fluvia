@@ -1,0 +1,53 @@
+{#
+  L'ÉCRAN D'UN MÉTIER — un seul gabarit, cinq vocabulaires.
+
+  ⚠ LA GÉOMÉTRIE VIT ICI, LES MOTS VIVENT DANS `MetierCatalog::ECRANS`. Cinq écrans dessinés
+  séparément divergeraient au premier changement, et le site cesserait de prouver ce qu'il affirme
+  le jour où l'un d'eux prendrait de l'avance sur les autres.
+
+  `motif` dit quelles cases sont prises : 0 libre, 1 prise, 2 prise et animée. Le nom posé dans une
+  case se lit dans `occupations`, en boucle — l'ordre est déterminé par la position, jamais tiré au
+  hasard : une page rendue deux fois doit être identique, sans quoi le cache et les moteurs voient
+  deux pages différentes.
+
+  L'appelant pose `aria-hidden` : décoratif.
+#}
+{% set heures = ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30'] %}
+{% set motif = [[1, 0, 1, 0], [1, 1, 1, 0], [0, 2, 0, 1], [1, 1, 0, 0], [0, 1, 0, 1], [1, 0, 1, 0]] %}
+
+<div class="ecran ecran-clair">
+  <div class="ecran-corps">
+    <div class="ecran-menu">
+      <p class="ecran-etab"><span class="ecran-logo"></span>{{ ecran.etablissement }}</p>
+      {% for entree in ecran.entrees %}
+        <p class="ecran-entree{{ loop.first ? ' ecran-entree-active' : '' }}">{{ entree }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="ecran-panneau ecran-panneau-creux">
+      <div class="ecran-panneau-tete">
+        <span class="ecran-panneau-titre">Mardi 8 septembre</span>
+        <span class="ecran-panneau-note">{{ ecran.note }}</span>
+      </div>
+
+      <div class="planning">
+        <span></span>
+        {% for colonne in ecran.colonnes %}
+          <span class="planning-tete">{{ colonne }}</span>
+        {% endfor %}
+
+        {% for rang in 0..(heures|length - 1) %}
+          <span class="planning-heure">{{ heures[rang] }}</span>
+          {% for colonne in 0..(ecran.colonnes|length - 1) %}
+            {% set etat = motif[rang][colonne] %}
+            {% if etat == 0 %}
+              <span class="planning-case"></span>
+            {% else %}
+              <span class="planning-case {{ etat == 2 ? 'planning-case-anime' : 'planning-case-prise' }}">{{ ecran.occupations[(rang * 4 + colonne) % ecran.occupations|length] }}</span>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>

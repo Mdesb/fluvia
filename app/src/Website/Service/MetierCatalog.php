@@ -40,6 +40,7 @@ final readonly class MetierCatalog
      * @return list<array{
      *     slug: string, code: string, nom: string, titre: string, chapo: string,
      *     specificites: list<array{titre: string, texte: string}>,
+     *     ecran: array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}|null,
      *     modules: list<array{slug: string, libelle: string, description: string}>
      * }>
      */
@@ -58,6 +59,7 @@ final readonly class MetierCatalog
      * @return array{
      *     slug: string, code: string, nom: string, titre: string, chapo: string,
      *     specificites: list<array{titre: string, texte: string}>,
+     *     ecran: array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}|null,
      *     modules: list<array{slug: string, libelle: string, description: string}>
      * }|null
      */
@@ -71,6 +73,61 @@ final readonly class MetierCatalog
 
         return null;
     }
+
+    /**
+     * Ce que chaque métier voit à l'écran, dans SES mots.
+     *
+     * ⚠ **C'EST LA DÉMONSTRATION DE LA PROMESSE, PAS UNE ILLUSTRATION.** Le site affirme qu'un
+     * créneau n'est pas la même chose partout — une réservation de terrain au padel, une séance à la
+     * piscine, une visite au musée. Un seul gabarit rendu cinq fois avec cinq tables de mots le
+     * montre, au lieu de l'écrire.
+     *
+     * ⚠ **AUCUN CHIFFRE D'AFFAIRE, AUCUN NOM DE CLIENT RÉEL.** Ce sont des établissements
+     * d'illustration. Un écran de démonstration qui exhibe des données ressemblant à celles d'un
+     * vrai client est une promesse qu'on ne peut pas tenir le jour où on la teste.
+     *
+     * `occupations` alimente les cases prises, dans l'ordre et en boucle : la géométrie du planning
+     * vit dans le gabarit, les mots vivent ici.
+     *
+     * @var array<string, array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}>
+     */
+    private const ECRANS = [
+        'piscine' => [
+            'etablissement' => 'Piscine Aqualude',
+            'entrees' => ['Créneaux', 'Bassins', 'Nageurs', 'Facturation', 'Paramètres'],
+            'note' => '4 lignes d\'eau',
+            'colonnes' => ['L1', 'L2', 'L3', 'L4'],
+            'occupations' => ['Aquagym', 'Scolaires', 'Club', 'Bébés nageurs', 'Aquabike', 'Public'],
+        ],
+        'sport' => [
+            'etablissement' => 'Studio Forme',
+            'entrees' => ['Planning', 'Salles', 'Adhérents', 'Abonnements', 'Paramètres'],
+            'note' => '4 salles',
+            'colonnes' => ['S1', 'S2', 'S3', 'S4'],
+            'occupations' => ['Cycling', 'Yoga', 'Renforcement', 'Cross training', 'Pilates', 'Boxe'],
+        ],
+        'padel' => [
+            'etablissement' => 'Padel du Parc',
+            'entrees' => ['Réservations', 'Terrains', 'Clients', 'Facturation', 'Paramètres'],
+            'note' => '4 terrains',
+            'colonnes' => ['T1', 'T2', 'T3', 'T4'],
+            'occupations' => ['Martin', 'Cours', 'Duval', 'Ligue', 'Bernard', 'Petit'],
+        ],
+        'patinoire' => [
+            'etablissement' => 'Patinoire Givrée',
+            'entrees' => ['Séances', 'Zones', 'Patineurs', 'Location de patins', 'Paramètres'],
+            'note' => '4 zones',
+            'colonnes' => ['Z1', 'Z2', 'Z3', 'Z4'],
+            'occupations' => ['Public', 'Scolaires', 'Hockey', 'Artistique', 'Soirée', 'Curling'],
+        ],
+        'musee' => [
+            'etablissement' => 'Musée des Arts',
+            'entrees' => ['Visites', 'Salles', 'Visiteurs', 'Billetterie', 'Paramètres'],
+            'note' => '4 salles',
+            'colonnes' => ['S1', 'S2', 'S3', 'S4'],
+            'occupations' => ['Visite guidée', 'Scolaires', 'Groupe', 'Atelier', 'Conférence', 'Libre'],
+        ],
+    ];
 
     /** La clé du bloc de texte long d'un métier — celle que l'écran d'administration remplit. */
     public static function cleDeBloc(string $code): string
@@ -229,6 +286,7 @@ final readonly class MetierCatalog
      * @return array{
      *     slug: string, code: string, nom: string, titre: string, chapo: string,
      *     specificites: list<array{titre: string, texte: string}>,
+     *     ecran: array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}|null,
      *     modules: list<array{slug: string, libelle: string, description: string}>
      * }
      */
@@ -262,6 +320,9 @@ final readonly class MetierCatalog
             'titre' => self::NOMS[$code]['titre'],
             'chapo' => self::NOMS[$code]['chapo'],
             'specificites' => self::SPECIFICITES[$code] ?? [],
+            // Absent pour un métier sans table d'écran : le gabarit n'affiche alors rien, plutôt
+            // que de montrer le vocabulaire d'un autre métier.
+            'ecran' => self::ECRANS[$code] ?? null,
             'modules' => $modules,
         ];
     }
