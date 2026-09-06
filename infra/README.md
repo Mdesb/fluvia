@@ -67,15 +67,17 @@ sur l'hôte, est exposé.
 
 - **Un dépôt Git distant privé** (GitHub/GitLab). Le dépôt local n'a pas encore de
   remote — sans ça, pas de `git clone` ni de `git pull` sur le serveur.
-- **Un sous-domaine** (ex. `preprod.tondomaine.fr`) en A vers `<ip-du-vps>`
+> ⚠ LIP réelle du VPS nest plus dans ce dépôt public : voir `infra/ACCES-VPS.md` (sur le VPS, non suivi).
+
+- **Un sous-domaine** (ex. `preprod.tondomaine.fr`) en A vers `<IP_DU_VPS>`
   et en AAAA vers l'IPv6. Propagation DNS avant de lancer Certbot.
-- **Ta clé SSH** déposée sur le VPS : `ssh-copy-id debian@<ip-du-vps>`
+- **Ta clé SSH** déposée sur le VPS : `ssh-copy-id debian@<IP_DU_VPS>`
 
 ### 2. Durcissement du serveur (une fois)
 
 ```bash
-scp infra/bootstrap.sh debian@<ip-du-vps>:~
-ssh debian@<ip-du-vps> 'sudo bash ~/bootstrap.sh'
+scp infra/bootstrap.sh debian@<IP_DU_VPS>:~
+ssh debian@<IP_DU_VPS> 'sudo bash ~/bootstrap.sh'
 ```
 
 Fait : mises à jour, swap 4 Go, SSH par clé uniquement, UFW, fail2ban,
