@@ -1547,6 +1547,18 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // LES DEUX CONSOLIDATIONS, QUE PERSONNE N'APPELAIT. Le tableau de bord d'UN site etait branche
+  // depuis l'origine ; ceux de la region et du groupe — classement des sites, ecart vs objectif,
+  // ecart vs n-1, badge de fraicheur — ne l'etaient par aucun ecran. C'est pourtant la vue d'un
+  // dirigeant : il ne regarde pas une piscine, il regarde son perimetre.
+  //
+  // ⚠ Les deux acceptent `periodeDebut`/`periodeFin` ; sans elles, la journee.
+  // ⚠ Le groupe ne rend PAS d'ecart vs objectif — seulement vs n-1. L'ecran ne doit pas afficher
+  // une case vide comme si c'etait un zero.
+  dashboardRegion: (id, params) =>
+    request(`/reporting/dashboards/region/${id}`, { query: params }),
+  dashboardGroupe: (id, params) =>
+    request(`/reporting/dashboards/groupe/${id}`, { query: params }),
   // Référentiel des indicateurs (M7).
   indicateurs: () => request('/api/indicateurs', { query: { itemsPerPage: 100 } }),
   // L'Explorateur (M7-04) : un indicateur x un perimetre x UN JOUR. Route hors `/api`, comme le
