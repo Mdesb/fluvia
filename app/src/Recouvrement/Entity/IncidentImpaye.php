@@ -12,6 +12,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Recouvrement\Enum\CanalResolutionImpaye;
 use App\Recouvrement\Enum\StatutIncidentImpaye;
 use App\Recouvrement\Security\RedevableSoiVoter;
+use App\Recouvrement\State\UnpaidIncidentProvider;
 use App\Recouvrement\State\ForcerReouvertureProcessor;
 use App\Recouvrement\State\ResoudreImpayeProcessor;
 use App\Securite\Entity\Utilisateur;
@@ -37,8 +38,17 @@ use Symfony\Component\Uid\Uuid;
 #[ApiResource(
     shortName: 'IncidentImpaye',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'recouvrement.piloter')"),
-        new Get(security: "is_granted('PERM', 'recouvrement.piloter') or (is_granted('PERM', 'recouvrement.lire_soi') and is_granted('" . RedevableSoiVoter::ATTRIBUTE . "', object))"),
+        // ⚠ `provider:` DÉCORE LE FOURNISSEUR DOCTRINE, IL NE LE REMPLACE PAS — voir
+        //   `UnpaidIncidentProvider`. Le cloisonnement, les filtres et la pagination restent ceux
+        //   d'API Platform ; on n'ajoute qu'un nom.
+        new GetCollection(
+            security: "is_granted('PERM', 'recouvrement.piloter')",
+            provider: UnpaidIncidentProvider::class,
+        ),
+        new Get(
+            security: "is_granted('PERM', 'recouvrement.piloter') or (is_granted('PERM', 'recouvrement.lire_soi') and is_granted('" . RedevableSoiVoter::ATTRIBUTE . "', object))",
+            provider: UnpaidIncidentProvider::class,
+        ),
         new Post(
             uriTemplate: '/recouvrement/incidents/{id}/resoudre',
             read: true,
@@ -77,6 +87,28 @@ class IncidentImpaye
     #[ORM\Column(length: 64)]
     #[Groups(['incident:read', 'representation:read'])]
     private string $referenceRedevable = '';
+
+    /**
+     * LE NOM DE CELUI QUI DOIT — résolu à la lecture, jamais stocké.
+     *
+     * ⚠ L'ÉCRAN AFFICHAIT `sport.abonnement_fitness` SUIVI DE DOUZE CARACTÈRES D'UUID, sous un
+     * en-tête qui nomme une personne. C'est sur cette ligne qu'un agent clique « Réglé » ou
+     * « Rouvrir l'accès sans que la dette soit payée » — sans pouvoir appeler ce client, ni le
+     * retrouver dans l'écran Clients, ni le rapprocher du débiteur de la remise SEPA.
+     *
+     * Et le frontal cherchait DÉJÀ `nomRedevable` : un champ qu'aucun code n'écrivait. Il retombait
+     * donc toujours sur la référence brute, sans que rien ne signale le manque.
+     *
+     * ⚠ NON PERSISTÉ, ET C'EST LE POINT. Le nom appartient au client, pas à l'impayé. Le copier ici
+     * à la création figerait l'orthographe du jour : un client renommé ou fusionné garderait son
+     * ancien nom sur ses impayés ouverts, et l'agent chercherait une fiche qui ne s'appelle plus
+     * comme ça. `UnpaidIncidentProvider` le résout à chaque lecture, via `DebtorNameRegistry`.
+     *
+     * ⚠ `null` VEUT DIRE « NON RÉSOLU », PAS « SANS NOM ». Aucun port ne couvre encore certains types
+     * de redevable ; l'écran doit le dire plutôt qu'inventer un libellé.
+     */
+    #[Groups(['incident:read'])]
+    private ?string $nomRedevable = null;
 
     /** Identifiant opaque de l'échéance d'origine côté verticale, si connu. */
     #[ORM\Column(length: 64, nullable: true)]
@@ -149,6 +181,18 @@ class IncidentImpaye
     public function setEtablissement(?Etablissement $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    public function getNomRedevable(): ?string
+    {
+        return $this->nomRedevable;
+    }
+
+    public function setNomRedevable(?string $nomRedevable): self
+    {
+        $this->nomRedevable = $nomRedevable;
 
         return $this;
     }
