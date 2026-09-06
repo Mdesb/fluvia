@@ -1721,6 +1721,16 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
   //
   // On réutilise `roleCouvre()` — le prédicat qui connaît le joker — plutôt que d'en réécrire une
   // variante : deux vérités sur la même question, c'est toujours la copie qui se trompe.
+  //
+  // ⚠ ET CE BANDEAU NE SORT PAS SUR UNE BASE QUI PORTE UN RÔLE JOKER. C'est correct, pas cassé.
+  // Un rôle `*.*` couvre tout module, présent comme à venir : sur la préproduction, deux rôles le
+  // portent, et il n'existe donc AUCUN module sans porteur.
+  //
+  // Je le note parce que j'ai fait l'erreur inverse en écrivant ce calcul : ma mesure de départ
+  // comparait des noms de module exacts en SQL et concluait « aucun rôle ne porte
+  // revenue_recovery ». C'était faux — six rôles le couvrent par le joker. Le prédicat, lui, avait
+  // raison depuis le début. Un lecteur qui verrait ce bandeau muet et le croirait cassé referait la
+  // même erreur, dans l'autre sens.
   const sansPorteur = modules.filter((m) => {
     const codesDuModule = permissions
       .filter((p) => p.module === m)
