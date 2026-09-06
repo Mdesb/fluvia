@@ -7,6 +7,7 @@ namespace App\Dms\Controller;
 use App\Dms\Crypto\DocumentStreamCipher;
 use App\Dms\Entity\Document;
 use App\Dms\Entity\DocumentVersion;
+use App\Dms\Http\DocumentResponseHeaders;
 use App\Dms\Security\DmsScopeGuard;
 use App\Dms\Storage\Storage;
 use Doctrine\ORM\EntityManagerInterface;
@@ -88,8 +89,6 @@ final class DocumentDownloadController
 
     private function streamResponse(string $storageKey, string $mimeType, string $originalFilename): StreamedResponse
     {
-        $filename = str_replace(['"', "\r", "\n"], '', $originalFilename);
-
         $response = new StreamedResponse(function () use ($storageKey): void {
             $source = $this->storage->get($storageKey);
             $destination = fopen('php://output', 'wb');
@@ -98,8 +97,9 @@ final class DocumentDownloadController
             fclose($source);
             fclose($destination);
         });
-        $response->headers->set('Content-Type', $mimeType);
-        $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        // Toujours en pièce jointe ici (c'était déjà le cas), et désormais `nosniff` + CSP `sandbox`
+        // par la même règle que le lien public — voir `DocumentResponseHeaders`.
+        DocumentResponseHeaders::apply($response, $mimeType, $originalFilename, inlineAllowed: false);
 
         return $response;
     }

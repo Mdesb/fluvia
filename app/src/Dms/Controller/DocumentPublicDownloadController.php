@@ -7,6 +7,7 @@ namespace App\Dms\Controller;
 use App\Dms\Crypto\DocumentStreamCipher;
 use App\Dms\Entity\DocumentPublicLink;
 use App\Dms\Enum\DocumentStatus;
+use App\Dms\Http\DocumentResponseHeaders;
 use App\Dms\Storage\Storage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -28,6 +29,10 @@ use Symfony\Component\Routing\Attribute\Route;
  *    (RG-DMS-10).
  * 4. Sert le contenu de `$link->getVersion()` (**jamais** `document->getCurrentVersion()`, RG-DMS-20,
  *    CA-13) — version purgée : **410 Gone**, jamais 500.
+ * 5. Les en-têtes de la réponse sont ceux de `DocumentResponseHeaders` : `inline` seulement pour ce
+ *    qu'un navigateur affiche sans exécuter, `nosniff` toujours. ⚠ Avant le 06/09, ce contrôleur
+ *    servait un `text/html` déclaré par le client en `inline` sur l'origine de l'application —
+ *    XSS stocké, audit constat 6.
  */
 #[AsController]
 final class DocumentPublicDownloadController
@@ -74,7 +79,6 @@ final class DocumentPublicDownloadController
         $this->em->flush(); // aucun événement de domaine émis (RG-DMS-10) — accès tracé sur l'entité seule.
 
         $mimeType = $version->getMimeType();
-        $filename = str_replace(['"', "\r", "\n"], '', $version->getOriginalFilename());
         $storageKey = $version->getStorageKey();
 
         $response = new StreamedResponse(function () use ($storageKey): void {
@@ -85,8 +89,7 @@ final class DocumentPublicDownloadController
             fclose($source);
             fclose($destination);
         });
-        $response->headers->set('Content-Type', $mimeType);
-        $response->headers->set('Content-Disposition', 'inline; filename="' . $filename . '"');
+        DocumentResponseHeaders::apply($response, $mimeType, $version->getOriginalFilename(), inlineAllowed: true);
 
         return $response;
     }

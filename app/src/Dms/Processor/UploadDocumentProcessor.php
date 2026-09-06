@@ -94,7 +94,10 @@ final class UploadDocumentProcessor implements ProcessorInterface
                 $sourceModule,
                 $stream,
                 $file->getClientOriginalName(),
-                $file->getClientMimeType(),
+                // ⚠ LE TYPE DÉCLARÉ PAR LE CLIENT N'EST PAS UNE INFORMATION, C'EST UNE PRÉTENTION. Un HTML
+                //   annoncé « application/pdf » était stocké puis servi comme un PDF (audit 06/09, constat
+                //   6). `getMimeType()` regarde le contenu (finfo) ; ce qu'il voit est ce qu'on range.
+                $file->getMimeType() ?? 'application/octet-stream',
                 $acteur instanceof Utilisateur ? $acteur : null,
             );
         } finally {

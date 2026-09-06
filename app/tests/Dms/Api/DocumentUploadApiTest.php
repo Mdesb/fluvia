@@ -25,7 +25,9 @@ final class DocumentUploadApiTest extends DmsApiTestCase
 
         $captures = $this->captureEvents(['document.stored']);
 
-        $chemin = $this->temporaryFile('contenu du contrat de test');
+        // Un VRAI en-tête PDF : depuis le 06/09 le serveur devine le type sur le contenu, il ne croit
+        // plus la déclaration du client. Du texte brut annoncé PDF serait rangé `text/plain`.
+        $chemin = $this->temporaryFile("%PDF-1.4\n% contenu du contrat de test\n%%EOF");
         $reponse = $client->request('POST', '/api/documents', $entete + [
             'extra' => [
                 'parameters' => ['category' => 'contract', 'title' => 'Contrat de test', 'sourceModule' => 'test_module'],
@@ -73,5 +75,31 @@ final class DocumentUploadApiTest extends DmsApiTestCase
             'extra' => ['parameters' => ['category' => 'other', 'title' => 'x']],
         ]);
         self::assertResponseStatusCodeSame(422);
+    }
+
+    /**
+     * AUDIT DU 06/09, CONSTAT 6. Le type MIME stocké était celui DÉCLARÉ par le client : un HTML annoncé
+     * « application/pdf » était rangé, puis servi, comme un PDF. Le serveur regarde désormais le contenu,
+     * et c'est ce qu'il a vu qui est stocké — et publié dans `document.stored`.
+     */
+    public function testLeTypeDeclareParLeClientNEstPasCruLeServeurDevineSurLeContenu(): void
+    {
+        [$client, $entete] = $this->dmsUserOn(SocleFixtures::ETAB_A_NOM, ['read', 'write'], 'sniff');
+        $client->disableReboot();
+        $captures = $this->captureEvents(['document.stored']);
+
+        $chemin = $this->temporaryFile('<html><body><script>alert(1)</script></body></html>');
+        $client->request('POST', '/api/documents', $entete + [
+            'extra' => [
+                'parameters' => ['category' => 'contract', 'title' => 'Faux PDF', 'sourceModule' => 'test_module'],
+                'files' => ['file' => new UploadedFile($chemin, 'faux.pdf', 'application/pdf', null, true)],
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(201, (string) $client->getResponse()->getContent(false));
+        self::assertCount(1, $captures);
+        /** @var DomainEvent $evenement */
+        $evenement = $captures[0];
+        self::assertSame('text/html', $evenement->payload['mimeType'], 'le type stocké est celui du contenu, pas celui déclaré');
     }
 }

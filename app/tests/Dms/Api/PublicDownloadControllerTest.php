@@ -101,7 +101,52 @@ final class PublicDownloadControllerTest extends DmsApiTestCase
     }
 
     /** @return array{0: Document, 1: string, 2: DocumentPublicLink} document, jeton en clair, lien */
-    private function createPublicLink(string $contenu, \DateTimeImmutable $expiresAt): array
+    /**
+     * AUDIT DU 06/09, CONSTAT 6. Un document déclaré `text/html` par celui qui l'avait téléversé était
+     * servi `inline`, sur l'origine de l'application : son script s'exécutait chez nous et lisait le
+     * JWT. Il part désormais en pièce jointe, et le navigateur a interdiction de « deviner » autre chose.
+     */
+    public function testUnDocumentDeclareHtmlPartEnPieceJointeEtLeNavigateurNeDevineRien(): void
+    {
+        [, $token, ] = $this->createPublicLink('<html><script>alert(1)</script></html>', new \DateTimeImmutable('+7 days'), 'text/html', 'piège.html');
+
+        $client = static::createClient();
+        $client->request('GET', '/dms/public/' . $token);
+        self::assertResponseIsSuccessful();
+
+        $entetes = $client->getResponse()->getHeaders(false);
+        self::assertStringStartsWith('attachment', $entetes['content-disposition'][0] ?? '', 'un HTML ne s\'affiche jamais en ligne');
+        self::assertSame('nosniff', $entetes['x-content-type-options'][0] ?? null, 'sans nosniff, la liste blanche ne protège de rien');
+        self::assertStringContainsString('sandbox', $entetes['content-security-policy'][0] ?? '', 'une pièce jointe rendue malgré tout tourne sans origine');
+    }
+
+    /** Ce que la règle ÉPARGNE : un PDF s'affiche toujours en ligne — c'est l'usage du lien public. */
+    public function testUnPdfSAfficheEnLigneMaisSansSniffing(): void
+    {
+        [, $token, ] = $this->createPublicLink("%PDF-1.4\n%%EOF", new \DateTimeImmutable('+7 days'));
+
+        $client = static::createClient();
+        $client->request('GET', '/dms/public/' . $token);
+        self::assertResponseIsSuccessful();
+
+        $entetes = $client->getResponse()->getHeaders(false);
+        self::assertStringStartsWith('inline', $entetes['content-disposition'][0] ?? '');
+        self::assertSame('application/pdf', $entetes['content-type'][0] ?? null);
+        self::assertSame('nosniff', $entetes['x-content-type-options'][0] ?? null);
+    }
+
+    /** Témoin de la liste blanche : le SVG est une image, mais il porte du script — il se télécharge. */
+    public function testUnSvgEstUneImageQuiPorteDuScriptDoncSeTelecharge(): void
+    {
+        [, $token, ] = $this->createPublicLink('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', new \DateTimeImmutable('+7 days'), 'image/svg+xml', 'dessin.svg');
+
+        $client = static::createClient();
+        $client->request('GET', '/dms/public/' . $token);
+        self::assertResponseIsSuccessful();
+        self::assertStringStartsWith('attachment', $client->getResponse()->getHeaders(false)['content-disposition'][0] ?? '');
+    }
+
+    private function createPublicLink(string $contenu, \DateTimeImmutable $expiresAt, string $mimeType = 'application/pdf', string $filename = 'f.pdf'): array
     {
         /** @var UploadDocumentHandler $handler */
         $handler = static::getContainer()->get(UploadDocumentHandler::class);
@@ -112,7 +157,7 @@ final class PublicDownloadControllerTest extends DmsApiTestCase
         fwrite($source, $contenu);
         rewind($source);
         try {
-            $document = $handler->upload($etablissement, DocumentCategory::Other, 'Titre', null, null, $source, 'f.pdf', 'application/pdf', null);
+            $document = $handler->upload($etablissement, DocumentCategory::Other, 'Titre', null, null, $source, $filename, $mimeType, null);
         } finally {
             fclose($source);
         }
