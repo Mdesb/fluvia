@@ -9,6 +9,8 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Compta\State\MarquerImpayeeRegieProcessor;
+use App\Securite\Entity\Utilisateur;
+use App\Compta\State\SettleUnpaidSaleProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -33,6 +35,23 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PERM', 'compta.gerer')",
             processor: MarquerImpayeeRegieProcessor::class,
         ),
+        // LE CHEMIN DU RETOUR, QUI N'EXISTAIT PAS.
+        //
+        // ⚠ MARQUER ÉTAIT DÉFINITIF, ET PAS SEULEMENT À L'ÉCRAN. `GenerateurEReportingHandler`
+        //   exclut de la déclaration DGFiP toutes les ventes marquées, par un `findAll()` sans
+        //   statut. Un chèque finalement encaissé restait exclu pour toujours : une recette réelle,
+        //   recouvrée, que rien ne pouvait faire redéclarer.
+        //
+        // ⚠ ON RÈGLE, ON NE DÉMARQUE PAS. Le marquage a eu lieu et reste vrai : le chèque est bien
+        //   revenu impayé ce jour-là. L'effacer réécrirait l'histoire ; le régler la continue, et
+        //   `AuditWriteSubscriber` garde les deux gestes.
+        new Post(
+            uriTemplate: '/compta/ventes-impayees-regie/{id}/regler',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'compta.gerer')",
+            processor: SettleUnpaidSaleProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['impaye:read']],
 )]
@@ -55,6 +74,34 @@ class VenteImpayeeRegie
     #[Groups(['impaye:read'])]
     private \DateTimeImmutable $dateMarquage;
 
+    /**
+     * QUAND LA VENTE A FINALEMENT ÉTÉ ENCAISSÉE — `null` tant qu'elle ne l'est pas.
+     *
+     * ⚠ C'EST CE CHAMP QUI DÉCIDE DE L'E-REPORTING. `GenerateurEReportingHandler` n'exclut plus que
+     * les marquages NON RÉGLÉS : une vente recouvrée redevient déclarable, ce qu'aucun geste du
+     * produit ne permettait. Sans lui, la déclaration DGFiP perdait définitivement une recette
+     * réelle, et personne ne pouvait la lui rendre.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['impaye:read'])]
+    private ?\DateTimeImmutable $regleLe = null;
+
+    /**
+     * COMMENT ELLE A ÉTÉ ENCAISSÉE.
+     *
+     * Exigé, comme le motif du marquage : un mouvement qui rentre dans la déclaration fiscale par un
+     * geste manuel doit dire par quel moyen, sinon le rapprochement se fait de mémoire.
+     */
+    #[ORM\Column(length: 200, nullable: true)]
+    #[Groups(['impaye:read'])]
+    private ?string $motifReglement = null;
+
+    /** Qui a constaté l'encaissement. Un geste qui remet une recette dans une déclaration a un auteur. */
+    #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['impaye:read'])]
+    private ?Utilisateur $regleParUtilisateur = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -70,6 +117,47 @@ class VenteImpayeeRegie
     public function getVenteOrigine(): Uuid
     {
         return $this->venteOrigine;
+    }
+
+    public function estReglee(): bool
+    {
+        return $this->regleLe !== null;
+    }
+
+    public function getRegleLe(): ?\DateTimeImmutable
+    {
+        return $this->regleLe;
+    }
+
+    public function setRegleLe(?\DateTimeImmutable $regleLe): self
+    {
+        $this->regleLe = $regleLe;
+
+        return $this;
+    }
+
+    public function getMotifReglement(): ?string
+    {
+        return $this->motifReglement;
+    }
+
+    public function setMotifReglement(?string $motifReglement): self
+    {
+        $this->motifReglement = $motifReglement;
+
+        return $this;
+    }
+
+    public function getRegleParUtilisateur(): ?Utilisateur
+    {
+        return $this->regleParUtilisateur;
+    }
+
+    public function setRegleParUtilisateur(?Utilisateur $regleParUtilisateur): self
+    {
+        $this->regleParUtilisateur = $regleParUtilisateur;
+
+        return $this;
     }
 
     public function setVenteOrigine(Uuid $venteOrigine): self

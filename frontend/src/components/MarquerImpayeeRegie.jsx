@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros } from '../api/produit.js'
+import { confirmer } from './Confirmation.jsx'
 
 // MARQUER UNE VENTE « IMPAYÉE RÉGIE » — l'écran lisait la liste sans permettre d'y ajouter.
 //
@@ -41,6 +42,11 @@ export default function MarquerImpayeeRegie({ etabActif, droits = [] }) {
   const [motif, setMotif] = useState('')
   const [busy, setBusy] = useState(false)
   const [succes, setSucces] = useState(null)
+  // La ligne dont on saisit le règlement, et son motif. Une saisie EN LIGNE, comme celle du
+  // marquage juste au-dessus : ce dépôt n'emploie `window.prompt` nulle part (0 occurrence), et un
+  // motif qui entre dans une déclaration fiscale mérite mieux qu'une boîte du navigateur.
+  const [reglementDe, setReglementDe] = useState(null)
+  const [motifReglement, setMotifReglement] = useState('')
 
   const charger = useCallback(() => {
     api.ventesImpayeesRegie()
@@ -71,6 +77,19 @@ export default function MarquerImpayeeRegie({ etabActif, droits = [] }) {
   }
 
   async function marquer() {
+    // ⚠ CE GESTE N'AVAIT AUCUNE CONFIRMATION, ET IL SORT UNE RECETTE D'UNE DECLARATION FISCALE.
+    //
+    //   Le patron est celui d'`ImpayesRecouvrement.resoudre()` sur la meme famille de donnees : une
+    //   confirmation dit CE QUI VA SE PASSER, jamais « etes-vous sur ». Ici, deux choses que
+    //   personne ne devinerait : la vente sort du solde d'encaisse ET de l'e-reporting DGFiP.
+    if (!await confirmer(
+      `Marquer la vente ${vente.numero} impayée ?\n\n`
+      + 'Elle sortira du solde d’encaisse attendu et de la déclaration e-reporting tant qu’elle '
+      + 'ne sera pas réglée. Le marquage se poursuit par un règlement, il ne s’annule pas.',
+    )) {
+      return
+    }
+
     setBusy(true)
     setErreur(null)
     try {
@@ -82,6 +101,25 @@ export default function MarquerImpayeeRegie({ etabActif, droits = [] }) {
       charger()
     } catch (e) {
       setErreur(e.message || 'Le marquage n’a pas abouti.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function regler(m) {
+    const motif = motifReglement.trim()
+    if (motif === '') return
+
+    setBusy(true)
+    setErreur(null)
+    try {
+      await api.reglerImpayeeRegie(m.id, { motif })
+      setSucces('Vente réglée : elle revient dans la déclaration e-reporting.')
+      setReglementDe(null)
+      setMotifReglement('')
+      charger()
+    } catch (e) {
+      setErreur(e.message || 'Le règlement n’a pas abouti.')
     } finally {
       setBusy(false)
     }
@@ -176,7 +214,45 @@ export default function MarquerImpayeeRegie({ etabActif, droits = [] }) {
               <span className="mono sub">{String(m.venteOrigine || '').slice(0, 8)}</span>
               <span className="nm">{m.motif || '—'}</span>
             </div>
-            <div className="hint">{dateFr(m.dateMarquage)}</div>
+            <div className="hint">
+              {dateFr(m.dateMarquage)}
+              {/* ⚠ L'ÉTAT SE LIT, PARCE QU'IL DÉCIDE DE LA DÉCLARATION. Une vente réglée est
+                  redéclarée ; une vente encore impayée ne l'est pas. Les confondre à l'écran, c'est
+                  ne pas savoir ce que la DGFiP va recevoir. */}
+              {m.regleLe
+                ? ` · réglée le ${dateFr(m.regleLe)}${m.motifReglement ? ` — ${m.motifReglement}` : ''}`
+                : ' · non réglée'}
+            </div>
+            {!m.regleLe && peutMarquer && reglementDe !== m.id && (
+              <button type="button" className="btn sm" disabled={busy} onClick={() => { setReglementDe(m.id); setMotifReglement('') }}>
+                Marquer réglée
+              </button>
+            )}
+            {!m.regleLe && peutMarquer && reglementDe === m.id && (
+              <div className="field">
+                <label className="field-lbl" htmlFor={`reg-${m.id}`}>Comment a-t-elle été encaissée ?</label>
+                <input
+                  id={`reg-${m.id}`}
+                  className="input"
+                  value={motifReglement}
+                  onChange={(e) => setMotifReglement(e.target.value)}
+                  placeholder="Chèque représenté, espèces au guichet…"
+                />
+                <span className="hint">
+                  Elle rentrera dans la déclaration e-reporting : le rapprochement se fera sur ce que
+                  vous écrivez ici.
+                </span>
+                {/* ⚠ PAS `className="r"` : elle n'existe qu'en `.card-h .r`, un sélecteur
+                    descendant. Ici on est dans `.card-b` — la classe serait acceptée par le
+                    garde-fou, qui vérifie la DÉCLARATION, et ne s'appliquerait pas. */}
+                <div style={{ display: 'flex', gap: 'var(--esp-normal)' }}>
+                  <button type="button" className="btn sm" onClick={() => setReglementDe(null)}>Annuler</button>
+                  <button type="button" className="btn sm primary" disabled={busy || motifReglement.trim() === ''} onClick={() => regler(m)}>
+                    {busy ? 'Enregistrement…' : 'Confirmer le règlement'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

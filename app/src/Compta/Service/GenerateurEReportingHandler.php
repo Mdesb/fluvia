@@ -52,9 +52,17 @@ final class GenerateurEReportingHandler
         $journalVentes = $regime->journalPour($profil, NatureOperation::Ventes);
         $compteTva = $regime->compteTvaCollectee($profil);
 
+        // ⚠ SEULEMENT LES MARQUAGES NON REGLES, ET C'EST UNE CORRECTION DE FOND.
+        //
+        //   Ce `findAll()` excluait TOUTE vente marquee, sans statut ni date. Le marquage n'ayant
+        //   aucun chemin de retour, un cheque finalement encaisse restait exclu POUR TOUJOURS : une
+        //   recette reelle, recouvree, que rien ne pouvait faire redeclarer a la DGFiP.
+        //
+        //   `regleLe` existe depuis le 06/09 : une vente reglee redevient declarable, ce qui est
+        //   simplement ce qu'elle est.
         $impayees = array_map(
             static fn (VenteImpayeeRegie $v): string => (string) $v->getVenteOrigine(),
-            $this->em->getRepository(VenteImpayeeRegie::class)->findAll(),
+            $this->em->getRepository(VenteImpayeeRegie::class)->findBy(['regleLe' => null]),
         );
 
         /** @var list<EcritureComptable> $ecritures */

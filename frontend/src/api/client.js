@@ -961,6 +961,13 @@ export const api = {
   //   « à 10 € » se confondent dans une tête pressée, et la confusion ne produit ni erreur ni
   //   message : elle produit un prélèvement faux. Le serveur exige un ENTIER — `(int) '10,50'`
   //   vaudrait 10, une saisie fausse qui passerait en silence.
+  // LE CHEMIN DU RETOUR D'UN MARQUAGE « IMPAYEE REGIE ».
+  //
+  // ⚠ IL N'EXISTAIT PAS, ET CE N'ETAIT PAS QU'UNE GENE D'ECRAN : `GenerateurEReportingHandler`
+  //   excluait de la declaration DGFiP toute vente marquee, sans regarder de statut. Un cheque
+  //   finalement encaisse restait exclu pour toujours.
+  reglerImpayeeRegie: (id, corps) =>
+    request(`/api/compta/ventes-impayees-regie/${id}/regler`, { method: 'POST', body: corps }),
   reduireEcheance: (id, corps) =>
     request(`/api/sport/echeances/${id}/reduire`, { method: 'POST', body: corps }),
   abonnementsDuPayeur: (clientId) =>
