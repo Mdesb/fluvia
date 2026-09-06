@@ -1638,14 +1638,12 @@ input:focus-visible {
    laissait deux trous. On passe a un rangement qui s'adapte au contenu — les cartes grandissent
    pour finir leur ligne au lieu de laisser des vides. */
 .tarifs-options .options {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  justify-content: start;
   gap: 10px;
 }
-.tarifs-options .options li {
-  flex: 1 1 190px;
-  max-width: 100%;
-}
+.tarifs-options .options > li { max-width: 320px; }
 
 /* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
 
@@ -1655,19 +1653,41 @@ input:focus-visible {
 
    ⚠ ON GARDE LA HAUTEUR EGALE DANS UNE LIGNE. Des cartes bordees de hauteurs differentes cote a
    cote font moins bien que du vide : c'est la LIGNE qu'on remplit, pas la carte qu'on retaille. */
+/* ⚠ UNE COLONNE A UNE LARGEUR MAXIMALE, ET C'EST LA CORRECTION D'UNE CORRECTION.
+
+   Ce matin, ces deux grilles laissaient un vide a droite de leur derniere ligne. Je les ai passees
+   en `flex` avec `flex: 1 1 <base>` : la ligne se remplit, oui — en ETIRANT ce qui s'y trouve. Sur
+   l'accueil, trois articles remplissaient une ligne entiere et le resultat etait bon. Sur
+   `/metiers`, cinq cartes donnent 2 + 2 + 1, et « Musees et sites de visite » mesurait 737 px
+   contre 361 px pour ses soeurs. Une carte deux fois plus large se lit comme une erreur.
+
+   ⚠ ET LE DIAGNOSTIC D'ORIGINE ETAIT A MOITIE FAUX : une derniere ligne incomplete n'est pas un
+   defaut, c'est l'aspect normal d'une grille de cartes. Ce qui genait, c'etait l'AMPLEUR du vide —
+   trois articles dans cinq colonnes.
+
+   `auto-fit` effondre les pistes vides (plus de vide inutile) et le plafond de piste empeche toute
+   carte de doubler de largeur (plus d'orphelin etire). `justify-content: start` garde le bloc
+   aligne sur le bord gauche du contenu, comme le reste de la page. */
+/* ⚠ LE PLAFOND PORTE SUR L'ELEMENT, PAS SUR LA PISTE — et c'est une mesure, pas un raisonnement.
+   Un plafond de piste fixe (`minmax(240px, 400px)`) fait compter les colonnes sur le MAXIMUM : dans
+   un conteneur de 740 px, une seule piste de 400 px, et les cinq cartes de /metiers se sont
+   empilees en une colonne la ou deux tenaient. `1fr` garde le compte sur le minimum ; le plafond
+   passe sur la carte. */
 .familles {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  justify-content: start;
   gap: 18px;
 }
-.familles .famille { flex: 1 1 240px; min-width: 0; }
+.familles > * { max-width: 420px; }
 
 .grille {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  justify-content: start;
   gap: 16px;
 }
-.grille > * { flex: 1 1 260px; min-width: 0; }
+.grille > * { max-width: 420px; }
 
 /* ── L'ANNONCE DU MONTANT UNIQUE, SUR LA BANDE SOMBRE ─────────────────────────────────────────
 
@@ -1688,8 +1708,9 @@ input:focus-visible {
    d'options laissait un vide a droite, exactement comme les rubriques, les articles et les groupes
    de tarifs. Un defaut corrige a trois endroits sur quatre se voit PLUS au quatrieme, pas moins. */
 .bande-sombre .choix-liste {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  justify-content: start;
   gap: 10px;
 }
-.bande-sombre .choix-liste > * { flex: 1 1 200px; min-width: 0; }
+.bande-sombre .choix-liste > * { max-width: 320px; }
