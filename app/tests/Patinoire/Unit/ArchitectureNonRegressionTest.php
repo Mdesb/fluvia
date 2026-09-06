@@ -31,12 +31,44 @@ final class ArchitectureNonRegressionTest extends TestCase
                     continue;
                 }
                 $contenu = file_get_contents($fichier->getPathname());
-                if ($contenu !== false && str_contains($contenu, 'App\\Patinoire')) {
+                if ($contenu !== false && self::referenceReellement($contenu)) {
                     $violations[] = $fichier->getPathname();
                 }
             }
         }
 
         self::assertSame([], $violations, 'Aucun fichier App\\Reservation|Vente|Offre|Crm|Acces|Piscine ne doit référencer App\\Patinoire (réutilisation via ports/références logiques, aucune modification de ces modules).');
+    }
+
+    /**
+     * CE FICHIER RÉFÉRENCE-T-IL VRAIMENT `App\Patinoire`, OU SE CONTENTE-T-IL D'EN PARLER ?
+     *
+     * ⚠ CE TÉMOIN A ÉTÉ ROUGE SUR `main` DU 05/09 AU 06/09, POUR UN COMMENTAIRE.
+     * `QualificationEncadrant.php:37` citait Patinoire comme précédent de conception — « même patron
+     * que `App\Reservation` et `App\Patinoire` » — exactement le genre de renvoi qu'on veut
+     * encourager entre modules. `str_contains()` le comptait comme une violation.
+     *
+     * Le message de ce test dit « ne doit RÉFÉRENCER » ; la mesure disait « ne doit MENTIONNER ».
+     * Un écart pareil coûte deux fois : il rend rouge un dépôt sain, et il apprend à passer outre —
+     * après quoi la vraie violation passera avec les autres.
+     *
+     * `token_get_all()` est l'analyseur de PHP lui-même : il sait ce qu'est un commentaire. Une
+     * référence réelle reste vue, qu'elle soit un `use`, un type, ou un nom de classe écrit en
+     * chaîne — seule la prose est épargnée.
+     */
+    private static function referenceReellement(string $contenu): bool
+    {
+        foreach (token_get_all($contenu) as $jeton) {
+            if (\is_array($jeton) && \in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $texte = \is_array($jeton) ? $jeton[1] : $jeton;
+            if (str_contains($texte, 'App\\Patinoire') || str_contains($texte, 'Patinoire\\')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

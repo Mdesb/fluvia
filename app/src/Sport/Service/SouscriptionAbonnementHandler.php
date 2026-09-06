@@ -42,8 +42,12 @@ final class SouscriptionAbonnementHandler
         Client $payeur,
         Formule $formule,
         Etablissement $etablissement,
-        PeriodiciteAbonnementFitness $periodicite,
         \DateTimeImmutable $dateSouscription,
+        // ⚠ LA DURÉE N'EST QU'UN REPLI DEPUIS LE 06/09. Quand la formule déclare
+        //    `engagement.dureeMin`, c'est elle qui décide — le contrat gèle les termes de
+        //    l'offre. Aucune formule ne le déclare aujourd'hui (`engagement` est NULL sur les
+        //    quatre), et aucun écran ne permet de l'écrire : ce paramètre reste donc le seul
+        //    chemin réel, jusqu'à ce que la fiche produit sache poser l'engagement.
         int $dureeEngagementMois,
         string $ibanClair,
         string $titulaireMandat,
@@ -80,6 +84,44 @@ final class SouscriptionAbonnementHandler
                 $montantCentimes,
             ));
         }
+        // ── LE CONTRAT GÈLE LES TERMES DE L'OFFRE ────────────────────────────────────────
+        //
+        // ⚠ LA CADENCE VENAIT DU CORPS DE LA REQUÊTE, ET LA FORMULE ÉTAIT IGNORÉE. Mesuré le
+        //    06/09 : `Formule::$periodicite` est éditable dans l'écran produit et lue par
+        //    PERSONNE — tous les `getPeriodicite()` du dépôt lisent un abonnement ou un rapport,
+        //    jamais une formule. Une formule déclarée ANNUELLE souscrite ici devenait MENSUELLE,
+        //    en silence, et le vendeur ne pouvait pas s'en apercevoir.
+        //
+        //    Le préavis, lui, était gelé depuis toujours (`engagement.resiliation`). C'est le même
+        //    geste, étendu : ce qui définit l'offre appartient à l'offre.
+        $declaree = $formule->getPeriodicite();
+        if ($declaree === null) {
+            throw new UnprocessableEntityHttpException(
+                'Cette formule ne déclare aucune périodicité : renseignez-la dans la fiche produit. '
+                . "La cadence d'un abonnement n'est plus saisie à la souscription, elle vient de l'offre.",
+            );
+        }
+
+        // ⚠ `Personnalise` EST REFUSÉ, PAS TRADUIT. Ce cas n'est employé nulle part dans le dépôt ;
+        //    lui choisir une cadence ici inventerait une règle commerciale et l'appliquerait en
+        //    silence à toutes les souscriptions d'une telle formule.
+        $periodicite = PeriodiciteAbonnementFitness::depuisFormule($declaree);
+        if ($periodicite === null) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'La périodicité « %s » de cette formule n\'a pas de cadence de prélèvement définie. '
+                . 'Choisissez « mensuel » ou « annuel » dans la fiche produit.',
+                $declaree->value,
+            ));
+        }
+
+        $engagement = $formule->getEngagement() ?? [];
+
+        // La durée déclarée par l'offre prime ; le paramètre reste le repli tant qu'aucun écran ne
+        // sait poser `engagement.dureeMin` — il est NULL sur les quatre formules de préproduction.
+        $duree = isset($engagement['dureeMin']) && is_numeric($engagement['dureeMin'])
+            ? (int) $engagement['dureeMin']
+            : $dureeEngagementMois;
+
         $abonnement = new AbonnementFitness();
         $abonnement->setAdherent($adherent)
             ->setPayeur($payeur)
@@ -89,9 +131,8 @@ final class SouscriptionAbonnementHandler
             ->setStatut(StatutAbonnementFitness::Actif)
             ->setDateSouscription($dateSouscription)
             ->setDateDebutEngagement($dateSouscription)
-            ->setDateFinEngagement($dateSouscription->modify(sprintf('+%d months', $dureeEngagementMois)));
+            ->setDateFinEngagement($dateSouscription->modify(sprintf('+%d months', $duree)));
 
-        $engagement = $formule->getEngagement() ?? [];
         $preavis = (int) ($engagement['resiliation'] ?? 30);
         $abonnement->setPreavisResiliationJours($preavis);
 

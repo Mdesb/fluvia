@@ -117,9 +117,9 @@ final class SubscriptionTermHandler
             return 'sans-tarif';
         }
 
-        $increment = $abonnement->getPeriodicite() === PeriodiciteAbonnementFitness::Mensuel
-            ? '+1 month'
-            : '+1 week';
+        // ⚠ MÊME PIÈGE QUE DANS LE GÉNÉRATEUR D'ÉCHÉANCIER : ce ternaire rendait hebdomadaire tout
+        //    ce qui n'était pas mensuel. Un abonnement annuel se serait reconduit d'une semaine.
+        $increment = $abonnement->getPeriodicite()->increment();
 
         $ancienneFin = $abonnement->getDateFinEngagement();
         $nouvelleFin = $mode === TermRenewalMode::Renew

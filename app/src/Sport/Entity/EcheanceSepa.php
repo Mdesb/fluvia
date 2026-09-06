@@ -13,7 +13,9 @@ use ApiPlatform\Metadata\Post;
 use App\Recouvrement\Entity\IncidentImpaye;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sport\Enum\StatutEcheanceSepa;
+use App\Securite\Entity\Utilisateur;
 use App\Sport\State\CancelScheduledDebitProcessor;
+use App\Sport\State\ReduceScheduledDebitProcessor;
 use App\Sport\State\SimulerRejetProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -62,6 +64,26 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'sport.gerer_abonnement')",
             processor: CancelScheduledDebitProcessor::class,
+        ),
+        // UNE OFFRE SUR UN PRÉLÈVEMENT À VENIR — parrainage, geste commercial, mois offert.
+        //
+        // ⚠ ON POUVAIT ANNULER UNE ÉCHÉANCE, JAMAIS LA RÉDUIRE. Le montant n'avait qu'un seul
+        //   écrivain, le générateur d'échéancier, à la création. Faire un geste de 10 € obligeait
+        //   donc à annuler tout le prélèvement du mois — ou à ne rien faire.
+        new Post(
+            uriTemplate: '/sport/echeances/{id}/reduire',
+            read: true,
+            // Le corps est lu par `LecteurCorps` dans le processeur, comme sur `souscrire`. Sans
+            // `input: false`, API Platform desrialiserait le corps et n'accepterait que
+            // `application/ld+json` : le serveur aurait rendu 415 a CHAQUE appel.
+            //
+            // Signale par `garde-fou verifier-formats` avant le premier commit. Son message dit
+            // aussi pourquoi on ne corrige pas cote client : « une operation qui ne desrialise pas
+            // ne controle pas le Content-Type du tout ; le drapeau y est inerte, et l'ecrire fait
+            // croire que l'appel est verifie alors qu'il ne l'est pas ».
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement')",
+            processor: ReduceScheduledDebitProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['echeance:read']],
@@ -118,6 +140,54 @@ class EcheanceSepa
     #[Groups(['echeance:read'])]
     private ?\DateTimeImmutable $cancelledAt = null;
 
+    /**
+     * LE MONTANT AVANT RÉDUCTION — `null` tant qu'aucune n'a été appliquée.
+     *
+     * ⚠ C'EST `montantCentimes` QUI PORTE LE MONTANT À PRÉLEVER, ET LA RÉDUCTION LE DIMINUE EN
+     * PLACE. Garder la base ici et soustraire chez les lecteurs obligerait à modifier chaque endroit
+     * qui lit une échéance — `SportEcheanceSepaSource`, le préavis, la génération de remise,
+     * l'écran, la comptabilité — et il suffirait d'en oublier UN pour prélever le plein tarif après
+     * avoir annoncé le réduit. Un seul écrivain, aucun lecteur à changer.
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['echeance:read'])]
+    private ?int $montantInitialCentimes = null;
+
+    /**
+     * POURQUOI CE PRÉLÈVEMENT A ÉTÉ RÉDUIT.
+     *
+     * Exigé, comme le motif d'annulation juste au-dessus et pour la même raison : la seule question
+     * posée six mois plus tard, devant un relevé qui ne correspond pas au contrat, sera « pourquoi ».
+     */
+    #[ORM\Column(length: 200, nullable: true)]
+    #[Groups(['echeance:read'])]
+    private ?string $reductionMotif = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['echeance:read'])]
+    private ?\DateTimeImmutable $reductionAt = null;
+
+    /** Qui a consenti le geste. Un rabais sur un prélèvement est une décision, elle a un auteur. */
+    #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['echeance:read'])]
+    private ?Utilisateur $reductionPar = null;
+
+    /**
+     * LA DATE AVANT LAQUELLE CE PRÉLÈVEMENT NE PEUT PLUS PARTIR — servie, jamais persistée.
+     *
+     * ⚠ CHANGER LE MONTANT REPOUSSE LE PRÉLÈVEMENT, ET IL FAUT LE DIRE AU MOMENT DU GESTE.
+     * `DebitPreNotifier::reasonNotCovered()` refuse un prélèvement dont le montant diffère de celui
+     * annoncé ; le préavis sera donc réémis, et `announce()` remet `sentAt` à l'instant courant —
+     * « un montant qui change doit rendre au client la totalité du délai ». Un geste commercial fait
+     * trois jours avant l'échéance la décale donc de deux semaines. C'est correct, et personne ne le
+     * devinerait : l'écran l'annonce à partir de ce champ.
+     *
+     * Nul en lecture ordinaire : il ne vaut que pour la réponse au geste qui vient de l'écrire.
+     */
+    #[Groups(['echeance:read'])]
+    private ?\DateTimeImmutable $prelevementPasAvant = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -126,6 +196,66 @@ class EcheanceSepa
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getMontantInitialCentimes(): ?int
+    {
+        return $this->montantInitialCentimes;
+    }
+
+    public function setMontantInitialCentimes(?int $montantInitialCentimes): self
+    {
+        $this->montantInitialCentimes = $montantInitialCentimes;
+
+        return $this;
+    }
+
+    public function getReductionMotif(): ?string
+    {
+        return $this->reductionMotif;
+    }
+
+    public function setReductionMotif(?string $reductionMotif): self
+    {
+        $this->reductionMotif = $reductionMotif;
+
+        return $this;
+    }
+
+    public function getReductionAt(): ?\DateTimeImmutable
+    {
+        return $this->reductionAt;
+    }
+
+    public function setReductionAt(?\DateTimeImmutable $reductionAt): self
+    {
+        $this->reductionAt = $reductionAt;
+
+        return $this;
+    }
+
+    public function getReductionPar(): ?Utilisateur
+    {
+        return $this->reductionPar;
+    }
+
+    public function setReductionPar(?Utilisateur $reductionPar): self
+    {
+        $this->reductionPar = $reductionPar;
+
+        return $this;
+    }
+
+    public function getPrelevementPasAvant(): ?\DateTimeImmutable
+    {
+        return $this->prelevementPasAvant;
+    }
+
+    public function setPrelevementPasAvant(?\DateTimeImmutable $prelevementPasAvant): self
+    {
+        $this->prelevementPasAvant = $prelevementPasAvant;
+
+        return $this;
     }
 
     public function getAbonnement(): ?AbonnementFitness

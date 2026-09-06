@@ -413,6 +413,14 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-espacement-en-ligne.php
     fi
 
+    # Un nom dans TACHES_AUTORISEES et absent de ScheduleCatalog ne tourne JAMAIS, en silence : le
+    # lanceur filtrait par egalite de nom et sortait 0 sans un mot. Ne prend pas `--contre` : la
+    # coherence des deux listes est une propriete de l arbre, pas d un ecart entre deux commits.
+    if [ -f "$ARBRE/bin/garde-fou-taches-planifiees-fantomes.php" ]; then
+        echo "── Tâches planifiées fantômes"
+        lancer garde-fou-taches-planifiees-fantomes.php
+    fi
+
     # Compare le champ que chaque extension de perimetre FILTRE a celui que l'entite DECLARE. Un
     # ecart ne leve pas d'erreur : il produit des lignes en trop.
     if [ -f "$ARBRE/bin/garde-fou-champ-cloisonnement.php" ]; then

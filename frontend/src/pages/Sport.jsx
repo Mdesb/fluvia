@@ -857,8 +857,11 @@ function SouscriptionModal({ open, onClose, onFait }) {
   const [produits, setProduits] = useState([])
   const [adherent, setAdherent] = useState('')
   const [payeur, setPayeur] = useState('')
+  // ⚠ UNE SUGGESTION NE DOIT PAS ÉCRASER UN CHOIX. Dès que quelqu'un désigne le payeur
+  //   lui-même, on ne suggère plus — jusqu'au prochain changement d'adhérent, qui repart de
+  //   zéro parce que c'est le début d'une autre souscription.
+  const [payeurManuel, setPayeurManuel] = useState(false)
   const [produit, setProduit] = useState('')
-  const [periodicite, setPeriodicite] = useState('mensuel')
   const [duree, setDuree] = useState('12')
   // ⚠ PLUS DE MONTANT SAISI. Arbitrage de Maxime du 01/09 : « il ne doit pas y avoir de prix
   //    libre. » Le serveur résout désormais depuis la grille tarifaire et REFUSE le champ s'il est
@@ -870,7 +873,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
 
   useEffect(() => {
     if (!open) return
-    setAdherent(''); setPayeur(''); setProduit(''); setPeriodicite('mensuel')
+    setAdherent(''); setPayeur(''); setPayeurManuel(false); setProduit('')
     setDuree('12'); setIban(''); setTitulaire(''); setErreur(null)
     Promise.allSettled([api.beneficiaires(), api.rechercheClients({ itemsPerPage: 100 }), api.produits()])
       .then(([b, c, p]) => {
@@ -880,6 +883,39 @@ function SouscriptionModal({ open, onClose, onFait }) {
       })
   }, [open])
 
+  // LE CLIENT RATTACHÉ À L'ADHÉRENT — c'est lui qu'on suggère comme payeur.
+  //
+  // ⚠ `b.client`, PAS `b.prenom`/`b.nom`. `GET /api/beneficiaires` n'expose ni l'un ni l'autre au
+  //   premier niveau : mesuré, 0 sur 11. Le sélecteur d'adhérent lisait ces deux champs
+  //   inexistants et retombait sur `|| b.id` — on choisissait dans une liste d'UUID. Le bon
+  //   idiome est vingt lignes plus haut, dans `nomAdherent()`.
+  const benefChoisi = beneficiaires.find((b) => b.id === adherent) || null
+  const clientAdherent = benefChoisi?.client || null
+
+  useEffect(() => {
+    if (payeurManuel || !adherent) return
+    const b = beneficiaires.find((x) => x.id === adherent)
+    const c = b?.client
+    if (!c?.id) return
+    setPayeur(c.id)
+    // Le titulaire du mandat n'est écrasé que s'il est vide : une saisie manuelle prime.
+    setTitulaire((t) => (t.trim() ? t : (nomOuAbsence(c, '') || '')))
+  }, [adherent, payeurManuel, beneficiaires])
+
+  // ⚠ LE CLIENT SUGGÉRÉ PEUT MANQUER DE LA LISTE : `rechercheClients` est bornée à 100. Poser
+  //   une valeur qu'aucune option ne porte afficherait un champ vide tout en l'ayant remplie.
+  const optionsPayeur = clientAdherent?.id && !clients.some((c) => c.id === clientAdherent.id)
+    ? [clientAdherent, ...clients]
+    : clients
+
+  // LA CADENCE VIENT DE LA FORMULE, PLUS DE CET ÉCRAN.
+  //
+  // ⚠ ELLE ÉTAIT SAISIE ICI ET LA FORMULE ÉTAIT IGNORÉE. `Formule::$periodicite` est éditable
+  //   dans la fiche produit et n'était lue par personne : une formule déclarée ANNUELLE
+  //   souscrite depuis cette modale devenait MENSUELLE, en silence. Le serveur refuse
+  //   désormais le champ plutôt que de l'ignorer — l'envoyer rendrait 422.
+  const CADENCES = { mensuel: 'Mensuelle', annuel: 'Annuelle', personnalise: 'Personnalisée' }
+
   const formules = produits.filter((p) => p.formule?.id)
   // Le tarif du produit choisi, tel que le catalogue le porte. On l'AFFICHE : c'est ce que le
   // serveur résoudra, et le montrer avant permet de s'apercevoir qu'il manque avant de valider.
@@ -888,7 +924,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
   const tarifAffiche = grilleTarif
     ? Number(grilleTarif.prix).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
     : null
-  const pret = adherent && payeur && produit && periodicite
+  const pret = adherent && payeur && produit
     // ⚠ `tarifAffiche` REMPLACE `centimes > 0` dans la garde : sans tarif au catalogue, le
     //    serveur refusera la souscription. Bloquer ici évite un aller-retour et une erreur
     //    technique là où la cause est un produit sans prix.
@@ -904,7 +940,6 @@ function SouscriptionModal({ open, onClose, onFait }) {
         adherent,
         payeur,
         formule: choisi.formule.id,
-        periodicite,
         dureeEngagementMois: Number(duree),
         iban: iban.trim(),
         titulaireMandat: titulaire.trim(),
@@ -936,7 +971,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
               <option value="">— choisir —</option>
               {beneficiaires.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {[b.prenom, b.nom].filter(Boolean).join(' ') || b.id}
+                  {(b.client ? nomOuAbsence(b.client, '') : '') || `sans nom — ${b.id.slice(0, 8)}`}
                 </option>
               ))}
             </select>
@@ -944,17 +979,36 @@ function SouscriptionModal({ open, onClose, onFait }) {
           </div>
           <div className="field" style={{ flex: '1 1 240px' }}>
             <label htmlFor="ab-payeur">Payeur *</label>
-            <select id="ab-payeur" className="input" value={payeur} onChange={(e) => setPayeur(e.target.value)}>
+            <select
+              id="ab-payeur"
+              className="input"
+              value={payeur}
+              onChange={(e) => { setPayeur(e.target.value); setPayeurManuel(true) }}
+            >
               <option value="">— choisir —</option>
-              {clients.map((c) => (
+              {optionsPayeur.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.raisonSociale || [c.prenom, c.nom].filter(Boolean).join(' ') || c.id}
                 </option>
               ))}
             </select>
             {/* Deux personnes différentes dans le cas courant : un parent règle pour son enfant.
-                Les confondre ferait prélever le mineur. */}
-            <span className="hint">Celui qui sera prélevé — souvent le parent, pas l’adhérent.</span>
+                Les confondre ferait prélever le mineur.
+
+                ⚠ ET C'EST POURQUOI LA SUGGESTION SE DIT. Pré-remplir en silence le champ qui
+                décide de QUI EST PRÉLEVÉ échangerait une saisie oubliée contre un prélèvement
+                sur la mauvaise personne — le même défaut, en moins visible. */}
+            {!payeurManuel && payeur && clientAdherent?.id === payeur ? (
+              <span className="hint">
+                <b>Suggéré</b> : l’adhérent se paie lui-même. Changez-le si quelqu’un d’autre règle.
+              </span>
+            ) : benefChoisi && !clientAdherent ? (
+              <span className="hint">
+                Cet adhérent n’est rattaché à aucun client : rien à suggérer, choisissez qui sera prélevé.
+              </span>
+            ) : (
+              <span className="hint">Celui qui sera prélevé — souvent le parent, pas l’adhérent.</span>
+            )}
           </div>
         </div>
 
@@ -970,11 +1024,23 @@ function SouscriptionModal({ open, onClose, onFait }) {
 
         <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 160px' }}>
-            <label htmlFor="ab-periodicite">Périodicité *</label>
-            <select id="ab-periodicite" className="input" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)}>
-              <option value="mensuel">Mensuelle</option>
-              <option value="hebdomadaire">Hebdomadaire</option>
-            </select>
+            <label htmlFor="ab-periodicite">Périodicité</label>
+            {/* ⚠ AFFICHÉE, PLUS SAISIE — même motif que le montant juste à côté, et pour la même
+                raison : la laisser modifiable ferait croire qu'on fixe la cadence alors que le
+                serveur applique celle de la formule. L'écart ne se verrait qu'au relevé bancaire. */}
+            <input
+              id="ab-periodicite"
+              className="input"
+              value={CADENCES[produitChoisi?.formule?.periodicite] || (produit ? '—' : '')}
+              readOnly
+              placeholder="choisissez un produit"
+              aria-describedby="ab-periodicite-aide"
+            />
+            <span className="hint" id="ab-periodicite-aide">
+              {produit && !produitChoisi?.formule?.periodicite
+                ? 'Cette formule n’en déclare aucune : le serveur refusera. Renseignez-la dans la fiche produit.'
+                : 'Déclarée par la formule. Se change dans la fiche produit.'}
+            </span>
           </div>
           <div className="field" style={{ flex: '1 1 160px' }}>
             <label htmlFor="ab-duree">Engagement (mois) *</label>

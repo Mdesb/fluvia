@@ -72,7 +72,6 @@ final class ParcoursSouscriptionCollecteTest extends SportApiTestCase
             $payeur,
             $formule,
             $etablissement,
-            PeriodiciteAbonnementFitness::Mensuel,
             new \DateTimeImmutable('-1 month'),
             12,
             'FR7630006000011234567890189',

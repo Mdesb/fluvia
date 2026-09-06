@@ -945,6 +945,30 @@ export const api = {
   // avalait l'echec (`.catch(() => null)`) et affichait « Aucun abonnement fitness » — un vide qui
   // ressemblait a une absence de donnees et qui etait une adresse fausse.
   abonnementsFitness: () => request('/api/abonnement_fitnesses', { query: { itemsPerPage: 200 } }),
+  // LES DEUX ROLES D'UN ABONNEMENT, INTERROGEABLES SEPAREMENT.
+  //
+  // Un abonnement porte un ADHERENT (`Beneficiaire`, celui qui entre) et un PAYEUR (`Client`,
+  // celui qui est preleve). La fiche client doit repondre aux deux questions, et ce ne sont pas
+  // les memes : « que paie-t-il ? » sert au litige bancaire, « a quoi a-t-il droit ? » sert a la
+  // porte. Le pont entre les deux est `Beneficiaire.client`, d'ou le second appel.
+  //
+  // ⚠ CES TROIS APPELS ONT EXIGE D'OUVRIR DES FILTRES COTE SERVEUR. Ni `AbonnementFitness` ni
+  //   `Beneficiaire` n'en declarait : un `?payeur=` etait ignore EN SILENCE et l'endpoint rendait
+  //   TOUT. Ca a la forme de donnees filtrees, ca arrive, et personne ne le remet en cause.
+  // UNE OFFRE SUR UN PRÉLÈVEMENT À VENIR — parrainage, geste commercial, mois offert.
+  //
+  // ⚠ `montantCentimes` EST CE QU'ON RETIRE, PAS LE MONTANT D'ARRIVÉE. « moins 10 € » et
+  //   « à 10 € » se confondent dans une tête pressée, et la confusion ne produit ni erreur ni
+  //   message : elle produit un prélèvement faux. Le serveur exige un ENTIER — `(int) '10,50'`
+  //   vaudrait 10, une saisie fausse qui passerait en silence.
+  reduireEcheance: (id, corps) =>
+    request(`/api/sport/echeances/${id}/reduire`, { method: 'POST', body: corps }),
+  abonnementsDuPayeur: (clientId) =>
+    request('/api/abonnement_fitnesses', { query: { payeur: clientId, itemsPerPage: 100 } }),
+  beneficiairesDuClient: (clientId) =>
+    request('/api/beneficiaires', { query: { client: clientId, itemsPerPage: 100 } }),
+  abonnementsDesAdherents: (ids) =>
+    request('/api/abonnement_fitnesses', { query: { adherent: ids, itemsPerPage: 100 } }),
   // LES DEUX GESTES QUE L'ECRAN AVOUAIT NE PAS FAIRE.
   //
   // Les routes existent depuis l'origine du module ; aucune fonction cliente ne les appelait, donc
@@ -1547,6 +1571,18 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // LES DEUX CONSOLIDATIONS, QUE PERSONNE N'APPELAIT. Le tableau de bord d'UN site etait branche
+  // depuis l'origine ; ceux de la region et du groupe — classement des sites, ecart vs objectif,
+  // ecart vs n-1, badge de fraicheur — ne l'etaient par aucun ecran. C'est pourtant la vue d'un
+  // dirigeant : il ne regarde pas une piscine, il regarde son perimetre.
+  //
+  // ⚠ Les deux acceptent `periodeDebut`/`periodeFin` ; sans elles, la journee.
+  // ⚠ Le groupe ne rend PAS d'ecart vs objectif — seulement vs n-1. L'ecran ne doit pas afficher
+  // une case vide comme si c'etait un zero.
+  dashboardRegion: (id, params) =>
+    request(`/reporting/dashboards/region/${id}`, { query: params }),
+  dashboardGroupe: (id, params) =>
+    request(`/reporting/dashboards/groupe/${id}`, { query: params }),
   // Référentiel des indicateurs (M7).
   indicateurs: () => request('/api/indicateurs', { query: { itemsPerPage: 100 } }),
   // L'Explorateur (M7-04) : un indicateur x un perimetre x UN JOUR. Route hors `/api`, comme le
@@ -1661,6 +1697,20 @@ export const api = {
   // reproduirait exactement le défaut qu'on corrige.
   demanderReinitialisation: (email) =>
     request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+  // LES DEUX BOUTS QUI MANQUAIENT AUX FLUX DE COMPTE. `oublie` demandait le courriel ; le lien
+  // qu'il envoie pointe vers `/mot-de-passe/reinitialiser?jeton=…` et `/activation?jeton=…`, et
+  // AUCUN ecran n'appelait ces deux routes-la. Les liens tombaient sur l'ecran de connexion.
+  //
+  // ⚠ `auth: false` : ces deux appels se font sans session, par definition — celui qui active son
+  // compte n'en a pas encore.
+  activerCompte: ({ jeton, motDePasse }) =>
+    request('/utilisateurs/activation', {
+      method: 'POST', body: { jeton, motDePasse }, auth: false,
+    }),
+  reinitialiserMotDePasse: ({ jeton, nouveauMotDePasse }) =>
+    request('/mot-de-passe/reinitialiser', {
+      method: 'POST', body: { jeton, nouveauMotDePasse }, auth: false,
+    }),
 
   // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
   //
@@ -2262,6 +2312,25 @@ export const api = {
     request('/api/boutique_allocation_quota_otas', { method: 'POST', body: corps, ld: true }),
   majQuotaOta: (id, corps) =>
     request(`/api/boutique_allocation_quota_otas/${id}`, { method: 'PATCH', body: corps }),
+  // LE MODULE << CONNECTEURS >> -- destinations sortantes Slack, Teams, Discord.
+  //
+  // /!\ L'URL NE REVIENT JAMAIS EN LECTURE. Elle vaut un mot de passe : qui la detient peut ecrire
+  // dans le canal au nom de l'etablissement. Le serveur ne la met dans aucun groupe de
+  // serialisation ; seul l'hote ressort. Ne jamais ajouter ici de route qui la relirait.
+  connecteurs: () =>
+    request('/api/integration_outbound_endpoints', { query: { itemsPerPage: 100 } }),
+  creerConnecteur: (corps) =>
+    request('/api/integration_outbound_endpoints', { method: 'POST', body: corps, ld: true }),
+  majConnecteur: (id, corps) =>
+    request(`/api/integration_outbound_endpoints/${id}`, { method: 'PATCH', body: corps }),
+  supprimerConnecteur: (id) =>
+    request(`/api/integration_outbound_endpoints/${id}`, { method: 'DELETE' }),
+  // La liste des evenements auxquels on peut s'abonner. Servie par le serveur depuis les manifestes
+  // de module, JAMAIS recopiee ici : une liste tenue a la main aurait diverge au premier module
+  // ajoute, et une faute de frappe dans un nom ne produit AUCUNE erreur -- l'abonnement ne matche
+  // simplement jamais, en silence.
+  evenementsConnecteurs: () =>
+    request('/api/integrations/evenements-disponibles'),
   reversementsOta: () =>
     request('/api/reversement_otas', { query: { itemsPerPage: 200 } }),
   // ⚠ LE MONTANT N'EST PAS FOURNI : le serveur le calcule sur les ventes de la periode. C'est ce

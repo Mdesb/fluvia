@@ -54,12 +54,30 @@ final class VerrouPremierPassageTest extends KernelTestCase
         $this->application->setAutoExit(false);
     }
 
+    /**
+     * ⚠ SANS `--dry-run`, ET C'EST TOUT L'OBJET DE CE TEMOIN.
+     *
+     * Il portait `--dry-run` jusqu'au 06/09 — un passage a blanc, ou RIEN NE PART JAMAIS. Il ne
+     * prouvait donc pas ce que son nom annonce : il prouvait que la simulation refusait d'afficher.
+     * C'etait justement le defaut, puisque le message du verrou conseille `--dry-run` et que
+     * `--dry-run` retombait dessus.
+     *
+     * Ici on lance pour de vrai. Si le verrou lachait, la tache s'executerait — c'est exactement le
+     * risque qu'on veut voir attrape.
+     */
     public function testUneTacheNonSureNePartPasQuandLOrdonnanceurLAppelleAvecOnly(): void
     {
-        $sortie = $this->executer(['--only' => $this->uneTacheNonSure(), '--dry-run' => true]);
+        $sortie = $this->executer(['--only' => $this->uneTacheNonSure()]);
 
         self::assertStringContainsString('premier passage', $sortie);
-        self::assertStringNotContainsString('due', $sortie);
+
+        // `$io->success()` n'imprime `[OK]` que si au moins une tache a tourne. Ancrer la sur le
+        // marqueur plutot que sur la phrase evite un temoin qui tombe sur un accent.
+        self::assertStringNotContainsString(
+            '[OK]',
+            $sortie,
+            'une tache retenue ne doit pas etre comptee comme executee',
+        );
     }
 
     /**

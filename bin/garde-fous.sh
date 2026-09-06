@@ -441,6 +441,7 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php "--contre=$REFERENCE"
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
+    executer "Tâches planifiées fantômes (n°54)" php_racine bin/garde-fou-taches-planifiees-fantomes.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
     executer "Entités rattachables hors liste (n°35)" php_racine bin/garde-fou-entite-rattachable-hors-liste.php "--contre=$REFERENCE"
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
@@ -455,6 +456,7 @@ else
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
+    executer "Tâches planifiées fantômes (n°54)" php_racine bin/garde-fou-taches-planifiees-fantomes.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
     executer "Entités rattachables hors liste (n°35)" php_racine bin/garde-fou-entite-rattachable-hors-liste.php
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php

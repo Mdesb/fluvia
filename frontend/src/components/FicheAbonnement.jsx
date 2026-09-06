@@ -60,6 +60,7 @@ function Champ({ libelle, children, aide }) {
 export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie }) {
   const [onglet, setOnglet] = useState('contrat')
   const [echeances, setEcheances] = useState(null)
+  const [reduction, setReduction] = useState(null)
   const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un objet = trouve ; `false` = lu, aucun
@@ -301,14 +302,33 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
                     <th className="num">Date</th>
                     <th className="num">Montant</th>
                     <th>Statut</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {echeances.map((e) => (
                     <tr key={e.id}>
                       <td className="num">{jour(e.dateProgrammee)}</td>
-                      <td className="num">{eurosCentimes(e.montantCentimes)}</td>
+                      <td className="num">
+                        {eurosCentimes(e.montantCentimes)}
+                        {/* ⚠ ON MONTRE LES DEUX MONTANTS, PAS SEULEMENT LE RÉDUIT. Un prélèvement
+                            qui ne correspond pas au contrat se conteste ; l'écart doit se lire ici,
+                            avec son motif, plutôt que se reconstituer six mois plus tard. */}
+                        {e.montantInitialCentimes != null && (
+                          <div className="sub">
+                            <s>{eurosCentimes(e.montantInitialCentimes)}</s>
+                            {e.reductionMotif ? ` · ${e.reductionMotif}` : ''}
+                          </div>
+                        )}
+                      </td>
                       <td><span className="badge mut">{e.statut || '—'}</span></td>
+                      <td>
+                        {e.statut === 'a_venir' && e.montantInitialCentimes == null && (
+                          <button className="btn sm" type="button" onClick={() => setReduction(e)}>
+                            Réduire
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -324,7 +344,117 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
         onClose={() => setGeste(null)}
         onFait={() => { setGeste(null); onModifie?.() }}
       />
+
+      <ReductionModal
+        echeance={reduction}
+        onClose={() => setReduction(null)}
+        onFait={() => { setReduction(null); onModifie?.() }}
+      />
     </div>
+  )
+}
+
+/**
+ * UNE OFFRE SUR UN PRÉLÈVEMENT À VENIR.
+ *
+ * ⚠ ELLE DIT CE QU'ELLE RETIRE, JAMAIS LE MONTANT D'ARRIVÉE. « moins 10 € » et « à 10 € » se
+ * confondent dans une tête pressée, et la confusion ne produit ni erreur ni message : elle produit
+ * un prélèvement faux. Le champ est donc libellé « Montant retiré », et la fenêtre affiche le calcul
+ * en toutes lettres avant de valider.
+ *
+ * ⚠ ET ELLE ANNONCE LA CONSÉQUENCE QUE PERSONNE NE DEVINERAIT : changer le montant repousse le
+ * prélèvement. Le préavis SEPA doit être réémis pour le nouveau montant, et le délai légal repart de
+ * zéro — « un montant qui change doit rendre au client la totalité du délai ». Un geste consenti
+ * trois jours avant l'échéance la décale donc de deux semaines. Le serveur rend la date ; on la
+ * montre au moment du geste, pas au relevé.
+ */
+function ReductionModal({ echeance, onClose, onFait }) {
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+  const [faite, setFaite] = useState(null)
+
+  useEffect(() => {
+    setMontant(''); setMotif(''); setErreur(null); setFaite(null)
+  }, [echeance])
+
+  // ⚠ `Math.round`, PAS UNE TRONCATURE : `10,50 €` doit valoir 1050 centimes, et `parseInt` en
+  //    rendrait 10. Le serveur refuse tout ce qui n'est pas un entier, mais un entier FAUX passerait.
+  const centimes = montant.trim() === '' ? null : Math.round(Number(montant.replace(',', '.')) * 100)
+  const valide = centimes !== null && Number.isFinite(centimes) && centimes > 0
+    && echeance && centimes < echeance.montantCentimes && motif.trim() !== ''
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      setFaite(await api.reduireEcheance(echeance.id, { montantCentimes: centimes, motif: motif.trim() }))
+    } catch (err) {
+      setErreur(err.message || 'La réduction n’a pas abouti.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!echeance} onClose={onClose} titre="Réduire un prélèvement à venir" taille="md">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        {faite ? (
+          <>
+            <div className="banner banner-ok">
+              <b>Prélèvement réduit</b> — {eurosCentimes(faite.montantInitialCentimes)} →{' '}
+              {eurosCentimes(faite.montantCentimes)}.
+            </div>
+            {/* Le serveur ne rend cette date que sur la réponse au geste : elle ne se relit pas. */}
+            {faite.prelevementPasAvant && (
+              <div className="banner banner-warn">
+                <b>Le prélèvement est repoussé.</b> Le client doit être prévenu du nouveau montant, et
+                le délai légal repart de zéro : il ne pourra pas partir avant le{' '}
+                {jour(faite.prelevementPasAvant)}.
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn primary" type="button" onClick={onFait}>Fermer</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              Échéance du {jour(echeance?.dateProgrammee)}, {eurosCentimes(echeance?.montantCentimes)}.
+            </p>
+            <div className="field">
+              <label htmlFor="red-montant">Montant retiré (€) *</label>
+              <input id="red-montant" className="input" type="number" step="0.01" min="0"
+                value={montant} onChange={(ev) => setMontant(ev.target.value)} />
+              <span className="hint">
+                {valide
+                  ? `Le client sera prélevé de ${eurosCentimes(echeance.montantCentimes - centimes)} au lieu de ${eurosCentimes(echeance.montantCentimes)}.`
+                  : 'Ce qu’on retire, pas le montant d’arrivée. Pour ne rien prélever, annulez l’échéance.'}
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="red-motif">Motif *</label>
+              <input id="red-motif" className="input" value={motif}
+                onChange={(ev) => setMotif(ev.target.value)} placeholder="Parrainage, geste commercial…" />
+              <span className="hint">
+                La seule question posée six mois plus tard, devant un relevé qui ne correspond pas au
+                contrat, sera « pourquoi ».
+              </span>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={onClose}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={!valide || envoi}>
+                {envoi ? 'Envoi…' : 'Réduire'}
+              </button>
+            </div>
+          </>
+        )}
+      </form>
+    </Modal>
   )
 }
 
@@ -337,14 +467,26 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
   const [motif, setMotif] = useState('')
+  const [motifLegitime, setMotifLegitime] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // ⚠ CE QUE LE SERVEUR A RÉPONDU, PAS CE QU'ON CROIT QU'IL A FAIT. Une résiliation demandée
+  //   pendant l'engagement revient en 201 avec le statut « refusee » : la fenêtre se fermait
+  //   dessus sans un mot, et l'exploitant croyait avoir résilié.
+  const [resultat, setResultat] = useState(null)
+
+  // En engagement, une demande simple est refusée d'office. C'est la seule situation où la case
+  // du motif légitime a un sens — hors engagement la demande passe directement en préavis.
+  const enEngagement = !!abonnement?.dateFinEngagement
+    && new Date(abonnement.dateFinEngagement) > new Date()
 
   useEffect(() => {
     setDebut('')
     setFin('')
     setMotif('')
+    setMotifLegitime(false)
     setErreur(null)
+    setResultat(null)
   }, [geste])
 
   async function soumettre(e) {
@@ -354,10 +496,19 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
     try {
       if (geste === 'pause') {
         await api.pauserAbonnement(abonnement.id, { dateDebut: debut, dateFin: fin, motif: motif.trim() || undefined })
-      } else {
-        await api.resilierAbonnement(abonnement.id, { motif: motif.trim() })
+        onFait()
+        return
       }
-      onFait()
+
+      const resiliation = await api.resilierAbonnement(abonnement.id, {
+        motif: motif.trim(),
+        motifLegitime: motifLegitime || undefined,
+      })
+
+      // ⚠ ON NE FERME PLUS SUR UN REFUS. Les trois issues sont réelles et se distinguent par le
+      //   statut rendu ; les confondre était le défaut. Le geste reste enregistré dans tous les
+      //   cas — c'est ce qu'il DEVIENT qui change.
+      setResultat(resiliation?.statut || 'inconnu')
     } catch (err) {
       setErreur(err.message || 'Le geste n’a pas abouti.')
     } finally {
@@ -415,14 +566,77 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
                 posée six mois plus tard sera « pourquoi ».
               </p>
             </div>
+
+            {enEngagement && (
+              <div className="field">
+                <label htmlFor="re-legitime">
+                  <input
+                    id="re-legitime"
+                    type="checkbox"
+                    checked={motifLegitime}
+                    onChange={(e) => setMotifLegitime(e.target.checked)}
+                  />{' '}
+                  Motif légitime (déménagement, perte d’emploi, raison médicale…)
+                </label>
+                {/* ⚠ SANS CETTE CASE, LA DEMANDE EST UN CUL-DE-SAC. Pendant l'engagement, le
+                    serveur refuse toute demande ; seul un motif légitime déclaré ouvre la voie de
+                    la validation manuelle par un responsable. La fenêtre ne l'offrait pas, donc
+                    elle ne pouvait produire qu'un refus définitif. */}
+                <p className="hint">
+                  L’engagement court jusqu’au {jour(abonnement?.dateFinEngagement)}. Sans motif
+                  légitime, la demande sera refusée. Avec, elle attendra la validation d’un
+                  responsable avant que le préavis commence.
+                </p>
+              </div>
+            )}
           </>
         )}
 
+        {/* ⚠ CE QUI S'EST RÉELLEMENT PASSÉ, AVANT DE POUVOIR FERMER. La fenêtre appelait
+            `onFait()` sur un 201 et se fermait : un refus était indiscernable d'une réussite. */}
+        {resultat && (
+          <div className={`banner ${resultat === 'en_preavis' ? 'banner-ok' : 'banner-warn'}`}>
+            {resultat === 'en_preavis' && (
+              <>
+                <b>Résiliation acceptée.</b> Le préavis court ; à sa date d’effet, l’accès sera
+                coupé et les échéances restantes annulées.
+              </>
+            )}
+            {resultat === 'refusee' && motifLegitime && (
+              <>
+                <b>Demande enregistrée, en attente de validation.</b> L’abonnement est encore en
+                engagement : un responsable doit valider le motif légitime pour que le préavis
+                commence. Tant qu’il ne l’a pas fait, l’abonnement reste actif et prélevé.
+              </>
+            )}
+            {resultat === 'refusee' && !motifLegitime && (
+              <>
+                <b>Demande refusée.</b> L’abonnement est en engagement jusqu’au{' '}
+                {jour(abonnement?.dateFinEngagement)}. La demande est conservée, mais elle ne
+                produira aucun effet : l’abonnement reste actif et prélevé. Un motif légitime
+                permet d’y déroger, après validation d’un responsable.
+              </>
+            )}
+            {resultat !== 'en_preavis' && resultat !== 'refusee' && (
+              <>
+                <b>Demande enregistrée</b>, statut « {resultat} ». Vérifiez la fiche : ce statut
+                n’est pas un de ceux que cet écran sait interpréter.
+              </>
+            )}
+          </div>
+        )}
+
         <div className="modal-actions">
-          <button className="btn" type="button" onClick={onClose}>Annuler</button>
-          <button className="btn primary" type="submit" disabled={envoi}>
-            {envoi ? 'Envoi…' : geste === 'pause' ? 'Mettre en pause' : 'Résilier'}
-          </button>
+          {resultat ? (
+            <button className="btn primary" type="button" onClick={onFait}>Fermer</button>
+          ) : (
+            <>
+              <button className="btn" type="button" onClick={onClose}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={envoi}>
+                {envoi ? 'Envoi…' : geste === 'pause' ? 'Mettre en pause' : 'Résilier'}
+              </button>
+            </>
+          )}
         </div>
       </form>
     </Modal>

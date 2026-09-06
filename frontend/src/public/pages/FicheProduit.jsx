@@ -64,10 +64,24 @@ function Abonnement({ produit, onNaviguer }) {
 
   if (faite) {
     return (
+      /* ⚠ CE MESSAGE DISAIT « ABONNEMENT SOUSCRIT » ET « LE PRÉLÈVEMENT SERA PRÉSENTÉ PAR
+         L'ÉTABLISSEMENT ». Les deux moitiés sont fausses aujourd'hui, et sur un chemin où le
+         client vient de signer un mandat SEPA.
+
+         `SouscriptionAbonnementEnLigneHandler` crée un mandat, une vente, une ligne et un
+         `Paiement('sepa', differe: true)` — puis s'arrête. Il ne crée PAS d'`AbonnementFitness` :
+         `new AbonnementFitness` n'existe qu'aux deux points du domaine Sport, et aucun fichier de
+         `app/src/Boutique` ne mentionne cette classe. Et rien ne collectera ce paiement :
+         `CompositeEcheanceSepaSource` n'agrège que les `EcheanceSepaSource`, dont aucune ne lit
+         `Vente` ni `Paiement`.
+
+         ⚠ ON N'ÉCRIT PAS L'INVERSE POUR AUTANT. « Aucun prélèvement ne sera présenté »
+           deviendrait faux le jour où ce chemin créera un vrai abonnement : ce serait remplacer
+           un mensonge par un autre, à retardement. On ne garde que ce qui est vrai dans les deux
+           cas — le mandat est signé, la commande est enregistrée. Le silence ne se périme pas. */
       <div className="banner banner-ok" role="status">
-        <strong>Abonnement souscrit.</strong> Commande {faite.numero || faite.vente?.slice(0, 8)}.
-        Le prélèvement sera présenté par l’établissement ; vous retrouvez la commande dans votre
-        espace.
+        <strong>Commande enregistrée.</strong> Commande {faite.numero || faite.vente?.slice(0, 8)}.
+        Votre mandat SEPA est signé. Vous retrouvez la commande dans votre espace.
       </div>
     )
   }

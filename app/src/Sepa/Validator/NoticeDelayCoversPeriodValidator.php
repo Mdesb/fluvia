@@ -126,6 +126,9 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
         return match ($periodicite) {
             PeriodiciteAbonnementFitness::Hebdomadaire => 7,
             PeriodiciteAbonnementFitness::Mensuel => 28,
+            // 365, pas 366 : même raison que le 28 ci-dessus. On prend l'année la plus courte, pour
+            // que ce qui passe ici passe aussi une année bissextile.
+            PeriodiciteAbonnementFitness::Annuel => 365,
         };
     }
 }
