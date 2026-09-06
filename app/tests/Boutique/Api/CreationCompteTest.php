@@ -54,4 +54,24 @@ final class CreationCompteTest extends BoutiqueApiTestCase
         $client->request('POST', '/api/boutique/comptes', ['json' => $donnees]);
         self::assertResponseStatusCodeSame(409);
     }
+
+    /**
+     * AUDIT DU 06/09, CONSTAT 7. Cette porte acceptait « aaa » — vérifié en préproduction, HTTP 201, puis
+     * `/auth` rendait un jeton valide avec. Douze caractères au minimum, désormais, et le même seuil que
+     * l'activation et la réinitialisation (`PasswordPolicy`).
+     */
+    public function testUnMotDePasseTropCourtEstRefuse(): void
+    {
+        $client = static::createClient();
+
+        $client->request('POST', '/api/boutique/comptes', [
+            'json' => [
+                'vitrine' => $this->idVitrineA(), 'email' => 'mdp.court@example.test', 'motDePasse' => 'aaa',
+                'nom' => 'Court', 'prenom' => 'Mot', 'dateNaissance' => '1990-01-01',
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([], $this->em()->getRepository(Client::class)->findBy(['email' => 'mdp.court@example.test']), 'aucune fiche ne doit exister');
+    }
 }

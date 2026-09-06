@@ -26,7 +26,12 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * CA-12). Un échec/timeout n'enregistre **aucun** paiement : la vente reste `en_cours`, le panier
  * reste valide jusqu'à expiration (CA-10, retentative possible). Un succès déclenche
  * `ConfirmerCommandeHandler::confirmerApresPaiementReussi()` (billets immédiats, e-mail, Reservation
- * confirmée par ligne timed-entry). Corps : { "referenceTransaction", "statut", "montantCentimes" }.
+ * confirmée par ligne timed-entry).
+ *
+ * ⚠ AUDIT DU 06/09, CONSTAT 1. Le corps portait `statut` et `montantCentimes`, et l'adaptateur les
+ * rendait tels quels : `{"statut":"accepte"}` confirmait la commande. Le corps porte désormais la
+ * référence et ce qui l'atteste (`recu` pour un bouchon, la signature du prestataire demain) ; le
+ * statut et le montant sont ceux que l'adaptateur a VÉRIFIÉS, confrontés à ce qui a été initié.
  *
  * @implements ProcessorInterface<PanierEnLigne, JsonResponse>
  */
@@ -52,9 +57,27 @@ final class RetourPaiementProcessor implements ProcessorInterface
             throw new ConflictHttpException('Aucun paiement en cours pour ce panier (RG-M3-11).');
         }
 
+        $corps = $this->lecteur->corps();
+        $reference = \is_string($corps['referenceTransaction'] ?? null) ? $corps['referenceTransaction'] : '';
+        $referenceInitiee = $suivi->getPaymentReference();
+        $montantInitie = $suivi->getPaymentAmountCents();
+        if ($referenceInitiee === null || $montantInitie === null) {
+            throw new ConflictHttpException('Aucune initiation de paiement mémorisée pour ce panier : repassez par « payer ».');
+        }
+        if ($reference === '' || !hash_equals($referenceInitiee, $reference)) {
+            throw new UnprocessableEntityHttpException('Retour de paiement refusé : la référence ne correspond pas à la transaction initiée.');
+        }
+
         $profil = $this->resoudreProfil($data);
         $adaptateur = $this->selecteur->pour($profil);
-        $resultat = $adaptateur->traiterRetour($this->lecteur->corps());
+        $resultat = $adaptateur->verifierRetour($reference, $montantInitie, $corps);
+        if ($resultat === null) {
+            // Rien n'atteste ce retour : ni reçu du bouchon, ni signature du prestataire. On ne devine pas.
+            throw new UnprocessableEntityHttpException('Retour de paiement non vérifiable : aucune preuve du prestataire ne l\'accompagne.');
+        }
+        if ($resultat->montantCentimes !== $montantInitie) {
+            throw new UnprocessableEntityHttpException('Retour de paiement refusé : le montant attesté n\'est pas celui de la commande.');
+        }
 
         if ($resultat->statut !== StatutTPE::Accepte) {
             // CA-10 : aucun paiement enregistré, la vente reste en_cours, le panier reste valide.

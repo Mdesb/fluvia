@@ -43,7 +43,7 @@ final class ClickCollectTest extends BoutiqueApiTestCase
         $donneesPaiement = $reponsePayer->toArray();
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/retour-paiement', [
             'headers' => $entete,
-            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'statut' => 'accepte', 'montantCentimes' => $donneesPaiement['montantCentimes']],
+            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'recu' => $donneesPaiement['simulation']['accepte']],
         ]);
         self::assertResponseIsSuccessful();
         $venteId = (string) $client->getResponse()->toArray()['vente'];

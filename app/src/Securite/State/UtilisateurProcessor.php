@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\State;
 
+use App\Securite\Service\PasswordPolicy;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
@@ -38,6 +39,7 @@ final class UtilisateurProcessor implements ProcessorInterface
         private readonly ProcessorInterface $persistProcessor,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly InvitationMailer $invitationMailer,
+        private readonly PasswordPolicy $passwords,
     ) {
     }
 
@@ -51,6 +53,8 @@ final class UtilisateurProcessor implements ProcessorInterface
         $motDePasseFourni = $data->getMotDePasseClair() !== null && $data->getMotDePasseClair() !== '';
 
         if ($motDePasseFourni) {
+            // Audit du 06/09, constat 7 : un compte exploitant créé « avec mot de passe » acceptait « a ».
+            $this->passwords->assertAcceptable((string) $data->getMotDePasseClair(), $data->getEmail());
             $data->setMotDePasse($this->hasher->hashPassword($data, $data->getMotDePasseClair()));
             $data->eraseCredentials();
             if ($creation) {

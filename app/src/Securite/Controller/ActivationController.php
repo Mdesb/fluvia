@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\Controller;
 
+use App\Securite\Service\PasswordPolicy;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Enum\StatutUtilisateur;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,10 +23,10 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ActivationController
 {
     /** Longueur minimale exigee sur ce flux — la meme que celle annoncee par l'ecran. */
-    private const TAILLE_MIN_MOT_DE_PASSE = 12;
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
+        private readonly PasswordPolicy $passwords,
     ) {
     }
 
@@ -44,13 +45,10 @@ final class ActivationController
         // Cote client il n'etait qu'un confort : cette route acceptait toute chaine non vide,
         // donc un appel direct posait « a ». Un formulaire qui affiche une regle que le serveur
         // ignore annonce le trou au lieu de le fermer.
-        if (mb_strlen($motDePasse) < self::TAILLE_MIN_MOT_DE_PASSE) {
-            return new JsonResponse([
-                'message' => sprintf(
-                    'Mot de passe trop court : %d caracteres au minimum.',
-                    self::TAILLE_MIN_MOT_DE_PASSE,
-                ),
-            ], 422);
+        // Depuis le 06/09 la règle vit dans `PasswordPolicy`, la même pour les quatre portes.
+        $violation = $this->passwords->violation($motDePasse);
+        if ($violation !== null) {
+            return new JsonResponse(['message' => $violation], 422);
         }
 
         $hash = hash('sha256', $jeton);

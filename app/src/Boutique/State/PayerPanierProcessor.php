@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\State;
 
+use App\Boutique\Entity\SuiviCommandeEnLigne;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
@@ -80,14 +81,28 @@ final class PayerPanierProcessor implements ProcessorInterface
         $montantCentimes = $this->calculateur->centimes($vente->getTotal());
         $initiation = $adaptateur->initierPaiement($vente->getId(), $montantCentimes, '');
 
-        return new JsonResponse([
+        // Ce qu'on vient de confier au prestataire, mémorisé : le retour se confrontera à ces deux
+        // valeurs, pas à ce que l'acheteur renverra (audit 06/09, constat 1).
+        $suivi = $this->em->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['panierOrigine' => $data]);
+        \assert($suivi instanceof SuiviCommandeEnLigne);
+        $suivi->recordPaymentInitiation($initiation->referenceTransaction, $montantCentimes);
+        $this->em->flush();
+
+        $reponse = [
             'vente' => (string) $vente->getId(),
             'panier' => (string) $data->getId(),
             'moyen' => $profil->getType() === TypeExploitant::RegieDirecte ? 'payfip' : 'cb_psp',
             'referenceTransaction' => $initiation->referenceTransaction,
             'urlRedirection' => $initiation->urlRedirection,
             'montantCentimes' => $montantCentimes,
-        ]);
+        ];
+        if ($initiation->simulationReceipts !== null) {
+            // Rendu par un BOUCHON seulement : la page « prestataire » du frontal public en fait ses
+            // boutons. Un vrai prestataire ne rend rien ici — c'est lui qui décide de l'issue.
+            $reponse['simulation'] = $initiation->simulationReceipts;
+        }
+
+        return new JsonResponse($reponse);
     }
 
     private function resoudreProfil(PanierEnLigne $panier): ProfilExploitant

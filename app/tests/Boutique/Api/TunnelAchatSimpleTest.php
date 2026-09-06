@@ -81,7 +81,7 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         // CA-10 : retour d'échec -> aucun paiement enregistré, panier toujours ouvert, retentative possible.
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/retour-paiement', [
             'headers' => $entete,
-            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'statut' => 'refuse', 'montantCentimes' => $donneesPaiement['montantCentimes']],
+            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'recu' => $donneesPaiement['simulation']['refuse']],
         ]);
         self::assertResponseIsSuccessful();
         $this->em()->clear();
@@ -94,7 +94,7 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         // Retentative réussie (CA-11) : billets immédiats, repli QR (CA-12, aucun wallet réel intégré).
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/retour-paiement', [
             'headers' => $entete,
-            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'statut' => 'accepte', 'montantCentimes' => $donneesPaiement['montantCentimes']],
+            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'recu' => $donneesPaiement['simulation']['accepte']],
         ]);
         self::assertResponseIsSuccessful();
         $confirmation = $client->getResponse()->toArray();

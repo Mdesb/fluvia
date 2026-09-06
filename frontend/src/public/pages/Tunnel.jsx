@@ -506,10 +506,12 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
     setErreur(null)
     setPhase('traitement')
     try {
+      // ⚠ ON N'ENVOIE PLUS DE STATUT (audit 06/09, constat 1) : le serveur ne le lirait plus. On
+      //   envoie le REÇU que le prestataire simulé a remis à l'initiation pour cette issue — le bouton
+      //   « Payer » joue le rôle de la page du prestataire. Sans reçu, le serveur répond 422.
       const r = await boutique.retourPaiement(panier.id, {
         referenceTransaction: resultat.referenceTransaction,
-        statut: statutTpe,
-        montantCentimes: resultat.montantCentimes,
+        recu: resultat?.simulation?.[statutTpe],
       })
       if (r?.statut === 'confirme' || r?.statut === 'conflit_inventaire') {
         // On mémorise l'éventuel conflit d'inventaire pour l'écran de confirmation.

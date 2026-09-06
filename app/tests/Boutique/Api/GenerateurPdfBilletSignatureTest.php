@@ -79,8 +79,7 @@ final class GenerateurPdfBilletSignatureTest extends BoutiqueApiTestCase
             'headers' => $entete,
             'json' => [
                 'referenceTransaction' => $donneesPaiement['referenceTransaction'],
-                'statut' => 'accepte',
-                'montantCentimes' => $donneesPaiement['montantCentimes'],
+                'recu' => $donneesPaiement['simulation']['accepte'],
             ],
         ]);
         self::assertResponseIsSuccessful();

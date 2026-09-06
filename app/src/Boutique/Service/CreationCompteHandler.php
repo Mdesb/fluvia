@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Boutique\Service;
 
+use App\Securite\Enum\AccountKind;
+use App\Securite\Service\PasswordPolicy;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Entity\Vitrine;
 use App\Crm\Entity\Client;
@@ -50,6 +52,7 @@ final class CreationCompteHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
+        private readonly PasswordPolicy $passwords,
     ) {
     }
 
@@ -68,6 +71,8 @@ final class CreationCompteHandler
         if ($email === '' || $motDePasse === '' || $nom === '' || $dateNaissanceStr === null) {
             throw new UnprocessableEntityHttpException('« email », « motDePasse », « nom » et « dateNaissance » sont requis (RG-M3-10).');
         }
+        // Audit du 06/09, constat 7 : cette porte acceptait « aaa » (vérifié en préproduction, 201).
+        $this->passwords->assertAcceptable($motDePasse, $email);
 
         $existant = $this->em->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
         if ($existant instanceof Utilisateur) {
@@ -100,6 +105,8 @@ final class CreationCompteHandler
             ->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse))
             ->setStatut(StatutUtilisateur::Actif)
             ->setRolesSecurite(['ROLE_USER'])
+            // Audit du 06/09, constat 4 : un compte né ici est un client final, et le reste.
+            ->setKind(AccountKind::Customer)
             ->setClientLie($client->getId());
         $this->em->persist($utilisateur);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\DataFixtures;
 
+use App\Securite\Enum\AccountKind;
 use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Entity\LignePanierEnLigne;
@@ -298,7 +299,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         $utilisateurClient = new Utilisateur();
         $utilisateurClient->setEmail(self::CLIENT_EMAIL)->setNom('Camille Martin')
             ->setMotDePasse($this->hasher->hashPassword($utilisateurClient, self::CLIENT_MDP))
-            ->setStatut(StatutUtilisateur::Actif)->setRolesSecurite(['ROLE_USER'])->setClientLie($clientDemo->getId());
+            ->setStatut(StatutUtilisateur::Actif)->setRolesSecurite(['ROLE_USER'])->setKind(AccountKind::Customer)->setClientLie($clientDemo->getId());
         $manager->persist($utilisateurClient);
 
         $compteDemo = (new CompteClient())->setUtilisateur($utilisateurClient)->setClient($clientDemo)

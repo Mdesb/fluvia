@@ -19,6 +19,7 @@ final class PayFipBoutiqueAdapter implements PaiementEnLigneInterface
 {
     public function __construct(
         private readonly PayFipInterface $payFip,
+        private readonly StubPaymentReceiptSigner $signer,
     ) {
     }
 
@@ -31,15 +32,24 @@ final class PayFipBoutiqueAdapter implements PaiementEnLigneInterface
     {
         $resultat = $this->payFip->initierPaiement((string) $venteId, $montantCentimes);
 
-        return new InitiationPaiementEnLigne($resultat->referenceTransaction, $resultat->urlRedirection);
+        // ⚠ Tant que `PayFipInterface` est un bouchon (« rien avec PayFiP pour le moment »), le retour se
+        //   vérifie par le même reçu signé que le PSP CB. Le jour du vrai PayFiP, c'est SON contrôle
+        //   (signature du retour, ou interrogation de la transaction) qui remplacera le signataire.
+        return new InitiationPaiementEnLigne($resultat->referenceTransaction, $resultat->urlRedirection, $this->signer->receipts($resultat->referenceTransaction, $montantCentimes));
     }
 
-    public function traiterRetour(array $donneesRetour): ResultatRetourPaiementEnLigne
+    /**
+     * Bouchon : n'atteste que ce qu'il a lui-même signé à l'initiation, pour cette référence et ce
+     * montant (`StubPaymentReceiptSigner`). Un statut nu dans les données n'est pas lu — c'était le
+     * défaut (audit 06/09, constat 1). Le vrai adaptateur vérifiera la signature du prestataire ici.
+     */
+    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour): ?ResultatRetourPaiementEnLigne
     {
-        $reference = \is_string($donneesRetour['referenceTransaction'] ?? null) ? $donneesRetour['referenceTransaction'] : '';
-        $statut = StatutTPE::tryFrom((string) ($donneesRetour['statut'] ?? '')) ?? StatutTPE::Timeout;
-        $montant = (int) ($donneesRetour['montantCentimes'] ?? 0);
+        $statut = $this->signer->verify($referenceTransaction, $montantAttenduCentimes, $donneesRetour['recu'] ?? null);
+        if ($statut === null) {
+            return null;
+        }
 
-        return new ResultatRetourPaiementEnLigne($reference, $statut, $montant);
+        return new ResultatRetourPaiementEnLigne($referenceTransaction, $statut, $montantAttenduCentimes);
     }
 }

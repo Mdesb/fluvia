@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\Controller;
 
+use App\Securite\Service\PasswordPolicy;
 use App\Audit\Service\JournalAudit;
 use App\Securite\Entity\JetonReinitialisation;
 use App\Securite\Entity\Utilisateur;
@@ -24,10 +25,10 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ReinitialisationMotDePasseController
 {
     /** Longueur minimale exigee sur ce flux — la meme que celle annoncee par l'ecran. */
-    private const TAILLE_MIN_MOT_DE_PASSE = 12;
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
+        private readonly PasswordPolicy $passwords,
         private readonly JournalAudit $journal,
     ) {
     }
@@ -45,13 +46,10 @@ final class ReinitialisationMotDePasseController
 
         // Meme seuil que l'activation, et pour la meme raison : l'ecran l'annonce, le serveur
         // l'applique. Voir `ActivationController`.
-        if (mb_strlen($nouveauMotDePasse) < self::TAILLE_MIN_MOT_DE_PASSE) {
-            return new JsonResponse([
-                'message' => sprintf(
-                    'Mot de passe trop court : %d caracteres au minimum.',
-                    self::TAILLE_MIN_MOT_DE_PASSE,
-                ),
-            ], 422);
+        // Depuis le 06/09 la règle vit dans `PasswordPolicy`, la même pour les quatre portes.
+        $violation = $this->passwords->violation($nouveauMotDePasse);
+        if ($violation !== null) {
+            return new JsonResponse(['message' => $violation], 422);
         }
 
         $hash = hash('sha256', $jetonClair);

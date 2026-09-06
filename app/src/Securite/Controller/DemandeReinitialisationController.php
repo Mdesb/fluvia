@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\Controller;
 
+use App\Securite\Security\PublicEndpointRateLimiter;
 use App\Securite\Entity\JetonReinitialisation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Notification\ReinitialisationMailer;
@@ -28,12 +29,16 @@ final class DemandeReinitialisationController
         private readonly EntityManagerInterface $em,
         private readonly ReinitialisationMailer $mailer,
         private readonly ExpediteurCourriel $courriel,
+        private readonly PublicEndpointRateLimiter $limiter,
     ) {
     }
 
     #[Route('/mot-de-passe/oublie', name: 'securite_mdp_oublie', methods: ['POST'])]
     public function __invoke(Request $request): JsonResponse
     {
+        // Audit du 06/09, constat 7 : un jeton par appel, un courriel par appel — borné par adresse.
+        $this->limiter->assertPasswordResetAllowed($request->getClientIp());
+
         $donnees = json_decode($request->getContent(), true) ?: [];
         $email = (string) ($donnees['email'] ?? '');
 

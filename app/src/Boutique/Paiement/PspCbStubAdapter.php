@@ -17,6 +17,11 @@ use Symfony\Component\Uid\Uuid;
 #[AutoconfigureTag('boutique.paiement_en_ligne')]
 final class PspCbStubAdapter implements PaiementEnLigneInterface
 {
+    public function __construct(
+        private readonly StubPaymentReceiptSigner $signer,
+    ) {
+    }
+
     public function cle(): TypeExploitant
     {
         // Un même stub couvre les deux discriminants privés (DSP et groupe privé, RG-M3-11) :
@@ -28,15 +33,21 @@ final class PspCbStubAdapter implements PaiementEnLigneInterface
     {
         $reference = 'PSPCB-' . substr(hash('sha256', $venteId->toRfc4122() . $montantCentimes), 0, 16);
 
-        return new InitiationPaiementEnLigne($reference, 'https://psp-cb.example.test/paiement/' . $reference);
+        return new InitiationPaiementEnLigne($reference, 'https://psp-cb.example.test/paiement/' . $reference, $this->signer->receipts($reference, $montantCentimes));
     }
 
-    public function traiterRetour(array $donneesRetour): ResultatRetourPaiementEnLigne
+    /**
+     * Bouchon : n'atteste que ce qu'il a lui-même signé à l'initiation, pour cette référence et ce
+     * montant (`StubPaymentReceiptSigner`). Un statut nu dans les données n'est pas lu — c'était le
+     * défaut (audit 06/09, constat 1). Le vrai adaptateur vérifiera la signature du prestataire ici.
+     */
+    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour): ?ResultatRetourPaiementEnLigne
     {
-        $reference = \is_string($donneesRetour['referenceTransaction'] ?? null) ? $donneesRetour['referenceTransaction'] : '';
-        $statut = StatutTPE::tryFrom((string) ($donneesRetour['statut'] ?? '')) ?? StatutTPE::Timeout;
-        $montant = (int) ($donneesRetour['montantCentimes'] ?? 0);
+        $statut = $this->signer->verify($referenceTransaction, $montantAttenduCentimes, $donneesRetour['recu'] ?? null);
+        if ($statut === null) {
+            return null;
+        }
 
-        return new ResultatRetourPaiementEnLigne($reference, $statut, $montant);
+        return new ResultatRetourPaiementEnLigne($referenceTransaction, $statut, $montantAttenduCentimes);
     }
 }

@@ -58,7 +58,7 @@ final class MotDePasseOublieTest extends SecuriteApiTestCase
 
         // Jeton déjà utilisé : refus (410).
         $client->request('POST', '/mot-de-passe/reinitialiser', [
-            'json' => ['jeton' => $jetonClair, 'nouveauMotDePasse' => 'Encore#2027'],
+            'json' => ['jeton' => $jetonClair, 'nouveauMotDePasse' => 'Encore#2027-douze-caracteres'],
         ]);
         self::assertResponseStatusCodeSame(410);
 

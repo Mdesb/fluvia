@@ -59,6 +59,17 @@ class SuiviCommandeEnLigne
     #[ORM\JoinColumn(nullable: false)]
     private ?Etablissement $etablissement = null;
 
+    /**
+     * CE QUI A ÉTÉ INITIÉ CHEZ LE PRESTATAIRE — la référence et le montant, mémorisés au moment où on
+     * les lui a confiés. Le retour de paiement se confronte à eux : une référence inconnue ou un
+     * montant différent ne confirment rien (audit 06/09, constat 1). `null` tant qu'aucune initiation.
+     */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $paymentReference = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $paymentAmountCents = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -161,6 +172,24 @@ class SuiviCommandeEnLigne
     public function setEtablissement(?Etablissement $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    public function getPaymentReference(): ?string
+    {
+        return $this->paymentReference;
+    }
+
+    public function getPaymentAmountCents(): ?int
+    {
+        return $this->paymentAmountCents;
+    }
+
+    public function recordPaymentInitiation(string $reference, int $amountCents): self
+    {
+        $this->paymentReference = $reference;
+        $this->paymentAmountCents = $amountCents;
 
         return $this;
     }

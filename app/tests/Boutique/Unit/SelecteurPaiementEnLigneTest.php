@@ -7,6 +7,7 @@ namespace App\Tests\Boutique\Unit;
 use App\Boutique\Paiement\PayFipBoutiqueAdapter;
 use App\Boutique\Paiement\PspCbStubAdapter;
 use App\Boutique\Paiement\SelecteurPaiementEnLigne;
+use App\Boutique\Paiement\StubPaymentReceiptSigner;
 use App\Compta\Adapter\PayFipStubAdapter;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
@@ -21,9 +22,13 @@ final class SelecteurPaiementEnLigneTest extends TestCase
 {
     private function selecteur(): SelecteurPaiementEnLigne
     {
+        // Les bouchons signent leurs recus (audit 06/09, constat 1) : un secret de test suffit ici,
+        // ce fichier ne teste que la commutation.
+        $signer = new StubPaymentReceiptSigner("secret-de-test");
+
         return new SelecteurPaiementEnLigne([
-            new PayFipBoutiqueAdapter(new PayFipStubAdapter()),
-            new PspCbStubAdapter(),
+            new PayFipBoutiqueAdapter(new PayFipStubAdapter(), $signer),
+            new PspCbStubAdapter($signer),
         ]);
     }
 

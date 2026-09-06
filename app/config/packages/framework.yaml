@@ -2,6 +2,26 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # ⚠ SANS CES DEUX LIGNES, L'ADRESSE CLIENTE EST CELLE DE NGINX — POUR TOUT LE MONDE.
+    #   `TRUSTED_PROXIES` était posée dans le compose de préprod depuis le début, et Symfony ne la
+    #   lisait pas : la variable ne fait rien tant que la configuration ne la nomme pas ici. Tous les
+    #   limiteurs de débit fusionnaient donc les visiteurs en un seul (audit du 06/09, constat 11), et
+    #   ceux ajoutés au constat 7 auraient verrouillé la préprod entière au premier abus.
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port']
+
+    # Les limiteurs des portes publiques (`PublicEndpointRateLimiter`). Fenêtre glissante : un compteur
+    # remis à zéro à heure fixe autorise deux fois la limite à cheval sur la bascule.
+    rate_limiter:
+        public_account_creation:
+            policy: sliding_window
+            limit: 5
+            interval: '1 hour'
+        password_reset_request:
+            policy: sliding_window
+            limit: 5
+            interval: '1 hour'
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 
@@ -11,5 +31,12 @@ framework:
 when@test:
     framework:
         test: true
+        # ⚠ LE COMPTEUR VIT DANS `cache.app`, QUI SURVIT D'UN TEST À L'AUTRE (`var/cache/test/pools`).
+        #   Avec la limite de production, le sixième compte créé par la suite Boutique — depuis la
+        #   même adresse, 127.0.0.1 — recevrait 429 et le test lirait une régression. La règle
+        #   elle-même se prouve à part, sur un stockage en mémoire (`PublicEndpointRateLimiterTest`).
+        rate_limiter:
+            public_account_creation: { policy: sliding_window, limit: 100000, interval: '1 hour' }
+            password_reset_request: { policy: sliding_window, limit: 100000, interval: '1 hour' }
         session:
             storage_factory_id: session.storage.factory.mock_file

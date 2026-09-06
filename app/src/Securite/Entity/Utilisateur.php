@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\Entity;
 
+use App\Securite\Enum\AccountKind;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -203,6 +204,21 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private array $rolesSecurite = ['ROLE_USER'];
+
+    /**
+     * EXPLOITANT OU CLIENT FINAL — la nature du compte, posée à sa création et jamais recopiée.
+     *
+     * ⚠ AUDIT DU 06/09, CONSTAT 4. Les comptes de la boutique publique vivaient ici sans rien qui les
+     * distingue des exploitants : leur jeton franchissait toutes les portes « connecté, et rien de
+     * plus » du back-office. `CustomerAccountPathListener` lit cette colonne — pas `rolesSecurite`, que
+     * l'API sait écrire (`utilisateur:write`) et qu'un rôle modèle pourrait recopier.
+     *
+     * Lecture seule par l'API : la nature se pose par le chemin qui crée le compte (`CreationCompteHandler`
+     * pour un client, tout le reste pour un exploitant), jamais par un PATCH.
+     */
+    #[ORM\Column(length: 16, enumType: AccountKind::class, options: ['default' => 'operator'])]
+    #[Groups(['utilisateur:read', 'me:read'])]
+    private AccountKind $kind = AccountKind::Operator;
 
     #[ORM\Column(options: ['default' => 0])]
     private int $tentativesEchouees = 0;
@@ -460,11 +476,25 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->motDePasse;
     }
 
+    public function getKind(): AccountKind
+    {
+        return $this->kind;
+    }
+
+    public function setKind(AccountKind $kind): self
+    {
+        $this->kind = $kind;
+
+        return $this;
+    }
+
     /** @return list<string> */
     public function getRoles(): array
     {
         $roles = $this->rolesSecurite;
         $roles[] = 'ROLE_USER';
+        // La nature du compte, lisible par `security.yaml` et les expressions `is_granted`.
+        $roles[] = $this->kind->role();
 
         return array_values(array_unique($roles));
     }

@@ -57,13 +57,13 @@ final class CycleVieUtilisateurTest extends SecuriteApiTestCase
 
         // Rejouer le même jeton (déjà consommé) : refus.
         $client->request('POST', '/utilisateurs/activation', [
-            'json' => ['jeton' => L7Fixtures::INVITE_JETON_CLAIR, 'motDePasse' => 'Autre#2026'],
+            'json' => ['jeton' => L7Fixtures::INVITE_JETON_CLAIR, 'motDePasse' => 'Autre#2026-douze'],
         ]);
         self::assertResponseStatusCodeSame(422);
 
         // Jeton expiré : refus (410).
         $client->request('POST', '/utilisateurs/activation', [
-            'json' => ['jeton' => L7Fixtures::INVITE_EXPIRE_JETON_CLAIR, 'motDePasse' => 'Autre#2026'],
+            'json' => ['jeton' => L7Fixtures::INVITE_EXPIRE_JETON_CLAIR, 'motDePasse' => 'Autre#2026-douze'],
         ]);
         self::assertResponseStatusCodeSame(410);
     }

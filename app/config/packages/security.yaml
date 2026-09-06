@@ -29,6 +29,14 @@ security:
                 password_path: motDePasse
                 success_handler: App\Securite\Security\GestionnaireSuccesConnexionMfa
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
+            # ⚠ AUDIT DU 06/09, CONSTAT 7. Aucune limite de débit sur /auth, alors qu'un verrou de compte
+            #   après 5 échecs existe (`EcouteurConnexion`) : un attaquant verrouillait n'importe quel
+            #   compte connu à volonté. Dix tentatives par minute et par compte — au-dessus du verrou
+            #   applicatif, qui reste la première barrière — et cinquante par adresse, toutes cibles
+            #   confondues (Symfony multiplie par cinq). Réponse 401 avec délai, jamais 200.
+            login_throttling:
+                max_attempts: 10
+                interval: '1 minute'
 
         # Authentification machine d'un Terminal (borne/ITBOX, US-TERM-01/02, plan-acces-terminal.md
         # §3.1) : firewall dédié, placé AVANT « api », isolé de l'authentification JWT humaine.
@@ -118,6 +126,11 @@ security:
 
 when@test:
     security:
+        firewalls:
+            auth:
+                # Même raison que pour les limiteurs du noyau : le compteur survit d'un test à l'autre,
+                # et la suite Securite enchaîne les mauvais mots de passe sur les mêmes comptes.
+                login_throttling: { max_attempts: 100000, interval: '1 minute' }
         password_hashers:
             # Password hashers are resource-intensive by design to ensure security.
             # In tests, it's safe to reduce their cost to improve performance.

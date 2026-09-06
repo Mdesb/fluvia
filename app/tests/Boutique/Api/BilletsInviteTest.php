@@ -93,7 +93,7 @@ final class BilletsInviteTest extends BoutiqueApiTestCase
 
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/retour-paiement', [
             'headers' => $entete,
-            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'statut' => 'accepte', 'montantCentimes' => $donneesPaiement['montantCentimes']],
+            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'recu' => $donneesPaiement['simulation']['accepte']],
         ]);
         self::assertResponseIsSuccessful();
 
@@ -140,7 +140,7 @@ final class BilletsInviteTest extends BoutiqueApiTestCase
 
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/retour-paiement', [
             'headers' => $entete,
-            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'statut' => 'accepte', 'montantCentimes' => $donneesPaiement['montantCentimes']],
+            'json' => ['referenceTransaction' => $donneesPaiement['referenceTransaction'], 'recu' => $donneesPaiement['simulation']['accepte']],
         ]);
         self::assertResponseIsSuccessful();
 
