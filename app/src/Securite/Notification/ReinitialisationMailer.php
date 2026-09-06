@@ -23,7 +23,7 @@ final class ReinitialisationMailer
 
     public function envoyer(Utilisateur $utilisateur, string $jetonClair): void
     {
-        $lien = sprintf('%s/mot-de-passe/reinitialiser?jeton=%s', rtrim($this->frontBaseUrl, '/'), $jetonClair);
+        $lien = sprintf('%s/nouveau-mot-de-passe?jeton=%s', rtrim($this->frontBaseUrl, '/'), $jetonClair);
 
         $email = (new Email())
             ->to($utilisateur->getEmail())

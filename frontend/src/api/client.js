@@ -1689,6 +1689,20 @@ export const api = {
   // reproduirait exactement le défaut qu'on corrige.
   demanderReinitialisation: (email) =>
     request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+  // LES DEUX BOUTS QUI MANQUAIENT AUX FLUX DE COMPTE. `oublie` demandait le courriel ; le lien
+  // qu'il envoie pointe vers `/mot-de-passe/reinitialiser?jeton=…` et `/activation?jeton=…`, et
+  // AUCUN ecran n'appelait ces deux routes-la. Les liens tombaient sur l'ecran de connexion.
+  //
+  // ⚠ `auth: false` : ces deux appels se font sans session, par definition — celui qui active son
+  // compte n'en a pas encore.
+  activerCompte: ({ jeton, motDePasse }) =>
+    request('/utilisateurs/activation', {
+      method: 'POST', body: { jeton, motDePasse }, auth: false,
+    }),
+  reinitialiserMotDePasse: ({ jeton, nouveauMotDePasse }) =>
+    request('/mot-de-passe/reinitialiser', {
+      method: 'POST', body: { jeton, nouveauMotDePasse }, auth: false,
+    }),
 
   // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
   //
