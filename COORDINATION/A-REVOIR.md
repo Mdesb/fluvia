@@ -120,15 +120,25 @@ Trois issues, et la question est en amont du frontal : **le moteur doit-il les l
 travail est dans l'agrégation, pas dans un formulaire), **le référentiel doit-il rester** en
 attente d'un usage, ou **la ressource doit-elle disparaître** ?
 
-### 3. Une politique de mot de passe, ou pas
+### 3. ~~Une politique de mot de passe, ou pas~~ — **tranche le 06/09, rien a revoir**
 
-Le dépôt n'en a **aucune** — création d'utilisateur comprise : n'importe quelle chaîne non vide est
-acceptée. J'ai posé une longueur minimale de 12 caractères sur les **deux seuls flux** que je
-touchais (activation d'une invitation, réinitialisation), parce que l'écran l'annonçait déjà et
-qu'un formulaire qui affiche une règle que le serveur ignore annonce le trou au lieu de le fermer.
+Ecrit comme une question ouverte le 06/09, et resolu le meme jour par `claude-A` pendant que je
+l'ecrivais. La ligne est gardee plutot qu'effacee, pour que la revue sache qu'elle n'a pas a
+s'en occuper.
 
-L'étendre ailleurs demande deux réponses qui ne sont pas techniques : **quel seuil**, et **que fait-on
-des comptes existants** — les laisser tels quels, ou exiger un changement à la prochaine connexion.
+`App\Securite\Service\PasswordPolicy` (audit du 06/09, constat 7) porte la regle en un seul
+endroit, et **quatre portes l'appellent** — les deux flux que j'avais durcis, plus deux qui
+n'avaient aucune regle : la creation de compte boutique (qui acceptait « aaa », verifie en
+preproduction, HTTP 201) et la creation par un administrateur (qui acceptait « a »).
+
+Les deux questions que je posais ont leur reponse dans le code : **douze caracteres**, adresse
+e-mail refusee, pas de classes imposees — et **rien n'est demande aux comptes existants**, un
+hachage ne se relisant pas. Les « aaa » volontaires de la preproduction continuent d'ouvrir ;
+seuls les nouveaux mots de passe passent par la regle.
+
+> ⚠ Ma fiche disait « le depot n'en a **aucune** ». C'etait vrai a l'ecriture et faux quelques
+> heures plus tard. Une phrase qui decrit un defaut devient un mensonge le jour ou on le
+> corrige — elle se rectifie la ou elle a ete ecrite.
 
 ### 4. Les fichiers d'export s'accumulent sans fin
 
