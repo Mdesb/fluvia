@@ -22,6 +22,7 @@ use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\Famille;
 use App\Crm\Enum\RoleBeneficiaire;
+use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeTarif;
 use App\Offre\Enum\Canal;
@@ -67,6 +68,7 @@ final class ConfirmerCommandeHandler
         private readonly ProjectionAccesReservationHandler $projectionAcces,
         private readonly ConfirmationCommandeMailer $mailer,
         private readonly ProduitEtablissementGuard $etablissementGuard,
+        private readonly BeneficiaryResolver $beneficiaires,
     ) {
     }
 
@@ -278,31 +280,16 @@ final class ConfirmerCommandeHandler
         }
     }
 
+    /**
+     * ⚠ CETTE RESOLUTION A DEMENAGE DANS `BeneficiaryResolver`, ET PAS PAR GOUT DU RANGEMENT.
+     *
+     * La souscription d'abonnement en ligne en avait besoin a l'identique. La recopier aurait donne
+     * deux reponses a « qui est l'adherent de cet achat » — identiques le premier jour, divergentes
+     * le jour ou l'une des deux apprend un cas de plus.
+     */
     private function resoudreBeneficiaire(Client $payeur, LigneCommandeMeta $meta): Beneficiaire
     {
-        $ligneVente = $meta->getLigneVente();
-        if ($ligneVente !== null && $ligneVente->getBeneficiaire() !== null) {
-            $existant = $this->em->getRepository(Beneficiaire::class)->findOneBy(['client' => $ligneVente->getBeneficiaire()]);
-            if ($existant instanceof Beneficiaire) {
-                return $existant;
-            }
-        }
-
-        $beneficiaire = $this->em->getRepository(Beneficiaire::class)->findOneBy(['client' => $payeur]);
-        if ($beneficiaire instanceof Beneficiaire) {
-            return $beneficiaire;
-        }
-
-        $famille = new Famille();
-        $famille->setPayeurPrincipal($payeur)->setGroupe($payeur->getGroupe())->setLibelle('Famille ' . ($payeur->getNom() ?? 'boutique'));
-        $this->em->persist($famille);
-
-        $beneficiaire = new Beneficiaire();
-        $beneficiaire->setFamille($famille)->setClient($payeur)->setRole(RoleBeneficiaire::PayeurEtBeneficiaire);
-        $this->em->persist($beneficiaire);
-        $this->em->flush();
-
-        return $beneficiaire;
+        return $this->beneficiaires->forPurchase($payeur, $meta->getLigneVente()?->getBeneficiaire());
     }
 
     /** @return array{0: TypeTarif, 1: string} */

@@ -49,11 +49,25 @@ final class SouscriptionAbonnementHandler
         //    quatre), et aucun écran ne permet de l'écrire : ce paramètre reste donc le seul
         //    chemin réel, jusqu'à ce que la fiche produit sache poser l'engagement.
         int $dureeEngagementMois,
-        string $ibanClair,
-        string $titulaireMandat,
+        // ⚠ NULLABLES DEPUIS LE 06/09 : LE CHEMIN EN LIGNE SIGNE SON MANDAT AVANT LA VENTE.
+        //    Le client saisit son IBAN dans le tunnel, bien avant qu'un abonnement existe. Repasser
+        //    cet IBAN ici créerait un SECOND mandat sur le même client et le même établissement :
+        //    deux RUM pour un seul contrat, et le rapprochement bancaire ne dirait plus lequel a
+        //    prélevé.
+        ?string $ibanClair = null,
+        ?string $titulaireMandat = null,
         // Le demi-mois d'une souscription en cours de période. `null` : toutes au même montant.
         ?int $montantPremiereCentimes = null,
+        // Le canal décide du TARIF : un produit peut être vendable en ligne et invisible au guichet.
+        Canal $canal = Canal::Guichet,
+        // Le mandat déjà signé, quand il y en a un. Exclusif avec l'IBAN ci-dessus.
+        ?MandatSepa $mandatExistant = null,
     ): AbonnementFitness {
+        if ($mandatExistant === null && ($ibanClair === null || $titulaireMandat === null)) {
+            throw new UnprocessableEntityHttpException(
+                'Un mandat SEPA est requis : soit un mandat déjà signé, soit un IBAN et son titulaire.',
+            );
+        }
         // ── LE PRIX VIENT DU TARIF, PLUS DE L'APPELANT ────────────────────────────────────────
         //
         // ⚠ ARBITRAGE DE MAXIME, 01/09 : « il ne doit pas y avoir de prix libre. » Le guichet
@@ -64,7 +78,7 @@ final class SouscriptionAbonnementHandler
         //    avec le chemin en ligne, où la vente EST maintenant et où aucune autre date n'existe.
         //    Ici la date du contrat est connue et c'est elle qui fait foi : le tarif applicable est
         //    celui en vigueur quand l'adhérent signe, pas celui du jour où on saisit.
-        $tarif = $this->resolveurTarif->forFormula($formule, Canal::Guichet, $dateSouscription);
+        $tarif = $this->resolveurTarif->forFormula($formule, $canal, $dateSouscription);
         $montantCentimes = $tarif->priceCents();
 
         // ⚠ LE PRORATA RESTE FOURNI, MAIS IL NE PEUT PLUS ÊTRE UN PRIX. Borné au tarif résolu, il
@@ -139,19 +153,27 @@ final class SouscriptionAbonnementHandler
         // `MandatSepa` (module partagé `App\Sepa`) est générique : rattaché au client + établissement
         // directement, plus de cycle 1:1 à casser côté mandat (contrairement à l'ancien
         // `MandatSepaFitness.abonnementRattache`) — le mandat est inséré une seule fois.
-        $token = $this->tokenisation->tokeniser($ibanClair);
-        $mandat = new MandatSepa();
-        $mandat->setRum($this->genererRum($abonnement))
-            ->setIbanToken($token->token)
-            ->setIban4Derniers($token->quatreDerniers)
-            ->setIbanChiffre($this->chiffreur->chiffrer($ibanClair))
-            ->setDebiteurNom($titulaireMandat)
-            ->setDateSignature($dateSouscription)
-            ->setStatut(StatutMandatSepa::Actif)
-            ->setClient($payeur)
-            ->setEtablissement($etablissement);
-        $this->em->persist($mandat);
-        $this->em->flush();
+        // ⚠ UN MANDAT DÉJÀ SIGNÉ SE REPREND, IL NE SE REFAIT PAS. Le tunnel en ligne fait saisir
+        //    l'IBAN au client avant qu'un abonnement existe ; en signer un second ici mettrait deux
+        //    RUM actifs sur le même client et le même établissement, et le rapprochement bancaire ne
+        //    dirait plus lequel a prélevé.
+        if ($mandatExistant instanceof MandatSepa) {
+            $mandat = $mandatExistant;
+        } else {
+            $token = $this->tokenisation->tokeniser((string) $ibanClair);
+            $mandat = new MandatSepa();
+            $mandat->setRum($this->genererRum($abonnement))
+                ->setIbanToken($token->token)
+                ->setIban4Derniers($token->quatreDerniers)
+                ->setIbanChiffre($this->chiffreur->chiffrer((string) $ibanClair))
+                ->setDebiteurNom((string) $titulaireMandat)
+                ->setDateSignature($dateSouscription)
+                ->setStatut(StatutMandatSepa::Actif)
+                ->setClient($payeur)
+                ->setEtablissement($etablissement);
+            $this->em->persist($mandat);
+            $this->em->flush();
+        }
 
         $abonnement->setMandatSepa($mandat);
         $this->em->persist($abonnement);

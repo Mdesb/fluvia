@@ -12,8 +12,10 @@ use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
-use App\Offre\Service\ResolveurPrix;
+use App\Crm\Service\BeneficiaryResolver;
+use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sepa\Entity\MandatSepa;
+use App\Sport\Service\SouscriptionAbonnementHandler;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
@@ -42,9 +44,11 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly GenerateurNumero $generateurNumero,
         private readonly SessionSystemeBoutiqueResolver $sessionSysteme,
         private readonly ValiderVenteService $validerVente,
-        private readonly ResolveurPrix $resolveurPrix,
         private readonly TokenisationIbanInterface $tokenisation,
         private readonly ChiffreurIbanInterface $chiffreur,
+        private readonly SubscriptionPriceResolver $resolveurAbonnement,
+        private readonly BeneficiaryResolver $beneficiaires,
+        private readonly SouscriptionAbonnementHandler $souscription,
     ) {
     }
 
@@ -113,24 +117,15 @@ final class SouscriptionAbonnementEnLigneHandler
             ->setEtablissement($etablissement);
         $this->em->persist($mandat);
 
-        // Prix résolu (RG-M1-01) puis Vente M2 avec paiement différé (collecte SEPA ultérieure).
-        $typeTarif = null;
-        $prix = null;
-        foreach ($produit->getGrilles() as $grille) {
-            $tarif = $grille->getTypeTarif();
-            if ($tarif === null) {
-                continue;
-            }
-            $resolu = $this->resolveurPrix->resoudre($produit, $tarif, new \DateTimeImmutable(), Canal::EnLigne);
-            if ($resolu !== null) {
-                $typeTarif = $tarif;
-                $prix = $resolu;
-                break;
-            }
-        }
-        if ($typeTarif === null || $prix === null) {
-            throw new UnprocessableEntityHttpException('Produit non commercialisé en ligne (aucun prix résolu).');
-        }
+        // ⚠ CETTE BOUCLE ÉTAIT UNE COPIE, ET `ResolvedSubscriptionPrice` DIT POURQUOI IL EXISTE :
+        //    « Rendre le prix seul aurait obligé chaque appelant à refaire la boucle de résolution :
+        //    trois copies au lieu d'une. » Celle-ci en était une — même produit, mêmes grilles, même
+        //    canal, même résolveur. Deux copies s'accordent le premier jour et divergent le jour où
+        //    l'une apprend une règle de plus, et ce jour-là la vente et l'échéancier ne diraient plus
+        //    le même prix au même client.
+        $resolu = $this->resolveurAbonnement->forProduct($produit, Canal::EnLigne, new \DateTimeImmutable());
+        $typeTarif = $resolu->tariffType;
+        $prix = $resolu->price;
 
         $session = $this->sessionSysteme->sessionSysteme($etablissement);
         $vente = new Vente();
@@ -175,6 +170,38 @@ final class SouscriptionAbonnementEnLigneHandler
         }
 
         $this->em->flush();
+
+        /*
+         * ── ET MAINTENANT LE CONTRAT, QUI MANQUAIT ─────────────────────────────────────────────
+         *
+         * ⚠ TOUT CE QUI PRÉCÈDE NE FAISAIT PAS UN ABONNÉ. Mandat signé, vente validée, QR posé — et
+         *   ni `AbonnementFitness`, ni échéancier, ni statut d'accès. Le client lisait « Abonnement
+         *   souscrit » et n'était ni abonné ni jamais prélevé : aucune source SEPA ne lit une
+         *   `Vente`, et le drapeau `differe` n'a qu'un lecteur, qui sert à autoriser un reste dû.
+         *
+         * ⚠ ON PASSE PAR `souscrire()`, PAS PAR UNE VARIANTE BOUTIQUE. Un seul endroit décide ce
+         *   qu'est un abonnement : tarif résolu, échéancier généré, statut d'accès ouvert, termes de
+         *   l'offre gelés. Une seconde définition oublierait l'un de ces gestes le jour où la
+         *   première en gagne un cinquième.
+         *
+         * ⚠ ET LE MANDAT EST CELUI QU'ON VIENT DE SIGNER. Le tunnel fait saisir l'IBAN avant qu'un
+         *   abonnement existe ; en refaire un ici mettrait deux RUM actifs sur le même client.
+         *
+         * La règle de l'adhérent est celle de Maxime : en ligne, l'acheteur est le payeur, et
+         * l'adhérent est lui-même — `forPurchase()` le retrouve ou le crée.
+         */
+        $this->souscription->souscrire(
+            adherent: $this->beneficiaires->forPurchase($client),
+            payeur: $client,
+            formule: $formule,
+            etablissement: $etablissement,
+            dateSouscription: new \DateTimeImmutable('today'),
+            // Repli : la formule décide quand elle déclare `engagement.dureeMin`. En ligne, aucun
+            // vendeur ne peut négocier une durée — 12 mois est le défaut de l'écran de souscription.
+            dureeEngagementMois: 12,
+            canal: Canal::EnLigne,
+            mandatExistant: $mandat,
+        );
 
         return $vente;
     }
