@@ -116,6 +116,31 @@ final class ScheduleCatalog
                 . "et rien ne l'exécute : la promesse est faite à l'écran et jamais tenue.",
                 critical: true,
             ),
+            // ⚠ CETTE TÂCHE ÉTAIT DANS LA LISTE BLANCHE DE L'ORDONNANCEUR ET ABSENTE D'ICI.
+            //
+            //   `infra/ordonnanceur.sh` la lançait à chaque cycle par `--only=`, le lanceur ne
+            //   trouvait aucune tâche de ce nom, sortait 0 sans un mot, et l'ordonnanceur écrivait
+            //   « ok ». `--status` ne pouvait pas la signaler non plus : il ne lit que ce
+            //   catalogue, donc elle n'y figurait même pas comme « JAMAIS ». Invisible des deux
+            //   côtés à la fois — c'est ça qui coûte, pas l'oubli lui-même.
+            //
+            //   Le correctif de la CLASSE est dans `RunScheduledTasksCommand` : un `--only` qui
+            //   ne désigne rien échoue désormais bruyamment.
+            new ScheduledTask(
+                'reservation:confirmations:expirer',
+                15,
+                "Les réservations à confirmer n'expirent jamais. Le créneau reste bloqué pour "
+                . "quelqu'un qui n'a rien confirmé, et — sur le chemin padel, où la vente est créée "
+                . "à la réservation — la vente rattachée reste due par ce client. Une place "
+                . "invendable et une créance fantôme, sans que rien ne le signale.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE. Un arriéré traité d'un coup libère d'un seul
+                // geste tous les créneaux échus ET annule leurs ventes rattachées : c'est le cas
+                // 3 (effet visible au dehors), pas le cas 1. Aujourd'hui le délai de confirmation
+                // est nul partout en préproduction, donc l'arriéré est vide — mais le jour où on
+                // l'allume, le premier passage balaierait tout le passé. `--dry-run` le montre.
+                safeOnFirstRun: false,
+            ),
             new ScheduledTask(
                 'sepa:preavis:annoncer',
                 1440,
