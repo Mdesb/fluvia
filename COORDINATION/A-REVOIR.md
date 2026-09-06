@@ -83,3 +83,59 @@ français. Une recherche muette se lit comme une absence.
 - **La recharge de carte** (`D80`) — en attente du débrief cartes.
 - **La carte cadeau** (`D70`, `D78`) — entièrement décidée, pas construite ; priorisée après l'outil
   de scan.
+
+---
+
+## Ce qui attend un arbitrage — relevé du 05–06/09
+
+Quatre points sortis de la revue des modules d'analyse et de trésorerie. Aucun n'est un chantier :
+ce sont des choix qui ne m'appartiennent pas, et pour chacun **le statu quo a déjà un coût**, écrit
+ici pour qu'il ne soit pas subi par défaut.
+
+### 1. Cinq commandes à autoriser, ou non, dans `TACHES_AUTORISEES`
+
+Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
+périodique entre au dépôt avec sa planification ; D109/D110, que cette liste est une décision
+versionnée. Elles ne pèsent pas la même chose :
+
+| commande | ce qu'il se passe tant qu'elle n'y est pas |
+|---|---|
+| `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
+| `reporting:agreger` | **les mesures cessent d'être produites** — l'Explorateur affiche déjà 3 jours « sans mesure » sur 14, et la consolidation région/groupe est vide de bout en bout |
+| `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
+| `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
+| `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
+
+**Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
+`reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
+
+### 2. `AxeAnalytique` sert-il encore à quelque chose ?
+
+Six axes en base, alimentés par les fixtures, **consommés par rien** : ni écran, ni moteur
+d'agrégation. Je n'ai délibérément pas construit son écran — un formulaire de configuration
+laisserait définir des axes d'analyse qui ne changent aucune analyse, c'est-à-dire exactement la
+promesse vide que le reste de ce travail consiste à retirer.
+
+Trois issues, et la question est en amont du frontal : **le moteur doit-il les lire** (alors le
+travail est dans l'agrégation, pas dans un formulaire), **le référentiel doit-il rester** en
+attente d'un usage, ou **la ressource doit-elle disparaître** ?
+
+### 3. Une politique de mot de passe, ou pas
+
+Le dépôt n'en a **aucune** — création d'utilisateur comprise : n'importe quelle chaîne non vide est
+acceptée. J'ai posé une longueur minimale de 12 caractères sur les **deux seuls flux** que je
+touchais (activation d'une invitation, réinitialisation), parce que l'écran l'annonçait déjà et
+qu'un formulaire qui affiche une règle que le serveur ignore annonce le trou au lieu de le fermer.
+
+L'étendre ailleurs demande deux réponses qui ne sont pas techniques : **quel seuil**, et **que fait-on
+des comptes existants** — les laisser tels quels, ou exiger un changement à la prochaine connexion.
+
+### 4. Les fichiers d'export s'accumulent sans fin
+
+Chaque export écrit un fichier dans `var/reporting/exports/` et garde sa référence. `Export`
+n'expose pas de `Delete`, donc rien ne les retire jamais — et supprimer la ligne en base **ne
+supprime pas le fichier** (constaté : cinq orphelins laissés par mes propres sondes, retirés à la
+main).
+
+Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
+premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
