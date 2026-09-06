@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sepa\State;
 
+use App\Crm\Security\CustomerReachability;
+use App\Platform\Security\EstablishmentScopeAsserter;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Crm\Entity\Client;
@@ -36,6 +38,8 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         private readonly TokenisationIbanInterface $tokenisation,
         private readonly ChiffreurIbanInterface $chiffreur,
         private readonly ContexteEtablissement $contexte,
+        private readonly EstablishmentScopeAsserter $scope,
+        private readonly CustomerReachability $customers,
     ) {
     }
 
@@ -47,6 +51,10 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         if (!$client instanceof Client) {
             throw new UnprocessableEntityHttpException('« client » est requis et doit référencer un client existant.');
         }
+        // ⚠ AUDIT DU 06/09, CONSTAT 5. Client et établissement venaient du corps par `find()`, sans être
+        //   confrontés à personne : un mandat se créait sur le client d'un autre groupe, rattaché à
+        //   l'établissement d'un autre tenant. 404 dans les deux cas — ne pas confirmer l'existence.
+        $this->customers->assertReachable($client);
 
         $etablissement = isset($corps['etablissement'])
             ? $this->resoudre(Etablissement::class, $corps['etablissement'])
@@ -54,6 +62,7 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         if (!$etablissement instanceof Etablissement) {
             throw new UnprocessableEntityHttpException('« etablissement » requis (fourni ou en-tête X-Etablissement).');
         }
+        $this->scope->assertReachable($etablissement);
 
         $iban = \is_string($corps['iban'] ?? null) ? $corps['iban'] : '';
         $bic = \is_string($corps['bicDebiteur'] ?? null) ? $corps['bicDebiteur'] : '';

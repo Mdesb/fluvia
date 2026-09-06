@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Reporting\Controller;
 
+use App\Securite\Entity\Affectation;
+use App\Securite\Service\EstablishmentReachability;
 use App\Reporting\Entity\Export;
 use App\Reporting\Enum\StatutExport;
 use App\Reporting\Service\StockageExportInterface;
@@ -30,6 +32,7 @@ final class ExportTelechargerController
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly StockageExportInterface $stockage,
+        private readonly EstablishmentReachability $reachability,
     ) {
     }
 
@@ -52,6 +55,15 @@ final class ExportTelechargerController
             throw new AccessDeniedHttpException('Export réservé à son demandeur ou à reporting.configurer.');
         }
 
+        // ⚠ AUDIT DU 06/09, CONSTAT 5. `reporting.configurer` ouvrait les exports de TOUS les tenants,
+        //   l'export ne portant aucun établissement. Un export qu'on n'a pas demandé soi-même doit avoir
+        //   été demandé par quelqu'un qui atteint AU MOINS UN des sites qu'on atteint soi-même : c'est ce
+        //   qui le rattache à un tenant — en-tête ou pas, et depuis n'importe lequel de ses sites pour un
+        //   administrateur de groupe. 404, pas 403 : ne pas confirmer l'existence de l'export.
+        if (!$estProprietaire && !$this->partageUnEtablissement($utilisateur, $export->getDemandePar())) {
+            throw new NotFoundHttpException('Export introuvable.');
+        }
+
         if ($export->getStatut() !== StatutExport::Genere && $export->getStatut() !== StatutExport::Envoye) {
             throw new ConflictHttpException(sprintf('Export non disponible (statut : %s).', $export->getStatut()->value));
         }
@@ -66,5 +78,24 @@ final class ExportTelechargerController
         $reponse->headers->set('Content-Disposition', sprintf('attachment; filename="export-%s.%s"', $export->getId(), $export->getFormat()->value));
 
         return $reponse;
+    }
+
+    private function partageUnEtablissement(Utilisateur $appelant, ?Utilisateur $demandeur): bool
+    {
+        if (!$demandeur instanceof Utilisateur) {
+            return false;
+        }
+
+        $maintenant = new \DateTimeImmutable();
+        /** @var list<Affectation> $affectations */
+        $affectations = $this->em->getRepository(Affectation::class)->findBy(['utilisateur' => $appelant]);
+        foreach ($affectations as $affectation) {
+            $etablissement = $affectation->getEtablissement();
+            if ($etablissement !== null && $this->reachability->canReachEstablishment($demandeur, $etablissement, $maintenant)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Caisse\State;
 
+use App\Platform\Security\EstablishmentScopeAsserter;
+use App\Securite\Service\EstablishmentReachability;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Caisse\Entity\Caisse;
@@ -35,6 +37,8 @@ final class OuvrirSessionProcessor implements ProcessorInterface
         private readonly \App\Vente\Service\LecteurCorps $lecteur,
         private readonly GenerateurNumero $generateur,
         private readonly Security $security,
+        private readonly EstablishmentScopeAsserter $scope,
+        private readonly EstablishmentReachability $reachability,
     ) {
     }
 
@@ -57,6 +61,18 @@ final class OuvrirSessionProcessor implements ProcessorInterface
             ? $this->resoudre(Utilisateur::class, $corps['regisseur'], 'regisseur')
             : $operateur;
         \assert($regisseur instanceof Utilisateur);
+
+        // ⚠ AUDIT DU 06/09, CONSTAT 5. Point de vente, caisse et régisseur venaient du corps par `find()`
+        //   sans être confrontés à personne : on ouvrait une session — donc une chaîne NF525 — sur le
+        //   guichet d'un autre client. Le point de vente doit être atteignable par l'opérateur, la caisse
+        //   doit être la sienne, et le régisseur doit pouvoir atteindre le site où il répond.
+        $etablissement = $this->scope->assertReachable($pdv->getEtablissement());
+        if ($caisse->getPointDeVente()?->getId()->equals($pdv->getId()) !== true) {
+            throw new UnprocessableEntityHttpException('Cette caisse n\'appartient pas à ce point de vente.');
+        }
+        if (!$this->reachability->canReachEstablishment($regisseur, $etablissement, new \DateTimeImmutable())) {
+            throw new UnprocessableEntityHttpException('Le régisseur désigné n\'est pas rattaché à cet établissement.');
+        }
 
         if (!isset($corps['fondDeCaisse'])) {
             throw new UnprocessableEntityHttpException('Fond de caisse requis à l\'ouverture (US-L2-01).');

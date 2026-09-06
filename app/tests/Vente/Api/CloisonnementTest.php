@@ -26,8 +26,9 @@ final class CloisonnementTest extends VenteApiTestCase
         $client->request('GET', '/api/ventes', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]]);
         self::assertResponseIsSuccessful();
 
-        // Sur B : aucune affectation → aucune permission effective → accès refusé.
+        // Sur B : aucune affectation → refusé. Depuis le 06/09 c'est `EstablishmentHeaderListener` qui
+        // ferme, AVANT le voter, et en 404 : un 403 confirmerait que B existe (audit, constat 3).
         $client->request('GET', '/api/ventes', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
     }
 }

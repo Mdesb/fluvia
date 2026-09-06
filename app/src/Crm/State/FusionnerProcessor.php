@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\State;
 
+use App\Crm\Security\CustomerReachability;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Crm\Entity\Client;
@@ -31,6 +32,7 @@ final class FusionnerProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly FusionHandler $handler,
         private readonly Security $security,
+        private readonly CustomerReachability $customers,
     ) {
     }
 
@@ -49,16 +51,23 @@ final class FusionnerProcessor implements ProcessorInterface
             if (!$maitre instanceof Famille || !$source instanceof Famille || !$payeur instanceof Client) {
                 throw new UnprocessableEntityHttpException('« familleMaitre », « familleSource » et « payeurPrincipal » sont requis.');
             }
+            // ⚠ AUDIT DU 06/09, CONSTAT 5 : une fusion est destructive, et ses sujets venaient du corps
+            //   par `find()`. On absorbait les familles d'un autre groupe.
+            $this->customers->assertReachable($maitre);
+            $this->customers->assertReachable($source);
+            $this->customers->assertReachable($payeur);
             $journal = $this->handler->fusionnerFamilles($maitre, $source, $payeur, $motif, $auteur);
         } else {
             $maitre = $this->resoudre(Client::class, $corps['maitre'] ?? null);
             if (!$maitre instanceof Client) {
                 throw new UnprocessableEntityHttpException('« maitre » requis et valide.');
             }
+            $this->customers->assertReachable($maitre);
             $sources = [];
             foreach ((array) ($corps['sources'] ?? []) as $iri) {
                 $client = $this->resoudre(Client::class, $iri);
                 if ($client instanceof Client) {
+                    $this->customers->assertReachable($client);
                     $sources[] = $client;
                 }
             }

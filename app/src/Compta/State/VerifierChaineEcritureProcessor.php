@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Compta\State;
 
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use App\Securite\Service\ContexteEtablissement;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Compta\Entity\EcritureComptable;
@@ -28,6 +30,7 @@ final class VerifierChaineEcritureProcessor implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly ScellementEcritureHandler $scellement,
         private readonly RequestStack $requestStack,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -50,6 +53,15 @@ final class VerifierChaineEcritureProcessor implements ProviderInterface
             throw new UnprocessableEntityHttpException(
                 'La chaine n\'a PAS ete verifiee : ce journal n\'existe pas.'
             );
+        }
+
+        // ⚠ AUDIT DU 06/09, CONSTAT 5 : le journal venait de l'URL par `find()`, sans être confronté au
+        //   périmètre — on vérifiait (et lisait) la chaîne comptable d'un autre exploitant. Il doit
+        //   appartenir au profil qui couvre l'établissement actif ; sinon 404, pas 422, pour ne pas
+        //   confirmer qu'il existe.
+        $etablissementActif = $this->contexte->etablissementActif();
+        if ($etablissementActif === null || $journal->getProfilExploitant()?->couvre($etablissementActif) !== true) {
+            throw new NotFoundHttpException('Ressource introuvable.');
         }
 
         // ⚠ SEULES LES ECRITURES SCELLEES SONT DANS LA CHAINE — une ecriture non scellee porte

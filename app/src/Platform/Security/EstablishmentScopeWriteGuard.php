@@ -7,9 +7,8 @@ namespace App\Platform\Security;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Organisation\Entity\Etablissement;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Securite\Service\EstablishmentReachability;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -42,6 +41,10 @@ use Symfony\Bundle\SecurityBundle\Security;
  * **ignoré**, faute de périmètre auquel comparer. Ces points d'entrée doivent donc porter leur propre
  * garde. Refuser par défaut y serait plus sûr en théorie et casserait la vente en ligne en pratique :
  * on préfère une limite nommée à une protection qu'on croit avoir.
+ *
+ * **Ce que ce garde ne voit pas, et qui a son propre outil.** Un processeur qui résout lui-même une
+ * entité depuis le corps puis la persiste par `$em->persist()` ne passe pas par le `persist_processor`
+ * décoré — il passe à côté de ce garde. Pour ceux-là : `EstablishmentScopeAsserter` (audit 06/09, constat 5).
  */
 #[AsDecorator('api_platform.doctrine.orm.state.persist_processor')]
 final class EstablishmentScopeWriteGuard implements ProcessorInterface
@@ -49,7 +52,7 @@ final class EstablishmentScopeWriteGuard implements ProcessorInterface
     public function __construct(
         private readonly ProcessorInterface $decorated,
         private readonly Security $security,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly EstablishmentReachability $reachability,
     ) {
     }
 
@@ -77,12 +80,11 @@ final class EstablishmentScopeWriteGuard implements ProcessorInterface
             return;
         }
 
-        $affectation = $this->entityManager->getRepository(Affectation::class)->findOneBy([
-            'utilisateur' => $utilisateur,
-            'etablissement' => $etablissement,
-        ]);
-
-        if ($affectation !== null) {
+        // Depuis le 06/09, « atteignable » et non « affecté » : une délégation active ou un accès
+        // d'assistance ouvert rendent aussi l'établissement écrivable — la même règle que celle de
+        // l'en-tête `X-Etablissement` (`EstablishmentHeaderListener`), écrite une fois dans
+        // `EstablishmentReachability`. Deux règles pour la même question auraient fini par diverger.
+        if ($this->reachability->canReachEstablishment($utilisateur, $etablissement, new \DateTimeImmutable())) {
             return;
         }
 

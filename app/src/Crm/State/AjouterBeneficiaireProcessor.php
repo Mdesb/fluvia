@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\State;
 
+use App\Crm\Security\CustomerReachability;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Crm\Entity\Beneficiaire;
@@ -30,6 +31,7 @@ final class AjouterBeneficiaireProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly CustomerReachability $customers,
     ) {
     }
 
@@ -44,6 +46,9 @@ final class AjouterBeneficiaireProcessor implements ProcessorInterface
         if (!$client instanceof Client) {
             throw new UnprocessableEntityHttpException('Client introuvable ou invalide.');
         }
+        // ⚠ AUDIT DU 06/09, CONSTAT 5 : le client venait du corps par `find()`. On rattachait à sa
+        //   famille un client d'un autre groupe.
+        $this->customers->assertReachable($client);
 
         $alerte = false;
         foreach ($this->em->getRepository(Beneficiaire::class)->findBy(['client' => $client]) as $existant) {

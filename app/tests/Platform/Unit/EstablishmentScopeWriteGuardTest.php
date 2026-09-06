@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Platform\Unit;
 
+use App\Securite\Port\NoSupportAccessScope;
+use App\Securite\Service\EstablishmentReachability;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
@@ -74,13 +76,17 @@ final class EstablishmentScopeWriteGuardTest extends TestCase
         $security = $this->createStub(Security::class);
         $security->method('getUser')->willReturn($utilisateurConnecte ? new Utilisateur() : null);
 
+        // `EstablishmentReachability` est finale : on ne la bouchonne pas, on la construit sur un
+        // gestionnaire d'entités bouchonné — une affectation trouvée ou non, aucune délégation, aucun
+        // accès d'assistance. C'est la règle réelle qui tourne, sur des données choisies.
         $repository = $this->createStub(EntityRepository::class);
         $repository->method('findOneBy')->willReturn($affecte ? new Affectation() : null);
+        $repository->method('findBy')->willReturn([]);
 
         $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getRepository')->willReturn($repository);
 
-        return new EstablishmentScopeWriteGuard($decore, $security, $em);
+        return new EstablishmentScopeWriteGuard($decore, $security, new EstablishmentReachability($em, new NoSupportAccessScope()));
     }
 
     private function entiteAvecEtablissement(): object

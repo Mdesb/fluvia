@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\Controller;
 
+use App\Securite\Service\EstablishmentReachability;
 use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Securite\Entity\Utilisateur;
 use App\Organisation\Service\EditorTenantResolver;
@@ -24,9 +25,13 @@ use Symfony\Component\Routing\Attribute\Route;
 #[AsController]
 final class MeController
 {
+    /** Nom de route lu par `EstablishmentHeaderListener` pour exempter cette route — et elle seule. */
+    public const ROUTE = 'securite_me';
+
     public function __construct(
         private readonly Security $security,
         private readonly ContexteEtablissement $contexte,
+        private readonly EstablishmentReachability $reachability,
         private readonly CalculateurDroits $calculateur,
         private readonly Fonctionnalites $fonctionnalites,
         private readonly EditorTenantResolver $editeur,
@@ -34,7 +39,7 @@ final class MeController
     ) {
     }
 
-    #[Route('/me', name: 'securite_me', methods: ['GET'])]
+    #[Route('/me', name: self::ROUTE, methods: ['GET'])]
     public function __invoke(): JsonResponse
     {
         $utilisateur = $this->security->getUser();
@@ -43,7 +48,18 @@ final class MeController
         }
 
         $etablissementActif = $this->contexte->idActif();
-        $etablissementActifEntite = $this->contexte->etablissementActif();
+
+        // ⚠ /me EST LA SEULE ROUTE OÙ UN EN-TÊTE HORS PÉRIMÈTRE NE VAUT PAS 404 — parce que c'est par
+        //   elle que l'écran se remet d'un établissement mémorisé qui ne lui appartient plus (accès
+        //   retiré, site supprimé) : `App.jsx` relit la liste et corrige le stockage local. Un 404 ici
+        //   laisserait l'écran sans issue. Mais on ne RÉPOND PAS POUR AUTANT SUR CE SITE : il est traité
+        //   comme absent — aucun droit qui lui soit propre, aucune capacité, aucun nom. Partout ailleurs,
+        //   `EstablishmentHeaderListener` ferme (audit du 06/09, constat 3).
+        if ($etablissementActif !== null
+            && !$this->reachability->canReach($utilisateur, $etablissementActif, new \DateTimeImmutable())) {
+            $etablissementActif = null;
+        }
+        $etablissementActifEntite = $etablissementActif !== null ? $this->contexte->etablissementActif() : null;
 
         return new JsonResponse([
             'id' => (string) $utilisateur->getId(),
