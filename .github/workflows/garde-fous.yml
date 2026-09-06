@@ -15,8 +15,6 @@ name: Garde-fous
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 jobs:
   garde-fous:
