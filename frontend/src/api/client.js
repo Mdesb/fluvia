@@ -2724,6 +2724,21 @@ export const api = {
   creerSalleMusee: (corps) =>
     request('/api/musee_salles', { method: 'POST', body: corps, ld: true }),
   museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
+  // LES AUDIOGUIDES ET LEURS LANGUES. Quatre routes servies depuis l'origine, aucune appelee.
+  //
+  // /!\ LE CROISEMENT EST L'INTERET : une langue que l'audioguide propose et qu'AUCUN guide ne
+  // parle est une bascule CERTAINE -- chaque visite demandee dans cette langue partira en repli,
+  // avec sa remise. C'est une lacune de recrutement, pas un alea d'agenda.
+  museeAudioguides: () =>
+    request('/api/musee_audioguides', { query: { itemsPerPage: 100 } }),
+  museeCreerAudioguide: (corps) =>
+    request('/api/musee_audioguides', { method: 'POST', body: corps, ld: true }),
+  museeMajAudioguide: (id, corps) =>
+    request(`/api/musee_audioguides/${id}`, { method: 'PATCH', body: corps }),
+  museeQualificationsLangue: () =>
+    request('/api/musee_qualification_langue_guides', { query: { itemsPerPage: 200 } }),
+  museeBasculesAudioguide: () =>
+    request('/api/musee_bascule_audioguides', { query: { itemsPerPage: 100 } }),
   museeContingentsGratuite: () =>
     request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
   museeDossiersGroupe: () =>

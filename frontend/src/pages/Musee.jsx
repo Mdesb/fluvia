@@ -4,6 +4,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import ReversementsOta from '../components/ReversementsOta.jsx'
 import { api, membres } from '../api/client.js'
+import AudioguidesMusee from '../components/AudioguidesMusee.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 
@@ -46,6 +47,7 @@ export default function Musee({ etabActif, droits }) {
           ['visites', 'Visites guidées'],
           ['groupes', 'Groupes scolaires'],
           ['expositions', 'Expositions'],
+          ['audioguides', 'Audioguides'],
           ['reversements', 'Reversements'],
         ]}
         actif={onglet}
@@ -53,6 +55,7 @@ export default function Musee({ etabActif, droits }) {
       />
 
       {onglet === 'salles' && <SallesSection etabActif={etabActif} droits={droits} />}
+      {onglet === 'audioguides' && <AudioguidesMusee etabActif={etabActif} droits={droits} />}
       {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'groupes' && <GroupesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'reversements' && (
