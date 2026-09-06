@@ -32,11 +32,22 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * veille aux Antilles : clôturer « hier » au sens du serveur y arrêterait une journée **en cours**. Le
  * fuseau vient de `Etablissement::getFuseauHoraire()`, ajouté pour ce lot.
  *
- * **`--dry-run` n'est pas un confort.** Une clôture *scelle*. Un exploitant qui découvre trois
- * semaines d'arriéré doit pouvoir voir ce qui partirait avant de décider — montrer avant de faire est
- * la moindre des choses sur un geste irréversible. C'est aussi pourquoi la tâche est déclarée
- * `safeOnFirstRun: false` : un premier passage sur un arriéré produirait vingt et un arrêtés d'un
- * coup, et aucun ne se retire.
+ * **`--dry-run` n'est pas un confort.** Une clôture *scelle*, et rien ne la retire
+ * (`InalterabiliteListener` refuse `preRemove` comme `preUpdate`). Montrer avant de faire est donc
+ * la moindre des choses.
+ *
+ * ⚠ ET IL A LONGTEMPS MONTRÉ AUTRE CHOSE. Jusqu'au 06/09, la branche de simulation faisait
+ *   `continue` avant `close()` : elle n'évaluait aucun des trois refus, comptait un arrêté par point
+ *   de vente actif, et concluait « N journées seraient arrêtées ». Elle annonçait 7 là où
+ *   l'exécution en aurait scellé 5 et refusé 2. Elle consulte désormais
+ *   `DailyClosureHandler::raisonDeRefus()` — la même méthode que `close()`, pas une copie.
+ *
+ * ⚠ ET CETTE PHRASE DISAIT « UN PREMIER PASSAGE SUR UN ARRIÉRÉ PRODUIRAIT VINGT ET UN ARRÊTÉS D'UN
+ *   COUP ». C'est faux : `execute()` ne ferme que LA VEILLE, une fois par point de vente, sans
+ *   jamais boucler sur les jours. Un arriéré ne produit pas vingt et un arrêtés — il produit un
+ *   REFUS, parce que la chaîne des cumuls interdit de sauter une journée porteuse de ventes.
+ *   `safeOnFirstRun: false` reste juste, pour l'autre raison : le scellé est définitif, et un arrêté
+ *   posé sur le mauvais jour ou avec la mauvaise clé ne se défait pas.
  */
 #[AsCommand(
     name: 'vente:cloture:journee',
@@ -101,6 +112,16 @@ final class CloseBusinessDayCommand extends Command
             $veille = (new \DateTimeImmutable('now', $fuseau))->modify('-1 day')->setTime(0, 0);
 
             if ($simulation) {
+                // ⚠ LA SIMULATION POSE LA MÊME QUESTION QUE L'EXÉCUTION. Elle sautait ce test et
+                //   annonçait un arrêté par point de vente actif — donc l'inverse du réel dès qu'un
+                //   arriéré existe, sur l'instrument même qui doit éclairer un geste irréversible.
+                $refus = $this->handler->raisonDeRefus($pdv, $veille);
+                if ($refus !== null) {
+                    $refusees[] = sprintf('%s (%s) : %s', $pdv->getLibelle(), $veille->format('Y-m-d'), $refus);
+
+                    continue;
+                }
+
                 $io->writeln(sprintf(
                     '  <info>%s</info> (%s, %s) → journée du %s',
                     $pdv->getLibelle(),
@@ -132,6 +153,22 @@ final class CloseBusinessDayCommand extends Command
 
         if ($simulation) {
             $io->success(sprintf('%d journée(s) seraient arrêtées. Rien n\'a été scellé.', $arretees));
+
+            // ⚠ ET CE QUI SERAIT REFUSÉ, SINON LE COMPTE MENT PAR OMISSION. Un exploitant qui lit
+            //   « 5 journées seraient arrêtées » sans voir les deux refus croit son parc à jour.
+            if ($refusees !== []) {
+                $io->warning(sprintf('%d journée(s) seraient REFUSÉE(S) :', \count($refusees)));
+                foreach ($refusees as $raison) {
+                    $io->writeln(sprintf('  - %s', $raison));
+                }
+                $io->writeln(
+                    "  Une journée antérieure porteuse de ventes bloque la chaîne des cumuls. Elle se "
+                    . "clôt une par une, de la plus ancienne à la plus récente, par "
+                    . "<comment>POST /api/point_de_ventes/{id}/cloture-journaliere</comment> avec "
+                    . "<comment>{\"journee\": \"AAAA-MM-JJ\"}</comment> — la liste est servie par "
+                    . "<comment>/api/clotures-journalieres/en-attente</comment>."
+                );
+            }
 
             return Command::SUCCESS;
         }

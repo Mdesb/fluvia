@@ -31,10 +31,37 @@ final class DailyClosureHandler
     ) {
     }
 
-    public function close(PointDeVente $pdv, \DateTimeImmutable $day, ?Utilisateur $author): DailyClosure
+    /**
+     * POURQUOI CETTE JOURNÉE NE PEUT PAS ÊTRE CLOSE — ou `null` si elle le peut.
+     *
+     * ⚠ CETTE MÉTHODE EXISTE PARCE QUE `--dry-run` ANNONÇAIT L'INVERSE DU RÉEL. La branche de
+     * simulation de `CloseBusinessDayCommand` faisait `continue` avant `close()` : elle n'évaluait
+     * aucun des trois refus, comptait un arrêté par point de vente actif, et concluait « N journées
+     * seraient arrêtées ». Le 06/09 elle annonçait 7 là où l'exécution en aurait scellé 5 et refusé
+     * 2 — deux points de vente portaient un arriéré depuis le 18/08.
+     *
+     * L'instrument censé protéger le premier passage d'un geste IRRÉVERSIBLE ne mesurait pas ce
+     * qu'il affirmait, et le catalogue le désigne nommément comme la façon de regarder avant de
+     * décider.
+     *
+     * ⚠ ET C'EST UNE MÉTHODE, PAS UNE COPIE DES TROIS TESTS DANS LA COMMANDE. Deux vérités sur la
+     * même question divergent au premier changement ; `close()` appelle celle-ci et garde ses types
+     * d'exception, la simulation appelle la même. Une seule source, deux lecteurs.
+     *
+     * @return string|null la raison, telle que l'exploitant la lira
+     */
+    public function raisonDeRefus(PointDeVente $pdv, \DateTimeImmutable $day): ?string
     {
-        $jour = $day->setTime(0, 0);
+        return $this->refus($pdv, $day->setTime(0, 0))[1] ?? null;
+    }
 
+    /**
+     * Les trois refus, dans l'ordre où ils comptent.
+     *
+     * @return array{0: 'a_venir'|'deja_close'|'journee_sautee', 1: string}|null
+     */
+    private function refus(PointDeVente $pdv, \DateTimeImmutable $jour): ?array
+    {
         // 1 — On n'arrête pas une journée qui n'a pas eu lieu. Sans ce refus, clore demain figerait un
         // cumul que les ventes de demain viendraient contredire : la clôture affirmerait un total, et
         // la journée qu'elle prétend couvrir se remplirait après coup.
@@ -44,10 +71,10 @@ final class DailyClosureHandler
         // alors dans la journée suivante, et le refus « journée sautée » ne les rattraperait pas,
         // puisque leur journée aurait été close. Une clôture fausse, et scellée.
         if ($jour > $this->aujourdhui($pdv)) {
-            throw new UnprocessableEntityHttpException(sprintf(
+            return ['a_venir', sprintf(
                 'On ne clôt pas une journée à venir (il est le %s sur ce point de vente).',
                 $this->aujourdhui($pdv)->format('Y-m-d'),
-            ));
+            )];
         }
 
         // 2 — Une journée ne se clôt qu'une fois. Deux clôtures du même jour compteraient deux fois la
@@ -56,27 +83,44 @@ final class DailyClosureHandler
         $existante = $this->em->getRepository(DailyClosure::class)
             ->findOneBy(['pointDeVente' => $pdv, 'businessDay' => $jour]);
         if ($existante instanceof DailyClosure) {
-            throw new ConflictHttpException(sprintf(
+            return ['deja_close', sprintf(
                 'Journée du %s déjà clôturée sur ce point de vente : une clôture est irréversible (NF525).',
                 $jour->format('Y-m-d'),
-            ));
+            )];
         }
-
-        $precedente = $this->derniereCloture($pdv, $jour);
 
         // 3 — **Le refus qui compte, et le moins évident.** Clore le 12 en laissant le 10 ouvert alors
         // qu'il porte des ventes ferait sauter ces ventes du cumul : le total du 12 partirait du cumul
         // du 9. Les ventes du 10 existeraient en base et seraient absentes de l'arrêté — exactement la
         // signature d'une suppression, produite ici par une clôture dans le désordre. La chaîne des
         // cumuls doit être continue pour dire quoi que ce soit.
-        $oubliee = $this->premierJourNonClos($pdv, $precedente?->getBusinessDay(), $jour);
+        $oubliee = $this->premierJourNonClos($pdv, $this->derniereCloture($pdv, $jour)?->getBusinessDay(), $jour);
         if ($oubliee !== null) {
-            throw new ConflictHttpException(sprintf(
+            return ['journee_sautee', sprintf(
                 'La journée du %s porte des ventes et n\'est pas clôturée : clôturez-la d\'abord, sinon '
                 . 'ses ventes disparaîtraient du cumul perpétuel.',
                 $oubliee->format('Y-m-d'),
-            ));
+            )];
         }
+
+        return null;
+    }
+
+    public function close(PointDeVente $pdv, \DateTimeImmutable $day, ?Utilisateur $author): DailyClosure
+    {
+        $jour = $day->setTime(0, 0);
+
+        $refus = $this->refus($pdv, $jour);
+        if ($refus !== null) {
+            [$type, $message] = $refus;
+
+            throw match ($type) {
+                'a_venir' => new UnprocessableEntityHttpException($message),
+                default => new ConflictHttpException($message),
+            };
+        }
+
+        $precedente = $this->derniereCloture($pdv, $jour);
 
         [$nombre, $total] = $this->totalDuJour($pdv, $jour);
 
