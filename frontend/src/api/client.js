@@ -945,6 +945,22 @@ export const api = {
   // avalait l'echec (`.catch(() => null)`) et affichait « Aucun abonnement fitness » — un vide qui
   // ressemblait a une absence de donnees et qui etait une adresse fausse.
   abonnementsFitness: () => request('/api/abonnement_fitnesses', { query: { itemsPerPage: 200 } }),
+  // LES DEUX ROLES D'UN ABONNEMENT, INTERROGEABLES SEPAREMENT.
+  //
+  // Un abonnement porte un ADHERENT (`Beneficiaire`, celui qui entre) et un PAYEUR (`Client`,
+  // celui qui est preleve). La fiche client doit repondre aux deux questions, et ce ne sont pas
+  // les memes : « que paie-t-il ? » sert au litige bancaire, « a quoi a-t-il droit ? » sert a la
+  // porte. Le pont entre les deux est `Beneficiaire.client`, d'ou le second appel.
+  //
+  // ⚠ CES TROIS APPELS ONT EXIGE D'OUVRIR DES FILTRES COTE SERVEUR. Ni `AbonnementFitness` ni
+  //   `Beneficiaire` n'en declarait : un `?payeur=` etait ignore EN SILENCE et l'endpoint rendait
+  //   TOUT. Ca a la forme de donnees filtrees, ca arrive, et personne ne le remet en cause.
+  abonnementsDuPayeur: (clientId) =>
+    request('/api/abonnement_fitnesses', { query: { payeur: clientId, itemsPerPage: 100 } }),
+  beneficiairesDuClient: (clientId) =>
+    request('/api/beneficiaires', { query: { client: clientId, itemsPerPage: 100 } }),
+  abonnementsDesAdherents: (ids) =>
+    request('/api/abonnement_fitnesses', { query: { adherent: ids, itemsPerPage: 100 } }),
   // LES DEUX GESTES QUE L'ECRAN AVOUAIT NE PAS FAIRE.
   //
   // Les routes existent depuis l'origine du module ; aucune fonction cliente ne les appelait, donc
