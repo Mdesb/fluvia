@@ -7,7 +7,12 @@ framework:
     #   lisait pas : la variable ne fait rien tant que la configuration ne la nomme pas ici. Tous les
     #   limiteurs de débit fusionnaient donc les visiteurs en un seul (audit du 06/09, constat 11), et
     #   ceux ajoutés au constat 7 auraient verrouillé la préprod entière au premier abus.
-    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    # ⚠ `default::` ET NON `%env(TRUSTED_PROXIES)%` NU. Le garde-fou `filtres-declares` amorce le
+    #   noyau `--network none`, SANS variables d'environnement et sans charger `.env` (il injecte
+    #   `DATABASE_URL` a la main pour la meme raison). Une variable exigee sans repli y fait echouer
+    #   l'amorcage — vu en CI au premier passage. Repli chaine vide = aucun proxy de confiance, le
+    #   defaut sur : la preprod, elle, recoit sa valeur du compose. Meme idiome que le socle Symfony.
+    trusted_proxies: '%env(default::TRUSTED_PROXIES)%'
     trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port']
 
     # Les limiteurs des portes publiques (`PublicEndpointRateLimiter`). Fenêtre glissante : un compteur
