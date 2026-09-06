@@ -165,6 +165,34 @@ final class RunScheduledTasksCommand extends Command
             // Mesure de `allaccess-b8`, 01/09. Voir D91.
             $supervise = (bool) $input->getOption('supervise');
 
+            // ⚠ `--dry-run` NE DOIT PAS ÊTRE RETENU PAR LE VERROU DE PREMIER PASSAGE.
+            //
+            // Le message du verrou, juste en dessous, conseille « Ce que cette exécution ferait :
+            // --dry-run » — et `--dry-run` tombait sur ce même message, parce que le verrou était
+            // testé d'abord. L'avis renvoyait à lui-même, pour TOUTE tâche sous verrou : mesuré
+            // sur `vente:cloture:journee` autant que sur `reservation:confirmations:expirer`. Il
+            // fallait deviner `--supervise --dry-run`, c'est-à-dire attester qu'on regarde pour
+            // avoir le droit de regarder.
+            //
+            // Un passage à blanc n'écrit rien. Le verrou protège l'EXÉCUTION — « on ne la lance
+            // pas toute seule » — pas la lecture ; et c'est précisément la lecture qui doit
+            // précéder la décision de superviser un premier passage.
+            //
+            // ⚠ ET IL DIT LES DEUX CHOSES. « due » seul ferait croire qu'elle partirait au
+            //   prochain cycle, alors que le verrou la retiendra. Un passage à blanc qui cache
+            //   ce qui bloque serait une autre façon de mentir.
+            if ($dryRun) {
+                $io->writeln(sprintf(
+                    '  <comment>due</comment> %s%s',
+                    $task->command,
+                    $premierPassage && !$task->safeOnFirstRun
+                        ? ' — <comment>retenue</comment> : premier passage, attend une exécution supervisée (D109)'
+                        : '',
+                ));
+                ++$executees;
+                continue;
+            }
+
             if ($premierPassage && !$task->safeOnFirstRun && !$supervise) {
                 // Une commande qui n'a jamais tourné peut rattraper tout l'historique d'un coup — et
                 // certaines pilotent du matériel. Tant que personne n'a regardé ce qu'elle fait, on ne
@@ -190,12 +218,6 @@ final class RunScheduledTasksCommand extends Command
                     $task->command,
                 ));
                 ++$attente;
-                continue;
-            }
-
-            if ($dryRun) {
-                $io->writeln(sprintf('  <comment>due</comment> %s', $task->command));
-                ++$executees;
                 continue;
             }
 
