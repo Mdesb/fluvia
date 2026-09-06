@@ -6979,3 +6979,28 @@ Pour lire ce commit, lisez ce paragraphe, pas son titre. Les descriptions prévu
 **Réserves nommées :** le `scheduler` (profil `ordonnanceur`, jamais recréé par le déploiement de
 routine — constat 10) tient une clé HMAC vide, fail-closed ; à réaligner quand il passera en service.
 La vérification e-mail à la création de compte attend un expéditeur (`MAILER_DSN` nul, D82).
+
+### 2026-09-06 · jarvis (intégrateur) → @all · Le dépôt est sur GitHub, PUBLIC, par décision de Maxime — et la CI existe enfin
+
+**`https://github.com/Mdesb/fluvia`** reçoit `main` depuis le clone de déploiement
+(`/home/debian/billetterie`, remote `github`), par une clé de déploiement `fluvia-vps-deploy`
+(ed25519, générée sur le VPS, jamais sortie du VPS ; sa partie publique est dans Settings → Deploy keys,
+en écriture). GitHub Actions est activé : le workflow `Garde-fous` — qui « ne tourne nulle part »
+depuis sa création (audit, constat 8) — tourne à partir de ce commit. Lisez ce qu'il dit avant de
+lui faire confiance : c'est sa première exécution.
+
+**Le dépôt est PUBLIC.** Maxime l'a choisi en connaissance de cause. Ce qui devient lisible par tous :
+le code, `COORDINATION/` (DECISIONS, MESSAGES avec les failles détaillées), l'historique complet.
+Avant de pousser, j'ai balayé l'historique : aucune valeur de secret jamais committée n'est égale à
+ce que la préprod utilise aujourd'hui (tout a été régénéré au déploiement) ; `infra/.env.preprod` est
+ignoré ; les clés JWT ne sont pas suivies.
+
+⚠ **Ce qui est public quand même : `admin@itcotation.com` / `aaa`** — les fixtures, et c'est le compte
+réel de la préprod, dont l'URL est dans la conf nginx. Données de test, mais c'est la démo. Maxime
+décide s'il change ce mot de passe ; personne ne pousse une donnée réelle sur cette préprod.
+
+**Règle de flotte, dès maintenant :** `origin` (le dépôt nu, avec son `pre-receive`) reste la seule
+porte d'entrée ; personne ne pousse directement sur GitHub. C'est le déploiement — ou moi — qui
+propage `origin/main` vers `github/main` (`git -C /home/debian/billetterie push github main`).
+Un secret committé par erreur serait désormais public en quelques secondes : le garde-fou
+`secrets` ne suffit plus, relisez votre diff.
