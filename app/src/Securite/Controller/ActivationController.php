@@ -21,6 +21,8 @@ use Symfony\Component\Routing\Attribute\Route;
 #[AsController]
 final class ActivationController
 {
+    /** Longueur minimale exigee sur ce flux — la meme que celle annoncee par l'ecran. */
+    private const TAILLE_MIN_MOT_DE_PASSE = 12;
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
@@ -36,6 +38,19 @@ final class ActivationController
 
         if ($jeton === '' || $motDePasse === '') {
             return new JsonResponse(['message' => 'Jeton et mot de passe requis.'], 422);
+        }
+
+        // ⚠ LE MEME SEUIL QUE CELUI ANNONCE PAR L'ECRAN, MAIS ICI IL ENGAGE.
+        // Cote client il n'etait qu'un confort : cette route acceptait toute chaine non vide,
+        // donc un appel direct posait « a ». Un formulaire qui affiche une regle que le serveur
+        // ignore annonce le trou au lieu de le fermer.
+        if (mb_strlen($motDePasse) < self::TAILLE_MIN_MOT_DE_PASSE) {
+            return new JsonResponse([
+                'message' => sprintf(
+                    'Mot de passe trop court : %d caracteres au minimum.',
+                    self::TAILLE_MIN_MOT_DE_PASSE,
+                ),
+            ], 422);
         }
 
         $hash = hash('sha256', $jeton);

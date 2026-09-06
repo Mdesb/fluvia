@@ -1571,6 +1571,18 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // LES DEUX CONSOLIDATIONS, QUE PERSONNE N'APPELAIT. Le tableau de bord d'UN site etait branche
+  // depuis l'origine ; ceux de la region et du groupe — classement des sites, ecart vs objectif,
+  // ecart vs n-1, badge de fraicheur — ne l'etaient par aucun ecran. C'est pourtant la vue d'un
+  // dirigeant : il ne regarde pas une piscine, il regarde son perimetre.
+  //
+  // ⚠ Les deux acceptent `periodeDebut`/`periodeFin` ; sans elles, la journee.
+  // ⚠ Le groupe ne rend PAS d'ecart vs objectif — seulement vs n-1. L'ecran ne doit pas afficher
+  // une case vide comme si c'etait un zero.
+  dashboardRegion: (id, params) =>
+    request(`/reporting/dashboards/region/${id}`, { query: params }),
+  dashboardGroupe: (id, params) =>
+    request(`/reporting/dashboards/groupe/${id}`, { query: params }),
   // Référentiel des indicateurs (M7).
   indicateurs: () => request('/api/indicateurs', { query: { itemsPerPage: 100 } }),
   // L'Explorateur (M7-04) : un indicateur x un perimetre x UN JOUR. Route hors `/api`, comme le
@@ -1685,6 +1697,20 @@ export const api = {
   // reproduirait exactement le défaut qu'on corrige.
   demanderReinitialisation: (email) =>
     request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+  // LES DEUX BOUTS QUI MANQUAIENT AUX FLUX DE COMPTE. `oublie` demandait le courriel ; le lien
+  // qu'il envoie pointe vers `/mot-de-passe/reinitialiser?jeton=…` et `/activation?jeton=…`, et
+  // AUCUN ecran n'appelait ces deux routes-la. Les liens tombaient sur l'ecran de connexion.
+  //
+  // ⚠ `auth: false` : ces deux appels se font sans session, par definition — celui qui active son
+  // compte n'en a pas encore.
+  activerCompte: ({ jeton, motDePasse }) =>
+    request('/utilisateurs/activation', {
+      method: 'POST', body: { jeton, motDePasse }, auth: false,
+    }),
+  reinitialiserMotDePasse: ({ jeton, nouveauMotDePasse }) =>
+    request('/mot-de-passe/reinitialiser', {
+      method: 'POST', body: { jeton, nouveauMotDePasse }, auth: false,
+    }),
 
   // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
   //

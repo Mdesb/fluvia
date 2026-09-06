@@ -44,6 +44,13 @@ services:
     # et l'autowiring ne peut pas choisir seul.
     App\Platform\Notification\ClientNotifierInterface: '@App\Platform\Notification\LogClientNotifier'
 
+    # ⚠ ALIAS DEVENU OBLIGATOIRE LE 06/09. Symfony le déduisait tant qu'une seule classe implémentait
+    # `EventBus` ; le décorateur du module « connecteurs » en est une seconde, et la déduction cesse
+    # alors — sans erreur au démarrage, jusqu'à ce qu'un consommateur soit construit.
+    # La décoration réattribue l'identifiant de `SymfonyEventBus` au décorateur : cet alias résout
+    # donc vers lui, et les six consommateurs de l'interface ne changent pas d'une ligne.
+    App\Platform\Event\EventBus: '@App\Platform\Event\SymfonyEventBus'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 

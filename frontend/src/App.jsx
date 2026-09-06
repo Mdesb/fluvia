@@ -10,6 +10,7 @@ import {
 } from './api/client.js'
 import { aLeDroit } from './api/droits.js'
 import Login from './pages/Login.jsx'
+import AccesCompte, { lireDemandeDeCompte } from './pages/AccesCompte.jsx'
 import AppShell, { ongletsConnus } from './components/AppShell.jsx'
 import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -136,6 +137,9 @@ amorcerModeSupport()
 
 export default function App() {
   const [booting, setBooting] = useState(true)
+  // Lue une seule fois, au premier rendu : la fonction nettoie l'URL de son jeton au
+  // passage, donc la rappeler rendrait `null` et perdrait la demande.
+  const [demandeCompte, setDemandeCompte] = useState(lireDemandeDeCompte)
   const [authed, setAuthed] = useState(!!tokenStore.get())
   const [me, setMe] = useState(null)
   const [etablissements, setEtablissements] = useState([])
@@ -382,6 +386,18 @@ export default function App() {
     if (authed && etabActif) rechargerSession()
     else setSession(null)
   }, [authed, etabActif, rechargerSession])
+
+  // ⚠ AVANT `booting`, ET AVANT LA CONNEXION. Un lien d'activation ou de reinitialisation
+  // arrive sans session : attendre `/me` ferait clignoter l'ecran de connexion, et la
+  // deconnexion qui suit un `/me` refuse effacerait l'etat en cours de saisie.
+  if (demandeCompte) {
+    return (
+      <AccesCompte
+        demande={demandeCompte}
+        onTermine={() => { setDemandeCompte(null); window.location.replace('/') }}
+      />
+    )
+  }
 
   if (booting) {
     return (

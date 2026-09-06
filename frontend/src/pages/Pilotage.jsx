@@ -3,6 +3,7 @@ import EcartsCaisse from '../components/EcartsCaisse.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
+import ConsolidationPerimetre from '../components/ConsolidationPerimetre.jsx'
 import ExplorateurIndicateurs from '../components/ExplorateurIndicateurs.jsx'
 import TableauxDeBord from '../components/TableauxDeBord.jsx'
 import RapportsPlanifies from '../components/RapportsPlanifies.jsx'
@@ -254,6 +255,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           tableau de bord d'etablissement et la supervision, rien d'autre -- et `api.indicateurs()`
           etait declare dans le client HTTP, appele par zero ecran. La route de l'explorateur
           existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
+      <ConsolidationPerimetre etabActif={etabActif} etablissements={etablissements} />
       <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
       <TableauxDeBord
         etabActif={etabActif}
