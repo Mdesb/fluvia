@@ -60,6 +60,7 @@ function Champ({ libelle, children, aide }) {
 export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie }) {
   const [onglet, setOnglet] = useState('contrat')
   const [echeances, setEcheances] = useState(null)
+  const [reduction, setReduction] = useState(null)
   const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un objet = trouve ; `false` = lu, aucun
@@ -301,14 +302,33 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
                     <th className="num">Date</th>
                     <th className="num">Montant</th>
                     <th>Statut</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {echeances.map((e) => (
                     <tr key={e.id}>
                       <td className="num">{jour(e.dateProgrammee)}</td>
-                      <td className="num">{eurosCentimes(e.montantCentimes)}</td>
+                      <td className="num">
+                        {eurosCentimes(e.montantCentimes)}
+                        {/* ⚠ ON MONTRE LES DEUX MONTANTS, PAS SEULEMENT LE RÉDUIT. Un prélèvement
+                            qui ne correspond pas au contrat se conteste ; l'écart doit se lire ici,
+                            avec son motif, plutôt que se reconstituer six mois plus tard. */}
+                        {e.montantInitialCentimes != null && (
+                          <div className="sub">
+                            <s>{eurosCentimes(e.montantInitialCentimes)}</s>
+                            {e.reductionMotif ? ` · ${e.reductionMotif}` : ''}
+                          </div>
+                        )}
+                      </td>
                       <td><span className="badge mut">{e.statut || '—'}</span></td>
+                      <td>
+                        {e.statut === 'a_venir' && e.montantInitialCentimes == null && (
+                          <button className="btn sm" type="button" onClick={() => setReduction(e)}>
+                            Réduire
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -324,7 +344,117 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
         onClose={() => setGeste(null)}
         onFait={() => { setGeste(null); onModifie?.() }}
       />
+
+      <ReductionModal
+        echeance={reduction}
+        onClose={() => setReduction(null)}
+        onFait={() => { setReduction(null); onModifie?.() }}
+      />
     </div>
+  )
+}
+
+/**
+ * UNE OFFRE SUR UN PRÉLÈVEMENT À VENIR.
+ *
+ * ⚠ ELLE DIT CE QU'ELLE RETIRE, JAMAIS LE MONTANT D'ARRIVÉE. « moins 10 € » et « à 10 € » se
+ * confondent dans une tête pressée, et la confusion ne produit ni erreur ni message : elle produit
+ * un prélèvement faux. Le champ est donc libellé « Montant retiré », et la fenêtre affiche le calcul
+ * en toutes lettres avant de valider.
+ *
+ * ⚠ ET ELLE ANNONCE LA CONSÉQUENCE QUE PERSONNE NE DEVINERAIT : changer le montant repousse le
+ * prélèvement. Le préavis SEPA doit être réémis pour le nouveau montant, et le délai légal repart de
+ * zéro — « un montant qui change doit rendre au client la totalité du délai ». Un geste consenti
+ * trois jours avant l'échéance la décale donc de deux semaines. Le serveur rend la date ; on la
+ * montre au moment du geste, pas au relevé.
+ */
+function ReductionModal({ echeance, onClose, onFait }) {
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+  const [faite, setFaite] = useState(null)
+
+  useEffect(() => {
+    setMontant(''); setMotif(''); setErreur(null); setFaite(null)
+  }, [echeance])
+
+  // ⚠ `Math.round`, PAS UNE TRONCATURE : `10,50 €` doit valoir 1050 centimes, et `parseInt` en
+  //    rendrait 10. Le serveur refuse tout ce qui n'est pas un entier, mais un entier FAUX passerait.
+  const centimes = montant.trim() === '' ? null : Math.round(Number(montant.replace(',', '.')) * 100)
+  const valide = centimes !== null && Number.isFinite(centimes) && centimes > 0
+    && echeance && centimes < echeance.montantCentimes && motif.trim() !== ''
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      setFaite(await api.reduireEcheance(echeance.id, { montantCentimes: centimes, motif: motif.trim() }))
+    } catch (err) {
+      setErreur(err.message || 'La réduction n’a pas abouti.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!echeance} onClose={onClose} titre="Réduire un prélèvement à venir" taille="md">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        {faite ? (
+          <>
+            <div className="banner banner-ok">
+              <b>Prélèvement réduit</b> — {eurosCentimes(faite.montantInitialCentimes)} →{' '}
+              {eurosCentimes(faite.montantCentimes)}.
+            </div>
+            {/* Le serveur ne rend cette date que sur la réponse au geste : elle ne se relit pas. */}
+            {faite.prelevementPasAvant && (
+              <div className="banner banner-warn">
+                <b>Le prélèvement est repoussé.</b> Le client doit être prévenu du nouveau montant, et
+                le délai légal repart de zéro : il ne pourra pas partir avant le{' '}
+                {jour(faite.prelevementPasAvant)}.
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn primary" type="button" onClick={onFait}>Fermer</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              Échéance du {jour(echeance?.dateProgrammee)}, {eurosCentimes(echeance?.montantCentimes)}.
+            </p>
+            <div className="field">
+              <label htmlFor="red-montant">Montant retiré (€) *</label>
+              <input id="red-montant" className="input" type="number" step="0.01" min="0"
+                value={montant} onChange={(ev) => setMontant(ev.target.value)} />
+              <span className="hint">
+                {valide
+                  ? `Le client sera prélevé de ${eurosCentimes(echeance.montantCentimes - centimes)} au lieu de ${eurosCentimes(echeance.montantCentimes)}.`
+                  : 'Ce qu’on retire, pas le montant d’arrivée. Pour ne rien prélever, annulez l’échéance.'}
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="red-motif">Motif *</label>
+              <input id="red-motif" className="input" value={motif}
+                onChange={(ev) => setMotif(ev.target.value)} placeholder="Parrainage, geste commercial…" />
+              <span className="hint">
+                La seule question posée six mois plus tard, devant un relevé qui ne correspond pas au
+                contrat, sera « pourquoi ».
+              </span>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={onClose}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={!valide || envoi}>
+                {envoi ? 'Envoi…' : 'Réduire'}
+              </button>
+            </div>
+          </>
+        )}
+      </form>
+    </Modal>
   )
 }
 
