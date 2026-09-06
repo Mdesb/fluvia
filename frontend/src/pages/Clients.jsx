@@ -11,6 +11,7 @@ import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
+import AbonnementsClient from '../components/AbonnementsClient.jsx'
 import ConsentementsClient from '../components/ConsentementsClient.jsx'
 import { confirmer } from '../components/Confirmation.jsx'
 
@@ -934,6 +935,12 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
       {/* La fiche savait ce que le client a ACHETÉ, jamais s'il est ENTRÉ. Les deux questions du
           comptoir sont pourtant celles-là : « a-t-il utilisé sa carte ? » et « il dit que la borne
           l'a refusé hier ». Le bloc ne s'affiche pas pour un compte sans droit sur les accès. */}
+      {/* La fiche savait ce qu'il a acheté et s'il est entré, jamais qu'il est prélevé de 39,90 €
+          tous les mois. Devant un client qui conteste un prélèvement, il n'y avait aucun écran à
+          ouvrir. Deux listes, parce qu'un abonnement a deux rôles : celui qui paie et celui qui
+          entre — et le cas courant les sépare (un parent règle pour son enfant). */}
+      <AbonnementsClient client={c} droits={droits} />
+
       <PassagesClient clientId={c.id} droits={droits} surDernierPassage={setDernierPassage} />
 
       {/* Ce que ce client accepte de recevoir. La fiche l'ignorait completement : on pouvait

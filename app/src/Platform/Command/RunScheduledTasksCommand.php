@@ -89,6 +89,40 @@ final class RunScheduledTasksCommand extends Command
         $taches = $this->catalog->all();
         usort($taches, static fn (ScheduledTask $a, ScheduledTask $b): int => $a->order <=> $b->order);
 
+        // ⚠ UN `--only` QUI NE DÉSIGNE RIEN SORTAIT EN SILENCE, CODE 0.
+        //
+        // Trouvé en l'exécutant, pas en le lisant : `--only=tache:qui:nexiste:pas` ne produisait
+        // aucune sortie et rendait 0. La boucle ci-dessous filtre par égalité de nom ; un nom
+        // absent du catalogue ne fait que sauter chaque tour, et la commande se termine « avec
+        // succès ».
+        //
+        // ⚠ CE N'ÉTAIT PAS THÉORIQUE, ET ÇA A COÛTÉ UNE TÂCHE ENTIÈRE. `infra/ordonnanceur.sh`
+        //   appelle `--only=<nom>` pour chaque nom de sa liste blanche.
+        //   `reservation:confirmations:expirer` y figurait et manquait au catalogue : à chaque
+        //   cycle l'ordonnanceur lançait, recevait 0, écrivait « ok », et rien ne tournait.
+        //   `--status` ne pouvait pas le dire non plus — il ne connaît que le catalogue, donc la
+        //   tâche n'y apparaissait même pas comme « JAMAIS ».
+        //
+        // Une absence ne crie pas toute seule. On la rend bruyante ici, où elle naît, et pas
+        // seulement dans le garde-fou qui compare les deux listes au moment du commit : le
+        // garde-fou protège le dépôt, celui-ci protège l'exécution.
+        if (\is_string($only) && $only !== '') {
+            $connues = array_map(static fn (ScheduledTask $t): string => $t->command, $taches);
+            if (!\in_array($only, $connues, true)) {
+                $io->error(sprintf('« %s » n\'est pas une tâche du catalogue.', $only));
+                $io->writeln(
+                    "  Rien n'a été exécuté. Une tâche absente du catalogue ne tourne jamais, et "
+                    . "<comment>--status</comment> ne peut pas la signaler : il ne connaît que le catalogue."
+                );
+                $io->writeln(
+                    "  → l'ajouter dans <comment>src/Platform/Scheduling/ScheduleCatalog.php</comment>, "
+                    . "ou la retirer de <comment>TACHES_AUTORISEES</comment> dans <comment>infra/ordonnanceur.sh</comment>."
+                );
+
+                return Command::FAILURE;
+            }
+        }
+
         foreach ($taches as $task) {
             if (\is_string($only) && $only !== '' && $task->command !== $only) {
                 continue;
@@ -131,6 +165,34 @@ final class RunScheduledTasksCommand extends Command
             // Mesure de `allaccess-b8`, 01/09. Voir D91.
             $supervise = (bool) $input->getOption('supervise');
 
+            // ⚠ `--dry-run` NE DOIT PAS ÊTRE RETENU PAR LE VERROU DE PREMIER PASSAGE.
+            //
+            // Le message du verrou, juste en dessous, conseille « Ce que cette exécution ferait :
+            // --dry-run » — et `--dry-run` tombait sur ce même message, parce que le verrou était
+            // testé d'abord. L'avis renvoyait à lui-même, pour TOUTE tâche sous verrou : mesuré
+            // sur `vente:cloture:journee` autant que sur `reservation:confirmations:expirer`. Il
+            // fallait deviner `--supervise --dry-run`, c'est-à-dire attester qu'on regarde pour
+            // avoir le droit de regarder.
+            //
+            // Un passage à blanc n'écrit rien. Le verrou protège l'EXÉCUTION — « on ne la lance
+            // pas toute seule » — pas la lecture ; et c'est précisément la lecture qui doit
+            // précéder la décision de superviser un premier passage.
+            //
+            // ⚠ ET IL DIT LES DEUX CHOSES. « due » seul ferait croire qu'elle partirait au
+            //   prochain cycle, alors que le verrou la retiendra. Un passage à blanc qui cache
+            //   ce qui bloque serait une autre façon de mentir.
+            if ($dryRun) {
+                $io->writeln(sprintf(
+                    '  <comment>due</comment> %s%s',
+                    $task->command,
+                    $premierPassage && !$task->safeOnFirstRun
+                        ? ' — <comment>retenue</comment> : premier passage, attend une exécution supervisée (D109)'
+                        : '',
+                ));
+                ++$executees;
+                continue;
+            }
+
             if ($premierPassage && !$task->safeOnFirstRun && !$supervise) {
                 // Une commande qui n'a jamais tourné peut rattraper tout l'historique d'un coup — et
                 // certaines pilotent du matériel. Tant que personne n'a regardé ce qu'elle fait, on ne
@@ -156,12 +218,6 @@ final class RunScheduledTasksCommand extends Command
                     $task->command,
                 ));
                 ++$attente;
-                continue;
-            }
-
-            if ($dryRun) {
-                $io->writeln(sprintf('  <comment>due</comment> %s', $task->command));
-                ++$executees;
                 continue;
             }
 

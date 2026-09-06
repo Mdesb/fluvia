@@ -274,13 +274,20 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 </b>
               ) : (
                 <>
-              Aucun impayé en cours. Un impayé s’ouvre aujourd’hui à partir d’une échéance
-              d’abonnement rejetée, ou du résultat négatif d’une représentation bancaire — il bloque
-              alors l’accès du redevable et en repart quand le paiement est régularisé.
-              <div style={{ marginTop: 8 }}>
-                <b>Un rejet SEPA déclaré depuis l’écran Prélèvements n’ouvre pas d’impayé</b> : il
-                est enregistré au journal des rejets et rien d’autre. Vérifié en le faisant.
-              </div>
+              {/* ⚠ CETTE LISTE OMETTAIT LE REJET SEPA, ET LE NIAIT EN GRAS JUSTE EN DESSOUS.
+                  « Un rejet SEPA déclaré depuis l'écran Prélèvements n'ouvre pas d'impayé [...]
+                  Vérifié en le faisant » : c'était vrai le 29/08 à 03h50, et faux à 09h44, quand
+                  `DeclarerRejetSepaProcessor` a été branché sur `detecterRejet()`. La vérification
+                  était bonne ; c'est de l'avoir gravée ici qui l'a rendue fausse.
+
+                  ⚠ « PEUT BLOQUER », PAS « BLOQUE ». Le blocage dépend du moment de refus choisi
+                  dans la règle de recouvrement de l'établissement — et, plus loin, de l'existence
+                  d'un port d'accès pour ce type de redevable. */}
+              Aucun impayé en cours. Un impayé s’ouvre à partir d’un rejet SEPA déclaré depuis
+              l’écran Prélèvements, d’une échéance d’abonnement rejetée, ou du résultat négatif
+              d’une représentation bancaire. Il programme les représentations prévues par la règle
+              de l’établissement, peut bloquer l’accès du redevable selon cette même règle, et se
+              referme quand le paiement est régularisé.
                 </>
               )}
               {resolus.length > 0 && (

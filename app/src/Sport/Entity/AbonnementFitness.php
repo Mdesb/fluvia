@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sport\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -93,6 +95,17 @@ use Symfony\Component\Uid\Uuid;
     denormalizationContext: ['groups' => ['abonnement:write']],
 )]
 #[NoticeDelayCoversPeriod]
+/*
+ * ⚠ UN FILTRE NON DECLARE EST IGNORE EN SILENCE, ET L'ENDPOINT REND TOUT.
+ *
+ *    Un client doit retrouver, sur sa fiche, les abonnements qu'il PAIE et ceux qui sont a SON
+ * nom : deux questions differentes, deux relations differentes. Sans filtre declare, l'ecran
+ * devrait tout charger et trier lui-meme -- ce qui marche a onze abonnements et ment a mille.
+ *
+ * Ca ressemble a des donnees, ca arrive, ca a la bonne forme -- et personne ne le remet en
+ * cause. C'est le motif que `bin/garde-fou-filtres-declares.php` surveille.
+ */
+#[ApiFilter(SearchFilter::class, properties: ['payeur' => 'exact', 'adherent' => 'exact', 'etablissement' => 'exact', 'statut' => 'exact'])]
 class AbonnementFitness
 {
     #[ORM\Id]

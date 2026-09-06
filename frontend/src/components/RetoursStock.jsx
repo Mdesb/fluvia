@@ -37,10 +37,15 @@ import { idDe } from '../api/iri.js'
 // d'un avoir dans cette liste ne prouve rien : l'état devient « indéterminé », jamais « à traiter ».
 // Annoncer « pas encore réintégré » sur une mesure tronquée ferait doubler un stock.
 
+// Les deux seules natures que le serveur pose, dans `ContrePassationHandler` : `annuler()` écrit
+// « annulation », `rembourser()` écrit « remboursement ». Rien d'autre n'en écrit.
+//
+// ⚠ J'EN AVAIS AJOUTE UNE TROISIEME, « geste commercial », qui n'existe nulle part. Elle ne cassait
+// rien — la table retombe sur la valeur brute — et c'est exactement pourquoi elle était dangereuse :
+// une entrée qui n'apparaîtra jamais se lit comme du vocabulaire du produit.
 const NATURES = {
   annulation: 'Annulation',
   remboursement: 'Remboursement',
-  geste_commercial: 'Geste commercial',
 }
 
 export default function RetoursStock({ etabActif, articles, peutAjuster, onErreur, onFait }) {

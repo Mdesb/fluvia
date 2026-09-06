@@ -167,8 +167,13 @@ export default function PrelevementsSepa({ etabActif, droits }) {
           Trois affichages se calculent en recoupant deux listes chargées séparément — le nom du
           débiteur d'une ligne de remise vient des mandats, et surtout le marquage « déjà rejetée »
           vient des rejets. Au-delà d'une page, une ligne pourtant rejetée cesse d'être reconnue
-          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic ouvrirait
-          un SECOND impayé sur la même échéance — donc un accès bloqué deux fois.
+          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic écrit un
+          SECOND rejet au journal pour la même échéance.
+          ⚠ CE COMMENTAIRE DISAIT « UN SECOND IMPAYÉ, DONC UN ACCÈS BLOQUÉ DEUX FOIS ». Ce n'est
+          plus vrai : `DeclarerRejetSepaProcessor::incidentDejaOuvert()` refuse d'en ouvrir un
+          deuxième pour le même couple (échéance, client), et l'écran le dit maintenant
+          (« Aucun nouvel impayé »). L'avertissement de pagination, lui, reste nécessaire : un
+          doublon au journal des rejets fausse la lecture de ce que la banque a réellement rendu.
           Le serveur ne pagine pas au-delà de ce qu'on demande, mais il ne prévient pas non plus
           qu'il a coupé : `totalItems` le dit, encore faut-il le lire. */}
       {tronquees.length > 0 && (
@@ -670,8 +675,15 @@ function Rejets({ rejets, lignes, lignesRejetees, peutGerer, onRejeter }) {
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {rejets.length === 0 ? (
           <div className="empty">
-            Aucun rejet. Les prélèvements refusés par la banque apparaissent ici, et chacun ouvre un
-            impayé qui peut fermer l&rsquo;accès du redevable.
+            {/* ⚠ « OUVRE LE SUIVI », PAS « OUVRE UN IMPAYÉ QUI FERME L'ACCÈS ». Ni l'un ni
+                l'autre n'était vrai sans condition : le serveur renonce à ouvrir l'impayé si la
+                remise n'a pas d'établissement, si le mandat n'a pas de client, ou si un impayé
+                non soldé existe déjà pour la même échéance — et aucune porte ne se ferme pour un
+                redevable de type client, faute de port dans `PropagationAccesHandler`.
+                Le message affiché APRÈS un rejet dit lequel des trois cas s'est produit. */}
+            Aucun rejet. Les prélèvements refusés par la banque apparaissent ici ; chacun ouvre le
+            suivi de recouvrement — un impayé, et les représentations bancaires prévues par la
+            règle de l&rsquo;établissement.
           </div>
         ) : (
           <table className="tbl">
@@ -1055,28 +1067,43 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
     if (connu) setLibelleMotif(connu[1])
   }
 
+  // CE QUE LE SERVEUR RÉPOND APRÈS UN REJET, MOT POUR MOT.
+  //
+  // ⚠ CES PHRASES NE DÉCRIVENT PAS LE SERVEUR, ELLES RESTITUENT SA RÉPONSE. Ici s'affichait
+  //   « ⚠ Aucun impayé n'est ouvert automatiquement », vrai le 29/08 à 03h50 et faux à 09h44,
+  //   quand `DeclarerRejetSepaProcessor` a été branché sur le moteur de recouvrement. Une
+  //   phrase qui décrit un comportement devient un mensonge le jour où on le corrige, et rien
+  //   ne relie les deux. `suiteRecouvrement` vient du processeur : il ne peut pas se périmer.
+  const SUITE_REJET = {
+    impaye_ouvert:
+      'Rejet enregistré. Un impayé est ouvert, et les représentations bancaires prévues par la '
+      + 'règle de recouvrement de l’établissement sont programmées.',
+    impaye_deja_ouvert:
+      'Rejet enregistré. Aucun nouvel impayé : il en existe déjà un, non soldé, pour cette '
+      + 'échéance et ce client.',
+    redevable_non_resolu:
+      'Rejet enregistré au journal. Aucun impayé ouvert : il manque l’établissement de la remise '
+      + 'ou le client du mandat, donc le recouvrement ne sait pas qui relancer.',
+  }
+
   async function envoyer(e) {
     e.preventDefault()
     setEnCours(true)
     setErreur(null)
     try {
-      await api.declarerRejetSepa({
+      const rejet = await api.declarerRejetSepa({
         ligne: `/api/ligne_remise_sepas/${ligne.id}`,
         codeMotif: codeMotif.trim().toUpperCase(),
         libelleMotif: libelleMotif.trim() || undefined,
         dateRejet,
       })
-      // CE MESSAGE ANNONCAIT UN IMPAYE QUI NE S'OUVRE PAS. Eprouve le 29/08 avec l'accord de
-      // Maxime, sur un mandat de demonstration : le rejet part en 201 et ne cree AUCUN incident --
-      // tableau de bord du recouvrement inchange, mandat toujours actif, aucun acces bloque.
-      // `DeclarerRejetSepaProcessor` n'emet aucun evenement et n'appelle pas le moteur de
-      // recouvrement ; ses deux seuls declencheurs sont la simulation d'echeance du module Sport et
-      // le resultat d'une representation.
-      // Annoncer la prise en charge fait fermer l'ecran en croyant l'affaire suivie. On dit ce qui
-      // s'est reellement passe, et ce qu'il reste a faire.
+      // ⚠ SI LE SERVEUR N'A RIEN DIT, ON NE DIT PAS À SA PLACE. Un `suiteRecouvrement` absent
+      //   veut dire que la réponse ne portait pas le champ — une API plus ancienne que cet
+      //   écran. Inventer « impayé ouvert » là serait exactement le défaut qu'on répare ici.
       onFait(
-        'Rejet enregistré au journal. ⚠ Aucun impayé n’est ouvert automatiquement : le suivi du '
-        + 'recouvrement doit être déclenché à part.',
+        SUITE_REJET[rejet?.suiteRecouvrement]
+        || 'Rejet enregistré. Le suivi de recouvrement n’a pas dit ce qu’il en a fait : '
+        + 'vérifiez l’écran Impayés & recouvrement.',
       )
     } catch (err) {
       setErreur(err.message || "Le rejet n'a pas pu être enregistré.")
@@ -1091,14 +1118,24 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
         {/* CE QUE CE GESTE DÉCLENCHE, ÉCRIT AVANT DE LE FAIRE.
-            « Enregistrer un rejet » sonne comme une saisie comptable anodine. En réalité le serveur
-            ouvre un incident d'impayé, programme les représentations bancaires et peut FERMER
-            L'ACCÈS du redevable selon la politique de recouvrement. Quelqu'un se présentera au
-            guichet sans comprendre : autant que celui qui clique le sache. */}
+            « Enregistrer un rejet » sonne comme une saisie comptable anodine ; le serveur ouvre un
+            impayé et programme les représentations bancaires.
+
+            ⚠ ON ANNONCE L'INTENTION, PAS LE RÉSULTAT — c'est la seule chose qu'on puisse dire
+            AVANT d'agir. Le résultat a des cas de bord que le serveur distingue (un impayé déjà
+            ouvert pour la même échéance, un mandat sans client), et c'est le message d'APRÈS qui
+            les nomme, à partir de `suiteRecouvrement`.
+
+            ⚠ ET ON NE PROMET PLUS LA FERMETURE D'ACCÈS. `PropagationAccesHandler` résout la porte
+            à couper par un port par type de redevable, et le seul qui existe est
+            `sport.abonnement_fitness` : un rejet sur un mandat client marque l'incident, mais ne
+            ferme aucune porte. Le docblock de `ouvrirIncident()` le dit à l'endroit qui changera
+            le jour où un port client existera. Ici on se tait : un silence ne se périme pas. */}
         <div className="banner banner-warn">
-          <b>Ce n&rsquo;est pas qu&rsquo;une écriture.</b> Le rejet ouvre un impayé, programme les
-          représentations bancaires, et peut fermer l&rsquo;accès du redevable selon la règle de
-          recouvrement de l&rsquo;établissement.
+          <b>Ce n&rsquo;est pas qu&rsquo;une écriture.</b> Enregistrer ce rejet ouvre le suivi de
+          recouvrement : un impayé, et les représentations bancaires prévues par la règle de
+          l&rsquo;établissement. Ce qui a réellement été fait s&rsquo;affiche après
+          l&rsquo;enregistrement.
         </div>
 
         {ligneImposee ? (

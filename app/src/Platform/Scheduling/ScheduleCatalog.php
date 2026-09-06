@@ -57,11 +57,24 @@ final class ScheduleCatalog
                 . "oublie trois semaines n a pas ete negligent, il a rencontre un produit qui lui "
                 . "demandait d etre un mecanisme. Le manque ne se decouvre qu au controle.",
                 critical: true,
-                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Un premier passage sur un
-                // arriéré de trois semaines produirait vingt et un arrêtés d'un coup, irréversibles :
-                // c'est la catégorie « destruction irréversible », jamais sûre. `--dry-run` montre ce
-                // qui partirait avant que quiconque décide — sur un geste irréversible, montrer avant
-                // de faire n'est pas un confort.
+                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Sept points de vente actifs,
+                // donc sept arrêtés irréversibles au premier passage : catégorie « destruction
+                // irréversible », qui mérite quelqu'un devant l'écran une fois. `--dry-run` montre ce
+                // qui partirait avant que quiconque décide.
+                //
+                // ⚠ CETTE PHRASE DISAIT « UN ARRIÉRÉ DE TROIS SEMAINES PRODUIRAIT VINGT ET UN ARRÊTÉS
+                //   D'UN COUP ». C'est faux, et vérifié dans le code le 06/09 :
+                //   `CloseBusinessDayCommand::execute()` calcule `now(-1 day)` dans le fuseau de
+                //   l'établissement et appelle `close($pdv, $veille)` une fois par point de vente.
+                //   Elle ne ferme QUE LA VEILLE. Il n'existe pas de balayage d'arriéré à craindre.
+                //
+                // ⚠ ET LE VRAI DÉFAUT EST L'INVERSE DE CELUI QU'ON CRAIGNAIT : la commande NE
+                //   RATTRAPE JAMAIS. Un jour où elle ne tourne pas reste ouvert pour toujours de son
+                //   point de vue. Le rattrapage existe ailleurs — `CloseDayProcessor`, branché sur
+                //   `PointDeVente`, accepte `{"journee": "AAAA-MM-JJ"}` et ferme n'importe quel jour
+                //   passé — mais AUCUN ÉCRAN ne l'expose : `clotures-journalieres`, `dailyClosure` et
+                //   `journaliere` rendent zéro sur tout `frontend/src`. La file des journées non
+                //   closes est donc calculée, servie, et invisible.
                 //
                 // Et ce qui échoue ne disparaît pas : la journée reste dans la file
                 // `/clotures-journalieres/en-attente`, avec sa raison. Une clôture manquée EN SILENCE
@@ -115,6 +128,31 @@ final class ScheduleCatalog
                 "Le no-show ne bascule jamais. D27 promet au client une séance restituée avec report, "
                 . "et rien ne l'exécute : la promesse est faite à l'écran et jamais tenue.",
                 critical: true,
+            ),
+            // ⚠ CETTE TÂCHE ÉTAIT DANS LA LISTE BLANCHE DE L'ORDONNANCEUR ET ABSENTE D'ICI.
+            //
+            //   `infra/ordonnanceur.sh` la lançait à chaque cycle par `--only=`, le lanceur ne
+            //   trouvait aucune tâche de ce nom, sortait 0 sans un mot, et l'ordonnanceur écrivait
+            //   « ok ». `--status` ne pouvait pas la signaler non plus : il ne lit que ce
+            //   catalogue, donc elle n'y figurait même pas comme « JAMAIS ». Invisible des deux
+            //   côtés à la fois — c'est ça qui coûte, pas l'oubli lui-même.
+            //
+            //   Le correctif de la CLASSE est dans `RunScheduledTasksCommand` : un `--only` qui
+            //   ne désigne rien échoue désormais bruyamment.
+            new ScheduledTask(
+                'reservation:confirmations:expirer',
+                15,
+                "Les réservations à confirmer n'expirent jamais. Le créneau reste bloqué pour "
+                . "quelqu'un qui n'a rien confirmé, et — sur le chemin padel, où la vente est créée "
+                . "à la réservation — la vente rattachée reste due par ce client. Une place "
+                . "invendable et une créance fantôme, sans que rien ne le signale.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE. Un arriéré traité d'un coup libère d'un seul
+                // geste tous les créneaux échus ET annule leurs ventes rattachées : c'est le cas
+                // 3 (effet visible au dehors), pas le cas 1. Aujourd'hui le délai de confirmation
+                // est nul partout en préproduction, donc l'arriéré est vide — mais le jour où on
+                // l'allume, le premier passage balaierait tout le passé. `--dry-run` le montre.
+                safeOnFirstRun: false,
             ),
             new ScheduledTask(
                 'sepa:preavis:annoncer',
@@ -326,6 +364,34 @@ final class ScheduleCatalog
                 'padel:parties:maintenir-a-3',
                 15,
                 "Une partie de padel incomplète n'est jamais relancée vers les joueurs.",
+            ),
+            // ⚠ AVANT LE TERME, ET L'ORDRE EST TOUTE LA RAISON D'ÊTRE DE CETTE PLACE.
+            //
+            //   Une résiliation en préavis laisse l'abonnement `Actif` jusqu'à son effet. Or la
+            //   tâche suivante sélectionne exactement les abonnements `Actif` arrivés au terme et
+            //   RECONDUIT leur engagement — en ignorant complètement les résiliations :
+            //   `Resiliation` n'apparaît ni dans `ProcessSubscriptionTermsCommand` ni dans
+            //   `SubscriptionTermHandler` (0 occurrence dans les deux, mesuré le 06/09). Les deux
+            //   tâches tombent la même nuit ; si le terme passait en premier, l'adhérent qui a
+            //   résilié serait reconduit pour un an la nuit même de son effet.
+            //
+            //   Rang 5 contre 10 : `usort` est stable, mais deux rangs égaux ne diraient rien.
+            new ScheduledTask(
+                command: 'sport:resiliations:appliquer',
+                everyMinutes: 1440,
+                why: "Une résiliation ne prend jamais effet. `executerEffet()` — le seul code qui "
+                    . "passe l'abonnement en résilié, révoque le mandat, annule les échéances "
+                    . "restantes et coupe l'accès — n'avait AUCUN appelant : trois occurrences dans "
+                    . "tout le dépôt, sa déclaration et deux commentaires. L'adhérent qui résilie "
+                    . "reste prélevé et son badge ouvre encore la porte.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — catégorie « effet visible au dehors » : sur un
+                // parc réel, toutes les résiliations dont la date d'effet est déjà passée
+                // prendraient effet d'un coup, donc autant d'accès coupés et de mandats révoqués
+                // en une fois. `--dry-run` montre la liste avant que quiconque décide.
+                safeOnFirstRun: false,
+                nightlyAt: '02:00',
+                order: 5,
             ),
             // ⚠ LE PREMIER VRAI CLIENT DU VERROU DE PREMIER PASSAGE (D109).
             //

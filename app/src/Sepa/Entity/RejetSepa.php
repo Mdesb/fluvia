@@ -70,6 +70,29 @@ class RejetSepa
     #[Groups(['rejet_sepa:read'])]
     private \DateTimeImmutable $dateSaisie;
 
+    /**
+     * CE QUE LE REJET A DÉCLENCHÉ, DIT PAR CELUI QUI VIENT DE LE FAIRE.
+     *
+     * ⚠ CE CHAMP EXISTE PARCE QUE DEUX ÉCRANS SE CONTREDISAIENT DESSUS. L'un annonçait qu'un
+     * impayé s'ouvrait, l'autre affirmait en gras que non — et le troisième message, affiché
+     * après le geste, contredisait le premier dans le même écran. Les trois étaient des phrases
+     * figées, écrites de part et d'autre du commit qui a branché le moteur de recouvrement.
+     * Chacune a été vraie. Aucune ne pouvait le rester : rien ne reliait une phrase au code.
+     *
+     * ⚠ ET LA RÉPONSE N'EST PAS BINAIRE, C'EST TOUT LE PROBLÈME. `ouvrirIncident()` renonce si
+     * la remise n'a pas d'établissement ou le mandat pas de client, et renonce aussi si un
+     * impayé non soldé existe déjà pour cette échéance. Une phrase absolue, dans un sens comme
+     * dans l'autre, est fausse une fois sur trois.
+     *
+     * ⚠ NON PERSISTÉ, À DESSEIN. Il ne vaut que pour la réponse au POST qui vient de l'écrire.
+     * Relu plus tard (GET), il rend `null` — « on ne sait pas », ce qui est exact : le lien
+     * durable est porté par `IncidentImpaye::$rejetOrigine`, dans l'autre sens.
+     *
+     * @var 'impaye_ouvert'|'impaye_deja_ouvert'|'redevable_non_resolu'|null
+     */
+    #[Groups(['rejet_sepa:read'])]
+    private ?string $suiteRecouvrement = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -79,6 +102,18 @@ class RejetSepa
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getSuiteRecouvrement(): ?string
+    {
+        return $this->suiteRecouvrement;
+    }
+
+    public function setSuiteRecouvrement(?string $suiteRecouvrement): self
+    {
+        $this->suiteRecouvrement = $suiteRecouvrement;
+
+        return $this;
     }
 
     public function getLigne(): ?LigneRemiseSepa
