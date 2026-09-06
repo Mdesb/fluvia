@@ -53,6 +53,11 @@ services:
       # Coffre des URL de webhook du module « connecteurs ». Même forme que ses quatre
       # sœurs : absente, le conteneur refuse de démarrer plutôt que de chiffrer pour de faux.
       INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.preprod}
+      # Signature d’un code de support scanne (billet/carte/badge) : une cle connue = un code
+      # d’acces forgeable. Absente, le conteneur refuse de demarrer plutot que de signer pour de faux.
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.preprod}
+      # Tokenisation HMAC de l’IBAN (module SEPA partage). Meme regle que ci-dessus.
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
@@ -120,6 +125,11 @@ services:
       # Coffre des URL de webhook du module « connecteurs ». Même forme que ses quatre
       # sœurs : absente, le conteneur refuse de démarrer plutôt que de chiffrer pour de faux.
       INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.preprod}
+      # Signature d’un code de support scanne (billet/carte/badge) : une cle connue = un code
+      # d’acces forgeable. Absente, le conteneur refuse de demarrer plutot que de signer pour de faux.
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.preprod}
+      # Tokenisation HMAC de l’IBAN (module SEPA partage). Meme regle que ci-dessus.
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
