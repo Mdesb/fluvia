@@ -34,10 +34,11 @@ git filter-repo --force --invert-paths --path infra/ACCES-VPS.md --replace-text 
 
 echo "▶ contrôle : plus aucune trace avant de publier"
 # Chaque chaîne sensible (partie gauche des règles « motif==>placeholder ») doit avoir disparu de
-# TOUS les commits. Un seul reste = on annule plutôt que de publier du sale.
+# TOUS les commits. `git log -S` (pickaxe) balaie tout l'historique en UN passage par motif — pas un
+# `git grep` par commit, qui prenait des minutes. Un seul reste = on annule plutôt que publier du sale.
 sed 's/==>.*//' "$RULES" | while IFS= read -r motif; do
   [ -z "$motif" ] && continue
-  if git rev-list --all | while read -r c; do git grep -qI -e "$motif" "$c" 2>/dev/null && echo x; done | grep -q x; then
+  if [ -n "$(git log --all --oneline -S "$motif" | head -1)" ]; then
     echo "✗ « $motif » subsiste après filtrage — publication annulée"; exit 2
   fi
 done
