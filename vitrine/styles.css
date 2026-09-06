@@ -1643,7 +1643,10 @@ input:focus-visible {
   justify-content: start;
   gap: 10px;
 }
-.tarifs-options .options > li { max-width: 320px; }
+/* ⚠ UNE PASTILLE QUI S'ETIRE NE GENE PAS, UNE CARTE SI — le plafond ne vaut donc pas ici.
+   Pose sur ces pastilles, il les figeait a GAUCHE d'une piste bien plus large : l'ecart entre les
+   deux modules de « Vendre » devenait trois fois celui des quatre d'« Encaisser et facturer ».
+   Elles ne portent qu'un libelle ; les laisser remplir leur piste garde le rythme regulier. */
 
 /* ── SEPT CARTES ET TROIS ARTICLES NE REMPLISSENT PAS LEUR DERNIERE LIGNE ─────────────────────
 
@@ -1713,4 +1716,4 @@ input:focus-visible {
   justify-content: start;
   gap: 10px;
 }
-.bande-sombre .choix-liste > * { max-width: 320px; }
+/* Meme raison que pour les pastilles de tarifs : un choix ne porte qu'un libelle. */
