@@ -365,6 +365,34 @@ final class ScheduleCatalog
                 15,
                 "Une partie de padel incomplète n'est jamais relancée vers les joueurs.",
             ),
+            // ⚠ AVANT LE TERME, ET L'ORDRE EST TOUTE LA RAISON D'ÊTRE DE CETTE PLACE.
+            //
+            //   Une résiliation en préavis laisse l'abonnement `Actif` jusqu'à son effet. Or la
+            //   tâche suivante sélectionne exactement les abonnements `Actif` arrivés au terme et
+            //   RECONDUIT leur engagement — en ignorant complètement les résiliations :
+            //   `Resiliation` n'apparaît ni dans `ProcessSubscriptionTermsCommand` ni dans
+            //   `SubscriptionTermHandler` (0 occurrence dans les deux, mesuré le 06/09). Les deux
+            //   tâches tombent la même nuit ; si le terme passait en premier, l'adhérent qui a
+            //   résilié serait reconduit pour un an la nuit même de son effet.
+            //
+            //   Rang 5 contre 10 : `usort` est stable, mais deux rangs égaux ne diraient rien.
+            new ScheduledTask(
+                command: 'sport:resiliations:appliquer',
+                everyMinutes: 1440,
+                why: "Une résiliation ne prend jamais effet. `executerEffet()` — le seul code qui "
+                    . "passe l'abonnement en résilié, révoque le mandat, annule les échéances "
+                    . "restantes et coupe l'accès — n'avait AUCUN appelant : trois occurrences dans "
+                    . "tout le dépôt, sa déclaration et deux commentaires. L'adhérent qui résilie "
+                    . "reste prélevé et son badge ouvre encore la porte.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — catégorie « effet visible au dehors » : sur un
+                // parc réel, toutes les résiliations dont la date d'effet est déjà passée
+                // prendraient effet d'un coup, donc autant d'accès coupés et de mandats révoqués
+                // en une fois. `--dry-run` montre la liste avant que quiconque décide.
+                safeOnFirstRun: false,
+                nightlyAt: '02:00',
+                order: 5,
+            ),
             // ⚠ LE PREMIER VRAI CLIENT DU VERROU DE PREMIER PASSAGE (D109).
             //
             // Son premier passage traite D'UN COUP tous les abonnements deja au terme : sur un parc

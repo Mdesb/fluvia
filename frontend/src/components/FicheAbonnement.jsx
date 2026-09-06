@@ -337,14 +337,26 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
   const [motif, setMotif] = useState('')
+  const [motifLegitime, setMotifLegitime] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // ⚠ CE QUE LE SERVEUR A RÉPONDU, PAS CE QU'ON CROIT QU'IL A FAIT. Une résiliation demandée
+  //   pendant l'engagement revient en 201 avec le statut « refusee » : la fenêtre se fermait
+  //   dessus sans un mot, et l'exploitant croyait avoir résilié.
+  const [resultat, setResultat] = useState(null)
+
+  // En engagement, une demande simple est refusée d'office. C'est la seule situation où la case
+  // du motif légitime a un sens — hors engagement la demande passe directement en préavis.
+  const enEngagement = !!abonnement?.dateFinEngagement
+    && new Date(abonnement.dateFinEngagement) > new Date()
 
   useEffect(() => {
     setDebut('')
     setFin('')
     setMotif('')
+    setMotifLegitime(false)
     setErreur(null)
+    setResultat(null)
   }, [geste])
 
   async function soumettre(e) {
@@ -354,10 +366,19 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
     try {
       if (geste === 'pause') {
         await api.pauserAbonnement(abonnement.id, { dateDebut: debut, dateFin: fin, motif: motif.trim() || undefined })
-      } else {
-        await api.resilierAbonnement(abonnement.id, { motif: motif.trim() })
+        onFait()
+        return
       }
-      onFait()
+
+      const resiliation = await api.resilierAbonnement(abonnement.id, {
+        motif: motif.trim(),
+        motifLegitime: motifLegitime || undefined,
+      })
+
+      // ⚠ ON NE FERME PLUS SUR UN REFUS. Les trois issues sont réelles et se distinguent par le
+      //   statut rendu ; les confondre était le défaut. Le geste reste enregistré dans tous les
+      //   cas — c'est ce qu'il DEVIENT qui change.
+      setResultat(resiliation?.statut || 'inconnu')
     } catch (err) {
       setErreur(err.message || 'Le geste n’a pas abouti.')
     } finally {
@@ -415,14 +436,77 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
                 posée six mois plus tard sera « pourquoi ».
               </p>
             </div>
+
+            {enEngagement && (
+              <div className="field">
+                <label htmlFor="re-legitime">
+                  <input
+                    id="re-legitime"
+                    type="checkbox"
+                    checked={motifLegitime}
+                    onChange={(e) => setMotifLegitime(e.target.checked)}
+                  />{' '}
+                  Motif légitime (déménagement, perte d’emploi, raison médicale…)
+                </label>
+                {/* ⚠ SANS CETTE CASE, LA DEMANDE EST UN CUL-DE-SAC. Pendant l'engagement, le
+                    serveur refuse toute demande ; seul un motif légitime déclaré ouvre la voie de
+                    la validation manuelle par un responsable. La fenêtre ne l'offrait pas, donc
+                    elle ne pouvait produire qu'un refus définitif. */}
+                <p className="hint">
+                  L’engagement court jusqu’au {jour(abonnement?.dateFinEngagement)}. Sans motif
+                  légitime, la demande sera refusée. Avec, elle attendra la validation d’un
+                  responsable avant que le préavis commence.
+                </p>
+              </div>
+            )}
           </>
         )}
 
+        {/* ⚠ CE QUI S'EST RÉELLEMENT PASSÉ, AVANT DE POUVOIR FERMER. La fenêtre appelait
+            `onFait()` sur un 201 et se fermait : un refus était indiscernable d'une réussite. */}
+        {resultat && (
+          <div className={`banner ${resultat === 'en_preavis' ? 'banner-ok' : 'banner-warn'}`}>
+            {resultat === 'en_preavis' && (
+              <>
+                <b>Résiliation acceptée.</b> Le préavis court ; à sa date d’effet, l’accès sera
+                coupé et les échéances restantes annulées.
+              </>
+            )}
+            {resultat === 'refusee' && motifLegitime && (
+              <>
+                <b>Demande enregistrée, en attente de validation.</b> L’abonnement est encore en
+                engagement : un responsable doit valider le motif légitime pour que le préavis
+                commence. Tant qu’il ne l’a pas fait, l’abonnement reste actif et prélevé.
+              </>
+            )}
+            {resultat === 'refusee' && !motifLegitime && (
+              <>
+                <b>Demande refusée.</b> L’abonnement est en engagement jusqu’au{' '}
+                {jour(abonnement?.dateFinEngagement)}. La demande est conservée, mais elle ne
+                produira aucun effet : l’abonnement reste actif et prélevé. Un motif légitime
+                permet d’y déroger, après validation d’un responsable.
+              </>
+            )}
+            {resultat !== 'en_preavis' && resultat !== 'refusee' && (
+              <>
+                <b>Demande enregistrée</b>, statut « {resultat} ». Vérifiez la fiche : ce statut
+                n’est pas un de ceux que cet écran sait interpréter.
+              </>
+            )}
+          </div>
+        )}
+
         <div className="modal-actions">
-          <button className="btn" type="button" onClick={onClose}>Annuler</button>
-          <button className="btn primary" type="submit" disabled={envoi}>
-            {envoi ? 'Envoi…' : geste === 'pause' ? 'Mettre en pause' : 'Résilier'}
-          </button>
+          {resultat ? (
+            <button className="btn primary" type="button" onClick={onFait}>Fermer</button>
+          ) : (
+            <>
+              <button className="btn" type="button" onClick={onClose}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={envoi}>
+                {envoi ? 'Envoi…' : geste === 'pause' ? 'Mettre en pause' : 'Résilier'}
+              </button>
+            </>
+          )}
         </div>
       </form>
     </Modal>
