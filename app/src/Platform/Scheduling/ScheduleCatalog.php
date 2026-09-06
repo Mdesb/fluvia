@@ -57,11 +57,24 @@ final class ScheduleCatalog
                 . "oublie trois semaines n a pas ete negligent, il a rencontre un produit qui lui "
                 . "demandait d etre un mecanisme. Le manque ne se decouvre qu au controle.",
                 critical: true,
-                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Un premier passage sur un
-                // arriéré de trois semaines produirait vingt et un arrêtés d'un coup, irréversibles :
-                // c'est la catégorie « destruction irréversible », jamais sûre. `--dry-run` montre ce
-                // qui partirait avant que quiconque décide — sur un geste irréversible, montrer avant
-                // de faire n'est pas un confort.
+                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Sept points de vente actifs,
+                // donc sept arrêtés irréversibles au premier passage : catégorie « destruction
+                // irréversible », qui mérite quelqu'un devant l'écran une fois. `--dry-run` montre ce
+                // qui partirait avant que quiconque décide.
+                //
+                // ⚠ CETTE PHRASE DISAIT « UN ARRIÉRÉ DE TROIS SEMAINES PRODUIRAIT VINGT ET UN ARRÊTÉS
+                //   D'UN COUP ». C'est faux, et vérifié dans le code le 06/09 :
+                //   `CloseBusinessDayCommand::execute()` calcule `now(-1 day)` dans le fuseau de
+                //   l'établissement et appelle `close($pdv, $veille)` une fois par point de vente.
+                //   Elle ne ferme QUE LA VEILLE. Il n'existe pas de balayage d'arriéré à craindre.
+                //
+                // ⚠ ET LE VRAI DÉFAUT EST L'INVERSE DE CELUI QU'ON CRAIGNAIT : la commande NE
+                //   RATTRAPE JAMAIS. Un jour où elle ne tourne pas reste ouvert pour toujours de son
+                //   point de vue. Le rattrapage existe ailleurs — `CloseDayProcessor`, branché sur
+                //   `PointDeVente`, accepte `{"journee": "AAAA-MM-JJ"}` et ferme n'importe quel jour
+                //   passé — mais AUCUN ÉCRAN ne l'expose : `clotures-journalieres`, `dailyClosure` et
+                //   `journaliere` rendent zéro sur tout `frontend/src`. La file des journées non
+                //   closes est donc calculée, servie, et invisible.
                 //
                 // Et ce qui échoue ne disparaît pas : la journée reste dans la file
                 // `/clotures-journalieres/en-attente`, avec sa raison. Une clôture manquée EN SILENCE

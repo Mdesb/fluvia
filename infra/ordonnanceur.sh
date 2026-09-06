@@ -110,7 +110,7 @@ set -eu
 #                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme les deux ci-dessus,
 #                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
 #
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer"
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
