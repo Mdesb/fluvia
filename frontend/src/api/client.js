@@ -2304,6 +2304,25 @@ export const api = {
     request('/api/boutique_allocation_quota_otas', { method: 'POST', body: corps, ld: true }),
   majQuotaOta: (id, corps) =>
     request(`/api/boutique_allocation_quota_otas/${id}`, { method: 'PATCH', body: corps }),
+  // LE MODULE << CONNECTEURS >> -- destinations sortantes Slack, Teams, Discord.
+  //
+  // /!\ L'URL NE REVIENT JAMAIS EN LECTURE. Elle vaut un mot de passe : qui la detient peut ecrire
+  // dans le canal au nom de l'etablissement. Le serveur ne la met dans aucun groupe de
+  // serialisation ; seul l'hote ressort. Ne jamais ajouter ici de route qui la relirait.
+  connecteurs: () =>
+    request('/api/integration_outbound_endpoints', { query: { itemsPerPage: 100 } }),
+  creerConnecteur: (corps) =>
+    request('/api/integration_outbound_endpoints', { method: 'POST', body: corps, ld: true }),
+  majConnecteur: (id, corps) =>
+    request(`/api/integration_outbound_endpoints/${id}`, { method: 'PATCH', body: corps }),
+  supprimerConnecteur: (id) =>
+    request(`/api/integration_outbound_endpoints/${id}`, { method: 'DELETE' }),
+  // La liste des evenements auxquels on peut s'abonner. Servie par le serveur depuis les manifestes
+  // de module, JAMAIS recopiee ici : une liste tenue a la main aurait diverge au premier module
+  // ajoute, et une faute de frappe dans un nom ne produit AUCUNE erreur -- l'abonnement ne matche
+  // simplement jamais, en silence.
+  evenementsConnecteurs: () =>
+    request('/api/integrations/evenements-disponibles'),
   reversementsOta: () =>
     request('/api/reversement_otas', { query: { itemsPerPage: 200 } }),
   // ⚠ LE MONTANT N'EST PAS FOURNI : le serveur le calcule sur les ventes de la periode. C'est ce
