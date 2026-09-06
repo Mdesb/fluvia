@@ -33,8 +33,12 @@ final class GenerateurEcheancierHandler
      */
     public function generer(AbonnementFitness $abonnement, int $montantCentimes, ?int $montantPremiereCentimes = null): void
     {
-        $mensuel = $abonnement->getPeriodicite() === PeriodiciteAbonnementFitness::Mensuel;
-        $increment = $mensuel ? '+1 month' : '+1 week';
+        // ⚠ CE TERNAIRE AURAIT RENDU UN ABONNEMENT ANNUEL HEBDOMADAIRE, EN SILENCE. Il s'écrivait
+        //    `=== Mensuel ? '+1 month' : '+1 week'` : tout ce qui n'est pas mensuel devenait
+        //    hebdomadaire, et ajouter un cas à l'énumération ne l'aurait pas fait broncher. Le pas
+        //    vit désormais sur l'énumération, dans un `match` exhaustif.
+        $periodicite = $abonnement->getPeriodicite();
+        $increment = $periodicite->increment();
         $date = $abonnement->getDateDebutEngagement();
         $fin = $abonnement->getDateFinEngagement();
         $premiere = true;
@@ -44,9 +48,10 @@ final class GenerateurEcheancierHandler
         //    5 » depuis l'écran produit, et tout le monde restait prélevé à sa date anniversaire.
         //    Mesuré le 06/09 : zéro lecture de `getJourPrelevement()` hors de l'entité.
         //
-        // ⚠ MENSUEL SEULEMENT. Une périodicité hebdomadaire n'a pas de « jour du mois » ; appliquer
-        //    la règle y produirait des échéances aux intervalles arbitraires.
-        $jour = $mensuel ? $abonnement->getFormule()?->getJourPrelevement() : null;
+        // ⚠ PAS L'HEBDOMADAIRE. Une cadence hebdomadaire n'a pas de « jour du mois » ; appliquer la
+        //    règle y produirait des échéances aux intervalles arbitraires. Le mensuel ET l'annuel en
+        //    ont un : le 5 du mois, ou le 5 du mois anniversaire.
+        $jour = $periodicite->porteUnJourDuMois() ? $abonnement->getFormule()?->getJourPrelevement() : null;
         if ($jour !== null && ($jour < 1 || $jour > 31)) {
             // Une valeur hors bornes ne se corrige pas en silence : on garde le comportement connu.
             $jour = null;

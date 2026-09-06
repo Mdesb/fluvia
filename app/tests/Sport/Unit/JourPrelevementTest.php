@@ -95,6 +95,29 @@ final class JourPrelevementTest extends TestCase
     }
 
     /**
+     * LA CADENCE ANNUELLE EXISTE DEPUIS LE 06/09, ET ELLE PORTE UN JOUR DU MOIS.
+     *
+     * Le 5 du mois anniversaire. ⚠ DEUX TERNAIRES DU DÉPÔT AURAIENT RENDU CET ABONNEMENT
+     * HEBDOMADAIRE, EN SILENCE : ils s'écrivaient `=== Mensuel ? '+1 month' : '+1 week'`, si
+     * bien que tout ce qui n'était pas mensuel devenait hebdomadaire. Ils sont devenus des
+     * `match` exhaustifs — le langage refuse alors d'oublier le cas suivant.
+     */
+    public function testLaCadenceAnnuelleAvanceDUnAnEtPorteLeJourDeclare(): void
+    {
+        $dates = $this->jours($this->generer(5, PeriodiciteAbonnementFitness::Annuel, '2026-01-17', '2029-06-17'));
+
+        self::assertSame(['2026-01-17', '2027-01-05', '2028-01-05', '2029-01-05'], $dates);
+    }
+
+    /** Sans jour déclaré, l'annuel avance simplement d'un an. */
+    public function testLaCadenceAnnuelleSansJourDeclare(): void
+    {
+        $dates = $this->jours($this->generer(null, PeriodiciteAbonnementFitness::Annuel, '2026-03-09', '2029-01-01'));
+
+        self::assertSame(['2026-03-09', '2027-03-09', '2028-03-09'], $dates);
+    }
+
+    /**
      * CE QUE LA RÈGLE ÉPARGNE (1) — l'hebdomadaire.
      *
      * Une périodicité hebdomadaire n'a pas de « jour du mois ». Y appliquer la règle produirait des

@@ -181,19 +181,27 @@ final class RunScheduledTasksCommand extends Command
             // ⚠ ET IL DIT LES DEUX CHOSES. « due » seul ferait croire qu'elle partirait au
             //   prochain cycle, alors que le verrou la retiendra. Un passage à blanc qui cache
             //   ce qui bloque serait une autre façon de mentir.
+            // ⚠ LA MÊME CONDITION QUE LE VERROU, À L'IDENTIQUE — pas une qui lui ressemble.
+            //
+            //   Ma première version omettait `!$supervise` : `--supervise --dry-run` annonçait
+            //   « retenue » sur une tâche que le verrou allait laisser passer. Le passage à blanc
+            //   décrivait un blocage qui n'aurait pas eu lieu.
+            //
+            //   Deux expressions qui doivent dire la même chose divergent toujours. Celle-ci est
+            //   calculée une fois et lue deux fois.
+            $retenue = $premierPassage && !$task->safeOnFirstRun && !$supervise;
+
             if ($dryRun) {
                 $io->writeln(sprintf(
                     '  <comment>due</comment> %s%s',
                     $task->command,
-                    $premierPassage && !$task->safeOnFirstRun
-                        ? ' — <comment>retenue</comment> : premier passage, attend une exécution supervisée (D109)'
-                        : '',
+                    $retenue ? ' — <comment>retenue</comment> : premier passage, attend une exécution supervisée (D109)' : '',
                 ));
                 ++$executees;
                 continue;
             }
 
-            if ($premierPassage && !$task->safeOnFirstRun && !$supervise) {
+            if ($retenue) {
                 // Une commande qui n'a jamais tourné peut rattraper tout l'historique d'un coup — et
                 // certaines pilotent du matériel. Tant que personne n'a regardé ce qu'elle fait, on ne
                 // la lance pas toute seule.

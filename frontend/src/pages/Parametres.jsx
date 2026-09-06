@@ -13,6 +13,7 @@ import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
+import ConnecteursSortants from '../components/ConnecteursSortants.jsx'
 import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
@@ -45,6 +46,10 @@ const SOUS = [
   // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
   // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
   ['ouverture', 'Horaires d’ouverture'],
+  // Les connecteurs sont un REGLAGE, pas un ecran de consultation : on colle une adresse de webhook
+  // une fois, puis on n'y revient que le jour ou un canal se tait. Leur place est ici, a cote des
+  // modules en service -- c'est le meme geste, activer et brancher.
+  ['connecteurs', 'Connecteurs sortants'],
 ]
 
 // Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
@@ -535,6 +540,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
+      {sousOnglet === 'connecteurs' && <ConnecteursSortants droits={droits} etabActif={etabActif} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
       {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}

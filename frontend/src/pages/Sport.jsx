@@ -862,7 +862,6 @@ function SouscriptionModal({ open, onClose, onFait }) {
   //   zéro parce que c'est le début d'une autre souscription.
   const [payeurManuel, setPayeurManuel] = useState(false)
   const [produit, setProduit] = useState('')
-  const [periodicite, setPeriodicite] = useState('mensuel')
   const [duree, setDuree] = useState('12')
   // ⚠ PLUS DE MONTANT SAISI. Arbitrage de Maxime du 01/09 : « il ne doit pas y avoir de prix
   //    libre. » Le serveur résout désormais depuis la grille tarifaire et REFUSE le champ s'il est
@@ -874,7 +873,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
 
   useEffect(() => {
     if (!open) return
-    setAdherent(''); setPayeur(''); setPayeurManuel(false); setProduit(''); setPeriodicite('mensuel')
+    setAdherent(''); setPayeur(''); setPayeurManuel(false); setProduit('')
     setDuree('12'); setIban(''); setTitulaire(''); setErreur(null)
     Promise.allSettled([api.beneficiaires(), api.rechercheClients({ itemsPerPage: 100 }), api.produits()])
       .then(([b, c, p]) => {
@@ -909,6 +908,14 @@ function SouscriptionModal({ open, onClose, onFait }) {
     ? [clientAdherent, ...clients]
     : clients
 
+  // LA CADENCE VIENT DE LA FORMULE, PLUS DE CET ÉCRAN.
+  //
+  // ⚠ ELLE ÉTAIT SAISIE ICI ET LA FORMULE ÉTAIT IGNORÉE. `Formule::$periodicite` est éditable
+  //   dans la fiche produit et n'était lue par personne : une formule déclarée ANNUELLE
+  //   souscrite depuis cette modale devenait MENSUELLE, en silence. Le serveur refuse
+  //   désormais le champ plutôt que de l'ignorer — l'envoyer rendrait 422.
+  const CADENCES = { mensuel: 'Mensuelle', annuel: 'Annuelle', personnalise: 'Personnalisée' }
+
   const formules = produits.filter((p) => p.formule?.id)
   // Le tarif du produit choisi, tel que le catalogue le porte. On l'AFFICHE : c'est ce que le
   // serveur résoudra, et le montrer avant permet de s'apercevoir qu'il manque avant de valider.
@@ -917,7 +924,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
   const tarifAffiche = grilleTarif
     ? Number(grilleTarif.prix).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
     : null
-  const pret = adherent && payeur && produit && periodicite
+  const pret = adherent && payeur && produit
     // ⚠ `tarifAffiche` REMPLACE `centimes > 0` dans la garde : sans tarif au catalogue, le
     //    serveur refusera la souscription. Bloquer ici évite un aller-retour et une erreur
     //    technique là où la cause est un produit sans prix.
@@ -933,7 +940,6 @@ function SouscriptionModal({ open, onClose, onFait }) {
         adherent,
         payeur,
         formule: choisi.formule.id,
-        periodicite,
         dureeEngagementMois: Number(duree),
         iban: iban.trim(),
         titulaireMandat: titulaire.trim(),
@@ -1018,11 +1024,23 @@ function SouscriptionModal({ open, onClose, onFait }) {
 
         <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 160px' }}>
-            <label htmlFor="ab-periodicite">Périodicité *</label>
-            <select id="ab-periodicite" className="input" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)}>
-              <option value="mensuel">Mensuelle</option>
-              <option value="hebdomadaire">Hebdomadaire</option>
-            </select>
+            <label htmlFor="ab-periodicite">Périodicité</label>
+            {/* ⚠ AFFICHÉE, PLUS SAISIE — même motif que le montant juste à côté, et pour la même
+                raison : la laisser modifiable ferait croire qu'on fixe la cadence alors que le
+                serveur applique celle de la formule. L'écart ne se verrait qu'au relevé bancaire. */}
+            <input
+              id="ab-periodicite"
+              className="input"
+              value={CADENCES[produitChoisi?.formule?.periodicite] || (produit ? '—' : '')}
+              readOnly
+              placeholder="choisissez un produit"
+              aria-describedby="ab-periodicite-aide"
+            />
+            <span className="hint" id="ab-periodicite-aide">
+              {produit && !produitChoisi?.formule?.periodicite
+                ? 'Cette formule n’en déclare aucune : le serveur refusera. Renseignez-la dans la fiche produit.'
+                : 'Déclarée par la formule. Se change dans la fiche produit.'}
+            </span>
           </div>
           <div className="field" style={{ flex: '1 1 160px' }}>
             <label htmlFor="ab-duree">Engagement (mois) *</label>

@@ -63,6 +63,7 @@ enum CapaciteCode: string
     case Patinoire = 'patinoire';
     case Piscine = 'piscine';
     case Social = 'social';
+    case Connecteurs = 'connecteurs';
     case Sport = 'sport';
     case Stay = 'stay';
 
