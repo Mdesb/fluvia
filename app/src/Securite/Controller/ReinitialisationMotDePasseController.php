@@ -23,6 +23,8 @@ use Symfony\Component\Routing\Attribute\Route;
 #[AsController]
 final class ReinitialisationMotDePasseController
 {
+    /** Longueur minimale exigee sur ce flux — la meme que celle annoncee par l'ecran. */
+    private const TAILLE_MIN_MOT_DE_PASSE = 12;
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
@@ -39,6 +41,17 @@ final class ReinitialisationMotDePasseController
 
         if ($jetonClair === '' || $nouveauMotDePasse === '') {
             return new JsonResponse(['message' => 'Jeton et nouveau mot de passe requis.'], 422);
+        }
+
+        // Meme seuil que l'activation, et pour la meme raison : l'ecran l'annonce, le serveur
+        // l'applique. Voir `ActivationController`.
+        if (mb_strlen($nouveauMotDePasse) < self::TAILLE_MIN_MOT_DE_PASSE) {
+            return new JsonResponse([
+                'message' => sprintf(
+                    'Mot de passe trop court : %d caracteres au minimum.',
+                    self::TAILLE_MIN_MOT_DE_PASSE,
+                ),
+            ], 422);
         }
 
         $hash = hash('sha256', $jetonClair);

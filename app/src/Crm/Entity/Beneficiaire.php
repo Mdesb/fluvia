@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Crm\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -36,6 +38,16 @@ use Symfony\Component\Uid\Uuid;
     ],
     normalizationContext: ['groups' => ['beneficiaire:read']],
 )]
+/*
+ * ⚠ UN FILTRE NON DECLARE EST IGNORE EN SILENCE, ET L'ENDPOINT REND TOUT.
+ *
+ *    Le pont entre un client et les abonnements a son nom : `Beneficiaire.client`. Sans lui, on
+ * ne peut pas passer du client a l'adherent.
+ *
+ * Ca ressemble a des donnees, ca arrive, ca a la bonne forme -- et personne ne le remet en
+ * cause. C'est le motif que `bin/garde-fou-filtres-declares.php` surveille.
+ */
+#[ApiFilter(SearchFilter::class, properties: ['client' => 'exact', 'famille' => 'exact'])]
 class Beneficiaire
 {
     #[ORM\Id]

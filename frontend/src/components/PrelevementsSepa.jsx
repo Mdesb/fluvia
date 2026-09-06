@@ -167,8 +167,13 @@ export default function PrelevementsSepa({ etabActif, droits }) {
           Trois affichages se calculent en recoupant deux listes chargées séparément — le nom du
           débiteur d'une ligne de remise vient des mandats, et surtout le marquage « déjà rejetée »
           vient des rejets. Au-delà d'une page, une ligne pourtant rejetée cesse d'être reconnue
-          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic ouvrirait
-          un SECOND impayé sur la même échéance — donc un accès bloqué deux fois.
+          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic écrit un
+          SECOND rejet au journal pour la même échéance.
+          ⚠ CE COMMENTAIRE DISAIT « UN SECOND IMPAYÉ, DONC UN ACCÈS BLOQUÉ DEUX FOIS ». Ce n'est
+          plus vrai : `DeclarerRejetSepaProcessor::incidentDejaOuvert()` refuse d'en ouvrir un
+          deuxième pour le même couple (échéance, client), et l'écran le dit maintenant
+          (« Aucun nouvel impayé »). L'avertissement de pagination, lui, reste nécessaire : un
+          doublon au journal des rejets fausse la lecture de ce que la banque a réellement rendu.
           Le serveur ne pagine pas au-delà de ce qu'on demande, mais il ne prévient pas non plus
           qu'il a coupé : `totalItems` le dit, encore faut-il le lire. */}
       {tronquees.length > 0 && (
@@ -670,8 +675,15 @@ function Rejets({ rejets, lignes, lignesRejetees, peutGerer, onRejeter }) {
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {rejets.length === 0 ? (
           <div className="empty">
-            Aucun rejet. Les prélèvements refusés par la banque apparaissent ici, et chacun ouvre un
-            impayé qui peut fermer l&rsquo;accès du redevable.
+            {/* ⚠ « OUVRE LE SUIVI », PAS « OUVRE UN IMPAYÉ QUI FERME L'ACCÈS ». Ni l'un ni
+                l'autre n'était vrai sans condition : le serveur renonce à ouvrir l'impayé si la
+                remise n'a pas d'établissement, si le mandat n'a pas de client, ou si un impayé
+                non soldé existe déjà pour la même échéance — et aucune porte ne se ferme pour un
+                redevable de type client, faute de port dans `PropagationAccesHandler`.
+                Le message affiché APRÈS un rejet dit lequel des trois cas s'est produit. */}
+            Aucun rejet. Les prélèvements refusés par la banque apparaissent ici ; chacun ouvre le
+            suivi de recouvrement — un impayé, et les représentations bancaires prévues par la
+            règle de l&rsquo;établissement.
           </div>
         ) : (
           <table className="tbl">

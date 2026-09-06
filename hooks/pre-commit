@@ -144,6 +144,10 @@ fi
 [ -f "$RACINE/bin/garde-fou-nullable-non-nul.php" ] && { lancer_gf garde-fou-nullable-non-nul.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-vacuite-tests.php" ] && { lancer_gf garde-fou-vacuite-tests.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-espacement-en-ligne.php" ] && { lancer_gf garde-fou-espacement-en-ligne.php || ECHEC=1; }
+# Un nom dans TACHES_AUTORISEES et absent de ScheduleCatalog ne tourne JAMAIS, et `--status` ne
+# peut pas le dire : il ne connait que le catalogue. Mesure le 06/09 sur
+# `reservation:confirmations:expirer` -- lancee a chaque cycle, jamais executee, « ok » a chaque fois.
+[ -f "$RACINE/bin/garde-fou-taches-planifiees-fantomes.php" ] && { lancer_gf garde-fou-taches-planifiees-fantomes.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-champ-cloisonnement.php" ] && { lancer_gf garde-fou-champ-cloisonnement.php || ECHEC=1; }
 # Entite rattachable exposee que l'extension de son module n'enumere pas (n°35). Le n°5 la gelait en
 # vrac avec les referentiels ; le rattachement prouve que c'est un oubli de liste blanche, pas un global.
