@@ -98,12 +98,17 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       (e) => e.debtorType === incident.typeRedevable && e.debtorRef === incident.referenceRedevable,
     )
 
-  // ⚠ On affiche le nom si un impaye du meme redevable est charge, sinon la reference brute.
-  // Inventer un libelle « client inconnu » ferait croire a une donnee manquante ; la reference est
-  // laide mais vraie, et elle permet de retrouver la ligne.
+  // ⚠ CE HELPER CHERCHAIT UN CHAMP QUE PERSONNE N'ÉCRIVAIT. Il lisait
+  //   `connu?.nomRedevable || connu?.libelleRedevable` — deux propriétés absentes de tout le dépôt,
+  //   cherchées qui plus est sur la liste des incidents elle-même. Il retombait donc TOUJOURS sur la
+  //   référence brute, sans que rien ne signale le manque : un lecteur écrit en espérant une donnée
+  //   que personne ne produit ne se plaint jamais, il rend seulement quelque chose de laid.
+  //
+  //   `nomRedevable` existe maintenant, résolu à la lecture par le serveur. La référence reste le
+  //   repli — laide mais vraie, et elle permet de retrouver la ligne.
   const nomRedevable = (type, reference) => {
     const connu = (incidents || []).find((i) => i.typeRedevable === type && i.referenceRedevable === reference)
-    return connu?.nomRedevable || connu?.libelleRedevable || reference
+    return connu?.nomRedevable || reference
   }
 
   async function retirerExemption(e) {
@@ -314,8 +319,17 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 {ouverts.map((i) => (
                   <tr key={i.id}>
                     <td>
-                      <span className="nm">{i.typeRedevable || '—'}</span>
-                      <div className="sub mono">{String(i.referenceRedevable || '').slice(0, 12)}</div>
+                      {/* ⚠ CETTE CELLULE RENDAIT `sport.abonnement_fitness` ET DOUZE CARACTÈRES
+                          D'UUID, sous un en-tête qui nomme une personne — et c'est sur cette ligne
+                          qu'on clique « Réglé ». Le serveur résout désormais le nom à la lecture.
+                          On garde le contrat en second : le nom sert à reconnaître, la référence à
+                          retrouver — au téléphone avec la banque, ou dans une requête. */}
+                      {i.nomRedevable
+                        ? <span className="nm">{i.nomRedevable}</span>
+                        : <span className="sub">nom non résolu</span>}
+                      <div className="sub mono">
+                        {i.typeRedevable || '—'} · {String(i.referenceRedevable || '').slice(0, 12)}
+                      </div>
                     </td>
                     <td className="num">{centimes(i.montantCentimes)}</td>
                     <td>
@@ -1062,6 +1076,8 @@ function redevableDe(representation, incidentsParId) {
     ? ref
     : incidentsParId.get(String(ref).split('/').pop())
   if (!incident) return '—'
-  return incident.referenceRedevable || incident.typeRedevable || '—'
+
+  // Le nom d'abord — c'est ce qu'un agent au téléphone doit lire. La référence reste le repli.
+  return incident.nomRedevable || incident.referenceRedevable || incident.typeRedevable || '—'
 }
 

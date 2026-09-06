@@ -253,15 +253,24 @@
 
       <fieldset>
         <legend>Vous</legend>
-        <p class="champ">
-          <label for="tunnel-structure">Nom de votre structure</label>
-          <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
-        </p>
-        <p class="champ">
-          <label for="tunnel-email">Votre adresse e-mail</label>
-          <input id="tunnel-email" name="email" type="email" required autocomplete="email">
-          <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
-        </p>
+        {#
+          ⚠ LES DEUX CHAMPS SONT CÔTE À CÔTE, ET CE N'EST PAS POUR GAGNER DE LA PLACE. Empilés, ils
+          faisaient 480 px chacun — leur largeur prévue, celle qui se lit le mieux — dans un panneau
+          de 1150 : deux traits perdus au milieu du vide. Les élargir aurait corrigé le déséquilibre
+          en dégradant la lisibilité. Côte à côte, ils remplissent le panneau sans rien changer à
+          leur mesure.
+        #}
+        <div class="champs">
+          <p class="champ">
+            <label for="tunnel-structure">Nom de votre structure</label>
+            <input id="tunnel-structure" name="companyName" type="text" required autocomplete="organization">
+          </p>
+          <p class="champ">
+            <label for="tunnel-email">Votre adresse e-mail</label>
+            <input id="tunnel-email" name="email" type="email" required autocomplete="email">
+            <span class="aide">C'est là que part votre lien de confirmation, puis vos accès.</span>
+          </p>
+        </div>
       </fieldset>
 
       <p id="tunnel-total" class="total" role="status" hidden></p>
