@@ -260,6 +260,17 @@ final class CatalogueCapacites
                 "Vendez la semaine entière plutôt que la prestation : hébergement, activités et repas dans une seule formule, à un seul prix. ⚠ Module en construction — le serveur existe, il n'a pas encore d'écran.",
                 'metier',
             ),
+            // ⚠ AJOUTE LE 06/09 APRES UNE PANNE. La capacite existait dans l'enum depuis 204e73fe,
+            //   sans descripteur ici : `descripteur()` etant un `match` sans branche par defaut,
+            //   tout appel a `toutes()` levait « Unhandled match case ». La page d'accueil du site
+            //   public et l'ecran « Site vitrine » rendaient 500, pendant que /metiers et /blog
+            //   repondaient normalement — ils ne passent pas par le catalogue complet.
+            CapaciteCode::Connecteurs => new DescripteurCapacite(
+                $code->value,
+                'Connecteurs',
+                "Les evenements de l'etablissement arrivent la ou l'equipe travaille deja : Slack, Teams ou Discord. Un seul module pour les trois, parce que c'est le meme envoi.",
+                'metier',
+            ),
             CapaciteCode::Dining => new DescripteurCapacite(
                 $code->value,
                 'Restauration',
