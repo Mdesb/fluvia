@@ -117,6 +117,10 @@ const STATUTS_TENTATIVE = {
 // tel quel s'il en apparaît un autre : afficher un code inconnu vaut mieux que n'afficher rien.
 const MOTIFS_IGNORE = {
   skipped_no_consent: 'le client n’a pas consenti aux messages marketing',
+  // ⚠ CE CAS S'AFFICHAIT COMME LE PRÉCÉDENT jusqu'au 06/09 : le moteur écrivait le même code pour
+  // « client introuvable » et « consentement refusé ». Un exploitant partait alors vérifier des
+  // préférences client sur un dossier qui ne désigne personne. Deux causes, deux phrases.
+  skipped_no_customer: 'aucun client identifiable sur ce dossier — rien n’a été envoyé',
 }
 
 function libelleDeclencheur(code) {

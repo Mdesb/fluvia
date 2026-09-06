@@ -39,6 +39,18 @@ class RecoveryEngine
     /** Code de saut le plus fréquent (RG-RR-03) — les autres skip reasons restent libres (`skipReason` n'est pas une énumération fermée). */
     public const SKIP_REASON_NO_CONSENT = 'skipped_no_consent';
 
+    /**
+     * ⚠ DISTINCT DE `NO_CONSENT`, ET CE N'EST PAS UNE NUANCE DE VOCABULAIRE.
+     *
+     * Ici le notifieur n'est même pas appelé : `resolveCustomerId()` n'a trouvé personne à qui
+     * écrire. Écrire « pas de consentement » enverrait l'exploitant vérifier les préférences d'un
+     * client — alors que le dossier n'en désigne aucun, et que la correction est ailleurs.
+     *
+     * Un motif d'abandon est lu par un humain qui va agir dessus : deux causes sous un seul code,
+     * c'est une des deux qui reçoit le mauvais mode d'emploi.
+     */
+    public const SKIP_REASON_NO_CUSTOMER = 'skipped_no_customer';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RecoverySubjectCustomerResolver $customerResolver,
@@ -245,7 +257,7 @@ class RecoveryEngine
                 // Pas de client identifiable (ou hors périmètre établissement, RG-RR-07) : échec fermé
                 // (RG-RR-03), jamais un envoi à l'aveugle — et aucun appel à `ClientNotifierInterface`
                 // sans destinataire résolu.
-                $tentative->setStatus(RecoveryAttemptStatus::Skipped)->setSkipReason(self::SKIP_REASON_NO_CONSENT);
+                $tentative->setStatus(RecoveryAttemptStatus::Skipped)->setSkipReason(self::SKIP_REASON_NO_CUSTOMER);
                 ++$compteurs['skipped'];
                 $this->maybeExhaust($case);
                 continue;
