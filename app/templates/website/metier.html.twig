@@ -36,6 +36,31 @@
     </div>
   </article>
 
+  {#
+    ⚠ L'ÉCRAN EST DÉCORATIF ET LE DIT (`aria-hidden`). Il ne porte aucune information qui ne soit
+    pas déjà écrite autour : un lecteur d'écran qui le traverserait n'y trouverait qu'une grille de
+    noms hors contexte.
+  #}
+  {% if metier.ecran is not null %}
+    <section class="bande bande-sombre section-duo">
+      <div class="duo">
+        <div class="duo-dire">
+          <p class="sur-titre">Le même socle</p>
+          <h2>Le même écran, vos mots.</h2>
+          <p>
+            Ce n'est pas une adaptation faite pour vous : c'est le produit tel qu'il est. Votre
+            vocabulaire est un paramètre, pas une version à part — et c'est pour ça qu'il ne prend
+            ni délai ni supplément.
+          </p>
+        </div>
+
+        <div class="duo-scene" aria-hidden="true">
+          {% include 'website/_ecran_metier.html.twig' with {ecran: metier.ecran} only %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
   {% if metier.specificites|length > 0 %}
     <section class="bande">
       <div class="mesure">

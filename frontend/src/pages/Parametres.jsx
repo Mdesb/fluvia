@@ -13,6 +13,7 @@ import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
+import ConnecteursSortants from '../components/ConnecteursSortants.jsx'
 import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
@@ -45,6 +46,10 @@ const SOUS = [
   // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
   // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
   ['ouverture', 'Horaires d’ouverture'],
+  // Les connecteurs sont un REGLAGE, pas un ecran de consultation : on colle une adresse de webhook
+  // une fois, puis on n'y revient que le jour ou un canal se tait. Leur place est ici, a cote des
+  // modules en service -- c'est le meme geste, activer et brancher.
+  ['connecteurs', 'Connecteurs sortants'],
 ]
 
 // Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
@@ -535,6 +540,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
+      {sousOnglet === 'connecteurs' && <ConnecteursSortants droits={droits} etabActif={etabActif} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
       {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}
@@ -1705,6 +1711,37 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
     return actions.some((code) => roleCouvre(codes, code))
   })
 
+  // ⚠ LA MÊME QUESTION, POSÉE SUR TOUS LES MODULES À LA FOIS.
+  //
+  // L'avertissement « personne ne peut s'en servir » existait déjà, mais seulement sur le module
+  // qu'on avait sélectionné : pour le voir, il fallait déjà soupçonner lequel. Le 25/08, une session
+  // a signalé dans sa propre migration que `smart_flow` créait ses permissions sans les accorder ;
+  // douze jours plus tard rien n'avait bougé, et `revenue_recovery` l'avait rejoint. Personne
+  // n'avait ouvert la bonne entrée de la liste.
+  //
+  // On réutilise `roleCouvre()` — le prédicat qui connaît le joker — plutôt que d'en réécrire une
+  // variante : deux vérités sur la même question, c'est toujours la copie qui se trompe.
+  //
+  // ⚠ ET CE BANDEAU NE SORT PAS SUR UNE BASE QUI PORTE UN RÔLE JOKER. C'est correct, pas cassé.
+  // Un rôle `*.*` couvre tout module, présent comme à venir : sur la préproduction, deux rôles le
+  // portent, et il n'existe donc AUCUN module sans porteur.
+  //
+  // Je le note parce que j'ai fait l'erreur inverse en écrivant ce calcul : ma mesure de départ
+  // comparait des noms de module exacts en SQL et concluait « aucun rôle ne porte
+  // revenue_recovery ». C'était faux — six rôles le couvrent par le joker. Le prédicat, lui, avait
+  // raison depuis le début. Un lecteur qui verrait ce bandeau muet et le croirait cassé referait la
+  // même erreur, dans l'autre sens.
+  const sansPorteur = modules.filter((m) => {
+    const codesDuModule = permissions
+      .filter((p) => p.module === m)
+      .map((p) => p.code || `${p.module}.${p.action}`)
+    if (codesDuModule.length === 0) return false
+    return !roles.some((r) => {
+      const codes = codesParRole[r.id]
+      return codes ? codesDuModule.some((code) => roleCouvre(codes, code)) : false
+    })
+  })
+
   // Combien de comptes portent chaque rôle sur l'établissement affiché. « Un rôle que personne ne
   // porte » et « un rôle porté par douze personnes » n'appellent pas la même vigilance.
   const comptesParRole = {}
@@ -1729,11 +1766,29 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
           <div className="banner banner-error">{erreur}</div>
         ) : (
           <>
+            {/* Un constat, pas un reproche : un module sans porteur peut être parfaitement
+                légitime — non vendu à ce client, ou interne. Ce qui ne l'est pas, c'est de ne
+                l'apprendre qu'en tombant dessus. */}
+            {sansPorteur.length > 0 && (
+              <div className="banner banner-warn">
+                <strong>
+                  {sansPorteur.length === 1
+                    ? 'Un module n’est accessible à personne'
+                    : `${sansPorteur.length} modules ne sont accessibles à personne`}
+                </strong>{' '}
+                — {sansPorteur.map(nomModule).join(', ')}. Aucun rôle n’y donne le moindre droit,
+                donc aucun compte ne pourra s’en servir, quels que soient ceux qu’on crée. C’est
+                parfois voulu : un module qu’on ne vend pas à ce client n’a personne pour l’ouvrir.
+              </div>
+            )}
+
             <div className="field" style={{ maxWidth: 420 }}>
               <label htmlFor="md-module">De quoi voulez-vous voir les droits ?</label>
               <select id="md-module" className="input" value={module} onChange={(e) => setModule(e.target.value)}>
                 {modules.map((m) => (
-                  <option key={m} value={m}>{nomModule(m)}</option>
+                  <option key={m} value={m}>
+                    {nomModule(m)}{sansPorteur.includes(m) ? ' — personne' : ''}
+                  </option>
                 ))}
               </select>
               <p className="hint">
