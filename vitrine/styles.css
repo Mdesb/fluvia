@@ -623,6 +623,18 @@ input:focus-visible {
 /* Les champs « Vous » gardent une largeur de formulaire, pas de page. */
 .tunnel .champ { max-width: 30em; }
 
+/* ⚠ CÔTE À CÔTE PLUTÔT QU'ÉLARGIS. Empilés, les deux champs faisaient 480 px — leur mesure, celle
+   qui se lit le mieux — dans un panneau de 1150 : deux traits perdus au milieu du vide. Les
+   élargir aurait corrigé le déséquilibre en dégradant la lecture. La rangée repasse seule à une
+   colonne sous 700 px, sans règle de plus. */
+.tunnel .champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 28px;
+  align-items: start;
+}
+.tunnel .champs .champ { max-width: none; }
+
 /* Le total et les actions se lisent au meme endroit que les champs. */
 .tunnel .total,
 .tunnel .actions { max-width: 30em; }
