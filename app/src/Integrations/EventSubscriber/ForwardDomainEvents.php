@@ -8,6 +8,7 @@ use App\Integrations\Entity\OutboundEndpoint;
 use App\Integrations\Service\OutboundDispatcher;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
+use App\Platform\Event\SymfonyEventBus;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
@@ -50,7 +51,18 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * être complet. Le jour où quelqu'un branche là-dessus autre chose que de l'alerte, il lui faut une
  * file, pas ce service.
  */
-#[AsDecorator(decorates: EventBus::class)]
+/**
+ * ⚠ ON DÉCORE LE SERVICE CONCRET, PAS L'INTERFACE — et ce n'est pas un détail de style.
+ *
+ * `EventBus` n'est pas un service déclaré : Symfony en fabriquait l'alias tout seul parce qu'UNE
+ * SEULE classe l'implémentait. Cette classe-ci en est une seconde, et l'alias automatique
+ * disparaît alors — silencieusement, en emportant les six autres consommateurs.
+ *
+ * L'alias est donc déclaré à la main dans `services.yaml`, dans le même commit. Comme la décoration
+ * réattribue l'identifiant du service concret au décorateur, cet alias résout vers lui : rien ne
+ * change pour ceux qui injectent l'interface.
+ */
+#[AsDecorator(decorates: SymfonyEventBus::class)]
 final class ForwardDomainEvents implements EventBus, EventSubscriberInterface
 {
     /** @var list<DomainEvent> */
