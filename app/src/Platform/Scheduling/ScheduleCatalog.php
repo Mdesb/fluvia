@@ -243,6 +243,23 @@ final class ScheduleCatalog
                 "Une place proposée à un client sur liste d'attente ne se libère jamais pour le suivant.",
             ),
             new ScheduledTask(
+                'revenue-recovery:attempts:send',
+                // 1440 comme les deux autres tâches qui écrivent à des clients : les étapes d'une
+                // politique se comptent en JOURS (J+1, J+3, J+7). Un passage aux cinq minutes
+                // n'avancerait rien et multiplierait les occasions de partir en double.
+                1440,
+                "Les relances se programment et rien ne part : un dossier s'ouvre, ses tentatives "
+                . "s'accumulent, et le client n'entend jamais parler de sa facture impayée. Le "
+                . "module entier était inerte faute de cette commande.",
+                // ⚠ JAMAIS SÛR AU PREMIER PASSAGE — même raison que `sepa:preavis:annoncer`, et
+                // mesurée sur la commande : `sendDueAttempts()` sélectionne toutes les tentatives
+                // dont l'échéance est passée, SANS BORNE BASSE ni limite. Un premier passage
+                // rattraperait tout l'historique, et personne ne veut découvrir trois cents
+                // relances parties ensemble. La levée est manuelle, et `--dry-run` montre ce qui
+                // partirait avant que quiconque décide.
+                safeOnFirstRun: false,
+            ),
+            new ScheduledTask(
                 'crm:rgpd:expirer-pmv',
                 1440,
                 "Le porte-monnaie virtuel n'expire jamais : un solde périmé reste dépensable.",
