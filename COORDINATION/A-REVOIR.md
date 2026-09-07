@@ -140,31 +140,36 @@ main).
 Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
 premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
 
-### 5. Un créneau validé peut perdre son encadrant, et rien ne le voit
+### 5. Un créneau validé peut perdre son encadrant — **reformulé le 07/09**
 
-Trouvé en triant les appels que `mesurer-ecart.mjs` déclare orphelins — définis dans un client,
-appelés par aucun écran. Trois lectures, et elles concordent :
+Écrit le 06/09, et déjà à moitié dépassé : `feat(piscine): renouveler un diplôme, retirer une
+affectation (#12)` a câblé le bouton de retrait pendant que je l'examinais. Ma phrase disait
+« aucun écran ne l'appelle — le bouton manquant protège l'invariant par accident ». C'est faux
+depuis ce jour-là.
+
+**Ce qui reste vrai, et qui est le vrai sujet.** Trois lectures, refaites sur `origin/main` :
 
 | ce qui a été lu | ce que ça dit |
 |---|---|
-| `DELETE /api/affectation_encadrants/{id}` | existe, gardé par la seule permission `piscine.configurer` — aucun processeur, aucune règle métier |
-| `ValiderCreneauBassinHandler` | exige une qualification qui couvre le type requis **au moment de valider** |
-| tout le dépôt | **aucun autre fichier** ne relit cette couverture ensuite |
+| l'écran Piscine | le retrait n'est atteignable **que sur un créneau brouillon** — la modale d'affectation ne s'ouvre pas autrement. C'est correct, et c'est du pair |
+| `DELETE /api/affectation_encadrants/{id}` | toujours **aucun processeur** : la seule permission `piscine.configurer` |
+| `ValiderCreneauBassinHandler` | exige une qualification couvrante **au moment de valider**, et rien ne la relit ensuite |
 
-Retirer l'affectation d'un créneau **déjà validé** le laisse donc `valide` sans encadrant qualifié,
-et plus rien ne le détecte. Ce n'est pas atteignable depuis un écran aujourd'hui : aucun n'appelle
-`retirerAffectationEncadrant`. **Le bouton manquant est ce qui protège l'invariant — par accident.**
+L'invariant n'est donc plus fermé par accident : **il est fermé par l'écran, et par lui seul**. Un
+appel direct à l'API retire encore l'encadrant d'un créneau validé, qui reste `valide` sans
+couverture, sans que rien ne le détecte.
 
-Trois issues, et elles ne se valent pas :
+La question n'a pas changé de nature, seulement d'ampleur — elle ne porte plus sur un geste
+manquant mais sur une garde manquante :
 
-- **Refuser la suppression sur un créneau validé** (409 nommé). Conservateur, mais bloque un
-  remplacement légitime d'encadrant si le modèle ne permet pas de dévalider un créneau.
-- **Dévalider le créneau en même temps** — cohérent, mais c'est une décision métier : un créneau
-  publié qui redevient brouillon a peut-être des conséquences en aval.
-- **Laisser l'API ouverte et poser le bouton avec la même règle que l'affectation** (brouillon
-  seulement, comme le bouton « affecter » qui existe déjà). Ferme l'écran, laisse l'API ouverte.
+- **Refuser la suppression quand le créneau est validé** (409 nommé). Aligne le serveur sur ce que
+  l'écran fait déjà ; bloque un remplacement d'encadrant si le modèle ne permet pas de dévalider.
+- **Dévalider le créneau en même temps** — cohérent, mais un créneau publié qui redevient brouillon
+  a peut-être des conséquences en aval.
+- **Laisser tel quel** et l'assumer : la règle vit dans l'écran, l'API est un outil d'intégration.
 
-Je n'ai pas tranché : choisir demande de connaître le métier, pas le code.
+> ⚠ Ma phrase du 06/09 est rectifiée ici plutôt qu'effacée. C'est la deuxième fiche de ce relevé
+> qui vieillit en un jour — les autres se relisent avec la même méfiance.
 
 ### 6. Un droit d'accès ne dit pas à qui il appartient — et sans ça, on ne peut pas le rattacher
 
