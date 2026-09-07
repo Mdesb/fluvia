@@ -686,14 +686,24 @@ function OngletAcces({ acces }) {
 
   const [motif, quoiFaire] = MOTIF_ACCES[acces.motifInactivite] || [acces.motifInactivite, null]
 
+  // ⚠ `actif` NE DIT PAS QUE LA PORTE S'OUVRE. Il porte l'état métier de l'abonnement — à jour, non
+  // suspendu. Le lien vers le support physique est `droitAcces`, nul jusqu'à l'appairage. Cet
+  // onglet rendait « ouvert » sur le seul `actif` : mesuré en préproduction, un seul des cinq
+  // statuts porte un `droitAcces`, et les autres s'affichaient donc « ouvert » alors qu'aucun badge
+  // ne leur est rattaché. Un exploitant qui lit « ouvert » ne cherche pas pourquoi l'adhérent reste
+  // dehors.
+  const rattache = Boolean(acces.droitAcces)
+
   return (
     <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
       <div className="fiche-stats">
         <div className="stat-tile">
           <div className="st-val">
-            {acces.actif
-              ? <span className="badge good">ouvert</span>
-              : <span className="badge crit">fermé</span>}
+            {!rattache
+              ? <span className="badge warn">non rattaché</span>
+              : acces.actif
+                ? <span className="badge good">ouvert</span>
+                : <span className="badge crit">fermé</span>}
           </div>
           <div className="st-lbl">Accès</div>
         </div>
@@ -705,7 +715,18 @@ function OngletAcces({ acces }) {
         </div>
       </div>
 
-      {!acces.actif && acces.motifInactivite && (
+      {!rattache && (
+        <div className="banner banner-warn">
+          <b>Aucun support physique n’est rattaché à cet abonnement.</b> Le contrôle d’accès ne
+          connaît donc pas cet adhérent&nbsp;: quel que soit l’état du contrat, la porte ne
+          s’ouvrira pas. Le rattachement se fait à l’appairage du badge ou du bracelet.
+          {acces.actif && (
+            <> L’abonnement, lui, est en règle&nbsp;— ce n’est pas un impayé ni une suspension.</>
+          )}
+        </div>
+      )}
+
+      {rattache && !acces.actif && acces.motifInactivite && (
         <div className="banner banner-warn">
           <b>Fermé pour {motif}.</b>{quoiFaire ? ` ${quoiFaire}` : null}
         </div>
