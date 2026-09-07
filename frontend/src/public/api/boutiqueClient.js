@@ -217,6 +217,13 @@ export const boutique = {
   creerCompte: (corps) =>
     request('/api/boutique/comptes', { method: 'POST', body: corps }),
 
+  // Confirmer l'adresse depuis le lien recu par courriel.
+  //
+  // ⚠ SANS JETON D'AUTHENTIFICATION, ET C'EST LA FORME NORMALE : on clique ce lien depuis sa boite
+  // mail, donc sans session. C'est le jeton du corps qui autorise, et lui seul.
+  verifierEmail: (jeton) =>
+    request('/api/boutique/comptes/verifier-email', { method: 'POST', body: { jeton } }),
+
   // --- Espace client (JWT client requis) ---
   login: (email, motDePasse) =>
     request('/auth', { method: 'POST', body: { email, motDePasse } }),

@@ -1,0 +1,21 @@
+{# Confirmation d'adresse — le seul courriel qui porte le jeton en clair.
+
+   ⚠ AUCUNE DONNEE DE COMMANDE ICI. On ne dit ni combien de commandes attendent, ni lesquelles :
+   le message part vers une adresse dont on n'a JUSTEMENT pas encore la preuve qu'elle appartient
+   au destinataire. Annoncer « 3 commandes vous attendent » renseignerait qui se serait inscrit
+   avec l'adresse d'un autre. Le compte n'apprend ce qu'il recupere qu'apres le clic. #}
+<p>Bonjour,</p>
+
+<p>
+  Confirmez votre adresse pour activer votre compte. Si vous aviez déjà commandé sans compte avec
+  cette adresse, vos commandes y seront rattachées.
+</p>
+
+<p>
+  <a href="{{ lien }}">Confirmer mon adresse</a>
+</p>
+
+<p>
+  Ce lien est valable {{ heures }}&nbsp;heures. Si vous n’avez pas créé de compte, ignorez ce
+  message&nbsp;: rien ne sera activé.
+</p>
