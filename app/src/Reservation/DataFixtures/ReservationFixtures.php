@@ -46,6 +46,14 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
     use FixturesIdempotentes;
 
     public const RESSOURCE_TERRAIN_LIBELLE = 'Terrain padel n°1';
+    /**
+     * Le terrain de la DÉMONSTRATION, distinct de celui des tests.
+     *
+     * ⚠ Ne l'utilise dans aucun test : son créneau est posé à une date relative (« lundi
+     * prochain »), donc ce qu'il occupe change toutes les semaines. C'est précisément le mélange
+     * qui a fait tomber trois tests en cascade — voir le commentaire au point de création.
+     */
+    public const RESSOURCE_TERRAIN_DEMO_LIBELLE = 'Terrain padel n°2 (démonstration)';
     public const RESSOURCE_BASSIN_LIBELLE = 'Bassin sportif';
     public const RESSOURCE_LIGNE_1_LIBELLE = 'Ligne 1';
     public const RESSOURCE_LIGNE_2_LIBELLE = 'Ligne 2';
@@ -228,8 +236,52 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         $manager->persist($regle);
 
         // --- Créneau + Réservation de démonstration ---
+        //
+        // ⚠ SUR SA PROPRE RESSOURCE, ET C'EST LE CORRECTIF D'UN DÉFAUT DATÉ (07/09).
+        //
+        // Ce créneau était posé sur `$terrain` — la ressource que dix fichiers de test utilisent —
+        // à une date RELATIVE (`next monday`), pendant que ces tests y créent des créneaux à des
+        // dates ABSOLUES. Les deux se sont rencontrés : le 07/09/2026 étant un lundi,
+        // « next monday » valait 2026-09-14 10:00 → 11:30, exactement la fenêtre de
+        // `RecurrenceTest` et de `OccurrenceEnConflitTest`. `ChevauchementCreneauGuard` faisait son
+        // travail, l'API rendait 409, et les deux tests tombaient.
+        //
+        // ⚠ CE QUI REND CE DÉFAUT MÉCHANT N'EST PAS QU'IL CASSE, C'EST QU'IL SE DÉPLACE ET GUÉRIT.
+        // Projeté : collision les semaines du 07/09, du 14/09 et du 21/09 — en changeant de test
+        // chaque semaine, `AnnulationNoShowTest` (21/09) étant le suivant sur la liste — puis plus
+        // rien à partir du 28/09, sans que personne n'ait rien corrigé. Trois semaines de rouge
+        // errant suivies d'une guérison spontanée, c'est le portrait exact d'un test qu'on finit
+        // par déclarer « instable » et désactiver. On aurait perdu `OccurrenceEnConflitTest`, qui
+        // garde la décision de Maxime du 31/08 (« ne jamais déplacer tout seul »).
+        //
+        // La ressource dédiée coupe la racine plutôt que la branche : décaler la date de la
+        // démonstration, ou celles des trois tests, n'aurait fait que replanter la même mine sur
+        // une autre case du calendrier. Aucun test ne référence ce libellé — vérifié — et aucun ne
+        // compte les ressources, donc rien ne dépend de ce qu'on ajoute ici.
+        //
+        // ⚠ ET ON NE POSE PLUS RIEN SUR `$terrain` DEPUIS UNE FIXTURE. C'est ce que cette ligne
+        // protège ; l'y remettre rouvrirait le même défaut, avec les mêmes trois semaines pour le
+        // comprendre.
+        // ⚠ SON `codeType` EST DISTINCT, ET CE N'EST PAS UN DÉTAIL — je l'ai appris en cassant deux
+        // tests verts avec la première version de ce correctif.
+        //
+        // `RecurrenceReportHandler` cherche une ressource de report par trois critères :
+        // `codeType` identique, `capacitePropre >= ` celle du créneau, et `actif`. Une seconde
+        // ressource `terrain` de capacité 4 les remplit tous les trois : elle devient une
+        // alternative de report pour n'importe quel créneau du terrain de test. Résultat mesuré,
+        // pas supposé — `testCa7ReportAutoSurRessourceEquivalente` reportait sur celle-ci au lieu
+        // de la sienne, et `testCa7BasculeValidationManuelleSiAucuneAlternative` trouvait
+        // justement l'alternative dont il vérifie l'absence. Deux verts perdus pour deux réparés.
+        //
+        // Aucun code ne compare `codeType` à une valeur littérale — vérifié : les comparaisons sont
+        // relatives (`$origin->codeType === $candidate->codeType`). Le distinguer ici est donc sans
+        // effet ailleurs, et il dit ce qu'il est.
+        $terrainDemo = (new Ressource())->setEtablissement($etabA)->setCodeType('terrain_demo')
+            ->setLibelle(self::RESSOURCE_TERRAIN_DEMO_LIBELLE)->setCapacitePropre(4);
+        $manager->persist($terrainDemo);
+
         $debut = (new \DateTimeImmutable('next monday'))->setTime(10, 0);
-        $creneauDemo = (new Creneau())->setRessource($terrain)->setActivite($activitePadel)
+        $creneauDemo = (new Creneau())->setRessource($terrainDemo)->setActivite($activitePadel)
             ->setDebut($debut)->setFin($debut->modify('+90 minutes'))->setCapacite(4)
             ->setEtablissement($etabA)->setStatut(StatutCreneau::Planifie);
         $manager->persist($creneauDemo);
