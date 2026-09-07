@@ -29,7 +29,8 @@ use App\Fonctionnalite\Service\CatalogueCapacites;
  * pages vérifiables : `Piscine\Entity\Poss`, `Patinoire\Entity\Affutage`, `Musee\Entity\PartenaireOTA`
  * existent, et quiconque en doute peut ouvrir le fichier. Une promesse commerciale sans entité
  * derrière serait invendable le jour de la démonstration — c'est le moment où le prospect la teste.
- */
+ */use App\Website\Config\TradeFallback;
+
 final readonly class MetierCatalog
 {
     public function __construct(private CatalogueCapacites $capacites)
@@ -139,52 +140,11 @@ final readonly class MetierCatalog
     public static function codes(): array
     {
         return array_map(
-            static fn (Metier $m): array => ['code' => $m->value, 'nom' => self::NOMS[$m->value]['nom']],
+            static fn (Metier $m): array => ['code' => $m->value, 'nom' => TradeFallback::NOMS[$m->value]['nom']],
             Metier::cases(),
         );
     }
 
-    /**
-     * Ce que chaque métier appelle son quotidien.
-     *
-     * Le `nom` sert au menu, le `titre` à l'onglet et aux moteurs — les deux diffèrent parce qu'un
-     * titre de recherche contient les mots qu'on tape, et un libellé de menu doit tenir sur une ligne.
-     *
-     * @var array<string, array{nom: string, titre: string, chapo: string}>
-     */
-    private const NOMS = [
-        'piscine' => [
-            'nom' => 'Piscines et centres aquatiques',
-            'titre' => 'Logiciel de gestion pour piscine et centre aquatique',
-            'chapo' => "Entrées, créneaux de bassin, casiers, encadrants : la journée d'une piscine tient "
-                ."sur des contraintes que peu de logiciels connaissent. Fluvia les porte, du POSS à la caution "
-                ."d'un casier forcé.",
-        ],
-        'sport' => [
-            'nom' => 'Salles de sport et fitness',
-            'titre' => 'Logiciel de gestion pour salle de sport et club de fitness',
-            'chapo' => "Abonnements prélevés, accès contrôlé, ouverture sans personnel : une salle vit de la "
-                ."régularité de ses encaissements et de la fiabilité de sa porte. Fluvia lie les deux.",
-        ],
-        'padel' => [
-            'nom' => 'Padel et sports de raquette',
-            'titre' => 'Logiciel de réservation pour club de padel',
-            'chapo' => "Terrains réservés à la demi-heure, joueurs qui ne viennent pas, tournois à organiser, "
-                ."éclairage à ne pas laisser allumé. Un club de padel se pilote au créneau.",
-        ],
-        'patinoire' => [
-            'nom' => 'Patinoires',
-            'titre' => 'Logiciel de gestion pour patinoire',
-            'chapo' => "Un parc de patins à louer, à affûter et à rendre, des séances publiques et scolaires, "
-                ."une saison qui dure quelques mois. Une patinoire ne se gère pas comme une salle ouverte à l'année.",
-        ],
-        'musee' => [
-            'nom' => 'Musées et sites de visite',
-            'titre' => 'Logiciel de billetterie pour musée et site de visite',
-            'chapo' => "Billetterie horodatée, jauges par salle, visites guidées, gratuités à justifier, "
-                ."revendeurs en ligne à rapprocher. Un musée compte ses entrées autrement qu'un équipement sportif.",
-        ],
-    ];
 
     /**
      * Ce que le produit sait faire pour ce métier, et que les autres n'ont pas.
@@ -316,9 +276,9 @@ final readonly class MetierCatalog
         return [
             'slug' => ModuleCatalog::slugDe($code),
             'code' => $code,
-            'nom' => self::NOMS[$code]['nom'],
-            'titre' => self::NOMS[$code]['titre'],
-            'chapo' => self::NOMS[$code]['chapo'],
+            'nom' => TradeFallback::NOMS[$code]['nom'],
+            'titre' => TradeFallback::NOMS[$code]['titre'],
+            'chapo' => TradeFallback::NOMS[$code]['chapo'],
             'specificites' => self::SPECIFICITES[$code] ?? [],
             // Absent pour un métier sans table d'écran : le gabarit n'affiche alors rien, plutôt
             // que de montrer le vocabulaire d'un autre métier.
