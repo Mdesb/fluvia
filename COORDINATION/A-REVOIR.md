@@ -165,3 +165,30 @@ Trois issues, et elles ne se valent pas :
   seulement, comme le bouton « affecter » qui existe déjà). Ferme l'écran, laisse l'API ouverte.
 
 Je n'ai pas tranché : choisir demande de connaître le métier, pas le code.
+
+### 6. Un droit d'accès ne dit pas à qui il appartient — et sans ça, on ne peut pas le rattacher
+
+Mesuré en cherchant à câbler `POST /sport/abonnements/{id}/rattacher-droit-acces`, la route qui lie
+un abonnement fitness au badge physique. Elle est complète côté serveur et **aucun écran ne
+l'appelle** ; en base, un seul des cinq statuts d'accès porte un droit, et il vient des fixtures.
+
+Le blocage n'est pas la route, c'est la lecture. `GET /api/droit_acces` rend :
+
+    sourceType, billetSupportRef, produitRef, authorisedSpaces,
+    statutProjection, etablissement, synchroniseLe
+
+**Aucun nom de porteur.** Sept droits, sept identifiants opaques. Un sélecteur bâti là-dessus
+ferait rattacher le badge de quelqu'un d'autre au jugé — sur le mécanisme qui décide qui entre.
+
+⚠ La décision n'est pas seulement technique. Exposer l'identité du porteur sur la liste des droits
+d'accès, c'est de la donnée personnelle rendue à un écran d'exploitation. Trois voies :
+
+- **Exposer le porteur** (nom, ou lien vers le bénéficiaire) sur la lecture des droits — le plus
+  simple à utiliser, le plus large en données personnelles.
+- **Un filtre par bénéficiaire** : l'écran demande « les droits de cette personne » plutôt que de
+  lire la liste entière. Rien n'est exposé qu'on ne demande déjà.
+- **Rattacher au moment de l'appairage** plutôt que depuis la fiche d'abonnement : le badge est
+  physiquement en main, l'ambiguïté n'existe pas.
+
+En attendant, l'onglet « Accès » dit honnêtement « non rattaché » au lieu d'afficher « ouvert »,
+mais le geste reste indisponible dans l'application.
