@@ -139,3 +139,29 @@ main).
 
 Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
 premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
+
+### 5. Un créneau validé peut perdre son encadrant, et rien ne le voit
+
+Trouvé en triant les appels que `mesurer-ecart.mjs` déclare orphelins — définis dans un client,
+appelés par aucun écran. Trois lectures, et elles concordent :
+
+| ce qui a été lu | ce que ça dit |
+|---|---|
+| `DELETE /api/affectation_encadrants/{id}` | existe, gardé par la seule permission `piscine.configurer` — aucun processeur, aucune règle métier |
+| `ValiderCreneauBassinHandler` | exige une qualification qui couvre le type requis **au moment de valider** |
+| tout le dépôt | **aucun autre fichier** ne relit cette couverture ensuite |
+
+Retirer l'affectation d'un créneau **déjà validé** le laisse donc `valide` sans encadrant qualifié,
+et plus rien ne le détecte. Ce n'est pas atteignable depuis un écran aujourd'hui : aucun n'appelle
+`retirerAffectationEncadrant`. **Le bouton manquant est ce qui protège l'invariant — par accident.**
+
+Trois issues, et elles ne se valent pas :
+
+- **Refuser la suppression sur un créneau validé** (409 nommé). Conservateur, mais bloque un
+  remplacement légitime d'encadrant si le modèle ne permet pas de dévalider un créneau.
+- **Dévalider le créneau en même temps** — cohérent, mais c'est une décision métier : un créneau
+  publié qui redevient brouillon a peut-être des conséquences en aval.
+- **Laisser l'API ouverte et poser le bouton avec la même règle que l'affectation** (brouillon
+  seulement, comme le bouton « affecter » qui existe déjà). Ferme l'écran, laisse l'API ouverte.
+
+Je n'ai pas tranché : choisir demande de connaître le métier, pas le code.
