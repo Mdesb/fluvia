@@ -31,18 +31,19 @@ ne le signale.
 > la fois, et l'affluence arrive d'un coup.
 
 **Activités à cocher** — Réservation de créneaux · Location de matériel · Vente de produits ·
-Restauration · Abonnements
+Abonnements
 
-**Ce que la page affichera** — 11 modules, relevés en semant la ligne et en lisant le rendu :
-Boutique en ligne, Casiers, Comptabilité, Gestion des no-show, Location de matériel, Porte-monnaie
-virtuel, Prélèvement SEPA, Recouvrement des impayés, **Restauration**, Réservation de créneaux,
-Suivi de stock.
+**Ce que la page affichera** — 10 modules : Boutique en ligne, Casiers, Comptabilité, Gestion des
+no-show, Location de matériel, Porte-monnaie virtuel, Prélèvement SEPA, Recouvrement des impayés,
+Réservation de créneaux, Suivi de stock.
 
-> ⚠ **« Restauration » est un module en construction, et sa description le dit sur la page** : « le
-> serveur existe, il n'a pas encore d'écran ». La page ne ment donc pas — mais elle met en avant, sur
-> une page de vente, quelque chose qu'un client ne pourrait pas utiliser aujourd'hui. Décochez
-> « Restauration » si vous préférez ne pas l'annoncer : il ne restera que 10 modules, et la page tient
-> très bien. C'est la même question pour les parcs.
+> ⚠ **« Restauration » a été retirée de cette proposition le 07/09**, après mesure du module et sur
+> votre décision de le reprendre plus tard. Ce n'est pas seulement qu'il lui manque un écran : une
+> addition **ne peut pas être soldée** aujourd'hui — le branchement à la caisse n'existe pas, et le
+> code refuse explicitement de déclarer réglée une table qui ne l'est pas. Le détail est dans
+> `features/restauration-en-salle/specs/`.
+>
+> Cochez-la le jour où le module sera fini : la page passera à 11 modules, sans autre geste.
 
 > **Pourquoi « Abonnements » sur un bowling.** Ce sont les ligues : un engagement à la saison, encaissé
 > par échéances. C'est aussi ce qui allume le porte-monnaie virtuel, qui correspond bien à la carte
@@ -63,11 +64,15 @@ recopie quoi que ce soit.</p>
 c'est le cas, et se rendent — et vous voyez à tout moment ce qui est sorti, ce qui n'est pas revenu,
 et ce qu'il reste en taille 43.</p>
 
-<h2>Le bar n'est pas un à-côté</h2>
-<p>La restauration et la boutique se tiennent dans le même outil que les pistes, pas dans une caisse
-séparée qu'on rapproche le lundi. Une tournée facturée sur la piste 3 se retrouve sur la même note
-que la partie.</p>
+<h2>Ce qui se vend au comptoir n'est pas un à-côté</h2>
+<p>La boutique se tient dans le même outil que les pistes, pas dans une caisse séparée qu'on
+rapproche le lundi. Ce qui est facturé sur la piste 3 se retrouve sur la même note que la partie, et
+la même comptabilité.</p>
 ```
+
+> ⚠ Ce paragraphe parlait du bar. Il a été réécrit le 07/09 : annoncer la restauration dans le texte
+> de vente alors que le module ne sait pas encore solder une addition aurait été une promesse que la
+> démonstration démentirait.
 
 ---
 
@@ -136,14 +141,13 @@ même geste au comptoir.</p>
 > une boutique et une restauration qui pèsent autant que l'entrée. Un parc se remplit à l'heure, pas
 > à la journée.
 
-**Activités à cocher** — Billetterie et entrées · Réservation de créneaux · Vente de produits ·
-Restauration
+**Activités à cocher** — Billetterie et entrées · Réservation de créneaux · Vente de produits
 
-**Ce que la page affichera** — 7 modules seulement : Boutique en ligne, Comptabilité, Contrôle
-d'accès, Gestion des no-show, **Restauration**, Réservation de créneaux, Suivi de stock.
+**Ce que la page affichera** — 6 modules seulement : Boutique en ligne, Comptabilité, Contrôle
+d'accès, Gestion des no-show, Réservation de créneaux, Suivi de stock.
 
-> ⚠ **Sept, c'est peu à côté des dix ou onze des autres**, et « Restauration » est de surcroît en
-> construction. Deux cases y remédieraient honnêtement si elles correspondent à vos parcs :
+> ⚠ **Six, c'est peu à côté des dix des autres** — « Restauration » ayant été retirée (voir le
+> bowling). Deux cases y remédieraient honnêtement si elles correspondent à vos parcs :
 > « Abonnements » (le pass annuel — trois modules de plus) et « Location de matériel » (les casiers —
 > deux de plus). Je ne les ai pas cochées de moi-même : mieux vaut ajouter une case en connaissance de
 > cause que retirer un module déjà affiché sur une page publique.
@@ -161,9 +165,9 @@ en ligne comme au guichet.</p>
 avertissement, ou une pénalité. C'est la différence entre un parc plein sur le papier et un parc
 plein.</p>
 
-<h2>La boutique et la restauration sont dans le même outil</h2>
-<p>Ce qui se vend à l'entrée, à la boutique et au comptoir se retrouve au même endroit, avec le même
-encaissement et la même comptabilité. Pas de caisse séparée à rapprocher le lundi matin.</p>
+<h2>La boutique est dans le même outil que l'entrée</h2>
+<p>Ce qui se vend au guichet et ce qui se vend à la boutique se retrouvent au même endroit, avec le
+même encaissement et la même comptabilité. Pas de caisse séparée à rapprocher le lundi matin.</p>
 ```
 
 ---
