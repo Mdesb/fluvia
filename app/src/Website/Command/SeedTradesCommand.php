@@ -35,9 +35,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * VEUT revenir au texte d'origine — c'est la règle 2 de `specs/verticales/paquet.md` :
  * « `noupdate: true` est le défaut pour tout ce que le client peut modifier ».
  *
- * ⚠ **ET LES ACTIVITÉS NE SE SUPPRIMENT PAS NON PLUS.** Retirer une activité que quelqu'un a
- * décochée serait la même régression, un cran plus bas : elle changerait les modules suggérés sans
- * que personne l'ait demandé.
+ * ⚠ **ET « LA LIGNE » INCLUT SES ACTIVITÉS.** Ni retirées, ni RECOMPLÉTÉES : une activité décochée
+ * par un exploitant ne revient pas au déploiement suivant. C'est la moitié qui manquait — « ne
+ * jamais retirer » ne protège rien tout seul, puisque c'est l'ajout qui ramène ce qu'on a retiré, et
+ * ça changerait les modules suggérés sur sa page sans que personne l'ait demandé.
  *
  * ── ⚠ LE TOTAL IMPRIMÉ N'EST PAS DÉCORATIF ─────────────────────────────────────────────────────
  *
@@ -86,8 +87,17 @@ final class SeedTradesCommand extends Command
             $ligne = $depot->findOneBy(['slug' => $entree['slug']]);
 
             if (null !== $ligne && !$force) {
+                /*
+                 * ⚠ ON NE COMPLETE PAS NON PLUS SES ACTIVITES, et c'est un defaut corrige apres
+                 *   coup : cette branche appelait `completerLesActivites()`. Une activite qu'un
+                 *   exploitant avait DECOCHEE revenait donc au deploiement suivant, et les modules
+                 *   suggeres sur sa page changeaient sans que personne l'ait demande.
+                 *
+                 *   « Ne jamais retirer » ne suffit pas : c'est l'AJOUT qui ramene ce qu'on a
+                 *   retire. Une ligne existante est de la donnee d'exploitation entiere — ses
+                 *   textes ET sa composition. `--force` reste la porte de sortie explicite.
+                 */
                 ++$gardes;
-                $activitesAjoutees += $this->completerLesActivites($ligne, $entree['activities']);
 
                 continue;
             }
@@ -149,10 +159,15 @@ final class SeedTradesCommand extends Command
     }
 
     /**
-     * Ajoute les activités manquantes. N'en retire JAMAIS.
+     * Pose les activités d'une ligne QU'ON ÉCRIT — à la création, ou sous `--force`.
      *
-     * ⚠ Retirer une activité que quelqu'un a décochée changerait les modules suggérés sans que
-     * personne l'ait demandé — la même régression que réécrire un chapô, un cran plus bas.
+     * ⚠ **ELLE N'EST JAMAIS APPELÉE SUR UNE LIGNE QU'ON CONSERVE**, et c'est le cœur de la garantie.
+     * Elle l'était, et c'était un défaut : une activité décochée par un exploitant revenait au
+     * déploiement suivant. « Ne jamais retirer » ne protège rien tout seul — c'est l'AJOUT qui
+     * ramène ce que quelqu'un a retiré.
+     *
+     * Elle ne retire rien non plus : sous `--force`, on réécrit les textes d'origine, on ne remet
+     * pas la composition à zéro.
      *
      * @param list<EstablishmentActivity> $attendues
      */
