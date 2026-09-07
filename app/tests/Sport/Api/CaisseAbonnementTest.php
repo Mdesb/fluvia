@@ -421,6 +421,30 @@ final class CaisseAbonnementTest extends AccesApiTestCase
         self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
     }
 
+    /**
+     * Vendre un produit-abonnement au comptoir SANS corps « abonnement » ne crée AUCUN abonnement :
+     * la création est opt-in. Le même produit peut être vendu à seule fin comptable (encaissé
+     * d'avance, produits constatés d'avance) sans ouvrir de mandat — c'est le cas qui cassait
+     * `Compta\PcaTest` quand l'adaptateur naissait à chaque ligne-formule.
+     */
+    public function testVenteSansCorpsAbonnementNeCreeAucunAbonnement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], (string) $payeur->getId());
+
+        // POST /valider SANS clé « abonnement » : la vente est validée, aucun abonnement n'est créé.
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful((string) $reponse->getContent(false));
+
+        $em = $this->em();
+        self::assertNull(
+            $em->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]),
+            'Sans corps « abonnement », vendre un produit-formule ne crée pas d\'abonnement (opt-in).',
+        );
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     private function em(): EntityManagerInterface

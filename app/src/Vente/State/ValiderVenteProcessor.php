@@ -45,13 +45,27 @@ final class ValiderVenteProcessor implements ProcessorInterface
             }
         }
 
-        // LA CAISSE CRÉE L'ABONNEMENT (arbitrage du 07/09). Le choix de mandat vient du corps
-        // optionnel `abonnement` (absent -> « counter »). Le rappel s'execute dans la transaction
-        // de scellement : un refus de souscription fait rollback le scel, la vente reste EnCours.
-        $mandate = MandateChoice::fromBody($this->lecteur->corps()['abonnement'] ?? null);
-        $this->service->valider($data, $overrides, function (Vente $vente) use ($mandate): void {
-            $this->saleSubscription->createSubscriptionsFromSale($vente, $mandate);
-        });
+        // LA CAISSE CRÉE L'ABONNEMENT (arbitrage du 07/09) — MAIS SEULEMENT SUR DEMANDE EXPLICITE.
+        //
+        // ⚠ LA CRÉATION EST OPT-IN : elle n'a lieu que si le corps porte une clé `abonnement`.
+        //    Vendre un produit-formule au comptoir n'implique PAS toujours d'ouvrir un abonnement
+        //    fitness avec mandat SEPA : le même produit peut être encaissé d'avance à seule fin
+        //    comptable (produits constatés d'avance, cf. `Compta\PcaTest`), sur une vente parfois
+        //    anonyme. Faire naître un abonnement à chaque ligne-formule cassait ce cas —
+        //    l'adaptateur refusait la vente faute de client payeur. C'est l'opérateur qui signale
+        //    l'intention en fournissant le mandat.
+        //
+        // Quand la clé est là, le rappel s'exécute dans la transaction de scellement : un refus de
+        // souscription fait rollback le scel, et la vente reste EnCours (rejouable).
+        $corpsAbonnement = $this->lecteur->corps()['abonnement'] ?? null;
+        if (\is_array($corpsAbonnement)) {
+            $mandate = MandateChoice::fromBody($corpsAbonnement);
+            $this->service->valider($data, $overrides, function (Vente $vente) use ($mandate): void {
+                $this->saleSubscription->createSubscriptionsFromSale($vente, $mandate);
+            });
+        } else {
+            $this->service->valider($data, $overrides);
+        }
         $this->em->flush();
 
         return $data;
