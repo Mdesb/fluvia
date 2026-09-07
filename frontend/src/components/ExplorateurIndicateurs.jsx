@@ -86,6 +86,10 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   const [points, setPoints] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const etab = etablissements.find((e) => e.id === etabActif) || null
   const regionId = etab?.region?.id || null
@@ -95,20 +99,20 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
     let annule = false
     api.indicateurs()
       .then((r) => { if (!annule) setIndicateursLus(membres(r).filter((i) => i.actif !== false)) })
-      .catch(() => { if (!annule) setIndicateursLus(null) })
+      .catch((e) => { if (!annule) { setIndicateursLus(null); setRaisonNonLu(e) } })
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
-      .catch(() => { if (!annule) setGroupesLus(null) })
+      .catch((e) => { if (!annule) { setGroupesLus(null); setRaisonNonLu(e) } })
     api.objectifsIndicateur()
       .then((r) => { if (!annule) setObjectifsLus(membres(r)) })
-      .catch(() => { if (!annule) setObjectifsLus(null) })
+      .catch((e) => { if (!annule) { setObjectifsLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
   const rechargerObjectifs = useCallback(() => {
     api.objectifsIndicateur()
       .then((r) => setObjectifsLus(membres(r)))
-      .catch(() => setObjectifsLus(null))
+      .catch((e) => { setObjectifsLus(null); setRaisonNonLu(e) })
   }, [])
 
   // Le premier indicateur actif sert de choix par défaut, pour que l'écran ouvre sur quelque chose.
@@ -260,6 +264,13 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
             )}
 
             {erreur && <div className="banner banner-error" style={{ marginTop: 'var(--esp-normal)' }}>{erreur}</div>}
+            {raisonNonLu?.message && (
+              <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+                <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+              </div>
+            )}
 
             {/* ⚠ TROIS ÉTATS PAR JOUR, JAMAIS DEUX. Une barre absente n'est pas une barre à zéro :
                 elle porte sa propre marque, et la légende sous le graphe la nomme. */}
