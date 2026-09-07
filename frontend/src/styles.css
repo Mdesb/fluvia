@@ -407,6 +407,24 @@ a { color: var(--accent); }
    pas pour corriger celui des modules (R6). Motif repris de `.bq-grille`, la grille de cartes de
    la boutique publique — un module s'achete, c'est une vitrine. */
 .modules-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--esp-bloc); align-items: start; }
+
+/* --- Page Modules (boutique) : presentation soignee (07/09) ------------------------------------
+   Tout l'espacement vient des jetons --esp-* ; les couleurs des jetons de theme, donc clair et
+   sombre suivent sans regle en double. Les etats se lisent a l'oeil : lisere vert = actif,
+   accent = choisi dans le panier, attenue = pas encore de tarif. */
+.modules-section { margin-top: var(--esp-section); }
+.modules-section-tete { display: flex; align-items: center; gap: var(--esp-normal); margin: 0 0 var(--esp-large); }
+.modules-section-tete h3 { font-size: var(--txt-normal); margin: 0; }
+.module-carte { padding: 16px; display: flex; flex-direction: column; gap: var(--esp-large); }
+.module-carte .m-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-normal); }
+.module-carte .m-nom { font-weight: 700; }
+.module-carte .m-desc { margin: 0; flex: 1; color: var(--ink-soft); font-size: var(--txt-petit); }
+.module-carte .m-pied { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-normal); }
+.module-carte .m-prix { font-weight: 700; font-variant-numeric: tabular-nums; }
+.module-carte.actif { border-left: 3px solid var(--good); }
+.module-carte.choisie { border-color: var(--accent); background: var(--accent-soft); }
+.module-carte.muet { opacity: .65; }
+.modules-total { position: sticky; bottom: var(--esp-normal); margin-top: var(--esp-section); }
 .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 1000px) { .g4 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: 1fr; } }
 
