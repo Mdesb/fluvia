@@ -146,6 +146,14 @@ const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['
 // le jour où un second axe d'affichage arrive, il s'ajoute ici et nulle part ailleurs.
 const AXES_MULTIPLES = ['rayon']
 
+// ⚠ PENDANT COMBIEN DE TEMPS `allerA` CORRIGE SON DEFILEMENT. Mesuré le 07/09/2026 sur la fiche
+// de GI-ONE FITNESS : l'onglet « Vente » se posait 333 ms après le clic dans un cas, ~490 ms dans
+// un autre — et entre les deux il restait immobile assez longtemps pour tromper un test de
+// stabilité sur deux ou trois trames. On corrige donc pendant une seconde pleine, ce qui laisse
+// de la marge sur les deux mesures sans jamais dépasser le temps où l'utilisateur regarde encore
+// le résultat de son clic.
+const DELAI_CORRECTION_MS = 1000
+
 /**
  * Le mode, en mots de l'utilisateur.
  *
@@ -244,20 +252,50 @@ export default function ProduitFiche({
 
   // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
   //
-  // ⚠ LE DEFILEMENT ATTEND QUE REACT AIT RENDU L'ONGLET : avant la validation du rendu, l'ancre
-  // n'existe pas dans le document et `getElementById` rend `null`. Deux `requestAnimationFrame`
-  // imbriques garantissent qu'on passe apres.
+  // ⚠ TROUVER L'ANCRE NE SUFFIT PAS : UN SEUL DEFILEMENT NE SUFFIT PAS NON PLUS.
+  //
+  // Les deux `requestAnimationFrame` imbriques attendaient le rendu de l'onglet, et ils
+  // l'attendaient correctement : l'ancre etait bien la, `scrollIntoView` etait bien appelee sur
+  // elle. Ce qui manquait, c'est que la PAGE, elle, n'avait pas fini de grandir. Mesures du
+  // 07/09/2026 (fiche « Test » de GI-ONE FITNESS) :
+  //
+  //   au clic          l'onglet « Vitrine » fait 1223 px, on est a 323 px du haut
+  //   a la 2e trame    l'onglet « Vente » ne fait que 1025 px : 125 px de course en tout, et on y
+  //                    est deja. La section demandee est a 359 px. Le navigateur ne peut RIEN
+  //                    faire, et `scrollIntoView` rend la main sans avoir bouge d'un pixel.
+  //   333 ms plus tard le reste de l'onglet arrive, la page passe a 1243 px. Personne ne redefile.
+  //
+  // La section restait donc la ou l'ancrage du navigateur l'avait laissee — hors ecran sur une
+  // fenetre de 900 px. Le raccourci avait l'air inerte, ou pire : il avait remonte la page.
+  //
+  // ⚠ ET UN TEST DE STABILITE SUR QUELQUES TRAMES NE SUFFIT PAS : entre les deux hauteurs la page
+  // reste immobile assez longtemps pour le tromper. On ne devine donc pas la fin de la mise en
+  // page — on REDEFILE a chaque fois que la hauteur du document change, pendant une seconde.
   //
   // ⚠ Et `scroll-margin-top` (styles.css) decale l'arret sous la barre collante de 62 px — sans
   // elle, la section visee arrive DESSOUS. Trouve en cliquant, pas en lisant.
+  //
+  // ⚠ CE QUE CE CORRECTIF NE PEUT PAS FAIRE : amener la section a 78 px du haut quand la page n'a
+  // pas 78 px de course sous elle. `block: 'start'` est alors ecrete par le navigateur, la section
+  // s'arrete aussi haut que le document le permet, et c'est une limite du document — pas du code.
+  // Mesure : 141 px au lieu de 78 sur cette fiche en 1440x900, la page etant au bout de sa course.
   function allerA(ancre) {
     setVueFiche('vente')
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const fin = Date.now() + DELAI_CORRECTION_MS
+    let hauteurDefilee = -1
+    const corriger = () => {
       const cible = document.getElementById(ancre)
-      if (!cible) return
-      const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
-    }))
+      const hauteur = document.documentElement.scrollHeight
+      // Redefiler seulement quand la page a change de taille : sans ca on relancerait l'animation
+      // a chaque trame, et un defilement doux ne se terminerait jamais.
+      if (cible && hauteur !== hauteurDefilee) {
+        hauteurDefilee = hauteur
+        cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
+      }
+      if (Date.now() < fin) requestAnimationFrame(corriger)
+    }
+    requestAnimationFrame(corriger)
   }
 
   const [detail, setDetail] = useState(null)
