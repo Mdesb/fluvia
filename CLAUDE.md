@@ -38,7 +38,7 @@ Ne charge jamais toute la doc d'un coup ; pointe la section utile :
 
 **Toute demande passe d'abord par `/aiguiller`**, avant de toucher un fichier :
 
-- **Voie légère** (`/correctif-rapide`) — petit changement localisé, réversible, ne touchant **aucune** zone sensible (base, auth, paiements, **cloisonnement multi-tenant**, NF525/argent, données personnelles) et n'ajoutant pas de capacité nouvelle. Intention en une ligne dans l'index, changement chirurgical, tests verts (+ non-régression si bug), revue `relecteur`, un feu vert humain avant merge.
+- **Voie légère** (`/correctif-rapide`) — petit changement localisé, réversible, ne touchant **aucune** zone sensible (base, auth, paiements, **cloisonnement multi-tenant**, NF525/argent, données personnelles) et n'ajoutant pas de capacité nouvelle. Intention en une ligne dans l'index, changement chirurgical, tests verts (+ non-régression si bug), revue `relecteur`, puis **auto-merge dès que la CI est verte** (le gate est la CI, plus de feu vert manuel).
 - **Cycle SDD complet** (`/nouvelle-fonctionnalite`) — vraie fonctionnalité ou zone sensible.
 
 **Défaut : voie légère** (personne ne code au quotidien). **En cas de doute : SDD complet.** Si un correctif rapide grossit ou touche une zone sensible, on **rebascule en SDD complet**. La voie légère allège le *process*, jamais les *garde-fous de sécurité*.
@@ -66,7 +66,7 @@ Rien ne merge tant que ce n'est pas vert.
 ## Git — GitHub est la référence
 
 - **Dépôt de référence : `github.com/Mdesb/fluvia`.** On y travaille en **branches + PR + Issues** ; la préprod déploie depuis GitHub ; la CI gate les PR.
-- **Une branche par changement** : `feature/<nom>` (SDD complet) ou `fix/<nom>` (voie légère). **Jamais de push direct sur `main`.** Merge = CI verte + feu vert humain.
+- **Une branche par changement** : `feature/<nom>` (SDD complet) ou `fix/<nom>` (voie légère). **Jamais de push direct sur `main`.** Merge = **automatique dès que la CI est verte** (auto-merge GitHub en squash, workflow `auto-merge.yml`) : le gate est la CI, plus de feu vert manuel. Pour un travail en cours, ouvre ta PR en **brouillon** — l'auto-merge ne s'arme qu'au passage « ready ».
 - **Commits en français, conventional commits** (`feat:`, `fix:`, `docs:`, `securite:` avec portée `fix(ci):`) ; le corps dit le *pourquoi* et les conséquences.
 - **Jamais de `push --force` ni de réécriture d'historique sur `main`.** (La seule exception passée : purger un secret du miroir public, opération d'intégration explicitement demandée par Maxime.)
 - **Réserver un chantier avant de le toucher** : assigne-toi l'**Issue** correspondante (atomique, horodaté — pas de course). **Priorité haute d'abord.** Reste dans ton périmètre (`CODEOWNERS`).
