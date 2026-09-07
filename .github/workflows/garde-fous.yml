@@ -15,8 +15,6 @@ name: Garde-fous
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 jobs:
   garde-fous:
@@ -82,6 +80,15 @@ jobs:
       # qui ne tourne pas sur l'image de production valide autre chose que ce qui sera livré.
       - name: Image PHP, celle de la préproduction
         run: docker build -t billetterie-preprod-php docker/php
+
+      # Sur un evenement pull_request, actions/checkout laisse une HEAD detachee sans
+      # branche locale `main`. Le banc clone ce depot (DEPOT_SOURCE=.git) puis, dans le
+      # clone, committe sur `main` et la pousse vers un bare jetable pour eprouver le hook
+      # pre-receive : sans etre attache a `main`, il echoue sur « src refspec main does
+      # not match any ». On attache donc HEAD a `main` sur le commit teste. Sans effet en
+      # local, ou le banc part du bare partage qui possede deja `main`.
+      - name: Attacher HEAD a main pour le banc (pull_request = HEAD detachee)
+        run: git checkout -B main
 
       - name: Les garde-fous refusent-ils vraiment ce qu'ils prétendent refuser ?
         env:
