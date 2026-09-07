@@ -2728,9 +2728,20 @@ export const api = {
   // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
   padelEclairageManuel: (id, corps) =>
     request(`/api/padel/terrains/${id}/eclairage/repli-manuel`, { method: 'POST', body: corps }),
-  // Pas de collection listable pour les tournois (seulement des routes custom
-  // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
-  padelTournois: () => Promise.resolve({ 'hydra:member': [] }),
+  // ⚠ CETTE FONCTION NE DEMANDAIT RIEN ET RÉPONDAIT « AUCUN TOURNOI ».
+  //
+  // Elle rendait `Promise.resolve({ 'hydra:member': [] })`, justifiée par un commentaire qui
+  // affirmait qu'aucune collection n'existait — « seulement des routes custom
+  // /api/padel/tournois/{id}/... ». C'était faux : le document OpenAPI que l'API sert publie
+  // `GET, POST /api/padel_tournois`, et la collection répond 200 avec un tournoi en base sur la
+  // préproduction. L'écran qui l'aurait appelée aurait donc affirmé une absence en contradiction
+  // avec les données, sans qu'aucune requête n'ait eu lieu.
+  //
+  // Le commentaire était le cœur du défaut : il ne décrivait pas un choix, il posait un fait — et
+  // un fait faux ferme la question pour tous ceux qui le lisent ensuite. Réfutable en une commande :
+  //
+  //     curl -H "Authorization: Bearer <jeton>" .../api/padel_tournois
+  padelTournois: () => request('/api/padel_tournois', { query: { itemsPerPage: 100 } }),
   // Musée
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
