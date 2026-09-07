@@ -28,6 +28,6 @@ final class CloisonnementFacturationTest extends FacturationApiTestCase
 
         // Sur B (aucune affectation), aucune permission effective → accès refusé.
         $client->request('GET', '/api/factures', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
     }
 }

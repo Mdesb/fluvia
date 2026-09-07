@@ -144,7 +144,7 @@ final class PerimetreCatalogueTest extends OffreApiTestCase
         ]);
 
         self::assertResponseStatusCodeSame(
-            403,
+            404,
             'Un en-tête forgé vers un site sans affectation doit être refusé avant toute lecture.',
         );
     }

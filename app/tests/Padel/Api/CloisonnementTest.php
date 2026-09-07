@@ -27,7 +27,7 @@ final class CloisonnementTest extends PadelApiTestCase
             self::assertResponseIsSuccessful(sprintf('%s : accessible sur l\'établissement affecté.', $chemin));
 
             $client->request('GET', $chemin, ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-            self::assertResponseStatusCodeSame(403, sprintf('RG-SOCLE-05 : %s inaccessible hors périmètre affecté.', $chemin));
+            self::assertResponseStatusCodeSame(404, sprintf('RG-SOCLE-05 : %s inaccessible hors périmètre affecté.', $chemin));
         }
     }
 
@@ -42,6 +42,6 @@ final class CloisonnementTest extends PadelApiTestCase
             'auth_bearer' => $entete['auth_bearer'],
             'headers' => [ContexteEtablissement::HEADER => $idEtabC],
         ]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : cloisonnement Groupe (admin du groupe A non affecté sur le groupe B/établissement C).');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : cloisonnement Groupe (admin du groupe A non affecté sur le groupe B/établissement C).');
     }
 }

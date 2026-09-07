@@ -28,7 +28,7 @@ final class CloisonnementTest extends ReservationApiTestCase
 
         // Sur B : aucune affectation → aucune permission effective → accès refusé.
         $client->request('GET', '/api/reservation_ressources', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : aucun accès hors périmètre affecté.');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : aucun accès hors périmètre affecté.');
     }
 
     /**
@@ -216,6 +216,6 @@ final class CloisonnementTest extends ReservationApiTestCase
             'auth_bearer' => $entete['auth_bearer'],
             'headers' => [ContexteEtablissement::HEADER => $idEtabC],
         ]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : cloisonnement Groupe (l\'admin du groupe A n\'est pas affecté sur le groupe B/établissement C).');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : cloisonnement Groupe (l\'admin du groupe A n\'est pas affecté sur le groupe B/établissement C).');
     }
 }
