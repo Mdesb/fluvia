@@ -12,6 +12,7 @@ use App\Crm\Entity\Client;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Enum\SeqTpSepa;
 use App\Sepa\Enum\StatutMandatSepa;
+use App\Sepa\State\CompleterMandatSepaProcessor;
 use App\Sepa\State\CreerMandatSepaProcessor;
 use App\Sepa\State\RevoquerMandatSepaProcessor;
 use Doctrine\ORM\Mapping as ORM;
@@ -58,6 +59,16 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'sepa.gerer')",
             processor: RevoquerMandatSepaProcessor::class,
+        ),
+        // Complétion d'un mandat « en attente » (mode « pending » de la vente d'un abonnement
+        // au comptoir) : capture l'IBAN et l'active. `read: true` sans provider -> cloisonnement
+        // par PerimetreSepaExtension, comme la révocation.
+        new Post(
+            uriTemplate: '/sepa/mandats/{id}/completer',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sepa.gerer')",
+            processor: CompleterMandatSepaProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['mandat_sepa:read']],

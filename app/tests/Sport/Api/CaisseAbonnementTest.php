@@ -333,6 +333,94 @@ final class CaisseAbonnementTest extends AccesApiTestCase
         );
     }
 
+    /**
+     * MODE « PENDING » — la vente crée l'abonnement avec un mandat EN ATTENTE (IBAN capturé plus
+     * tard). Le mandat n'étant pas actif, `GenerationRemiseHandler` l'exclut de toute remise : rien
+     * n'est prélevé sur un IBAN absent.
+     */
+    public function testModePendingCreeUnMandatEnAttenteNonPrelevable(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], (string) $payeur->getId());
+
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete + [
+            'json' => ['abonnement' => ['mode' => 'pending']],
+        ]);
+        self::assertResponseIsSuccessful((string) $reponse->getContent(false));
+
+        $em = $this->em();
+        $abo = $em->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]);
+        self::assertInstanceOf(AbonnementFitness::class, $abo, 'Le mode pending crée quand même l\'abonnement, lié à la vente.');
+        $mandat = $abo->getMandatSepa();
+        self::assertInstanceOf(MandatSepa::class, $mandat);
+        self::assertSame(
+            StatutMandatSepa::EnAttente,
+            $mandat->getStatut(),
+            'Le mandat est « en attente » : le filtre Actif de GenerationRemiseHandler l\'exclut de toute remise.',
+        );
+        self::assertSame('', $mandat->getIban4Derniers(), 'Aucun IBAN tant que le mandat est en attente.');
+    }
+
+    /** Compléter un mandat « en attente » capture l'IBAN et l'active (dès lors prélevable). */
+    public function testCompleterUnMandatEnAttenteLActive(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], (string) $payeur->getId());
+        $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete + [
+            'json' => ['abonnement' => ['mode' => 'pending']],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $em = $this->em();
+        $abo = $em->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]);
+        self::assertInstanceOf(AbonnementFitness::class, $abo);
+        $mandatId = (string) $abo->getMandatSepa()?->getId();
+
+        $reponse = $client->request('POST', '/api/sepa/mandats/' . $mandatId . '/completer', $entete + [
+            'json' => ['iban' => self::IBAN_DEMO, 'titulaire' => 'Jean Dupont', 'bic' => self::BIC_DEMO],
+        ]);
+        self::assertResponseIsSuccessful((string) $reponse->getContent(false));
+
+        $em2 = $this->em();
+        $mandat = $em2->getRepository(MandatSepa::class)->find(Uuid::fromString($mandatId));
+        self::assertInstanceOf(MandatSepa::class, $mandat);
+        self::assertSame(StatutMandatSepa::Actif, $mandat->getStatut(), 'La complétion active le mandat.');
+        self::assertNotSame('', $mandat->getIban4Derniers(), 'L\'IBAN est désormais capturé.');
+        self::assertSame(self::BIC_DEMO, $mandat->getBicDebiteur());
+    }
+
+    /** On ne complète pas un mandat déjà actif : l'écraser effacerait un IBAN valide (déjà prélevé). */
+    public function testCompleterUnMandatDejaActifEstRefuse(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], (string) $payeur->getId());
+        // Mode comptoir : le mandat naît actif.
+        $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete + [
+            'json' => ['abonnement' => [
+                'mode' => 'counter',
+                'iban' => self::IBAN_DEMO,
+                'titulaire' => 'Jean Dupont',
+                'bic' => self::BIC_DEMO,
+            ]],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $em = $this->em();
+        $abo = $em->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]);
+        $mandatId = (string) $abo?->getMandatSepa()?->getId();
+
+        $reponse = $client->request('POST', '/api/sepa/mandats/' . $mandatId . '/completer', $entete + [
+            'json' => ['iban' => self::IBAN_DEMO, 'titulaire' => 'Jean Dupont'],
+        ]);
+        self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     private function em(): EntityManagerInterface

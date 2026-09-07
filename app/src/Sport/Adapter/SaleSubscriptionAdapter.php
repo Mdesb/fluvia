@@ -122,10 +122,11 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             $adherent = $this->beneficiaires->forPurchase($payeur, $designe);
 
             // ── LE MANDAT ──────────────────────────────────────────────────────────────────────
-            // Trois modes existent (cf. `MandateChoice`). « counter » signe un mandat au comptoir
-            // depuis l'IBAN saisi ; « existing » réutilise un mandat actif du client. « pending »
-            // (IBAN capturé plus tard) reste refusé explicitement tant qu'il n'est pas câblé : jamais
-            // dégradé en silence vers un autre comportement sur un prélèvement.
+            // Les trois modes de `MandateChoice`. « counter » signe un mandat au comptoir depuis
+            // l'IBAN saisi ; « existing » réutilise un mandat actif du client ; « pending » crée un
+            // mandat EN ATTENTE (IBAN capturé plus tard via POST /sepa/mandats/{id}/completer). Tant
+            // qu'un mandat est « en attente », ses échéances sont exclues de toute remise
+            // (`GenerationRemiseHandler`) : rien n'est prélevé sur un IBAN absent.
             //
             // `souscrire()` refuse lui-même (422) si le mandat manque, résout le tarif depuis la grille
             // du produit et gèle la cadence sur la formule : on ne redécide rien de tout cela ici. Le
@@ -157,9 +158,21 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                     mandatExistant: $this->resoudreMandatExistant($mandate, $payeur, $etablissement),
                     sourceSaleLineId: $ligne->getId(),
                 ),
+                MandateChoice::MODE_PENDING => $this->souscription->souscrire(
+                    adherent: $adherent,
+                    payeur: $payeur,
+                    formule: $formule,
+                    etablissement: $etablissement,
+                    dateSouscription: $vente->getDate(),
+                    dureeEngagementMois: 12,
+                    montantPremiereCentimes: 0,
+                    canal: Canal::Guichet,
+                    // Mandat EN ATTENTE : ni prélevable, ni oublié — l'IBAN sera capturé plus tard.
+                    mandatEnAttente: true,
+                    sourceSaleLineId: $ligne->getId(),
+                ),
                 default => throw new UnprocessableEntityHttpException(sprintf(
-                    'Le mode de mandat « %s » n\'est pas encore disponible à la caisse : signez le '
-                    . 'mandat au comptoir (IBAN + titulaire) ou réutilisez un mandat existant du client.',
+                    'Le mode de mandat « %s » est inconnu.',
                     $mandate->mode,
                 )),
             };

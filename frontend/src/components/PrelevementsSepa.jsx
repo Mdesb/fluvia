@@ -56,6 +56,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   const [creationMandat, setCreationMandat] = useState(false)
   const [generation, setGeneration] = useState(false)
   const [rejetSur, setRejetSur] = useState(null)
+  const [mandatACompleter, setMandatACompleter] = useState(null)
   const [editionConfig, setEditionConfig] = useState(false)
 
   const peutGerer = aLeDroit(droits, 'sepa.gerer') || aLeDroit(droits, 'compta.gerer')
@@ -226,6 +227,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
               peutGerer={peutGerer}
               onCreer={() => setCreationMandat(true)}
               onRevoquer={revoquerMandat}
+              onCompleter={setMandatACompleter}
             />
           )}
 
@@ -280,6 +282,12 @@ export default function PrelevementsSepa({ etabActif, droits }) {
         onFait={(m) => { setRejetSur(null); apresEcriture(m) }}
       />
 
+      <CompleterMandatModal
+        cible={mandatACompleter}
+        onClose={() => setMandatACompleter(null)}
+        onFait={(m) => { setMandatACompleter(null); apresEcriture(m) }}
+      />
+
       <ConfigCreancierModal
         open={editionConfig}
         config={config}
@@ -293,7 +301,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
 
 // --- Mandats -----------------------------------------------------------------------------------
 
-function Mandats({ mandats, peutGerer, onCreer, onRevoquer }) {
+function Mandats({ mandats, peutGerer, onCreer, onRevoquer, onCompleter }) {
   const actifs = (mandats || []).filter((m) => m.statut !== 'revoque')
 
   return (
@@ -377,6 +385,14 @@ function Mandats({ mandats, peutGerer, onCreer, onRevoquer }) {
                       {m.statut === 'actif' && (
                         <button className="btn danger sm" type="button" onClick={() => onRevoquer(m)}>
                           Révoquer
+                        </button>
+                      )}
+                      {/* Un mandat « en attente » (vente au comptoir sans IBAN) : le compléter
+                          capture l'IBAN et l'active. Tant qu'il ne l'est pas, ses échéances
+                          restent hors de toute remise. */}
+                      {m.statut === 'en_attente' && (
+                        <button className="btn sm" type="button" onClick={() => onCompleter(m)}>
+                          Compléter
                         </button>
                       )}
                     </td>
@@ -788,6 +804,75 @@ function Creancier({ config, peutGerer, onEditer }) {
 }
 
 // --- Modales -----------------------------------------------------------------------------------
+
+function CompleterMandatModal({ cible, onClose, onFait }) {
+  const [titulaire, setTitulaire] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
+  const [enCours, setEnCours] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!cible) return
+    // Pre-remplit le titulaire avec celui deja porte par le mandat, s'il existe.
+    setTitulaire(cible.debiteurNom || '')
+    setIban('')
+    setBic('')
+    setErreur(null)
+  }, [cible])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    setErreur(null)
+    try {
+      await api.completerMandatSepa(cible.id, {
+        iban: iban.replace(/\s+/g, '').toUpperCase(),
+        titulaire: titulaire.trim(),
+        bic: bic.trim().toUpperCase(),
+      })
+      onFait('Mandat complété : l’IBAN est enregistré, le mandat est actif. Ses échéances entreront dans la prochaine remise.')
+    } catch (err) {
+      setErreur(err.message || "Le mandat n'a pas pu être complété.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!cible} onClose={onClose} titre="Compléter un mandat en attente">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <p className="hint">
+          Ce mandat a été signé au comptoir sans IBAN : tant qu’il reste « en attente », aucune
+          de ses échéances n’entre dans une remise. Saisir l’IBAN l’active.
+        </p>
+
+        <div className="field">
+          <label htmlFor="cm-nom">Titulaire du compte *</label>
+          <input id="cm-nom" className="input" required value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label htmlFor="cm-iban">IBAN *</label>
+          <input id="cm-iban" className="input mono" required autoComplete="off" placeholder="FR76…" value={iban} onChange={(e) => setIban(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label htmlFor="cm-bic">BIC</label>
+          <input id="cm-bic" className="input mono" autoComplete="off" placeholder="BNPAFRPP" value={bic} onChange={(e) => setBic(e.target.value)} />
+        </div>
+
+        <div className="row actions">
+          <button className="btn" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours || !iban.trim() || !titulaire.trim()}>
+            {enCours ? 'Enregistrement…' : 'Compléter et activer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 function CreationMandatModal({ open, etabActif, onClose, onFait }) {
   const [client, setClient] = useState(null)

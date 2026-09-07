@@ -2192,6 +2192,8 @@ export const api = {
   // `input: false`). Operation SUR MESURE — `uriTemplate` dedie — donc pas de `ld: true`, qui est le
   // drapeau des operations standard.
   revoquerMandatSepa: (id) => request(`/api/sepa/mandats/${id}/revoquer`, { method: 'POST', body: {} }),
+  // Complete un mandat « en attente » (signe au comptoir sans IBAN) : capture l'IBAN et l'active.
+  completerMandatSepa: (id, corps) => request(`/api/sepa/mandats/${id}/completer`, { method: 'POST', body: corps }),
   genererRemiseSepa: (dateExecution) =>
     request('/api/sepa/remises/generer', {
       method: 'POST',

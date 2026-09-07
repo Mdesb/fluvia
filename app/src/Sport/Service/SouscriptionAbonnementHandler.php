@@ -69,8 +69,11 @@ final class SouscriptionAbonnementHandler
         // La ligne de vente d'origine, quand l'abonnement nait d'une vente au guichet : porte
         // l'idempotence et le lien retour Vente vers abonnement, ecrit dans le meme flush.
         ?Uuid $sourceSaleLineId = null,
+        // Mode « pending » : cree un mandat EN ATTENTE (sans IBAN), a completer plus tard.
+        // Exclusif avec ibanClair/titulaire et mandatExistant.
+        bool $mandatEnAttente = false,
     ): AbonnementFitness {
-        if ($mandatExistant === null && ($ibanClair === null || $titulaireMandat === null)) {
+        if ($mandatExistant === null && !$mandatEnAttente && ($ibanClair === null || $titulaireMandat === null)) {
             throw new UnprocessableEntityHttpException(
                 'Un mandat SEPA est requis : soit un mandat déjà signé, soit un IBAN et son titulaire.',
             );
@@ -166,6 +169,18 @@ final class SouscriptionAbonnementHandler
         //    dirait plus lequel a prélevé.
         if ($mandatExistant instanceof MandatSepa) {
             $mandat = $mandatExistant;
+        } elseif ($mandatEnAttente) {
+            // Placeholder EN ATTENTE : pas d'IBAN, donc exclu de toute remise jusqu'a sa
+            // completion (POST /sepa/mandats/{id}/completer). `dateSignature` est non-nullable :
+            // on la fixe a la date de vente, corrigee lors de la completion.
+            $mandat = new MandatSepa();
+            $mandat->setRum($this->genererRum($abonnement))
+                ->setDateSignature($dateSouscription)
+                ->setStatut(StatutMandatSepa::EnAttente)
+                ->setClient($payeur)
+                ->setEtablissement($etablissement);
+            $this->em->persist($mandat);
+            $this->em->flush();
         } else {
             $token = $this->tokenisation->tokeniser((string) $ibanClair);
             $mandat = new MandatSepa();
