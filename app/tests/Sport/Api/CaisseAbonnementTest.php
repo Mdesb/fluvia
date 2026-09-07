@@ -13,6 +13,7 @@ use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Sepa\DataFixtures\SepaFixtures;
+use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
@@ -241,6 +242,97 @@ final class CaisseAbonnementTest extends AccesApiTestCase
         );
     }
 
+    /**
+     * MODE « EXISTING » — un second abonnement réutilise le mandat déjà signé par le client, sans en
+     * créer un nouveau (un client, un mandat ; deux RUM feraient un rapprochement bancaire ambigu).
+     */
+    public function testModeExistingReutiliseLeMandatDuClient(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $payeurId = (string) $payeur->getId();
+
+        // 1re vente au comptoir : signe le mandat.
+        [$vente1] = $this->venteAbonnement($client, $entete, $session['id'], $payeurId);
+        $r1 = $client->request('POST', '/api/ventes/' . $vente1 . '/valider', $entete + [
+            'json' => ['abonnement' => [
+                'mode' => 'counter',
+                'iban' => self::IBAN_DEMO,
+                'titulaire' => 'Jean Dupont',
+                'bic' => self::BIC_DEMO,
+            ]],
+        ]);
+        self::assertResponseIsSuccessful((string) $r1->getContent(false));
+
+        $em = $this->em();
+        $mandatsApresPremiere = (int) $em->getRepository(MandatSepa::class)->count([]);
+        self::assertGreaterThanOrEqual(1, $mandatsApresPremiere, 'La 1re vente doit avoir signé un mandat.');
+
+        // 2e vente : réutilise le mandat existant, sans en resaisir l'IBAN.
+        [$vente2, $ligne2] = $this->venteAbonnement($client, $entete, $session['id'], $payeurId);
+        $r2 = $client->request('POST', '/api/ventes/' . $vente2 . '/valider', $entete + [
+            'json' => ['abonnement' => ['mode' => 'existing']],
+        ]);
+        self::assertResponseIsSuccessful((string) $r2->getContent(false));
+
+        $em2 = $this->em();
+        self::assertSame(
+            $mandatsApresPremiere,
+            (int) $em2->getRepository(MandatSepa::class)->count([]),
+            'Le mode existing ne doit signer AUCUN nouveau mandat.',
+        );
+        $abo2 = $em2->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligne2)]);
+        self::assertInstanceOf(AbonnementFitness::class, $abo2);
+        self::assertSame(StatutMandatSepa::Actif, $abo2->getMandatSepa()?->getStatut());
+        self::assertSame(
+            $payeurId,
+            (string) $abo2->getMandatSepa()?->getClient()?->getId(),
+            'Le mandat réutilisé est bien celui du payeur.',
+        );
+    }
+
+    /**
+     * MODE « EXISTING » sans mandat actif — refus (422) et rollback du scel. Un client qui n'a jamais
+     * signé ne peut pas être prélevé : on ne fabrique pas un mandat vide en silence.
+     */
+    public function testModeExistingSansMandatActifEstRefuse(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+
+        // Un client tout neuf sur l'établissement A : aucun mandat signé (le payeur de démonstration,
+        // lui, en a déjà un par les fixtures — il réutiliserait, pas ce qu'on veut éprouver ici).
+        $reference = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $groupeA = $reference->getGroupe();
+        $etabA = $reference->getEtablissementCreation();
+        self::assertInstanceOf(Groupe::class, $groupeA);
+        self::assertInstanceOf(Etablissement::class, $etabA);
+
+        $em = $this->em();
+        $sansMandatId = $this->creerClient($em, $groupeA, $etabA, 'sans.mandat@example.test');
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], $sansMandatId);
+
+        $scellesAvant = (int) $em->getRepository(OperationScellee::class)->count([]);
+
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete + [
+            'json' => ['abonnement' => ['mode' => 'existing']],
+        ]);
+        self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+
+        $em->clear();
+        self::assertSame(
+            StatutVente::EnCours,
+            $em->getRepository(Vente::class)->find(Uuid::fromString($venteId))?->getStatut(),
+        );
+        self::assertNull($em->getRepository(AbonnementFitness::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]));
+        self::assertSame(
+            $scellesAvant,
+            (int) $em->getRepository(OperationScellee::class)->count([]),
+            'Un mode existing sans mandat actif ne doit rien sceller.',
+        );
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     private function em(): EntityManagerInterface
@@ -288,16 +380,22 @@ final class CaisseAbonnementTest extends AccesApiTestCase
     {
         $groupeB = $this->entite(Groupe::class, ['nom' => CrmFixtures::GROUPE_B_NOM]);
         $etabC = $this->entite(Etablissement::class, ['nom' => CrmFixtures::ETAB_C_NOM]);
-        $intrus = (new Client())
+
+        return $this->creerClient($em, $groupeB, $etabC, 'intrus.groupeb@example.test');
+    }
+
+    private function creerClient(EntityManagerInterface $em, Groupe $groupe, Etablissement $etab, string $email): string
+    {
+        $client = (new Client())
             ->setType(TypeClient::Physique)
-            ->setGroupe($groupeB)
-            ->setEtablissementCreation($etabC)
-            ->setNom('Intrus')
-            ->setPrenom('Ex')
-            ->setEmail('intrus.groupeb@example.test');
-        $em->persist($intrus);
+            ->setGroupe($groupe)
+            ->setEtablissementCreation($etab)
+            ->setNom('Témoin')
+            ->setPrenom('Test')
+            ->setEmail($email);
+        $em->persist($client);
         $em->flush();
 
-        return (string) $intrus->getId();
+        return (string) $client->getId();
     }
 }

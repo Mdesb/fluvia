@@ -10,6 +10,8 @@ use App\Offre\Entity\Formule;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Organisation\Entity\Etablissement;
+use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\Repository\SubscriptionRepository;
 use App\Sport\Service\SouscriptionAbonnementHandler;
 use App\Vente\Entity\Vente;
@@ -120,39 +122,81 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             $adherent = $this->beneficiaires->forPurchase($payeur, $designe);
 
             // ── LE MANDAT ──────────────────────────────────────────────────────────────────────
-            // Trois modes existent (cf. `MandateChoice`) ; seul « counter » — le mandat signé au
-            // comptoir depuis l'IBAN saisi — est livré ici. « existing » (réutiliser un mandat du
-            // client) et « pending » (IBAN capturé plus tard) sont refusés explicitement tant qu'ils
-            // ne sont pas câblés : jamais dégradés en silence vers un autre comportement sur un
-            // prélèvement.
-            if ($mandate->mode !== MandateChoice::MODE_COUNTER) {
-                throw new UnprocessableEntityHttpException(sprintf(
-                    'Le mode de mandat « %s » n\'est pas encore disponible à la caisse : '
-                    . 'signez le mandat au comptoir (IBAN + titulaire du compte).',
+            // Trois modes existent (cf. `MandateChoice`). « counter » signe un mandat au comptoir
+            // depuis l'IBAN saisi ; « existing » réutilise un mandat actif du client. « pending »
+            // (IBAN capturé plus tard) reste refusé explicitement tant qu'il n'est pas câblé : jamais
+            // dégradé en silence vers un autre comportement sur un prélèvement.
+            //
+            // `souscrire()` refuse lui-même (422) si le mandat manque, résout le tarif depuis la grille
+            // du produit et gèle la cadence sur la formule : on ne redécide rien de tout cela ici. Le
+            // 1er mois est encaissé dans la vente, la 1re échéance SEPA vaut donc 0 (voir docblock).
+            match ($mandate->mode) {
+                MandateChoice::MODE_COUNTER => $this->souscription->souscrire(
+                    adherent: $adherent,
+                    payeur: $payeur,
+                    formule: $formule,
+                    etablissement: $etablissement,
+                    dateSouscription: $vente->getDate(),
+                    dureeEngagementMois: 12,
+                    ibanClair: $mandate->iban,
+                    titulaireMandat: $mandate->titulaire,
+                    montantPremiereCentimes: 0,
+                    canal: Canal::Guichet,
+                    bicDebiteur: $mandate->bic,
+                    sourceSaleLineId: $ligne->getId(),
+                ),
+                MandateChoice::MODE_EXISTING => $this->souscription->souscrire(
+                    adherent: $adherent,
+                    payeur: $payeur,
+                    formule: $formule,
+                    etablissement: $etablissement,
+                    dateSouscription: $vente->getDate(),
+                    dureeEngagementMois: 12,
+                    montantPremiereCentimes: 0,
+                    canal: Canal::Guichet,
+                    mandatExistant: $this->resoudreMandatExistant($mandate, $payeur, $etablissement),
+                    sourceSaleLineId: $ligne->getId(),
+                ),
+                default => throw new UnprocessableEntityHttpException(sprintf(
+                    'Le mode de mandat « %s » n\'est pas encore disponible à la caisse : signez le '
+                    . 'mandat au comptoir (IBAN + titulaire) ou réutilisez un mandat existant du client.',
                     $mandate->mode,
-                ));
-            }
+                )),
+            };
+        }
+    }
 
-            // `souscrire()` refuse lui-même (422) si l'IBAN ou le titulaire manque, résout le tarif
-            // depuis la grille du produit et gèle la cadence sur la formule : on ne redécide rien ici.
-            $this->souscription->souscrire(
-                adherent: $adherent,
-                payeur: $payeur,
-                formule: $formule,
-                etablissement: $etablissement,
-                dateSouscription: $vente->getDate(),
-                // Repli : la formule décide quand elle déclare `engagement.dureeMin`. Aucun écran de
-                // caisse ne négocie de durée — 12 mois est le défaut, comme la souscription en ligne.
-                dureeEngagementMois: 12,
-                ibanClair: $mandate->iban,
-                titulaireMandat: $mandate->titulaire,
-                // 1er mois encaissé dans la vente : la 1re échéance SEPA vaut 0 (voir docblock de classe).
-                montantPremiereCentimes: 0,
-                canal: Canal::Guichet,
-                bicDebiteur: $mandate->bic,
-                sourceSaleLineId: $ligne->getId(),
+    /**
+     * Le mandat à réutiliser (mode « existing »), résolu puis VALIDÉ dans le périmètre. Un mandat
+     * désigné par son id doit exister ; à défaut d'id, on prend le mandat actif du client. Dans tous
+     * les cas il doit être ACTIF, appartenir au payeur ET à l'établissement vendeur — échec fermé
+     * (422, message identique) sinon : jamais le mandat d'un autre client ni d'un autre locataire, et
+     * jamais un oracle sur l'existence d'un mandat hors périmètre.
+     */
+    private function resoudreMandatExistant(MandateChoice $mandate, Client $payeur, Etablissement $etablissement): MandatSepa
+    {
+        $repo = $this->em->getRepository(MandatSepa::class);
+        if (null !== $mandate->mandateId) {
+            $mandat = Uuid::isValid($mandate->mandateId) ? $repo->find(Uuid::fromString($mandate->mandateId)) : null;
+        } else {
+            $mandat = $repo->findOneBy([
+                'client' => $payeur,
+                'etablissement' => $etablissement,
+                'statut' => StatutMandatSepa::Actif,
+            ]);
+        }
+
+        if (!$mandat instanceof MandatSepa
+            || StatutMandatSepa::Actif !== $mandat->getStatut()
+            || (string) $mandat->getClient()?->getId() !== (string) $payeur->getId()
+            || (string) $mandat->getEtablissement()?->getId() !== (string) $etablissement->getId()) {
+            throw new UnprocessableEntityHttpException(
+                'Aucun mandat SEPA actif pour ce client sur cet établissement : signez-en un au '
+                . 'comptoir (IBAN + titulaire).'
             );
         }
+
+        return $mandat;
     }
 
     private function resoudreClient(?Uuid $id): ?Client
