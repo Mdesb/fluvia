@@ -161,7 +161,33 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
     // deux heures du matin a Paris en ete. « Prochaine echeance » aurait alors designe celle
     // d'hier, deux heures par nuit. Le garde-fou n°31 l'a attrape sur ce fichier meme.
     const aujourdhui = jourLocal()
-    return echeances.find((e) => (e.dateProgrammee || '') >= aujourdhui) || null
+    // ⚠ UN MINIMUM, PAS UN `find`. `find` rend le PREMIER element du tableau qui satisfait le
+    // test — donc, sur une liste non triee, une echeance future QUELCONQUE. Cette ligne envoyait
+    // `order[dateProgrammee]=asc` au serveur depuis le 03/09 et se croyait donc triee : le
+    // parametre etait accepte en 200 et IGNORE, faute d'`OrderFilter` sur la ressource. Mesure du
+    // 07/09 : la reponse sortait dans l'ordre des UUID, et son propre gabarit `search` ne listait
+    // que `{?abonnement,statut}`.
+    //
+    // Le filtre est desormais declare — et on ne s'appuie pas dessus. Un minimum explicite est
+    // juste quel que soit l'ordre recu, y compris le jour ou quelqu'un le retire.
+    //
+    // ⚠ `annulee` EXCLU, et ce n'est pas un arbitrage de ma part : `StatutEcheanceSepa` le definit
+    // comme « abandon definitif — l'echeance ne reviendra pas ». Annoncer un prelevement qui ne
+    // partira jamais est pire que n'annoncer rien.
+    //
+    // ⚠ RESTE A TRANCHER, et je ne le tranche pas ici : une echeance `gelee` (pause) revient a la
+    // reprise, mais PAS a la date qu'elle porte. Elle reste donc comptee comme prochaine, ce qui
+    // annonce une date qui bougera. Le corriger demande de savoir ce qu'on veut afficher pour un
+    // abonnement en pause — une question de produit, pas de code.
+    let prochaineEcheance = null
+    for (const e of echeances) {
+      const d = e.dateProgrammee || ''
+      if (d < aujourdhui || e.statut === 'annulee') continue
+      if (prochaineEcheance === null || d < (prochaineEcheance.dateProgrammee || '')) {
+        prochaineEcheance = e
+      }
+    }
+    return prochaineEcheance
   }, [echeances])
 
   if (!a) return null

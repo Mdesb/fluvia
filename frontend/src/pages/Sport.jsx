@@ -629,6 +629,17 @@ function Echeancier({
     null,
   )
 
+  // ⚠ L'ECHEANCIER ARRIVAIT DANS L'ORDRE DES UUID — 25 lignes de septembre 2025 a septembre 2026
+  // entremelees. Mesure du 07/09 contre l'API de preprod, pas une impression.
+  //
+  // La ressource porte desormais `order: ['dateProgrammee' => 'ASC']`, donc cette liste arrive
+  // triee. On la trie QUAND MEME ici, et ce n'est pas de la redondance : un ecran qui depend d'un
+  // ordre qu'il ne controle pas se recasse en silence le jour ou la ressource change, sans qu'une
+  // seule ligne de ce fichier bouge. Le tri est un invariant de l'affichage, on l'ecrit ici aussi.
+  const rangees = [...(echeances || [])].sort(
+    (x, y) => (x.dateProgrammee || '').localeCompare(y.dateProgrammee || ''),
+  )
+
   // Le talon `{ id }` se recoupe avec les abonnements deja charges par la page. Si CETTE liste-la
   // n'a pas pu etre lue, on ne remplace pas le nom par un tiret muet : on le dit.
   function adherent(echeance) {
@@ -684,7 +695,7 @@ function Echeancier({
                 </tr>
               </thead>
               <tbody>
-                {echeances.map((e) => {
+                {rangees.map((e) => {
                   const etat = etatEcheance(e.statut)
                   return (
                     <tr key={e.id}>
