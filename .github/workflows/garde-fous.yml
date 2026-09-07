@@ -1,9 +1,19 @@
 # Garde-fous partagés (C4/C16/C19) — voir COORDINATION/PLAYBOOK.md §9.
 #
-# ⚠ Ce workflow ne tourne nulle part aujourd'hui : `origin` est un dépôt bare local
-# (/home/debian/billetterie.git), il n'y a pas de remote GitHub. Ce qui protège réellement le dépôt,
-# c'est le hook `pre-receive` (C16). Ce fichier est prêt pour le jour où le dépôt sera poussé sur
-# GitHub, et sert de documentation exécutable de ce que la CI devrait faire.
+# ⚠ CE WORKFLOW TOURNE, ET IL EST BLOQUANT. Il se déclenche sur `pull_request` vers `origin`
+# (github.com/Mdesb/fluvia), et ses deux jobs — « Tous les garde-fous du lanceur » et « Banc d'essai
+# des garde-fous » — sont les deux checks REQUIS par la protection de `main`. Avec `auto-merge.yml`,
+# une PR non brouillon fusionne DÈS qu'ils passent au vert : personne ne relit le diff derrière eux.
+# Ces deux jobs sont le gate, en entier. Ce qu'ils laissent passer entre dans `main`.
+#
+# (Cet en-tête a affirmé le contraire — « ne tourne nulle part, pas de remote GitHub » — jusqu'à la
+# migration. L'écho traîne encore dans les archives de COORDINATION/ : c'est périmé. Un commentaire
+# qui dit « ceci ne tourne pas » sur un fichier qui bloque les PR invite à ne pas le relire.)
+#
+# Le hook `pre-receive` (C16) reste la seconde barrière, côté serveur : il garde le dépôt nu
+# /home/debian/billetterie.git, aujourd'hui le remote `bare`, qui reçoit toujours des pushes. Les
+# deux ne couvrent pas le même chemin — ce workflow ne voit que les `pull_request`, `pre-receive` ne
+# voit que ce qui entre dans le nu — et aucune ne rend l'autre superflue.
 #
 # **Il délègue entièrement à `bin/garde-fous.sh`, et c'est délibéré.** Sa version précédente
 # réimplémentait les appels : elle lançait le cloisonnement et le manifeste, mais ni le nommage
@@ -15,8 +25,6 @@ name: Garde-fous
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 jobs:
   garde-fous:
@@ -82,6 +90,15 @@ jobs:
       # qui ne tourne pas sur l'image de production valide autre chose que ce qui sera livré.
       - name: Image PHP, celle de la préproduction
         run: docker build -t billetterie-preprod-php docker/php
+
+      # Sur un evenement pull_request, actions/checkout laisse une HEAD detachee sans
+      # branche locale `main`. Le banc clone ce depot (DEPOT_SOURCE=.git) puis, dans le
+      # clone, committe sur `main` et la pousse vers un bare jetable pour eprouver le hook
+      # pre-receive : sans etre attache a `main`, il echoue sur « src refspec main does
+      # not match any ». On attache donc HEAD a `main` sur le commit teste. Sans effet en
+      # local, ou le banc part du bare partage qui possede deja `main`.
+      - name: Attacher HEAD a main pour le banc (pull_request = HEAD detachee)
+        run: git checkout -B main
 
       - name: Les garde-fous refusent-ils vraiment ce qu'ils prétendent refuser ?
         env:

@@ -1,0 +1,37 @@
+# Fusion automatique dès que tout est vert — plus aucune validation manuelle.
+#
+# Sur chaque PR non brouillon, ce workflow arme l'auto-merge natif de GitHub. GitHub
+# fusionne alors la PR en squash DÈS que les checks requis passent au vert et que la
+# branche est à jour. C'est GitHub qui fusionne, côté serveur : aucune session Claude
+# n'exécute de « merge », donc ni classifieur ni identité gh locale n'entrent en jeu.
+#
+# `pull_request_target` : le workflow tourne dans la version de `main` (pas celle de la
+# PR) avec un jeton en écriture. Il n'exécute AUCUN code de la PR — seulement un appel
+# gh — donc l'usage de pull_request_target est sûr ici.
+#
+# Prérequis, réglés une fois : « Allow auto-merge » sur le dépôt (fait), et la protection
+# de `main` (PR obligatoire + les deux checks garde-fous + 0 approbation). Le gate reste
+# donc entièrement la CI ; ce workflow ne fait qu'appuyer sur « merge » à ta place.
+#
+# ⚠ Une PR armée fusionne dès le vert. Pour un travail en cours, ouvre la PR en
+# **brouillon** (draft) : l'auto-merge ne s'arme qu'au passage « ready for review ».
+name: Auto-merge sur vert
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  armer:
+    name: Armer l'auto-merge (squash)
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.draft == false }}
+    steps:
+      - name: gh pr merge --auto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "${{ github.event.pull_request.number }}" --auto --squash --repo "${{ github.repository }}"
