@@ -29,6 +29,12 @@ final class CloisonnementTest extends PadelApiTestCase
             $client->request('GET', $chemin, ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
             self::assertResponseStatusCodeSame(404, sprintf('RG-SOCLE-05 : %s inaccessible hors périmètre affecté.', $chemin));
         }
+
+        // TÉMOIN DU VOTER (07/09) : l'en-tête EST dans la portée (le listener laisse passer),
+        // mais la permission d'écriture manque (LECTEUR n'a que *.lire) → le voter doit refuser.
+        // Sans ce cas, depuis e915c94e ce test ne prouve plus que le refus du listener (404).
+        $client->request('POST', '/api/padel_grille_tarifaire_terrains', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA], 'json' => []]);
+        self::assertResponseStatusCodeSame(403, 'Le voter refuse une écriture dans la portée sans la permission requise (le listener, lui, a laissé passer l\'en-tête).');
     }
 
     public function testAdminNeVoitPasLesRessourcesDunAutreGroupe(): void
