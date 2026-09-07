@@ -192,8 +192,19 @@ final readonly class MetierCatalog
      *
      * ⚠ **C'EST LA DÉMONSTRATION DE LA PROMESSE, PAS UNE ILLUSTRATION.** Le site affirme qu'un
      * créneau n'est pas la même chose partout — une réservation de terrain au padel, une séance à la
-     * piscine, une visite au musée. Un seul gabarit rendu cinq fois avec cinq tables de mots le
-     * montre, au lieu de l'écrire.
+     * piscine, une visite au musée, une partie au bowling. Un seul gabarit rendu huit fois avec huit
+     * tables de mots le montre, au lieu de l'écrire.
+     *
+     * ⚠ **ELLE EST FACULTATIVE, ET C'EST CE QUI LA REND COMPATIBLE AVEC LE RÉFÉRENTIEL.** La lecture
+     * est `self::ECRANS[$code] ?? null` : un métier créé en base sans entrée ici a sa page, ses
+     * modules et son texte, simplement sans écran de démonstration. Ajouter cet écran reste, lui, un
+     * déploiement — c'est le seul morceau d'une page métier qui n'ait pas basculé en base, et c'est
+     * assumé : ce sont des mots de vente, comme les spécificités juste en dessous.
+     *
+     * ⚠ **TROIS ENTRÉES N'ONT PAS DE LIGNE AUJOURD'HUI** — `bowling`, `escalade`, `parcs-de-loisirs`.
+     * Elles ne rendent donc rien, et c'est sans danger : ce sont les lignes qui décident quelles
+     * pages existent, jamais cette table. Elles attendent que les métiers soient créés dans
+     * l'administration, avec exactement ces codes.
      *
      * ⚠ **AUCUN CHIFFRE D'AFFAIRE, AUCUN NOM DE CLIENT RÉEL.** Ce sont des établissements
      * d'illustration. Un écran de démonstration qui exhibe des données ressemblant à celles d'un
@@ -239,6 +250,35 @@ final readonly class MetierCatalog
             'note' => '4 salles',
             'colonnes' => ['S1', 'S2', 'S3', 'S4'],
             'occupations' => ['Visite guidée', 'Scolaires', 'Groupe', 'Atelier', 'Conférence', 'Libre'],
+        ],
+
+        // ── Les trois qui n'ont pas encore de ligne ─────────────────────────────────────────────
+        //
+        // ⚠ Le libellé de la quatrième entrée du menu change d'un métier à l'autre, et c'est tout le
+        //   propos : « Location de chaussures » au bowling, « Location de matériel » à l'escalade,
+        //   « Billetterie » au parc. Un menu identique partout démentirait la phrase que la page
+        //   vient d'écrire.
+
+        'bowling' => [
+            'etablissement' => 'Bowling du Stade',
+            'entrees' => ['Parties', 'Pistes', 'Joueurs', 'Location de chaussures', 'Paramètres'],
+            'note' => '4 pistes',
+            'colonnes' => ['P1', 'P2', 'P3', 'P4'],
+            'occupations' => ['Anniversaire', 'Ligue', 'Public', 'Entreprise', 'Scolaires', 'Tournoi'],
+        ],
+        'escalade' => [
+            'etablissement' => 'Bloc & Cie',
+            'entrees' => ['Séances', 'Secteurs', 'Grimpeurs', 'Location de matériel', 'Paramètres'],
+            'note' => '4 secteurs',
+            'colonnes' => ['S1', 'S2', 'S3', 'S4'],
+            'occupations' => ['Grimpe libre', 'Cours enfants', 'Scolaires', 'Perfectionnement', 'Groupe', 'Compétition'],
+        ],
+        'parcs-de-loisirs' => [
+            'etablissement' => 'Parc des Cimes',
+            'entrees' => ['Créneaux', 'Attractions', 'Visiteurs', 'Billetterie', 'Paramètres'],
+            'note' => '4 attractions',
+            'colonnes' => ['A1', 'A2', 'A3', 'A4'],
+            'occupations' => ['Public', 'Scolaires', 'Groupe', 'Anniversaire', 'Privatisation', 'Nocturne'],
         ],
     ];
 

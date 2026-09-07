@@ -117,6 +117,37 @@ final class SixthTradeTest extends SocleApiTestCase
     }
 
     /**
+     * Une ligne prend l'écran de démonstration qui porte son code — s'il en existe un.
+     *
+     * ⚠ **C'EST LA SEULE PARTIE D'UNE PAGE MÉTIER QUI RESTE EN CODE**, et elle est facultative :
+     * `MetierCatalog::ECRANS[$code] ?? null`. D'où ce témoin. Si ce chemin cessait de fonctionner
+     * pour une ligne, les pages perdraient silencieusement leur écran : le `?? null` rend exactement
+     * le même résultat qu'une absence légitime, et aucun test existant ne verrait la différence.
+     *
+     * ⚠ **ET LE VOCABULAIRE EST CELUI DU MÉTIER, PAS UN GABARIT NEUTRE.** « Location de chaussures »
+     * ne se dit qu'au bowling. C'est ce que la page affirme deux paragraphes plus haut — qu'un
+     * créneau n'est pas la même chose partout — et ce témoin le vérifie au lieu de le croire.
+     */
+    public function testUneLignePrendLecranDeDemonstrationDeSonCode(): void
+    {
+        $client = static::createClient();
+        $this->semerLesCinqPlusUn();
+
+        $client->request('GET', '/metiers/'.self::CODE);
+        self::assertResponseIsSuccessful();
+
+        $html = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Bowling du Stade', $html);
+        self::assertStringContainsString('Location de chaussures', $html);
+        self::assertStringContainsString('4 pistes', $html);
+
+        // Témoin négatif : l'écran d'un AUTRE métier ne doit pas fuir sur cette page. Sans lui, un
+        // catalogue qui rendrait le premier écran venu passerait les trois assertions ci-dessus.
+        self::assertStringNotContainsString('Piscine Aqualude', $html);
+    }
+
+    /**
      * ⚠ **LES CINQ AUSSI**, et pas seulement le sixième.
      *
      * Le repli est tout-ou-rien : ne semer QUE le bowling ferait basculer le site sur les lignes et
