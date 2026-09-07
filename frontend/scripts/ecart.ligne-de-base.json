@@ -29,29 +29,43 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 600,
+    "plafond": 529,
     "releve": {
-        "exposees": 1170,
-        "sansEcran": 1,
-        "attendues": 1169,
-        "appelees": 578,
-        "atteignables": 569,
-        "inatteignables": 600,
+        "exposees": 1194,
+        "sansEcran": 9,
+        "attendues": 1185,
+        "appelees": 669,
+        "atteignables": 656,
+        "inatteignables": 529,
         "orphelins": [
             "ajouterLigneReleve  (back-office)",
+            "editorArticle  (back-office)",
+            "editorBloc  (back-office)",
             "etatSynchroAcces  (back-office)",
-            "grilleTarifaires  (back-office)",
             "majFactureFournisseur  (back-office)",
             "majNoteDeFrais  (back-office)",
+            "majQualificationEncadrant  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
             "planningOuverture  (back-office)",
             "rattacherDroitAccesAbonnement  (back-office)",
-            "supprimerLigneFrais  (back-office)"
+            "retirerAffectationEncadrant  (back-office)",
+            "supprimerLigneFrais  (back-office)",
+            "supprimerObjectif  (back-office)"
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
         "declares": [
+            {
+                "fichier": "app/src/Website/ApiResource/EditorBlogPost.php",
+                "operations": 5,
+                "raison": "aucune interface n'appelle cette lecture d'item, et pourtant elle est"
+            },
+            {
+                "fichier": "app/src/Website/ApiResource/EditorContentBlock.php",
+                "operations": 3,
+                "raison": "aucune interface n'appelle cette lecture d'item, et pourtant elle est"
+            },
             {
                 "fichier": "app/src/Platform/ApiResource/LoadedBuild.php",
                 "operations": 1,
@@ -63,8 +77,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 554,
-                "atteignables": 545
+                "appelees": 645,
+                "atteignables": 632
             },
             {
                 "nom": "boutique en ligne",
@@ -74,28 +88,40 @@
         ],
         "parPrefixe": [
             [
+                "boutique",
+                36
+            ],
+            [
                 "stock",
+                34
+            ],
+            [
+                "editor",
                 30
             ],
             [
-                "boutique",
-                29
-            ],
-            [
                 "reservation",
-                26
+                29
             ],
             [
                 "finance",
                 20
             ],
             [
-                "editor",
-                18
+                "musee",
+                19
+            ],
+            [
+                "personnel",
+                17
             ],
             [
                 "patinoire",
                 17
+            ],
+            [
+                "compta",
+                15
             ],
             [
                 "support",
@@ -106,20 +132,8 @@
                 14
             ],
             [
-                "compta",
-                14
-            ],
-            [
-                "personnel",
-                13
-            ],
-            [
-                "musee",
-                12
-            ],
-            [
                 "produits",
-                11
+                12
             ],
             [
                 "ventes",
@@ -138,6 +152,10 @@
                 10
             ],
             [
+                "sport",
+                9
+            ],
+            [
                 "utilisateurs",
                 9
             ],
@@ -150,16 +168,12 @@
                 8
             ],
             [
-                "sport",
+                "clients",
                 8
             ],
             [
                 "legal",
                 8
-            ],
-            [
-                "clients",
-                7
             ],
             [
                 "documents",
@@ -182,11 +196,19 @@
                 6
             ],
             [
+                "stays",
+                6
+            ],
+            [
                 "roles",
                 6
             ],
             [
                 "expense",
+                6
+            ],
+            [
+                "revenue-recovery",
                 6
             ],
             [
@@ -214,8 +236,16 @@
                 5
             ],
             [
+                "smart-flow",
+                5
+            ],
+            [
                 "calendar",
                 5
+            ],
+            [
+                "promotions",
+                4
             ],
             [
                 "customer",
@@ -251,6 +281,14 @@
             ],
             [
                 "caution",
+                4
+            ],
+            [
+                "integration",
+                4
+            ],
+            [
+                "affectation",
                 4
             ],
             [
@@ -322,6 +360,18 @@
                 3
             ],
             [
+                "objectif",
+                3
+            ],
+            [
+                "tableau",
+                3
+            ],
+            [
+                "rapport",
+                3
+            ],
+            [
                 "regions",
                 3
             ],
@@ -358,6 +408,10 @@
                 3
             ],
             [
+                "qualification",
+                3
+            ],
+            [
                 "sessions-caisse",
                 2
             ],
@@ -379,6 +433,14 @@
             ],
             [
                 "jauge",
+                2
+            ],
+            [
+                "indicateurs",
+                2
+            ],
+            [
+                "reporting",
                 2
             ],
             [
@@ -450,7 +512,15 @@
                 1
             ],
             [
+                "statut",
+                1
+            ],
+            [
                 "abonnement",
+                1
+            ],
+            [
+                "beneficiaires",
                 1
             ],
             [
@@ -463,10 +533,6 @@
             ],
             [
                 "reservations",
-                1
-            ],
-            [
-                "beneficiaires",
                 1
             ],
             [
@@ -490,7 +556,7 @@
                 1
             ],
             [
-                "indicateurs",
+                "exports",
                 1
             ],
             [
@@ -554,6 +620,18 @@
                 1
             ],
             [
+                "retrait",
+                1
+            ],
+            [
+                "integrations",
+                1
+            ],
+            [
+                "reversement",
+                1
+            ],
+            [
                 "absences",
                 1
             ],
@@ -571,6 +649,10 @@
             ],
             [
                 "posses",
+                1
+            ],
+            [
+                "avoirs",
                 1
             ],
             [
