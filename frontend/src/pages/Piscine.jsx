@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import Liste, { texte } from '../components/Liste.jsx'
+import Liste, { jourLocal, texte } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -490,6 +490,22 @@ function CreneauxBassins({ etabActif, droits = [] }) {
 function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer, onFait, onErreur }) {
   const [choix, setChoix] = useState('')
   const [envoi, setEnvoi] = useState(false)
+  // L'affectation en cours de retrait. `null` = aucune.
+  const [retrait, setRetrait] = useState(null)
+
+  async function retirer(a) {
+    setRetrait(a.id)
+    onErreur(null)
+    try {
+      await api.retirerAffectationEncadrant(a.id)
+      // ⚠ ON FERME, ET C'EST LA CORRECTION PLUTÔT QUE LA FACILITÉ. `dejaPosees` est calculée par le
+      // parent : retirer sans fermer laisserait à l'écran une affectation qui n'existe plus.
+      onFait()
+    } catch (e) {
+      onErreur(e.message || 'L’affectation n’a pas pu être retirée.')
+      setRetrait(null)
+    }
+  }
 
   const posees = new Set(dejaPosees.map((a) => idDe(a.qualification)).filter(Boolean))
 
@@ -523,6 +539,30 @@ function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer,
         refusera de le valider sans un encadrant dont le diplôme couvre ce type et reste valide au{' '}
         {heure(creneau.debut)}.
       </p>
+
+      {/* ⚠ CE QUI EST DÉJÀ POSÉ, ET COMMENT LE DÉFAIRE. Une affectation sur le mauvais créneau
+          n'avait aucun moyen d'être retirée : il fallait vivre avec, ou annuler le créneau. */}
+      {dejaPosees.length > 0 && (
+        <div className="field">
+          <label>Déjà affectés</label>
+          {dejaPosees.map((a) => (
+            <div key={a.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+              {/* ⚠ ON RÉSOUT ICI, ON N'EMPRUNTE PAS. `nomEncadrant` existe dans le composant parent,
+                  pas dans celui-ci : l'appeler serait un identifiant hors portée — que le bundler
+                  ne signale pas et que seul le garde-fou n°40 attrape. */}
+              <span>{libelleEncadrant(qualifications.find((q) => String(q.id) === idDe(a.qualification)) || {})}</span>
+              <button
+                type="button"
+                className="btn ghost sm"
+                disabled={retrait === a.id}
+                onClick={() => retirer(a)}
+              >
+                {retrait === a.id ? 'Retrait…' : 'Retirer'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {eligibles.length === 0 ? (
         <p className="empty">
@@ -573,6 +613,8 @@ function QualificationsEncadrants({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'piscine.gerer')
   const [version, setVersion] = useState(0)
   const [creation, setCreation] = useState(false)
+  // Le diplôme dont on prolonge la validité. `null` = aucun.
+  const [renouvellement, setRenouvellement] = useState(null)
   const [erreur, setErreur] = useState(null)
 
   const maintenant = new Date()
@@ -609,8 +651,28 @@ function QualificationsEncadrants({ etabActif, droits = [] }) {
               )
             },
           },
+          // ⚠ RENOUVELER PLUTÔT QUE DUPLIQUER. Sans ce geste, prolonger un diplôme obligeait à en
+          // enregistrer un SECOND pour la même personne — et la liste accumulait des doublons dont
+          // un seul comptait.
+          {
+            cle: 'renouveler',
+            entete: '',
+            rendu: (r) => (peutGerer ? (
+              <button type="button" className="btn ghost sm" onClick={() => setRenouvellement(r)}>
+                Renouveler
+              </button>
+            ) : null),
+          },
         ]}
       />
+      {renouvellement && (
+        <RenouvellementModal
+          qualification={renouvellement}
+          onFermer={() => setRenouvellement(null)}
+          onFait={() => { setRenouvellement(null); setVersion((v) => v + 1) }}
+          onErreur={setErreur}
+        />
+      )}
       {creation && (
         <QualificationModal
           onFermer={() => setCreation(false)}
@@ -853,6 +915,66 @@ function BassinModal({ open, onClose, onCree }) {
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+
+/**
+ * PROLONGER LA VALIDITÉ D'UN DIPLÔME — la réparation que l'écran ne savait pas faire.
+ *
+ * ⚠ ON NE CHANGE QUE LA DATE. Le serveur accepte aussi de changer l'encadrant et le type de
+ * diplôme ; ce ne serait plus un renouvellement mais un autre diplôme, et il s'enregistre comme
+ * tel. Sous le mot « Renouveler », proposer de changer la personne inviterait à réécrire une
+ * qualification au lieu d'en créer une.
+ *
+ * ⚠ ET UNE DATE PASSÉE EST ACCEPTÉE, VOLONTAIREMENT. Corriger une saisie erronée vers une date déjà
+ * écoulée est légitime — le diplôme cesse alors de couvrir, ce que la liste dit déjà. Refuser ici
+ * empêcherait de réparer une faute de frappe.
+ */
+function RenouvellementModal({ qualification, onFermer, onFait, onErreur }) {
+  const [date, setDate] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    setDate(qualification?.dateValidite ? jourLocal(qualification.dateValidite) : '')
+  }, [qualification])
+
+  async function valider() {
+    setEnvoi(true)
+    onErreur(null)
+    try {
+      await api.majQualificationEncadrant(qualification.id, { dateValidite: date })
+      onFait()
+    } catch (e) {
+      onErreur(e.message || 'Le diplôme n’a pas pu être renouvelé.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Renouveler le diplôme" taille="sm">
+      <p className="hint">
+        {libelleEncadrant(qualification)} — {qualification.type}. Seule l’échéance change&nbsp;: un
+        autre diplôme s’enregistre comme un diplôme de plus, pas en réécrivant celui-ci.
+      </p>
+      <div className="field">
+        <label htmlFor="pi-renouv">Valide jusqu’au</label>
+        <input
+          id="pi-renouv"
+          className="input"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      <div className="bar">
+        <button type="button" className="btn" onClick={onFermer}>Annuler</button>
+        <button type="button" className="btn primary" onClick={valider} disabled={envoi || date === ''}>
+          {envoi ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
     </Modal>
   )
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
@@ -25,6 +25,9 @@ import { dateFr, jourLocal } from './Liste.jsx'
  * sans imputation la note ne pourrait pas passer en comptabilité.
  */
 export default function NotesDeFrais({ etabActif, droits = [] }) {
+  // La note dont on a deplie les lignes. `null` = aucune, et c'est l'etat normal : une liste de
+  // notes se lit d'abord en survol, le detail se demande.
+  const [depliee, setDepliee] = useState(null)
   // Le référentiel nécessaire à la CRÉATION, distinct de la liste : sans salarié déclaré,
   // personne ne peut avoir de note de frais.
   const [employes, setEmployes] = useState(null)
@@ -146,6 +149,7 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
                     <th className="num">Total</th>
                     <th>Soumise</th>
                     <th>Remboursée</th>
+                    <th className="num">Lignes</th>
                     <th />
                   </tr>
                 </thead>
@@ -153,7 +157,8 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
                   {notes.map((n) => {
                     const st = ETATS[n.status] || { libelle: n.status, ton: 'mut' }
                     return (
-                      <tr key={n.id}>
+                      <Fragment key={n.id}>
+                      <tr>
                         <td>{nomEmploye(n.employee)}</td>
                         <td>
                           <span className={`badge ${st.ton}`}>{st.libelle}</span>
@@ -164,6 +169,21 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
                         <td className="num">{euros(n.totalAmount)}</td>
                         <td>{n.submittedAt ? dateFr(n.submittedAt) : '—'}</td>
                         <td>{n.reimbursedAt ? dateFr(n.reimbursedAt) : '—'}</td>
+                        <td className="num">
+                          {/* ⚠ LE COMPTE EST UNE INFORMATION EN SOI : une note à zéro ligne se
+                              soumet sans que rien ne l'empêche, et personne ne le voyait. */}
+                          {(n.lines || []).length === 0 ? (
+                            <span className="badge warn">aucune</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="lnk"
+                              onClick={() => setDepliee(depliee === n.id ? null : n.id)}
+                            >
+                              {(n.lines || []).length}
+                            </button>
+                          )}
+                        </td>
                         <td className="num">
                           {/* LES GESTES SUIVENT L'ÉTAT, ET UN GESTE QUI N'A PAS DE SENS EST ABSENT,
                               jamais grisé : on ne propose pas « soumettre » sur une note déjà
@@ -246,6 +266,20 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
                           )}
                         </td>
                       </tr>
+
+                      {depliee === n.id && (
+                        <tr>
+                          <td colSpan={7} style={{ background: 'var(--panel-2)' }}>
+                            <LignesNote
+                              note={n}
+                              peutModifier={peutSoumettre && n.status === 'draft'}
+                              onSupprime={recharger}
+                              onErreur={setErreur}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </tbody>
@@ -253,10 +287,14 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
             </div>
           )}
 
+          {/* ⚠ CE BANDEAU DISAIT QUE L'OCR N'ÉTAIT PAS BRANCHÉ. Il l'est, dans `LigneModal`,
+              avec une règle soignée — il ne remplit que les champs vides. La phrase décrivait un
+              défaut corrigé depuis, et rien ne reliait les deux : elle est remplacée par ce qui
+              reste vrai. */}
           <div className="hint">
-            ⚠ La reconnaissance automatique des justificatifs (OCR) existe côté serveur et n’est
-            pas branchée ici&nbsp;: les lignes se saisissent à la main. Un bouton qui ne ferait
-            rien serait pire que son absence.
+            Une ligne ne se modifie que tant que la note est en brouillon&nbsp;: dès qu’elle est
+            soumise, le serveur la scelle. Dépliez le compte de lignes pour les voir et en retirer
+            une.
           </div>
         </div>
       </section>
@@ -711,5 +749,85 @@ function RemboursementModal({ note, onClose, onFait }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+
+/**
+ * LES LIGNES D'UNE NOTE — déjà dans la charge utile, jamais affichées jusqu'ici.
+ *
+ * ⚠ ON NE PROPOSE LE RETRAIT QUE SUR UN BROUILLON. `ExpenseLineProcessor` refuse toute écriture dès
+ * que la note quitte `draft` (RG-EXP-01.1) : le bouton est donc ABSENT ailleurs, jamais grisé.
+ * Proposer un geste pour le refuser ensuite est exactement ce que cet écran évite déjà pour
+ * « soumettre ».
+ *
+ * ⚠ ET LE RETRAIT NE SE CONFIRME PAS. Une ligne de brouillon se resaisit en trente secondes, et la
+ * note n'est encore engagée nulle part — une confirmation ici serait une cérémonie. Le jour où le
+ * geste porterait sur une note scellée, il faudrait l'inverse ; c'est précisément pour ça qu'il
+ * n'existe pas dans ce cas.
+ */
+function LignesNote({ note, peutModifier, onSupprime, onErreur }) {
+  const [busy, setBusy] = useState(null)
+  const lignes = note.lines || []
+
+  async function supprimer(l) {
+    setBusy(l.id)
+    onErreur(null)
+    try {
+      await api.supprimerLigneFrais(l.id)
+      await onSupprime()
+    } catch (e) {
+      onErreur(e.message || 'La ligne n’a pas pu être retirée.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (lignes.length === 0) {
+    return <div className="sub">Aucune ligne sur cette note.</div>
+  }
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Nature</th>
+            <th className="num">TTC</th>
+            <th className="num">HT</th>
+            <th className="num">TVA</th>
+            <th>Justificatif</th>
+            {peutModifier && <th />}
+          </tr>
+        </thead>
+        <tbody>
+          {lignes.map((l) => (
+            <tr key={l.id}>
+              <td>{l.expenseDate ? dateFr(l.expenseDate) : '—'}</td>
+              <td>{l.expenseNatureCode || <span className="sub">—</span>}</td>
+              <td className="num">{euros(l.amountInclTax)}</td>
+              <td className="num">{euros(l.amountExclTax)}</td>
+              <td className="num">{euros(l.vatAmount)}</td>
+              <td>
+                {l.receiptFileName || <span className="sub">aucun</span>}
+              </td>
+              {peutModifier && (
+                <td>
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={busy === l.id}
+                    onClick={() => supprimer(l)}
+                  >
+                    {busy === l.id ? 'Retrait…' : 'Retirer'}
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
