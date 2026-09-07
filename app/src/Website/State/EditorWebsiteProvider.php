@@ -8,6 +8,8 @@ use ApiPlatform\Metadata\CollectionOperationInterface;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Subscription\Security\EditorOnly;
+use App\Fonctionnalite\Enum\EstablishmentActivity;
+use App\Website\ApiResource\EditorActivity;
 use App\Website\ApiResource\EditorBlogCategory;
 use App\Website\ApiResource\EditorBlogPost;
 use App\Website\ApiResource\EditorContentBlock;
@@ -44,7 +46,7 @@ use Symfony\Component\Uid\Uuid;
  * qu'ils décrivent le site de l'éditeur et non les données d'un client. Il n'existe donc pas deux
  * périmètres entre lesquels un identifiant pourrait faire passer quelqu'un.
  *
- * @implements ProviderInterface<EditorBlogPost|EditorBlogCategory|EditorContentBlock|EditorTrade>
+ * @implements ProviderInterface<EditorBlogPost|EditorBlogCategory|EditorContentBlock|EditorTrade|EditorActivity>
  */
 final class EditorWebsiteProvider implements ProviderInterface
 {
@@ -65,6 +67,10 @@ final class EditorWebsiteProvider implements ProviderInterface
 
         if (EditorContentBlock::class === $classe) {
             return $collection ? $this->blocsDeclares() : $this->bloc((string) ($uriVariables['id'] ?? ''));
+        }
+
+        if (EditorActivity::class === $classe) {
+            return $this->activites();
         }
 
         if (EditorTrade::class === $classe) {
@@ -132,6 +138,30 @@ final class EditorWebsiteProvider implements ProviderInterface
         $lignes = $this->em->getRepository(Trade::class)->findBy([], ['position' => 'ASC', 'code' => 'ASC']);
 
         return array_map($this->vueMetier->depuis(...), $lignes);
+    }
+
+    /**
+     * Les neuf activites de D15, avec leurs libelles.
+     *
+     * ⚠ **L'ECRAN NE LES REECRIT PAS.** Les libelles vivent dans l'enumeration ; une seconde
+     * orthographe en JavaScript deriverait au premier libelle corrige, et l'ecran proposerait
+     * autre chose que ce que le site vend.
+     *
+     * @return list<EditorActivity>
+     */
+    private function activites(): array
+    {
+        $lignes = [];
+
+        foreach (EstablishmentActivity::cases() as $activite) {
+            $vue = new EditorActivity();
+            $vue->id = $activite->value;
+            $vue->label = $activite->label();
+
+            $lignes[] = $vue;
+        }
+
+        return $lignes;
     }
 
     private function metier(Uuid $id): Trade

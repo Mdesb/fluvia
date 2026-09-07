@@ -7,7 +7,6 @@ namespace App\Website\ApiResource;
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
-use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
@@ -44,9 +43,12 @@ use App\Website\State\EditorWebsiteProvider;
 #[ApiResource(
     shortName: 'EditorTrade',
     operations: [
+        // ⚠ PAS DE `Get` D'UN METIER ISOLE, ET C'EST DELIBERE : l'ecran charge la collection et
+        //   edite depuis la ligne, il ne relit jamais un element seul. `EditorBlogCategory` n'en a
+        //   pas non plus. Une operation que personne ne declenche coute un cloisonnement a tenir et
+        //   un test a maintenir, pour rien — c'est le garde-fou n°15 qui l'a signalee ici.
         new GetCollection(uriTemplate: '/editor/website/trades', provider: EditorWebsiteProvider::class),
         new Post(uriTemplate: '/editor/website/trades', provider: EditorWebsiteProvider::class, processor: EditorWebsiteProcessor::class),
-        new Get(uriTemplate: '/editor/website/trades/{id}', provider: EditorWebsiteProvider::class),
         new Patch(uriTemplate: '/editor/website/trades/{id}', provider: EditorWebsiteProvider::class, processor: EditorWebsiteProcessor::class),
         new Delete(uriTemplate: '/editor/website/trades/{id}', provider: EditorWebsiteProvider::class, processor: EditorWebsiteProcessor::class),
     ],

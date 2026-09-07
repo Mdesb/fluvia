@@ -2827,6 +2827,15 @@ export const api = {
   majEditorRubrique: (id, corps) => request(`/api/editor/website/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorRubrique: (id) => request(`/api/editor/website/categories/${id}`, { method: 'DELETE' }),
 
+  // Le referentiel des metiers : chaque ligne est une page de /metiers, sans deploiement.
+  editorMetiers: () => request('/api/editor/website/trades'),
+  creerEditorMetier: (corps) => request('/api/editor/website/trades', { method: 'POST', body: corps, ld: true }),
+  majEditorMetier: (id, corps) => request(`/api/editor/website/trades/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorMetier: (id) => request(`/api/editor/website/trades/${id}`, { method: 'DELETE' }),
+
+  // Les neuf activites de D15, servies par le serveur pour que l'ecran ne les reecrive pas.
+  editorActivites: () => request('/api/editor/website/activities'),
+
   editorBlocs: () => request('/api/editor/website/blocks'),
   editorBloc: (cle) => request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`),
   // PUT et non PATCH : un bloc n'a qu'une valeur, et elle se remplace en entier. Une fusion
