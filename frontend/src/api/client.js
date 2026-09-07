@@ -1209,6 +1209,25 @@ export const api = {
   creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
   creerCreneau: (corps) =>
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
+  // LES CRENEAUX D'UNE ACTIVITE, A PARTIR D'UN INSTANT.
+  //
+  // `reservationCreneaux()` (plus haut) rend les 200 premiers creneaux de l'etablissement, tous
+  // confondus : la fiche produit y aurait cherche les siens a l'aveugle, et un etablissement actif
+  // en aurait rempli la page avant d'arriver a l'activite demandee.
+  //
+  // ⚠ LES DEUX FILTRES SONT DECLARES SUR L'ENTITE, ET C'EST CE QUI LES REND SURS :
+  // `SearchFilter(activite: exact)` et `DateFilter(debut)`. Un parametre non declare est ignore en
+  // SILENCE par API Platform — la reponse serait complete, l'ecran afficherait tous les creneaux de
+  // tout le monde, et rien ne signalerait que le filtre n'a pas mordu.
+  creneauxDeActivite: (activiteId, depuis) =>
+    request('/api/reservation_creneaus', {
+      query: {
+        activite: `/api/reservation_activites/${activiteId}`,
+        'debut[after]': depuis,
+        'order[debut]': 'asc',
+        itemsPerPage: 100,
+      },
+    }),
   // ── ANNULER UNE RESERVATION ───────────────────────────────────────────────────────────────────
   //
   // ⚠ L'ECRAN N'A RIEN A DECIDER : tout vit dans `AnnulerReservationProcessor`. Dans le delai franc

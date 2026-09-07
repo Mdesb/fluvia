@@ -27,8 +27,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * en temps réel (aucun décalage avec M1/le stock). Comble des manques boutique (tunnel public) :
  * expose désormais le **prix public** (fourchette « à partir de » calculée via `ResolveurPrix` M1, aucun
  * prix recodé) et le **visuel** du produit s'il existe (`Produit.champsPerso['visuelUrl']`, même
- * convention que `champsPerso['timedEntry']`/`champsPerso['ressourceId']` déjà utilisée par ce module —
+ * convention que `champsPerso['timedEntry']` déjà utilisée par ce module —
  * aucune facette visuel dédiée côté M1).
+ *
+ * (`champsPerso['ressourceId']` a longtemps voisiné avec celles-là et ne désigne plus rien : depuis
+ * le 07/09, un produit trouve ses créneaux par l'activité qui le référence — voir
+ * `CreneauxProduitProvider`. Le nommer ici évite qu'on le recopie comme une convention vivante.)
  *
  * @implements ProviderInterface<JsonResponse>
  */
