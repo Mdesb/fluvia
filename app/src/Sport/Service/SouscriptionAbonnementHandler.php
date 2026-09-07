@@ -11,6 +11,7 @@ use App\Offre\Enum\Canal;
 use App\Offre\Service\SubscriptionPriceResolver;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
+use Symfony\Component\Uid\Uuid;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
@@ -62,6 +63,12 @@ final class SouscriptionAbonnementHandler
         Canal $canal = Canal::Guichet,
         // Le mandat déjà signé, quand il y en a un. Exclusif avec l'IBAN ci-dessus.
         ?MandatSepa $mandatExistant = null,
+        // Le BIC du debiteur, quand le mandat est signe au comptoir : sans lui, la remise
+        // pain.008 rendrait un <BIC></BIC> vide. Ignore quand un mandat existant est repris.
+        ?string $bicDebiteur = null,
+        // La ligne de vente d'origine, quand l'abonnement nait d'une vente au guichet : porte
+        // l'idempotence et le lien retour Vente vers abonnement, ecrit dans le meme flush.
+        ?Uuid $sourceSaleLineId = null,
     ): AbonnementFitness {
         if ($mandatExistant === null && ($ibanClair === null || $titulaireMandat === null)) {
             throw new UnprocessableEntityHttpException(
@@ -167,6 +174,7 @@ final class SouscriptionAbonnementHandler
                 ->setIban4Derniers($token->quatreDerniers)
                 ->setIbanChiffre($this->chiffreur->chiffrer((string) $ibanClair))
                 ->setDebiteurNom((string) $titulaireMandat)
+                ->setBicDebiteur((string) ($bicDebiteur ?? ''))
                 ->setDateSignature($dateSouscription)
                 ->setStatut(StatutMandatSepa::Actif)
                 ->setClient($payeur)
@@ -187,6 +195,10 @@ final class SouscriptionAbonnementHandler
         $statutAcces = new StatutAccesFitness();
         $statutAcces->setAbonnement($abonnement)->setActif(true);
         $this->em->persist($statutAcces);
+
+        if (null !== $sourceSaleLineId) {
+            $abonnement->setSourceSaleLineId($sourceSaleLineId);
+        }
 
         $this->em->flush();
 

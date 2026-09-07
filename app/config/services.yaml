@@ -147,6 +147,7 @@ services:
     # Recharge de carte multi-entrées (frontière module Accès, US-CQ1, RG-CQ1-09) : implémentation
     # réelle dès ce lot — pas de stub, Accès est propriétaire de DroitAcces/Support/Appairage.
     App\Vente\Port\CardRechargeInterface: '@App\Acces\Service\CardRechargeHandler'
+    App\Vente\Port\SaleSubscriptionInterface: '@App\Sport\Adapter\SaleSubscriptionAdapter'
 
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'

@@ -7,6 +7,8 @@ namespace App\Vente\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
+use App\Vente\Port\MandateChoice;
+use App\Vente\Port\SaleSubscriptionInterface;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,6 +27,7 @@ final class ValiderVenteProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ValiderVenteService $service,
+        private readonly SaleSubscriptionInterface $saleSubscription,
     ) {
     }
 
@@ -42,7 +45,13 @@ final class ValiderVenteProcessor implements ProcessorInterface
             }
         }
 
-        $this->service->valider($data, $overrides);
+        // LA CAISSE CRÉE L'ABONNEMENT (arbitrage du 07/09). Le choix de mandat vient du corps
+        // optionnel `abonnement` (absent -> « counter »). Le rappel s'execute dans la transaction
+        // de scellement : un refus de souscription fait rollback le scel, la vente reste EnCours.
+        $mandate = MandateChoice::fromBody($this->lecteur->corps()['abonnement'] ?? null);
+        $this->service->valider($data, $overrides, function (Vente $vente) use ($mandate): void {
+            $this->saleSubscription->createSubscriptionsFromSale($vente, $mandate);
+        });
         $this->em->flush();
 
         return $data;

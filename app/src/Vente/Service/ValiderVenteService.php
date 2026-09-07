@@ -83,7 +83,15 @@ final class ValiderVenteService
     /**
      * @param array<string, array{type?: string, identifiant?: string}> $supportsOverride indexé par id de ligne
      */
-    public function valider(Vente $vente, array $supportsOverride = []): OperationScellee
+    /**
+     * @param array<string, array{type?: string, identifiant?: string}> $supportsOverride indexe par id de ligne
+     * @param (callable(Vente): void)|null $apresScellement rappel execute DANS la transaction de
+     *        scellement, apres le scel et avant la publication des evenements post-commit. Sert au
+     *        guichet a creer l'abonnement d'une vente d'abonnement (`SaleSubscriptionInterface`) : un
+     *        refus y fait rollback le scel NF525, la vente reste EnCours. Non passe par les autres
+     *        appelants (boutique, resynchro), qui ne creent pas d'abonnement par ce chemin.
+     */
+    public function valider(Vente $vente, array $supportsOverride = [], ?callable $apresScellement = null): OperationScellee
     {
         // D7-bis — repart toujours d'une liste vide : un appel précédent qui aurait échoué en cours de
         // route (donc jamais parvenu jusqu'à la publication post-commit ci-dessous) ne doit rien laisser
@@ -148,7 +156,7 @@ final class ValiderVenteService
         // d'échec (voir le `catch` ci-dessous, correctif revue de cohérence).
         $supportsCrees = [];
         try {
-            $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv, &$supportsCrees): OperationScellee {
+            $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv, &$supportsCrees, $apresScellement): OperationScellee {
                 // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
                 $this->stock->decrementer($vente);
 
@@ -203,6 +211,14 @@ final class ValiderVenteService
                 }
 
                 $this->em->flush();
+
+                // Rappel execute ICI, dans la transaction de scellement et apres le scel : une
+                // exception levee par lui (ex. refus de souscription d'abonnement au guichet) fait
+                // rollback l'operation scellee de CETTE vente. Les evenements de recharge accumules
+                // ne sont toujours publies qu'apres le retour de `transactional()` (commit reel).
+                if ($apresScellement !== null) {
+                    $apresScellement($vente);
+                }
 
                 return $operation;
             });
