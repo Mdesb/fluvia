@@ -6,7 +6,7 @@ namespace App\Sport\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
-use App\Crm\Entity\Beneficiaire;
+use App\Crm\Service\BeneficiaryResolver;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
@@ -16,6 +16,7 @@ use App\Sport\Enum\PeriodiciteAbonnementFitness;
 use App\Sport\Service\SouscriptionAbonnementHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -36,6 +37,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly SouscriptionAbonnementHandler $handler,
         private readonly ContexteEtablissement $contexte,
+        private readonly BeneficiaryResolver $beneficiaires,
     ) {
     }
 
@@ -43,12 +45,32 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
     {
         $corps = $this->lecteur->corps();
 
-        $adherent = $this->resoudre(Beneficiaire::class, $corps['adherent'] ?? null);
         $payeur = $this->resoudre(Client::class, $corps['payeur'] ?? null);
         $formule = $this->resoudre(Formule::class, $corps['formule'] ?? null);
-        if (!$adherent instanceof Beneficiaire || !$payeur instanceof Client || !$formule instanceof Formule) {
-            throw new UnprocessableEntityHttpException('« adherent », « payeur » et « formule » sont requis et doivent référencer des ressources existantes.');
+        if (!$payeur instanceof Client || !$formule instanceof Formule) {
+            throw new UnprocessableEntityHttpException('« payeur » et « formule » sont requis et doivent référencer des ressources existantes.');
         }
+
+        // ── L'ADHÉRENT EST UN CLIENT, RÉSOLU EN BÉNÉFICIAIRE — MÊME MODÈLE QUE LA CAISSE ──────
+        // On ne fait plus choisir un `Beneficiaire` dans une liste (« adhérent » ne parlait à
+        // personne) : on désigne un CLIENT — recherché ou créé comme au comptoir — et le serveur
+        // en résout le bénéficiaire via `forPurchase` — exactement comme une vente au comptoir.
+        // `adherent` absent : le payeur est l'adhérent. Cloisonnement échec fermé (404) : le
+        // désigné doit partager le groupe du payeur, car forPurchase ne filtre aucun périmètre.
+        $adherentDesigne = null;
+        if (isset($corps['adherent'])) {
+            $adherentDesigne = $this->resoudre(Client::class, $corps['adherent']);
+            if (!$adherentDesigne instanceof Client) {
+                // Désigné explicitement mais introuvable : on REFUSE plutôt que de retomber en
+                // silence sur le payeur — une faute de saisie souscrirait pour la mauvaise personne.
+                throw new UnprocessableEntityHttpException('« adherent » ne désigne aucun client existant. Retirez-le pour souscrire au nom du payeur.');
+            }
+        }
+        if ($adherentDesigne instanceof Client
+            && (string) $adherentDesigne->getGroupe()?->getId() !== (string) $payeur->getGroupe()?->getId()) {
+            throw new NotFoundHttpException('Bénéficiaire introuvable.');
+        }
+        $adherent = $this->beneficiaires->forPurchase($payeur, $adherentDesigne);
 
         $etablissement = $this->contexte->etablissementActif();
         if (!$etablissement instanceof Etablissement) {

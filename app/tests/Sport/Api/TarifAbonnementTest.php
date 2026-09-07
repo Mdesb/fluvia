@@ -126,7 +126,7 @@ final class TarifAbonnementTest extends SportApiTestCase
     {
         $modele = $this->abonnementDemo();
         $client->request('POST', '/api/sport/abonnements/souscrire', $entete + ['json' => [
-            'adherent' => (string) $modele->getAdherent()->getId(),
+            // adherent omis : le payeur est l'adhérent (sans effet sur le tarif mesuré ici).
             'payeur' => (string) $modele->getPayeur()->getId(),
             'formule' => (string) $modele->getFormuleId(),
             'dureeEngagementMois' => 3,

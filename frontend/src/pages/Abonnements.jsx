@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Modal from '../components/Modal.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { euros } from '../api/produit.js'
+import { euros, libelleProduit, prixIndicatif } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
 
-// Onglet Exploitation « Abonnements » — vue de gestion transverse des abonnements clients.
+// Onglet Exploitation « Abonnements » — gestion transverse des abonnements clients.
 //
-// Lot livrable (Issue #14) : surface l'API AbonnementFitness cloisonnée existante. Voir / suspendre /
-// résilier / créer passent par les opérations sur mesure du serveur (le prix vient de la formule du
-// catalogue, « pas de prix libre »). La création couvre pour l'instant le mandat « IBAN saisi » ; les
-// cas « mandat existant » et « en attente » arrivent avec le chantier caisse→abonnement (backend).
+// La souscription est une PAGE (pas une modale) : on choisit un produit d'abonnement (le catalogue est
+// filtré aux seuls produits prélevés en SEPA), on en voit les détails (prix, cadence, jour de
+// prélèvement), on désigne le PAYEUR et — facultativement — l'ADHÉRENT. Les deux se recherchent ou se
+// créent comme en caisse (même `ClientPicker`) : « adhérent » n'est plus une liste de bénéficiaires
+// pré-attachés mais un CLIENT, que le serveur résout en bénéficiaire (`forPurchase`). Adhérent absent :
+// le payeur est l'adhérent.
+//
+// Le prix et la cadence NE SONT PAS envoyés — le serveur les résout depuis la formule du produit
+// (arbitrage « pas de prix libre »).
 //
 // ⚠ Discipline des états : `null` = on lit ; `undefined` = on n'a PAS PU lire (refus) ; un tableau =
 // lu. Jamais « — » là où rien n'a été mesuré, jamais de `.find`/accès sur `null`.
@@ -24,10 +28,21 @@ const LABEL_STATUT = {
   expire: 'Expiré',
 }
 
+const LABEL_PERIODICITE = {
+  mensuel: 'Mensuel',
+  annuel: 'Annuel',
+  personnalise: 'Personnalisé',
+}
+
 function classeStatut(s) {
   if (s === 'actif') return 'good'
   if (s === 'resilie' || s === 'expire') return 'crit'
   return 'warn'
+}
+
+function labelPeriodicite(v) {
+  if (!v) return '—'
+  return LABEL_PERIODICITE[v] || v.charAt(0).toUpperCase() + v.slice(1)
 }
 
 function texteBeneficiaire(b) {
@@ -47,10 +62,13 @@ function dateFr(v) {
 }
 
 export default function Abonnements({ droits }) {
+  const [vue, setVue] = useState('liste') // 'liste' | 'creation'
   const [liste, setListe] = useState(null)
+  const [produits, setProduits] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [enCours, setEnCours] = useState(null)
-  const [creation, setCreation] = useState(false)
+  const [filtreStatut, setFiltreStatut] = useState('')
+  const [recherche, setRecherche] = useState('')
   const peutGerer = aLeDroit(droits, 'sport.gerer_abonnement')
 
   const charger = useCallback(async () => {
@@ -63,9 +81,42 @@ export default function Abonnements({ droits }) {
     }
   }, [])
 
+  // Les produits servent à DEUX choses : le nom du produit dans la liste (via `formuleId`), et le
+  // choix filtré à la création. On les lit une fois. Un refus (`undefined`) n'empêche pas la liste
+  // des abonnements : elle affichera « produit inconnu » plutôt que rien.
+  const chargerProduits = useCallback(async () => {
+    try {
+      setProduits(membres(await api.produits({ itemsPerPage: 200 })))
+    } catch {
+      setProduits(undefined)
+    }
+  }, [])
+
   useEffect(() => {
     charger()
-  }, [charger])
+    chargerProduits()
+  }, [charger, chargerProduits])
+
+  // formule id -> produit, pour retrouver le nom du produit d'un abonnement (qui n'expose que
+  // `formuleId`, la formule n'étant pas une ressource indépendante).
+  const produitParFormule = useMemo(() => {
+    const m = new Map()
+    if (Array.isArray(produits)) {
+      for (const p of produits) {
+        const fid = p?.formule ? idDe(p.formule) : null
+        if (fid) m.set(fid, p)
+      }
+    }
+    return m
+  }, [produits])
+
+  const nomProduit = useCallback(
+    (a) => {
+      const p = a?.formuleId ? produitParFormule.get(a.formuleId) : null
+      return p ? libelleProduit(p) : null
+    },
+    [produitParFormule],
+  )
 
   const suspendre = useCallback(
     async (a) => {
@@ -105,7 +156,34 @@ export default function Abonnements({ droits }) {
     [charger],
   )
 
-  const corps = useMemo(() => {
+  const listeFiltree = useMemo(() => {
+    if (!Array.isArray(liste)) return liste
+    const q = recherche.trim().toLowerCase()
+    return liste.filter((a) => {
+      if (filtreStatut && (a.statut || '').toLowerCase() !== filtreStatut) return false
+      if (!q) return true
+      const foin = [nomClient(a.payeur), texteBeneficiaire(a.adherent), nomProduit(a)]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return foin.includes(q)
+    })
+  }, [liste, filtreStatut, recherche, nomProduit])
+
+  if (vue === 'creation') {
+    return (
+      <CreationAbonnement
+        produits={produits}
+        onAnnuler={() => setVue('liste')}
+        onCree={async () => {
+          setVue('liste')
+          await charger()
+        }}
+      />
+    )
+  }
+
+  const corps = () => {
     if (liste === null)
       return (
         <div className="center" style={{ minHeight: 140 }}>
@@ -121,12 +199,15 @@ export default function Abonnements({ droits }) {
       )
     if (liste.length === 0)
       return <p className="empty">Aucun abonnement pour cet établissement.</p>
+    if (Array.isArray(listeFiltree) && listeFiltree.length === 0)
+      return <p className="empty">Aucun abonnement ne correspond aux filtres.</p>
 
     return (
       <div style={{ overflowX: 'auto' }}>
         <table className="tbl">
           <thead>
             <tr>
+              <th>Produit</th>
               <th>Payeur</th>
               <th>Adhérent</th>
               <th>Statut</th>
@@ -137,20 +218,24 @@ export default function Abonnements({ droits }) {
             </tr>
           </thead>
           <tbody>
-            {liste.map((a) => {
+            {listeFiltree.map((a) => {
               const s = (a.statut || '').toLowerCase()
               const nomAdherent = texteBeneficiaire(a.adherent)
+              const produitNom = nomProduit(a)
               const occupe = enCours === idDe(a)
               return (
                 <tr key={idDe(a)}>
+                  <td>
+                    {produitNom || (
+                      <span className="sub">{produits === undefined ? 'produit non lu' : 'produit inconnu'}</span>
+                    )}
+                  </td>
                   <td>{nomClient(a.payeur) || <span className="sub">—</span>}</td>
                   <td>{nomAdherent || <span className="sub">—</span>}</td>
                   <td>
-                    <span className={`badge ${classeStatut(s)}`}>
-                      {LABEL_STATUT[s] || a.statut || '—'}
-                    </span>
+                    <span className={`badge ${classeStatut(s)}`}>{LABEL_STATUT[s] || a.statut || '—'}</span>
                   </td>
-                  <td>{a.periodicite || <span className="sub">—</span>}</td>
+                  <td>{labelPeriodicite((a.periodicite || '').toLowerCase())}</td>
                   <td className="num">
                     {typeof a.montantCentimes === 'number' ? euros(a.montantCentimes / 100) : '—'}
                   </td>
@@ -158,17 +243,17 @@ export default function Abonnements({ droits }) {
                   {peutGerer && (
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {s === 'actif' && (
-                        <button type="button" className="btn" disabled={occupe} onClick={() => suspendre(a)}>
+                        <button type="button" className="btn sm" disabled={occupe} onClick={() => suspendre(a)}>
                           Suspendre
                         </button>
                       )}
                       {s !== 'resilie' && (
                         <button
                           type="button"
-                          className="btn danger"
+                          className="btn sm danger"
                           disabled={occupe}
                           onClick={() => resilier(a)}
-                          style={{ marginLeft: 6 }}
+                          style={{ marginLeft: 'var(--esp-serre)' }}
                         >
                           Résilier
                         </button>
@@ -182,7 +267,9 @@ export default function Abonnements({ droits }) {
         </table>
       </div>
     )
-  }, [liste, erreur, peutGerer, enCours, suspendre, resilier])
+  }
+
+  const total = Array.isArray(liste) ? liste.length : null
 
   return (
     <div className="view large">
@@ -192,7 +279,7 @@ export default function Abonnements({ droits }) {
           <p className="sub">Gestion des abonnements clients de l'établissement.</p>
         </div>
         {peutGerer && (
-          <button type="button" className="btn primary" onClick={() => setCreation(true)}>
+          <button type="button" className="btn primary" onClick={() => setVue('creation')}>
             Nouvel abonnement
           </button>
         )}
@@ -200,170 +287,258 @@ export default function Abonnements({ droits }) {
 
       {liste !== undefined && erreur && <div className="banner banner-error">{erreur}</div>}
 
-      <div className="card">
-        <div className="card-b">{corps}</div>
-      </div>
-
-      {creation && (
-        <ModalCreation
-          onFerme={() => setCreation(false)}
-          onCree={async () => {
-            setCreation(false)
-            await charger()
-          }}
-        />
+      {Array.isArray(liste) && liste.length > 0 && (
+        <div className="row" style={{ gap: 'var(--esp-serre)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="field" style={{ margin: 0 }}>
+            <span className="sub">Statut</span>
+            <select className="select" value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
+              <option value="">Tous</option>
+              {Object.entries(LABEL_STATUT).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0, flex: 1, minWidth: 220 }}>
+            <span className="sub">Rechercher</span>
+            <input
+              className="input"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder="Payeur, adhérent, produit…"
+            />
+          </label>
+          {total != null && (
+            <span className="sub">
+              {Array.isArray(listeFiltree) ? listeFiltree.length : total} / {total}
+            </span>
+          )}
+        </div>
       )}
+
+      <div className="card">
+        <div className="card-b">{corps()}</div>
+      </div>
     </div>
   )
 }
 
-// Création (souscription). Le prix et la cadence NE SONT PAS envoyés — le serveur les résout depuis la
-// formule du produit du catalogue (arbitrage « pas de prix libre »). On choisit un produit-abonnement
-// (→ sa formule), le payeur, l'adhérent, et on saisit le mandat SEPA (IBAN + titulaire).
-function ModalCreation({ onFerme, onCree }) {
-  const [produits, setProduits] = useState(null)
+// Détails du produit choisi : prix indicatif, cadence, jour de prélèvement. Rendus depuis l'objet
+// produit déjà chargé (la collection porte `formule` et `grilles`), sans appel supplémentaire.
+function DetailsProduit({ produit }) {
+  const f = produit.formule || {}
+  const prix = prixIndicatif(produit)
+  return (
+    <div
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 10,
+        padding: 'var(--esp-normal)',
+        display: 'grid',
+        gap: 'var(--esp-serre)',
+      }}
+    >
+      <strong>{libelleProduit(produit)}</strong>
+      <div className="row" style={{ gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+        <span>
+          <span className="sub">Prix&nbsp;: </span>
+          {prix != null ? euros(prix) : '—'}
+        </span>
+        <span>
+          <span className="sub">Périodicité&nbsp;: </span>
+          {labelPeriodicite(f.periodicite)}
+        </span>
+        {f.jourPrelevement != null && (
+          <span>
+            <span className="sub">Prélèvement le&nbsp;: </span>
+            {f.jourPrelevement}
+          </span>
+        )}
+        <span>
+          <span className="sub">SEPA&nbsp;: </span>
+          {f.sepaActif ? 'oui' : 'non'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Souscription au guichet. Le prix et la cadence NE SONT PAS envoyés — le serveur les résout depuis la
+// formule du produit (« pas de prix libre »). Payeur et adhérent sont des CLIENTS (recherche/création
+// comme en caisse) ; l'adhérent est facultatif (par défaut le payeur).
+function CreationAbonnement({ produits, onAnnuler, onCree }) {
   const [produitId, setProduitId] = useState('')
   const [payeur, setPayeur] = useState(null)
-  const [beneficiaires, setBeneficiaires] = useState(null)
-  const [adherent, setAdherent] = useState('')
+  const [adherent, setAdherent] = useState(null)
+  const [picker, setPicker] = useState(null) // null | 'payeur' | 'adherent'
   const [iban, setIban] = useState('')
   const [titulaire, setTitulaire] = useState('')
   const [dureeMois, setDureeMois] = useState(12)
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
 
-  useEffect(() => {
-    let vivant = true
-    api
-      .produits({ itemsPerPage: 200 })
-      .then((r) => vivant && setProduits(membres(r)))
-      .catch(() => vivant && setProduits(undefined))
-    return () => {
-      vivant = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let vivant = true
-    setBeneficiaires(null)
-    setAdherent('')
-    if (!payeur) return
-    api
-      .beneficiairesDuClient(idDe(payeur))
-      .then((r) => vivant && setBeneficiaires(membres(r)))
-      .catch(() => vivant && setBeneficiaires(undefined))
-    return () => {
-      vivant = false
-    }
-  }, [payeur])
+  // ⚠ CE QUE CET ÉCRAN SAIT SOUSCRIRE : un produit d'abonnement PRÉLEVÉ EN SEPA. Le filtre n'est pas
+  // cosmétique — la souscription ouvre un mandat (IBAN + titulaire obligatoires). Montrer un produit
+  // sans SEPA laisserait choisir ce qu'on ne peut pas finir de saisir ici.
+  const produitsAbo = useMemo(
+    () => (Array.isArray(produits) ? produits.filter((p) => p?.formule?.sepaActif) : []),
+    [produits],
+  )
+  const produit = useMemo(
+    () => produitsAbo.find((p) => idDe(p) === produitId) || null,
+    [produitsAbo, produitId],
+  )
 
   const soumettre = useCallback(async () => {
     setErreur(null)
-    if (!produitId || !payeur || !adherent || !iban.trim() || !titulaire.trim()) {
-      setErreur('Produit, payeur, adhérent, IBAN et titulaire du mandat sont requis.')
+    if (!produit || !payeur || !iban.trim() || !titulaire.trim()) {
+      setErreur('Produit, payeur, IBAN et titulaire du mandat sont requis.')
+      return
+    }
+    const formule = produit.formule ? idDe(produit.formule) : null
+    if (!formule) {
+      setErreur("Ce produit n'est pas un abonnement (aucune formule attachée).")
       return
     }
     setEnvoi(true)
     try {
-      // La formule vit dans le produit : on la lit sur le détail du produit choisi.
-      const produit = await api.produit(produitId.replace('/api/produits/', ''))
-      const formule = produit?.formule ? idDe(produit.formule) : null
-      if (!formule) {
-        setErreur("Ce produit n'est pas un abonnement (aucune formule attachée).")
-        setEnvoi(false)
-        return
-      }
-      await api.souscrireAbonnement({
+      const corps = {
         payeur: idDe(payeur),
-        adherent,
         formule,
         iban: iban.trim(),
         titulaireMandat: titulaire.trim(),
         dureeEngagementMois: Number(dureeMois) || 12,
-      })
+      }
+      // Adhérent facultatif : présent seulement s'il diffère du payeur. Absent = le serveur prend le
+      // payeur comme adhérent (mais un adhérent DÉSIGNÉ mais introuvable est refusé, pas ignoré).
+      if (adherent) corps.adherent = idDe(adherent)
+      await api.souscrireAbonnement(corps)
       await onCree()
     } catch (e) {
       setErreur(e?.message || 'La souscription a été refusée.')
-    } finally {
       setEnvoi(false)
     }
-  }, [produitId, payeur, adherent, iban, titulaire, dureeMois, onCree])
+  }, [produit, payeur, adherent, iban, titulaire, dureeMois, onCree])
 
   return (
-    <Modal open onClose={onFerme} titre="Nouvel abonnement">
-      <div style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-        <label className="field">
-          <span className="sub">Produit-abonnement (catalogue)</span>
-          <select className="select" value={produitId} onChange={(e) => setProduitId(e.target.value)}>
-            <option value="">Sélectionner…</option>
-            {Array.isArray(produits) &&
-              produits.map((p) => (
-                <option key={idDe(p)} value={idDe(p)}>
-                  {p.libelleRecherche || p.code || idDe(p)}
-                </option>
-              ))}
-          </select>
-          {produits === undefined && <small className="crit">Produits non lisibles.</small>}
-          <small className="sub">Le prix et la cadence viennent de la formule du produit.</small>
-        </label>
-
-        <label className="field">
-          <span className="sub">Payeur</span>
-          <ClientPicker onSelect={setPayeur} />
-          {payeur && <small className="sub">Choisi : {nomClient(payeur)}</small>}
-        </label>
-
-        <label className="field">
-          <span className="sub">Adhérent</span>
-          <select
-            className="select"
-            value={adherent}
-            onChange={(e) => setAdherent(e.target.value)}
-            disabled={!payeur}
+    <div className="view large">
+      <div className="view-head">
+        <div className="ttl">
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={onAnnuler}
+            style={{ marginBottom: 'var(--esp-serre)' }}
           >
-            <option value="">{!payeur ? 'Choisis un payeur d’abord' : 'Sélectionner…'}</option>
-            {Array.isArray(beneficiaires) &&
-              beneficiaires.map((b) => (
-                <option key={idDe(b)} value={idDe(b)}>
-                  {texteBeneficiaire(b) || idDe(b)}
-                </option>
-              ))}
-          </select>
-          {beneficiaires === undefined && <small className="crit">Bénéficiaires non lisibles.</small>}
-        </label>
-
-        <label className="field">
-          <span className="sub">IBAN (mandat SEPA)</span>
-          <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 …" />
-        </label>
-
-        <label className="field">
-          <span className="sub">Titulaire du mandat</span>
-          <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
-        </label>
-
-        <label className="field">
-          <span className="sub">Durée d'engagement (mois)</span>
-          <input
-            className="input"
-            type="number"
-            min="0"
-            value={dureeMois}
-            onChange={(e) => setDureeMois(e.target.value)}
-          />
-        </label>
-
-        {erreur && <div className="banner banner-error">{erreur}</div>}
-
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn" onClick={onFerme} disabled={envoi}>
-            Annuler
+            ← Retour aux abonnements
           </button>
-          <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
-            {envoi ? 'Souscription…' : 'Souscrire'}
-          </button>
+          <h2>Nouvel abonnement</h2>
+          <p className="sub">Souscription au guichet : produit, payeur, adhérent, mandat SEPA.</p>
         </div>
       </div>
-    </Modal>
+
+      <div className="card">
+        <div className="card-b" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
+          <label className="field" style={{ margin: 0 }}>
+            <span className="sub">Produit d'abonnement</span>
+            <select className="select" value={produitId} onChange={(e) => setProduitId(e.target.value)}>
+              <option value="">Sélectionner…</option>
+              {produitsAbo.map((p) => (
+                <option key={idDe(p)} value={idDe(p)}>
+                  {libelleProduit(p)}
+                </option>
+              ))}
+            </select>
+            {produits === undefined && <small className="crit">Produits non lisibles.</small>}
+            {Array.isArray(produits) && produitsAbo.length === 0 && (
+              <small className="sub">Aucun produit d'abonnement prélevé en SEPA dans le catalogue.</small>
+            )}
+            <small className="sub">Le prix et la cadence viennent de la formule du produit.</small>
+          </label>
+
+          {produit && <DetailsProduit produit={produit} />}
+
+          <div className="field" style={{ margin: 0 }}>
+            <span className="sub">Payeur</span>
+            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn" onClick={() => setPicker('payeur')}>
+                {payeur ? 'Modifier le payeur' : 'Choisir un payeur'}
+              </button>
+              <span>{payeur ? nomClient(payeur) : <span className="sub">Aucun payeur choisi</span>}</span>
+            </div>
+          </div>
+
+          <div className="field" style={{ margin: 0 }}>
+            <span className="sub">Adhérent (facultatif)</span>
+            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn" onClick={() => setPicker('adherent')}>
+                {adherent ? "Modifier l'adhérent" : 'Choisir un adhérent'}
+              </button>
+              <span>
+                {adherent ? (
+                  nomClient(adherent)
+                ) : (
+                  <span className="sub">Par défaut, le payeur est l'adhérent</span>
+                )}
+              </span>
+              {adherent && (
+                <button type="button" className="btn ghost sm" onClick={() => setAdherent(null)}>
+                  Retirer
+                </button>
+              )}
+            </div>
+            <small className="sub">Recherche ou création d'un client, comme en caisse.</small>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
+            <label className="field" style={{ margin: 0 }}>
+              <span className="sub">IBAN (mandat SEPA)</span>
+              <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 …" />
+            </label>
+            <label className="field" style={{ margin: 0 }}>
+              <span className="sub">Titulaire du mandat</span>
+              <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
+            </label>
+          </div>
+
+          <label className="field" style={{ margin: 0, maxWidth: 240 }}>
+            <span className="sub">Durée d'engagement (mois)</span>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              value={dureeMois}
+              onChange={(e) => setDureeMois(e.target.value)}
+            />
+          </label>
+
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-serre)' }}>
+            <button type="button" className="btn" onClick={onAnnuler} disabled={envoi}>
+              Annuler
+            </button>
+            <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
+              {envoi ? 'Souscription…' : "Souscrire l'abonnement"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {picker && (
+        <ClientPicker
+          open
+          titre={picker === 'payeur' ? 'Payeur' : 'Adhérent'}
+          avecCreation
+          onClose={() => setPicker(null)}
+          onSelect={(c) => {
+            if (picker === 'payeur') setPayeur(c)
+            else setAdherent(c)
+            setPicker(null)
+          }}
+        />
+      )}
+    </div>
   )
 }
