@@ -41,7 +41,7 @@ export default function ReversementsOta({ etabActif, droits = [] }) {
 
   function charger() {
     setReversements(null)
-    api.reversementsOta()
+    api.museeReversements()
       .then((r) => setReversements(membres(r)))
       .catch(() => setReversements(undefined))
   }
@@ -49,7 +49,7 @@ export default function ReversementsOta({ etabActif, droits = [] }) {
   useEffect(charger, [etabActif])
 
   useEffect(() => {
-    api.partenairesOta()
+    api.museePartenairesOta()
       .then((r) => setPartenaires(membres(r)))
       .catch(() => setPartenaires(undefined))
   }, [etabActif])
@@ -219,7 +219,7 @@ function GenerationReversement({ ouvert, partenaires, onFermer, onFait, onErreur
     onErreur(null)
     try {
       await api.genererReversement({
-        partenaire: `/api/boutique_partenaire_otas/${partenaire}`,
+        partenaire: `/api/musee_partenaire_otas/${partenaire}`,
         periodeDebut: debut,
         periodeFin: fin,
       })
