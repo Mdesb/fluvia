@@ -2340,6 +2340,21 @@ export const api = {
     request('/api/integrations/evenements-disponibles'),
   reversementsOta: () =>
     request('/api/reversement_otas', { query: { itemsPerPage: 200 } }),
+  // LES REVERSEMENTS DU MUSEE -- a ne pas confondre avec `reversementsOta` juste au-dessus, qui est
+  // l'objet de la BOUTIQUE.
+  //
+  // /!\ DEUX OBJETS HOMONYMES, DEUX MODULES. `Musee\Entity\Reversement` (partenaires du musee,
+  // `MuseeReversement`) et `Boutique\Entity\ReversementOTA` (revendeurs en ligne,
+  // `ReversementOTA`) portent le meme mot et ne se melangent pas. L'ecran du musee lisait le second
+  // et ecrivait sur le premier : sa liste restait vide, et ses boutons visaient un autre objet.
+  //
+  // /!\ Et le 05/09 j'avais conclu que `/api/musee_reversements` n'existait pas. Elle existe --
+  // verifie au point d'entree de l'API. Une conclusion d'absence tiree d'une recherche qui n'a rien
+  // rendu vaut ce que vaut la recherche.
+  museeReversements: () =>
+    request('/api/musee_reversements', { query: { itemsPerPage: 200 } }),
+  museePartenairesOta: () =>
+    request('/api/musee_partenaire_otas', { query: { itemsPerPage: 200 } }),
   // ⚠ LE MONTANT N'EST PAS FOURNI : le serveur le calcule sur les ventes de la periode. C'est ce
   // qui permet de le refaire a l'identique si le partenaire le conteste.
   // ⚠ `ld: true` PARCE QUE CETTE ROUTE DESERIALISE. Elle ne porte pas `input: false` :
