@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Website\Service;
 
+use App\Fonctionnalite\Config\ActivityCapabilities;
 use App\Fonctionnalite\Config\PresetVerticale;
 use App\Fonctionnalite\Enum\Metier;
 use App\Fonctionnalite\Service\CatalogueCapacites;
+use App\Website\Config\TradeFallback;
+use App\Website\Entity\Trade;
 
 /**
  * Les métiers tels que le site public les présente (ED-12).
@@ -29,12 +32,14 @@ use App\Fonctionnalite\Service\CatalogueCapacites;
  * pages vérifiables : `Piscine\Entity\Poss`, `Patinoire\Entity\Affutage`, `Musee\Entity\PartenaireOTA`
  * existent, et quiconque en doute peut ouvrir le fichier. Une promesse commerciale sans entité
  * derrière serait invendable le jour de la démonstration — c'est le moment où le prospect la teste.
- */use App\Website\Config\TradeFallback;
+ */
 
 final readonly class MetierCatalog
 {
-    public function __construct(private CatalogueCapacites $capacites)
-    {
+    public function __construct(
+        private CatalogueCapacites $capacites,
+        private TradeReference $trades,
+    ) {
     }
 
     /**
@@ -47,13 +52,120 @@ final readonly class MetierCatalog
      */
     public function tous(): array
     {
-        $metiers = [];
+        $lignes = $this->trades->published();
 
-        foreach (Metier::cases() as $metier) {
-            $metiers[] = $this->versMetier($metier);
+        /*
+         * ⚠ LE REPLI EST TOUT-OU-RIEN, ET C'EST LE POINT LE PLUS IMPORTANT DE CETTE METHODE.
+         *
+         * Zero ligne -> les constantes. Au moins une ligne -> les lignes SEULES. Pas de fusion,
+         * pas de `?? NOMS[$code]` champ par champ.
+         *
+         * Un repli PAR CHAMP rendrait une base a moitie semee indiscernable d'une base saine : un
+         * metier dont la ligne existe mais dont le nom est vide sortirait avec le nom de la
+         * constante, et personne ne saurait jamais que la ligne est cassee. Le tout-ou-rien n'a
+         * qu'un seul etat ambigu — « quatre lignes sur cinq » — et il est ferme par le temoin
+         * d'integrite.
+         */
+        if ([] === $lignes) {
+            $metiers = [];
+
+            foreach (Metier::cases() as $metier) {
+                $metiers[] = $this->versMetier($metier);
+            }
+
+            return $metiers;
         }
 
-        return $metiers;
+        return array_map($this->depuisLaLigne(...), $lignes);
+    }
+
+    /**
+     * Un metier tel qu'une LIGNE le decrit.
+     *
+     * La forme rendue est exactement celle de {@see self::versMetier()} : c'est le contrat avec les
+     * gabarits, et aucun d'eux n'est touche par ce lot.
+     *
+     * @return array{
+     *     slug: string, code: string, nom: string, titre: string, chapo: string,
+     *     specificites: list<array{titre: string, texte: string}>,
+     *     ecran: array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}|null,
+     *     modules: list<array{slug: string, libelle: string, description: string}>
+     * }
+     */
+    private function depuisLaLigne(Trade $ligne): array
+    {
+        $code = $ligne->getCode();
+
+        /*
+         * ⚠ `Metier::tryFrom()` EST ICI EMPLOYE POUR CE QU'IL FAIT BIEN, et pas comme dans le
+         *   defaut n°1 des faits etablis : il ne decide PAS si le metier existe — la ligne le
+         *   decide — il decide seulement de quelle SOURCE viennent les modules. Un `null` n'ouvre
+         *   pas une plateforme vide, il ouvre l'autre branche.
+         *
+         *   Un code que l'application connait garde son prereglage, inchange : c'est ce qui rend le
+         *   rendu identique pour les cinq metiers d'aujourd'hui. Un metier cree en base, lui, n'a
+         *   aucun prereglage, et ses modules se deduisent de ses activites.
+         */
+        $metier = Metier::tryFrom($code);
+
+        if (null !== $metier) {
+            $capacites = PresetVerticale::capacites($metier);
+        } else {
+            $activites = [];
+
+            foreach ($ligne->getActivities() as $activite) {
+                $activites[] = $activite->getActivity();
+            }
+
+            $capacites = ActivityCapabilities::modulesFor($activites);
+        }
+
+        return [
+            'slug' => $ligne->getSlug(),
+            'code' => $code,
+            'nom' => $ligne->getName(),
+            'titre' => $ligne->getSearchTitle(),
+            'chapo' => $ligne->getLead(),
+            'specificites' => self::SPECIFICITES[$code] ?? [],
+            'ecran' => self::ECRANS[$code] ?? null,
+            'modules' => $this->modulesVendables($capacites),
+        ];
+    }
+
+    /**
+     * Les modules affichables pour un jeu de capacites.
+     *
+     * ⚠ **EXTRAIT DE `versMetier()` SANS UNE LIGNE DE CHANGEMENT**, pour que les deux chemins
+     * partagent exactement le meme filtre et le meme tri. Deux copies divergeraient au premier
+     * ajustement, et la page ne dirait plus la meme chose selon que la base porte des lignes ou non.
+     *
+     * @param list<string> $capacites
+     *
+     * @return list<array{slug: string, libelle: string, description: string}>
+     */
+    private function modulesVendables(array $capacites): array
+    {
+        $modules = [];
+
+        foreach ($capacites as $capacite) {
+            $descripteur = $this->capacites->trouve($capacite);
+
+            // Une capacité du préréglage absente du catalogue serait une incohérence interne ; on la
+            // saute plutôt que d'afficher un code technique sur une page de vente.
+            if (null === $descripteur || $descripteur->estVerticale) {
+                continue;
+            }
+
+            $modules[] = [
+                'slug' => ModuleCatalog::slugDe($descripteur->code),
+                'libelle' => $descripteur->libelle,
+                'description' => $descripteur->description,
+            ];
+        }
+
+        usort($modules, static fn (array $a, array $b): int => strcmp($a['libelle'], $b['libelle']));
+
+        return $modules;
     }
 
     /**
@@ -253,25 +365,7 @@ final readonly class MetierCatalog
     private function versMetier(Metier $metier): array
     {
         $code = $metier->value;
-        $modules = [];
-
-        foreach (PresetVerticale::capacites($metier) as $capacite) {
-            $descripteur = $this->capacites->trouve($capacite);
-
-            // Une capacité du préréglage absente du catalogue serait une incohérence interne ; on la
-            // saute plutôt que d'afficher un code technique sur une page de vente.
-            if (null === $descripteur || $descripteur->estVerticale) {
-                continue;
-            }
-
-            $modules[] = [
-                'slug' => ModuleCatalog::slugDe($descripteur->code),
-                'libelle' => $descripteur->libelle,
-                'description' => $descripteur->description,
-            ];
-        }
-
-        usort($modules, static fn (array $a, array $b): int => strcmp($a['libelle'], $b['libelle']));
+        $modules = $this->modulesVendables(PresetVerticale::capacites($metier));
 
         return [
             'slug' => ModuleCatalog::slugDe($code),
