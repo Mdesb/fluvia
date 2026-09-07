@@ -2,9 +2,12 @@
 #
 # Hook `pre-receive` — fait exécuter les garde-fous (C4/C16).
 #
-# Le dépôt n'a ni remote GitHub ni CI : `origin` est un bare local. Ce hook est donc le SEUL endroit
-# où les garde-fous s'exécutent sans dépendre de la bonne volonté de qui pousse. Un push refusé ici
-# ne l'est pour personne d'autre : rien n'entre dans le dépôt partagé.
+# Ce hook n'est plus le SEUL endroit où les garde-fous s'exécutent : depuis la migration GitHub,
+# `.github/workflows/garde-fous.yml` les lance sur chaque `pull_request` vers `origin`
+# (github.com/Mdesb/fluvia), et ses deux jobs sont des checks requis par la protection de `main`.
+# Ce hook garde l'autre chemin, celui que la CI ne voit pas : ce qui entre dans le dépôt nu
+# /home/debian/billetterie.git (remote `bare`), sans dépendre de la bonne volonté de qui pousse.
+# Un push refusé ici ne l'est pour personne d'autre : rien n'entre dans le dépôt partagé.
 #
 # Il lance **tous** les garde-fous statiques présents dans l'arbre poussé — ceux qui n'ont besoin ni
 # de Composer ni de base de données. Le nombre n'est volontairement pas écrit ici : cette ligne a
