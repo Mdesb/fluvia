@@ -2087,6 +2087,19 @@ export const api = {
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
+  // ── DECLARER ET MODIFIER UNE REGIE (Parametres > Caisse) ────────────────────────────────────
+  //
+  // `POST` et `PATCH` existent depuis l'origine du module, tous deux sous `compta.gerer`, et
+  // n'etaient appeles d'aucun ecran : `RegieRecettes` n'etait instanciee que par `ComptaFixtures`.
+  // Sur un etablissement reellement ouvert, il n'y avait donc AUCUN moyen de creer une regie, et
+  // l'onglet Comptabilite > Regie restait vide sans que rien n'explique pourquoi.
+  //
+  // ⚠ `profilExploitant` est obligatoire a la creation (`nullable: false`, `NotNull`) : l'omettre
+  // rend un 422 sur un champ que l'ecran n'aurait jamais montre.
+  creerRegieRecettes: (corps) =>
+    request('/api/regie_recettes', { method: 'POST', body: corps, ld: true }),
+  majRegieRecettes: (id, corps) =>
+    request(`/api/regie_recettes/${id}`, { method: 'PATCH', body: corps }),
   ventesImpayeesRegie: () =>
     request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
   // ── VERSER UNE REGIE (US-L4-02, CA-5) ─────────────────────────────────────────────────────────

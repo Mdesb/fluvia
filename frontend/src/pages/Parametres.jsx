@@ -4,6 +4,7 @@ import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { lireHash } from '../api/url.js'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
+import RegiesRecettes from '../components/RegiesRecettes.jsx'
 import TopologieAcces from './TopologieAcces.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
@@ -679,6 +680,14 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
           <MoyensPaiement etabActif={etabActif} />
+          {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
+              Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
+              elle, ne se declarait a AUCUN endroit. `POST /api/regie_recettes` existait, et le
+              seul code qui instanciait l'entite etait celui des jeux d'essai.
+              Sa place est ici par le critere de R21 : le libelle, le plafond et l'acte se
+              reglent a l'arrete puis on n'y revient plus. Verser, en revanche, reste dans
+              Comptabilite -- c'est un geste quotidien. */}
+          <RegiesRecettes etabActif={etabActif} droits={droits} />
         </div>
       )}
 
