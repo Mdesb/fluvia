@@ -101,10 +101,20 @@ versionnée. Elles ne pèsent pas la même chose :
 | commande | ce qu'il se passe tant qu'elle n'y est pas |
 |---|---|
 | `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
-| `reporting:agreger` | **les mesures cessent d'être produites** — l'Explorateur affiche déjà 3 jours « sans mesure » sur 14, et la consolidation région/groupe est vide de bout en bout |
+| `reporting:agreger` | **les mesures cessent d'être produites** — dernière mesure générée le **04/09 à 21:49** (`genereLe`, mesuré le 07/09) ; depuis, l'Explorateur rend « sans mesure » pour chaque jour écoulé, et la consolidation région/groupe est vide de bout en bout |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
 | `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
 | `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
+
+> ⚠ **Ce point se dégrade pendant qu'il attend.** La version du 06/09 chiffrait « 3 jours sans
+> mesure sur 14 ». Un compte de jours ne vieillit pas en devenant imprécis : il devient faux, et
+> rien ne le signale. Il est remplacé ici par une **date de dernière mesure** et un **rythme** —
+> le retard croît d'un jour par jour tant que la commande n'est pas autorisée.
+>
+> Vérifié le 07/09 : la commande existe bien (`AgregerMesuresCommand`, idempotente, trois passes
+> site → région → groupe) et n'apparaît pas dans `TACHES_AUTORISEES`. Rien à écrire, seulement à
+> autoriser.
+
 
 **Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
 `reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
