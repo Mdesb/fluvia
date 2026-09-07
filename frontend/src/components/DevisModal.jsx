@@ -201,11 +201,29 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
       ? []
       : tauxTva.filter((t) => Number(t.taux) === tauxProduit)
 
+    // ── AUTO-REPRISE DU PRIX, MAIS SEULEMENT QUAND AUCUN JUGEMENT N'EST REQUIS (arbitrage de
+    //    Maxime du 07/09). Le prix ne se verse tout seul QUE si les trois conditions du geste
+    //    manuel sont déjà tranchées sans ambiguïté : un seul taux actif correspond, un seul tarif
+    //    existe, ET la conversion TTC→HT retombe au centime — le cas où le bouton « Reprendre X HT »
+    //    n'aurait rien montré de plus. Dès qu'il y a un choix (plusieurs taux/tarifs) ou un écart
+    //    d'arrondi, on ne touche à rien : la friction et l'avertissement reprennent là où ils
+    //    protègent. `prixUnitaireHT === prixRepris`, donc un changement de produit l'efface comme
+    //    une reprise manuelle (même logique que plus haut).
+    let prixAuto = {}
+    if (candidats.length === 1 && grilles.length === 1 && tauxProduit !== null) {
+      const htRepris = htDepuisTtc(grilles[0].prix, tauxProduit)
+      if (Number(ttcDepuisHt(htRepris, tauxProduit)) === Number(grilles[0].prix)) {
+        prixAuto = { prixUnitaireHT: htRepris, prixRepris: htRepris }
+      }
+    }
+
     majLignes(i, {
       designation: libelleProduit(p),
       // Un seul candidat : on présélectionne, et on le DIT sous la ligne. Plusieurs : on ne touche
       // à rien — choisir pour l'utilisateur entre deux taux fiscaux serait le pire des deux mondes.
       ...(candidats.length === 1 ? { tauxTva: idDe(candidats[0]), tauxRepris: idDe(candidats[0]) } : {}),
+      // Le prix, lui, ne se verse que dans le cas sans risque ci-dessus.
+      ...prixAuto,
       catalogue: {
         nom: libelleProduit(p),
         tauxProduit,
