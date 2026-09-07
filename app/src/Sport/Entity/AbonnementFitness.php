@@ -28,6 +28,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use App\Sepa\Validator\NoticeDelayCoversPeriod;
 use Symfony\Component\Uid\Uuid;
+use App\Sport\Repository\SubscriptionRepository;
 
 /**
  * Abonnement fitness récurrent (US-SPORT-01, RG-M1-03). Instancie une `Formule` M1 (existante, lue non
@@ -37,8 +38,9 @@ use Symfony\Component\Uid\Uuid;
  * (pause, résiliation, réengagement, rattachement du droit d'accès) — même patron que
  * `Consentement`/`PorteMonnaieVirtuel` en M4 : éviter un `{id}` d'URI ambigu sur l'enfant.
  */
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: SubscriptionRepository::class)]
 #[ORM\Table(name: 'sport_abonnement_fitness')]
+#[ORM\UniqueConstraint(name: 'uniq_abo_source_sale_line', columns: ['source_sale_line_id'])]
 #[ApiResource(
     shortName: 'AbonnementFitness',
     operations: [
@@ -112,6 +114,15 @@ class AbonnementFitness
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['abonnement:read', 'pause:read', 'resiliation:read', 'incident:read', 'echeance:read', 'statut_acces:read'])]
     private Uuid $id;
+
+    /**
+     * La ligne de vente (LigneVente) qui a cree cet abonnement au guichet. UNIQUE (nullable,
+     * contrainte `uniq_abo_source_sale_line`) : idempotence (une ligne ne cree qu'un abonnement,
+     * meme si la validation est rejouee) ET lien retour Vente vers abonnement pour la revocation
+     * au remboursement. Renseigne dans le meme flush que l'abonnement (via souscrire()).
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $sourceSaleLineId = null;
 
     #[ORM\ManyToOne(targetEntity: Beneficiaire::class)]
     #[ORM\JoinColumn(nullable: false)]
@@ -388,4 +399,17 @@ class AbonnementFitness
 
         return $this->payeur !== null && (string) $this->payeur->getId() === (string) $lie;
     }
+
+    public function getSourceSaleLineId(): ?Uuid
+    {
+        return $this->sourceSaleLineId;
+    }
+
+    public function setSourceSaleLineId(?Uuid $sourceSaleLineId): self
+    {
+        $this->sourceSaleLineId = $sourceSaleLineId;
+
+        return $this;
+    }
+
 }
