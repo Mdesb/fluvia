@@ -45,6 +45,8 @@ export default function FacturesFournisseur({ etabActif, droits }) {
   const [succes, setSucces] = useState(null)
   const [approbation, setApprobation] = useState(null)
   const [contestation, setContestation] = useState(null)
+  // La facture en cours de correction. `null` = aucune.
+  const [correction, setCorrection] = useState(null)
   const [avoir, setAvoir] = useState(null)
   const [resolution, setResolution] = useState(null)
 
@@ -162,6 +164,14 @@ export default function FacturesFournisseur({ etabActif, droits }) {
                 Contester
               </button>
             )}
+            {/* ⚠ CORRIGER PLUTÔT QU'ANNULER-RESAISIR. Quand l'OCR lit de travers un numéro ou
+                une date, il fallait jusqu'ici annuler la facture et tout refaire, lignes comprises.
+                ⚠ Et le geste n'existe QUE sur un brouillon : au-delà, le serveur scelle (409). */}
+            {peutSaisir && f.status === 'draft' && (
+              <button className="btn ghost sm" type="button" onClick={() => setCorrection(f)}>
+                Corriger
+              </button>
+            )}
             {peutSaisir && (
               <button className="btn ghost sm" type="button" onClick={() => annuler(f)}>
                 Annuler
@@ -204,6 +214,14 @@ export default function FacturesFournisseur({ etabActif, droits }) {
       {closes.length > 0 && (
         <TableauFactures fournisseurs={fournisseurs} titre="Réglées et annulées" sous="pour mémoire" factures={closes} />
       )}
+
+      <CorrectionFactureModal
+        facture={correction}
+        fournisseurs={fournisseurs}
+        onClose={() => setCorrection(null)}
+        onFait={(m) => { setCorrection(null); setSucces(m); recharger() }}
+        onErreur={setErreur}
+      />
 
       <ApprobationModal
         facture={approbation}
@@ -988,6 +1006,115 @@ function AvoirFournisseur({ facture, onClose, onFait, onErreur }) {
           <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
           <button className="btn primary" type="button" disabled={enCours || !pret} onClick={envoyer}>
             {enCours ? 'Enregistrement…' : 'Émettre l’avoir'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+
+/**
+ * CORRIGER UNE FACTURE EN BROUILLON — ce que l'écran ne savait pas faire.
+ *
+ * ⚠ SEULEMENT LES CHAMPS QU'ON SE TROMPE EN SAISISSANT. Le serveur accepte aussi de changer
+ * l'établissement et le profil exploitant ; ce sont des déplacements de périmètre comptable, pas
+ * des corrections. Les offrir sous le mot « Corriger » inviterait à un geste dont la portée ne se
+ * lit pas ici.
+ *
+ * ⚠ ET LES LIGNES NE SE CORRIGENT PAS D'ICI. Elles ont leur propre ressource et leur propre garde ;
+ * mêler les deux dans une même modale ferait croire qu'un seul enregistrement les couvre.
+ */
+function CorrectionFactureModal({ facture, fournisseurs, onClose, onFait, onErreur }) {
+  const [numero, setNumero] = useState('')
+  const [dateFacture, setDateFacture] = useState('')
+  const [echeance, setEcheance] = useState('')
+  const [fournisseur, setFournisseur] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!facture) return
+    setNumero(facture.supplierInvoiceNumber || '')
+    setDateFacture(facture.invoiceDate ? jourLocal(facture.invoiceDate) : '')
+    setEcheance(facture.dueDate ? jourLocal(facture.dueDate) : '')
+    setFournisseur(resoudre(facture.supplier) || '')
+  }, [facture])
+
+  if (!facture) return null
+
+  // L'échéance ne peut pas précéder la facture. Le serveur le refuserait ; le dire ici évite un
+  // aller-retour pour une faute de frappe.
+  const ordre = dateFacture !== '' && echeance !== '' && echeance < dateFacture
+  const pret = numero.trim() !== '' && dateFacture !== '' && echeance !== '' && !ordre
+
+  async function enregistrer() {
+    setEnCours(true)
+    onErreur(null)
+    try {
+      const corps = {
+        supplierInvoiceNumber: numero.trim(),
+        invoiceDate: dateFacture,
+        dueDate: echeance,
+      }
+      // ⚠ ON N'ENVOIE LE FOURNISSEUR QUE S'IL A CHANGÉ. Le renvoyer à l'identique ferait repasser
+      // le processeur par sa vérification « fournisseur inactif » (CA-1) — et une facture saisie
+      // hier chez un fournisseur désactivé depuis deviendrait incorrigible.
+      if (fournisseur !== '' && fournisseur !== resoudre(facture.supplier)) {
+        corps.supplier = `/api/stock_fournisseurs/${fournisseur}`
+      }
+      await api.majFactureFournisseur(facture.id, corps)
+      await onFait('Facture corrigée.')
+    } catch (e) {
+      onErreur(e.message || 'La facture n’a pas pu être corrigée.')
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} titre="Corriger la facture" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          Une facture ne se corrige qu’en brouillon&nbsp;: dès qu’elle est approuvée, le serveur la
+          scelle. Les lignes se modifient depuis leur propre écran.
+        </div>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Numéro de facture *</span>
+          <input className="input" value={numero} onChange={(e) => setNumero(e.target.value)} />
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Date de facture *</span>
+          <input className="input" type="date" value={dateFacture} onChange={(e) => setDateFacture(e.target.value)} />
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Échéance *</span>
+          <input className="input" type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+          {ordre && (
+            <span className="sub">L’échéance ne peut pas précéder la date de facture.</span>
+          )}
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Fournisseur</span>
+          <select className="select" value={fournisseur} onChange={(e) => setFournisseur(e.target.value)}>
+            <option value="">— inchangé —</option>
+            {(fournisseurs || []).map((f) => (
+              <option key={f.id} value={f.id}>{f.nom || f.raisonSociale || f.id}</option>
+            ))}
+          </select>
+          <span className="sub">
+            Changer de fournisseur n’est accepté que s’il est actif&nbsp;: un fournisseur désactivé
+            depuis la saisie serait refusé.
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="button" disabled={enCours || !pret} onClick={enregistrer}>
+            {enCours ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
       </div>
