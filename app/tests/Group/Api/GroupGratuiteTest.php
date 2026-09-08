@@ -86,6 +86,61 @@ final class GroupGratuiteTest extends GroupApiTestCase
         self::assertEqualsWithDelta(36.0, (float) $doc->getTotalTTC(), 0.001, 'Seules les entrées payantes (6) sont facturées.');
     }
 
+    public function testConfirmationRepartitPayantEtGratuit(): void
+    {
+        [$client, $entete] = $this->gestionnaireSurA();
+
+        // Un contingent, puis une réservation « par personne » d'effectif 3 avec 1 gratuité.
+        // (Le créneau de démonstration a 3 places libres — l'effectif tient tout juste.)
+        $client->request('POST', '/api/group_gratuite_contingents', $entete + [
+            'json' => ['label' => 'Scolaires', 'quota' => 5],
+        ]);
+        self::assertResponseIsSuccessful();
+        $cid = $client->getResponse()->toArray()['id'];
+
+        $client->request('POST', '/api/group/bookings', $entete + [
+            'json' => [
+                'group' => '/api/participant_groups/' . $this->idGroupe(GroupFixtures::GROUPE_A_LABEL),
+                'effectif' => 3,
+                'grain' => 'per_person',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $bid = $client->getResponse()->toArray()['id'];
+
+        $client->request('POST', '/api/group/bookings/' . $bid . '/grant-gratuite', $entete + [
+            'json' => ['contingent' => '/api/group_gratuite_contingents/' . $cid, 'quantite' => 1, 'motif' => 'accompagnateur'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        // Diagnostic : la gratuité est bien rattachée à la réservation avant la confirmation.
+        $client->request('GET', '/api/group_gratuites?booking=' . $bid, $entete);
+        self::assertSame(1, self::total($client->getResponse()->toArray()), 'La gratuité doit être rattachée avant confirmation.');
+
+        $client->request('POST', '/api/group/bookings/' . $bid . '/assign', $entete + [
+            'json' => ['creneau' => '/api/reservation_creneaux/' . $this->unCreneauDeA()],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/group/bookings/' . $bid . '/confirm', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful();
+
+        // 3 entrées = 2 payantes (vente_unite, différées) + 1 gratuite (gratuit) — le grain visiteur
+        // du musée, avec sa sémantique argent. Paiement différé : montantDu nul, la somme est au devis.
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $booking = $em->getRepository(GroupBooking::class)->find(Uuid::fromString($bid));
+        self::assertNotNull($booking);
+        $modes = ['vente_unite' => 0, 'gratuit' => 0];
+        foreach ($booking->getJaugeReservations() as $reservation) {
+            $mode = $reservation->getModeDecompte()->value;
+            $modes[$mode] = ($modes[$mode] ?? 0) + 1;
+            self::assertSame('0.00', $reservation->getMontantDu(), 'Paiement différé : montantDu nul, la somme est portée par le devis.');
+        }
+        self::assertSame(2, $modes['vente_unite'], 'Deux entrées payantes en vente_unite (différées).');
+        self::assertSame(1, $modes['gratuit'], 'Une entrée gratuite en gratuit.');
+    }
+
     private function creerBooking(object $client, array $entete, int $effectif): string
     {
         $client->request('POST', '/api/group/bookings', $entete + [
