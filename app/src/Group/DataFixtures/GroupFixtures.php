@@ -79,8 +79,14 @@ final class GroupFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Rôle « Gestionnaire de groupes » + utilisateur sur l'établissement A ---
+        // « Affecter à une activité » est l'une des quatre opérations du module (cadrage Maxime).
+        // L'écran d'affectation LIT les créneaux du socle Réservation, garde `reservation.lire`.
+        // Sans ce droit, la liste des créneaux part en 403 et l'affectation est impossible pour ce
+        // rôle — un compte tout-puissant (admin) le masque. Constaté à l'exécution le 08/09.
+        $permReservationLire = $this->permissionNommee($manager, 'reservation', 'lire');
         $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire de groupes');
-        $roleGestionnaire->addPermission($permRead)->addPermission($permManage);
+        $roleGestionnaire->addPermission($permRead)->addPermission($permManage)
+            ->addPermission($permReservationLire);
         $gestionnaire = $this->utilisateurParEmail(
             $manager,
             self::GESTIONNAIRE_EMAIL,
