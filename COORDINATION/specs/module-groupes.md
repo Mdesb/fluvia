@@ -92,10 +92,18 @@ les reversements OTA, `PerimetreMuseeExtension`, l'audit. Et une **divergence de
 / contrôle d'accès individuel — décision structurante n°2 du plan musée), là où `App\Group` crée **une**
 `Reservation` `quantity=N` (grain groupe).
 
-**Deux arbitrages à trancher AVANT de coder** (produit, pour Maxime) :
-1. **Gratuités/contingents** : les rendre transverses dans `App\Group` (si d'autres métiers en ont
-   besoin) ou les garder en couche musée au-dessus de `GroupBooking` ?
-2. **Grain de réservation** : billet par personne (musée) vs ligne groupe (`App\Group`) — lequel fait foi ?
+**Arbitrages tranchés par Maxime (08/09)** :
+1. **Gratuités/contingents → TRANSVERSES** dans `App\Group` (réutilisables par tous les métiers). À
+   construire : `GroupGratuiteContingent` (établissement, quota, motif) + `GroupGratuite` (une entrée
+   gratuite rattachée à une réservation, décomptée du contingent), un handler d'octroi repris de
+   `AccorderGratuiteHandler`, et l'intégration facturation (une gratuité = hors du décompte payant du
+   devis). Le musée consommera ces gratuités transverses au lieu des siennes.
+2. **Grain de réservation → PAR RÉSERVATION** : `GroupBooking.grain` (enum `per_group` défaut /
+   `per_person`), choisi à la création. À la confirmation : `per_person` crée **N** `Reservation`
+   (quantity 1, une par visiteur — pour le billet / l'accès individuel) ; `per_group` crée **1**
+   `Reservation` (quantity N). ⚠ Le lien `jaugeReservation` (FK unique, livré au commit `97dcf361`)
+   devient une **collection** (join table) pour porter les N ; l'annulation les libère toutes. Le
+   `per_person` réalise pleinement le grain visiteur du musée (billets/accès nominatifs).
 
 **Mapping `DossierGroupeScolaire` → `App\Group`** : `etablissementScolaire` → `ParticipantGroup.label`
 (+ `type=School`) ; `effectif`/`accompagnateurs` → `GroupBooking` ; `creneauEntree` → `creneau` ;
@@ -108,6 +116,11 @@ dossier. Marquer les dossiers migrés (champ côté musée ou table de correspon
 
 **Direction de dépendance** : `Musee` → `App\Group` (Musée consomme ; jamais de FK `App\Group` → `Musee`).
 
-**Ordre** : (1) trancher les 2 arbitrages ; (2) porter dans `App\Group` ce qu'ils imposent ; (3) écrire
-la migration + témoins ; (4) rebrancher `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` ;
-(5) déprécier `DossierGroupeScolaire` (garder la table le temps de valider), puis retirer.
+**Ordre (arbitrages tranchés)** :
+- **Phase A — dans `App\Group`, sûr et additif** (aucune touche au musée) : le grain par réservation
+  (`GroupBooking.grain` + collection `jaugeReservations` + confirm branché N vs 1) ; les gratuités
+  transverses (`GroupGratuiteContingent` + `GroupGratuite` + octroi + intégration devis).
+- **Phase B — verticale musée PARTAGÉE, à coordonner** : migration de données (write-only, idempotente,
+  témoins) ; puis rebrancher `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` ; puis
+  déprécier `DossierGroupeScolaire` (garder la table le temps de valider), puis retirer. Un mot dans
+  COORDINATION avant d'ouvrir la Phase B.
