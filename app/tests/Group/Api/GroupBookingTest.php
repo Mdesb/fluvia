@@ -46,7 +46,7 @@ final class GroupBookingTest extends GroupApiTestCase
         self::assertResponseIsSuccessful();
         $confirme = $client->getResponse()->toArray();
         self::assertSame('confirmed', $confirme['status']);
-        self::assertNotNull($confirme['jaugeReservation'] ?? null, 'Une réservation socle doit décompter la jauge.');
+        self::assertNotEmpty($confirme['jaugeReservations'] ?? [], 'Une réservation socle doit décompter la jauge.');
 
         // Annulation.
         $client->request('POST', '/api/group/bookings/' . $id . '/cancel', $entete + ['json' => []]);
@@ -58,6 +58,32 @@ final class GroupBookingTest extends GroupApiTestCase
             'json' => ['creneau' => '/api/reservation_creneaux/' . $this->unCreneauDeA()],
         ]);
         self::assertResponseStatusCodeSame(422, 'Une réservation annulée ne peut plus être affectée.');
+    }
+
+    public function testGrainParPersonneUneReservationParVisiteur(): void
+    {
+        [$client, $entete] = $this->gestionnaireSurA();
+
+        // grain « par personne », effectif 2 → 2 réservations socle (quantité 1 chacune).
+        $client->request('POST', '/api/group/bookings', $entete + [
+            'json' => [
+                'group' => '/api/participant_groups/' . $this->idGroupe(GroupFixtures::GROUPE_A_LABEL),
+                'effectif' => 2,
+                'grain' => 'per_person',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        self::assertSame('per_person', $client->getResponse()->toArray()['grain']);
+        $id = $client->getResponse()->toArray()['id'];
+
+        $client->request('POST', '/api/group/bookings/' . $id . '/assign', $entete + [
+            'json' => ['creneau' => '/api/reservation_creneaux/' . $this->unCreneauDeA()],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/group/bookings/' . $id . '/confirm', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful();
+        self::assertCount(2, $client->getResponse()->toArray()['jaugeReservations'], 'per_person : une réservation par visiteur.');
     }
 
     public function testConfirmationRefuseeSiJaugeInsuffisante(): void

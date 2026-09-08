@@ -13,8 +13,11 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Crm\Entity\Client;
 use App\Facturation\Entity\CommercialDocument;
+use App\Group\Enum\GroupBookingGrain;
 use App\Group\Enum\GroupBookingStatus;
 use App\Group\Enum\GroupPaymentStatus;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use App\Group\State\ApplyGroupProductProcessor;
 use App\Group\State\AssignGroupBookingProcessor;
 use App\Group\State\CancelGroupBookingProcessor;
@@ -181,15 +184,22 @@ class GroupBooking
     #[Groups(['group_booking:read'])]
     private ?CommercialDocument $commercialDocument = null;
 
+    /** Grain de décompte, choisi par réservation : un bloc (`per_group`) ou un billet par visiteur (`per_person`). */
+    #[ORM\Column(length: 12, enumType: GroupBookingGrain::class, options: ['default' => 'per_group'])]
+    #[Groups(['group_booking:read', 'group_booking:write'])]
+    private GroupBookingGrain $grain = GroupBookingGrain::PerGroup;
+
     /**
-     * Réservation socle créée à la confirmation pour **décompter la jauge** du créneau
-     * (`Reservation.quantity` = effectif + accompagnateurs). Annulée quand la réservation de groupe
-     * l'est, ce qui libère les places.
+     * Réservations socle créées à la confirmation pour **décompter la jauge** du créneau : UNE de
+     * quantité N si `per_group`, N de quantité 1 si `per_person`. Annulées quand la réservation de
+     * groupe l'est, ce qui libère les places.
+     *
+     * @var Collection<int, Reservation>
      */
-    #[ORM\ManyToOne(targetEntity: Reservation::class)]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\ManyToMany(targetEntity: Reservation::class)]
+    #[ORM\JoinTable(name: 'group_booking_jauge_reservation')]
     #[Groups(['group_booking:read'])]
-    private ?Reservation $jaugeReservation = null;
+    private Collection $jaugeReservations;
 
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['group_booking:read'])]
@@ -199,6 +209,7 @@ class GroupBooking
     {
         $this->id = Uuid::v4();
         $this->createdAt = new \DateTimeImmutable();
+        $this->jaugeReservations = new ArrayCollection();
     }
 
     public function getId(): Uuid
@@ -350,14 +361,29 @@ class GroupBooking
         return $this;
     }
 
-    public function getJaugeReservation(): ?Reservation
+    public function getGrain(): GroupBookingGrain
     {
-        return $this->jaugeReservation;
+        return $this->grain;
     }
 
-    public function setJaugeReservation(?Reservation $jaugeReservation): self
+    public function setGrain(GroupBookingGrain $grain): self
     {
-        $this->jaugeReservation = $jaugeReservation;
+        $this->grain = $grain;
+
+        return $this;
+    }
+
+    /** @return Collection<int, Reservation> */
+    public function getJaugeReservations(): Collection
+    {
+        return $this->jaugeReservations;
+    }
+
+    public function addJaugeReservation(Reservation $reservation): self
+    {
+        if (!$this->jaugeReservations->contains($reservation)) {
+            $this->jaugeReservations->add($reservation);
+        }
 
         return $this;
     }

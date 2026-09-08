@@ -587,6 +587,7 @@ function FormMembre({ groupe, membreId, onFermer, onValider }) {
 function FormReservation({ groupe, onFermer, onValider }) {
   const [effectif, setEffectif] = useState(String(groupe?.headcount ?? ''))
   const [accompagnateurs, setAccompagnateurs] = useState('0')
+  const [grain, setGrain] = useState('per_group')
   const [envoi, setEnvoi] = useState(false)
 
   async function soumettre(e) {
@@ -597,6 +598,7 @@ function FormReservation({ groupe, onFermer, onValider }) {
         group: `/api/participant_groups/${idDe(groupe)}`,
         effectif: effectif === '' ? 0 : Math.max(0, parseInt(effectif, 10) || 0),
         accompagnateurs: accompagnateurs === '' ? 0 : Math.max(0, parseInt(accompagnateurs, 10) || 0),
+        grain,
       })
     } finally {
       setEnvoi(false)
@@ -614,6 +616,13 @@ function FormReservation({ groupe, onFermer, onValider }) {
         <div className="field">
           <label htmlFor="r-acc">Accompagnateurs</label>
           <input id="r-acc" type="number" min="0" className="input num" value={accompagnateurs} onChange={(e) => setAccompagnateurs(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="r-grain">Décompte de la jauge</label>
+          <select id="r-grain" className="input" value={grain} onChange={(e) => setGrain(e.target.value)}>
+            <option value="per_group">Par groupe (un bloc)</option>
+            <option value="per_person">Par personne (un billet par visiteur)</option>
+          </select>
         </div>
         <div className="modal-actions">
           <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>

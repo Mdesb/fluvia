@@ -33,9 +33,10 @@ final class CancelGroupBookingProcessor implements ProcessorInterface
     {
         \assert($data instanceof GroupBooking);
 
-        $reservation = $data->getJaugeReservation();
-        if ($reservation !== null && $reservation->getStatut() === StatutReservation::Confirmee) {
-            $reservation->setStatut(StatutReservation::AnnuleeLibre);
+        foreach ($data->getJaugeReservations() as $reservation) {
+            if ($reservation->getStatut() === StatutReservation::Confirmee) {
+                $reservation->setStatut(StatutReservation::AnnuleeLibre);
+            }
         }
 
         $data->setStatus(GroupBookingStatus::Cancelled);

@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Crm\Entity\Beneficiaire;
 use App\Group\Entity\GroupBooking;
+use App\Group\Enum\GroupBookingGrain;
 use App\Group\Enum\GroupBookingStatus;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
@@ -54,7 +55,7 @@ final class ConfirmGroupBookingProcessor implements ProcessorInterface
         }
 
         $creneau = $data->getCreneau();
-        if ($creneau !== null && $data->getJaugeReservation() === null) {
+        if ($creneau !== null && $data->getJaugeReservations()->isEmpty()) {
             $total = max(1, $data->getEffectif() + $data->getAccompagnateurs());
 
             if ($this->jauge->placesRestantes($creneau) < $total) {
@@ -73,16 +74,22 @@ final class ConfirmGroupBookingProcessor implements ProcessorInterface
                 );
             }
 
-            $reservation = (new Reservation())
-                ->setCreneau($creneau)
-                ->setOrganisateur($responsable)
-                ->setEtablissement($data->getEtablissement())
-                ->setModeDecompte(ModeDecompteReservation::Gratuit)
-                ->setMontantDu('0.00')
-                ->setStatut(StatutReservation::Confirmee)
-                ->setQuantity($total);
-            $this->em->persist($reservation);
-            $data->setJaugeReservation($reservation);
+            // Grain : un billet par visiteur (N × quantité 1) ou un bloc (1 × quantité N).
+            $perPerson = $data->getGrain() === GroupBookingGrain::PerPerson;
+            $nombre = $perPerson ? $total : 1;
+            $parLigne = $perPerson ? 1 : $total;
+            for ($i = 0; $i < $nombre; ++$i) {
+                $reservation = (new Reservation())
+                    ->setCreneau($creneau)
+                    ->setOrganisateur($responsable)
+                    ->setEtablissement($data->getEtablissement())
+                    ->setModeDecompte(ModeDecompteReservation::Gratuit)
+                    ->setMontantDu('0.00')
+                    ->setStatut(StatutReservation::Confirmee)
+                    ->setQuantity($parLigne);
+                $this->em->persist($reservation);
+                $data->addJaugeReservation($reservation);
+            }
         }
 
         $data->setStatus(GroupBookingStatus::Confirmed);
