@@ -229,6 +229,39 @@ l'étape 5.
    (Vite proxifie, donc même origine), mais tout appel manuel en absolu depuis la page est bloqué.
 4. Le repère de coordonnées du pilote (800×450) n'est pas le viewport CSS (1280×720) : facteur 0,625.
 
+**2026-09-09 — ⚠ CHANGEMENT DE TRONC : le lot a été rejoué de `bare/main` sur `origin/main`.**
+
+Une session pair (`allaccess-28`) a annoncé une décision de flotte : `origin/main` (GitHub) est le
+tronc unique et la source de déploiement ; `bare/main` est abandonné. **Mesuré avant d'agir**, parce
+qu'un message de pair n'est pas une mesure :
+
+| | |
+|---|---|
+| `origin/main` | `9e77ab66`, **08/09 à 20:52** — vivant, travail du jour dessus |
+| `bare/main` | `7f95d7c3`, **07/09 à 00:03** — dormant depuis un jour et demi |
+| ancêtre commun | `eca89b4a` — **il en existe un** |
+| divergence | 2 393 commits d'un côté, 2 417 de l'autre |
+| fusion à blanc | **55 conflits** (workflows, `CLAUDE.md`… rien à voir avec ce lot) |
+
+⚠ **Une correction au message du pair** : il annonçait une histoire « INCOMPATIBLE ». Il existe bien
+un ancêtre commun — les histoires ne sont pas disjointes, elles ont massivement divergé (le scrub
+public). La conclusion pratique du pair est juste (on ne fusionne pas la branche telle quelle) ; sa
+justification ne l'est qu'à moitié, et la nuance compte : c'est ce qui rend le **cherry-pick**
+possible là où un merge est impraticable.
+
+**Manœuvre** : branche `sauvegarde/personnel-rh-sur-bare` posée en filet, puis
+`feature/personnel-rh-lot1` créée depuis `origin/main`, et les trois commits rejoués par
+`cherry-pick`. **Aucun conflit** — quatre des six fichiers sont neufs, `Personnel.jsx` était
+identique des deux côtés, et `client.js` s'est auto-fusionné.
+
+Vérifié après bascule : build front vert, garde-fous front verts (droits, imports, portée),
+`composer.lock` et `package-lock.json` **identiques** entre les deux troncs (donc `vendor/` et
+`node_modules/` restent valides), 1 seule migration d'écart.
+
+⚠ **Les chiffres d'écart des messages de commit se lisent sur l'ANCIENNE base** (529 → 526 → 520).
+Sur `origin/main`, la même mesure donne **514 inatteignables / 676 atteignables** : le tronc vivant
+porte davantage d'écrans. Les deux mesures sont justes, elles ne portent pas sur le même arbre.
+
 ## Journal de Rétropropagation
 
 <!-- Rempli par /verifier-specs : date, écart trouvé, décision prise, fichier spec modifié. -->
