@@ -41,6 +41,12 @@ final class DocumentTicketTest extends VenteApiTestCase
             'lignes',
             'total',
             'totalRemises',
+            // ⚠ AJOUTÉE DÉLIBÉRÉMENT LE 08/09, et c'est le seul cas où ce test se modifie.
+            // Son en-tête dit qu'il ne doit pas être retouché pour repasser — la règle vaut pour un
+            // refactor, qui ne doit rien changer. Ici le PAPIER change : NF525 et le régime de la
+            // facture simplifiée exigent la ventilation par taux, elle manquait, on l'ajoute.
+            // Modifier ce test est donc l'aveu explicite qu'un document opposable a changé.
+            'vat',
             'mode',
             'imprime',
             'impressionAutomatique',
@@ -104,6 +110,15 @@ final class DocumentTicketTest extends VenteApiTestCase
             ]],
             'total' => '45.00',
             'totalRemises' => '0.00',
+            // Le produit des fixtures ne porte aucun taux : la ventilation est donc VIDE et se
+            // déclare incomplète. C'est la vérité du jeu de données, et c'est exactement ce qu'on
+            // veut voir — un tableau vide accompagné de `complete: false` plutôt qu'un groupe
+            // fantôme à 0 % qui aurait l'air d'une ventilation faite.
+            'vat' => [
+                'breakdown' => [],
+                'withoutRate' => ['lines' => 1, 'grossAmount' => '45.00'],
+                'complete' => false,
+            ],
             'mode' => 'imprimer',
             'imprime' => true,
             'impressionAutomatique' => true,

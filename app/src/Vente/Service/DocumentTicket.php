@@ -40,15 +40,20 @@ use App\Vente\Entity\Vente;
  *     remiseType: ?string, montantLigne: ?string, optionsSelectionnees: mixed,
  *     promotionsAppliquees: mixed}
  * @phpstan-type Ticket array{vente: string, numero: ?string, date: string, lignes: list<LigneTicket>,
- *     total: ?string, totalRemises: ?string, duplicata: bool}
+ *     total: ?string, totalRemises: ?string, vat: array<string, mixed>, duplicata: bool}
  */
 final class DocumentTicket
 {
+    public function __construct(
+        private readonly SaleVatBreakdown $vatBreakdown,
+    ) {
+    }
+
     /**
      * @param bool $duplicata lu par l'appelant AVANT de marquer la vente imprimée — voir l'en-tête
      *
      * @return array{vente: string, numero: ?string, date: string, lignes: list<array<string, mixed>>,
-     *     total: ?string, totalRemises: ?string, duplicata: bool}
+     *     total: ?string, totalRemises: ?string, vat: array<string, mixed>, duplicata: bool}
      */
     public function pour(Vente $vente, bool $duplicata): array
     {
@@ -59,6 +64,11 @@ final class DocumentTicket
             'lignes' => $this->lignes($vente),
             'total' => $vente->getTotal(),
             'totalRemises' => $vente->getTotalRemises(),
+            // La ventilation par taux, exigée par NF525 et par le régime de la facture simplifiée.
+            // Elle porte aussi ce qu'elle N'A PAS su ventiler (`withoutRate`, `complete`) : le papier
+            // doit pouvoir écrire « ventilation incomplète » au lieu d'un tableau qui ment par
+            // omission. Voir `SaleVatBreakdown`.
+            'vat' => $this->vatBreakdown->of($vente),
             'duplicata' => $duplicata,
         ];
     }

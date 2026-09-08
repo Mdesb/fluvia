@@ -113,6 +113,7 @@ final class TicketProcessor implements ProcessorInterface
             'lignes' => $document['lignes'],
             'total' => $document['total'],
             'totalRemises' => $document['totalRemises'],
+            'vat' => $document['vat'],
             'mode' => $mode,
             'imprime' => $data->isImprime(),
             'impressionAutomatique' => $auDessusSeuil,
