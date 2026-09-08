@@ -974,6 +974,8 @@ export const api = {
     request(`/api/compta/ventes-impayees-regie/${id}/regler`, { method: 'POST', body: corps }),
   reduireEcheance: (id, corps) =>
     request(`/api/sport/echeances/${id}/reduire`, { method: 'POST', body: corps }),
+  listerAbonnements: () =>
+    request('/api/abonnement_fitnesses', { query: { itemsPerPage: 100 } }),
   abonnementsDuPayeur: (clientId) =>
     request('/api/abonnement_fitnesses', { query: { payeur: clientId, itemsPerPage: 100 } }),
   beneficiairesDuClient: (clientId) =>
