@@ -21,6 +21,20 @@ use Symfony\Component\Uid\Uuid;
  * un résultat « accepté » crée le règlement, un refus/timeout n'ajoute rien (US-L2-07 / CA-10). Le
  * moyen doit être autorisé sur le point de vente (acte de régie M6, RG-M2-02).
  *
+ * ── ⚠ CE QUE LA CLÉ D'IDEMPOTENCE NE FERME PAS, ET IL FAUT LE SAVOIR ───────────────────────────
+ *
+ * Elle ferme le cas fréquent : le terminal a ACCEPTÉ, la réponse HTTP s'est perdue, le client rejoue.
+ * Un `Paiement` porte la clé, le rejeu le retrouve, la carte ne repasse pas.
+ *
+ * **Elle ne ferme pas le cas inverse, et c'est le dangereux.** Sur un refus ou un timeout, CA-10
+ * interdit de créer un `Paiement` — la clé n'est donc écrite nulle part, et un rejeu redemande au
+ * terminal. Pour un refus c'est juste : aucun argent n'a bougé. Pour un TIMEOUT, le terminal a pu
+ * accepter pendant qu'on cessait de l'attendre : le rejeu débite une seconde fois.
+ *
+ * Le fermer demande une trace de TENTATIVE écrite AVANT l'appel au terminal, et un adaptateur TPE
+ * capable de répondre « qu'est-il arrivé à la transaction T ? ». Le mock ne le peut pas — il n'a pas
+ * de mémoire — donc ce lot attend l'adaptateur réel, et pas l'inverse.
+ *
  * @phpstan-type ResultatPaiement array{paiement: Paiement|null, statutTPE: StatutTPE|null}
  */
 final class PaiementHandler
@@ -49,6 +63,26 @@ final class PaiementHandler
     {
         if ($vente->estScellee()) {
             throw new ConflictHttpException('Vente validée : encaissement clos (NF525).');
+        }
+
+        // ── LE REJEU NE REPASSE PAS LA CARTE ───────────────────────────────────────────────────
+        //
+        // Deux effets irréversibles partent AVANT qu'une seule ligne soit écrite : le débit du
+        // porte-monnaie virtuel (plus bas) et l'ordre au TPE. Une réponse perdue — nginx coupe à
+        // 60 s et une transaction carte réelle dépasse ce délai — puis un client qui rejoue, et on
+        // encaissait deux fois. Rien ne l'empêchait : `Vente` porte une clé d'idempotence depuis
+        // l'origine, le RÈGLEMENT n'en avait aucune.
+        //
+        // ⚠ **La garde est ICI, pas juste avant le TPE.** Placée là, elle laisserait le débit PMV se
+        // rejouer — l'autre effet, celui qu'on ne regarde pas parce qu'il ne s'appelle pas « carte ».
+        // Le critère qui la place : tout ce qui sort du processus doit se trouver APRÈS cette ligne.
+        //
+        // L'identifiant fourni compte comme une clé lui aussi. `$donnees['id']` existait déjà pour le
+        // rejeu hors-ligne et n'était protégé que par la clé primaire : le doublon était donc refusé
+        // au `flush()`, c'est-à-dire une fois la carte débitée.
+        $dejaEncaisse = $this->rejeu($vente, $donnees);
+        if ($dejaEncaisse !== null) {
+            return ['paiement' => $dejaEncaisse, 'statutTPE' => $dejaEncaisse->getStatutTPE()];
         }
 
         $code = \is_string($donnees['moyen'] ?? null) ? $donnees['moyen'] : '';
@@ -120,6 +154,7 @@ final class PaiementHandler
         $paiement->setMontant($this->calculateur->decimal($montantCentimes));
         $paiement->setRendu($this->calculateur->decimal($rendu));
         $paiement->setDiffere($differe);
+        $paiement->setCleIdempotence($this->uuidOuNull($donnees['cleIdempotence'] ?? null));
 
         // TPE : envoi automatique ; seul « accepté » crée le règlement (CA-10).
         if ($moyen->exigeReference) {
@@ -157,5 +192,40 @@ final class PaiementHandler
         $this->calculateur->recalculerVente($vente);
 
         return ['paiement' => $paiement, 'statutTPE' => $paiement->getStatutTPE()];
+    }
+
+    /**
+     * Le règlement déjà enregistré pour cette clé — ou pour cet identifiant fourni — sur cette vente.
+     *
+     * ⚠ La recherche porte sur le couple (vente, clé), exactement comme la contrainte d'unicité
+     * `uniq_paiement_vente_cle`. Les deux doivent dire la même chose : une recherche plus étroite que
+     * la contrainte laisse passer le doublon jusqu'au `flush()`, donc après le débit ; une contrainte
+     * plus étroite que la recherche rend un 500 sur une clé parfaitement légitime.
+     *
+     * @param array<string, mixed> $donnees
+     */
+    private function rejeu(Vente $vente, array $donnees): ?Paiement
+    {
+        $cle = $this->uuidOuNull($donnees['cleIdempotence'] ?? null);
+        $id = $this->uuidOuNull($donnees['id'] ?? null);
+        if ($cle === null && $id === null) {
+            return null;
+        }
+
+        foreach ($vente->getPaiements() as $paiement) {
+            if ($cle !== null && $paiement->getCleIdempotence()?->equals($cle) === true) {
+                return $paiement;
+            }
+            if ($id !== null && $paiement->getId()->equals($id)) {
+                return $paiement;
+            }
+        }
+
+        return null;
+    }
+
+    private function uuidOuNull(mixed $valeur): ?Uuid
+    {
+        return \is_string($valeur) && Uuid::isValid($valeur) ? Uuid::fromString($valeur) : null;
     }
 }

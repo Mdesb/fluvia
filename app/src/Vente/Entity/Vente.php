@@ -106,7 +106,9 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/paiements',
-            description: 'Enregistre un reglement. Corps : { moyen, montant, id?, differe?, banque?, numeroCheque? }.',
+            description: 'Enregistre un reglement. Corps : { moyen, montant, cleIdempotence?, id?, differe?, banque?, numeroCheque? }. '
+                . 'Rejouer le meme appel avec la meme cleIdempotence (ou le meme id) rend le reglement deja enregistre '
+                . 'sans redemander au terminal ni redebiter le porte-monnaie : a utiliser des que la reponse peut se perdre.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",

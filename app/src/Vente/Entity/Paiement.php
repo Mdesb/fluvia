@@ -15,9 +15,22 @@ use Symfony\Component\Uid\Uuid;
  * du moyen est stocké en clair (référentiel M6, pas de FK dure). Le rendu de monnaie n'est possible
  * que sur un moyen autorisant le rendu (espèces, RG-M2-05 / CA-9). La référence TPE est conservée
  * pour les paiements CB (US-L2-07). Immuable une fois la vente validée (NF525).
+ *
+ * ── LA CLÉ D'IDEMPOTENCE, ET POURQUOI ELLE EST PORTÉE PAR (VENTE, CLÉ) ─────────────────────────
+ *
+ * `Vente` porte déjà la sienne : ouvrir deux fois le même panier ne crée qu'une vente. Le RÈGLEMENT
+ * n'en avait aucune, et c'est lui qui déplace de l'argent — le débit du porte-monnaie et l'ordre au
+ * TPE partent tous deux avant qu'une seule ligne soit écrite. Une réponse perdue et un client qui
+ * rejoue encaissaient donc deux fois.
+ *
+ * ⚠ **La portée est le couple, pas la clé seule.** Une contrainte globale et une recherche menée
+ * dans la collection de la vente ne diraient pas la même chose : une clé déjà employée sur une AUTRE
+ * vente passerait la recherche et se ferait refuser au `flush()`, en 500, après que la carte a été
+ * débitée. La contrainte et la recherche portent donc exactement le même couple.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'vente_paiement')]
+#[ORM\UniqueConstraint(name: 'uniq_paiement_vente_cle', columns: ['vente_id', 'cle_idempotence'])]
 class Paiement
 {
     #[ORM\Id]
@@ -61,6 +74,15 @@ class Paiement
     #[Groups(['vente:read', 'paiement:read'])]
     private bool $differe = false;
 
+    /**
+     * Nullable : les règlements antérieurs n'en portent aucune, et un `NOT NULL` aurait exigé d'en
+     * inventer une pour eux — donc d'écrire dans des lignes que `InalterabiliteListener` protège.
+     * Absente = ce règlement n'a jamais été rejouable, ce qui est la vérité pour tout l'historique.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['vente:read', 'paiement:read'])]
+    private ?Uuid $cleIdempotence = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['vente:read', 'paiement:read'])]
     private \DateTimeImmutable $dateHeure;
@@ -79,6 +101,18 @@ class Paiement
     public function setId(Uuid $id): self
     {
         $this->id = $id;
+
+        return $this;
+    }
+
+    public function getCleIdempotence(): ?Uuid
+    {
+        return $this->cleIdempotence;
+    }
+
+    public function setCleIdempotence(?Uuid $cle): self
+    {
+        $this->cleIdempotence = $cle;
 
         return $this;
     }
