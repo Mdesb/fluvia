@@ -157,6 +157,18 @@ services:
     App\Compta\Port\PdpInterface: '@App\Compta\Adapter\PdpStubAdapter'
     # Chorus Pro B2G (§4.7 spec) : format exact non détaillé (⚠ HYPOTHÈSE) — stub par défaut.
     App\Compta\Port\ChorusProInterface: '@App\Compta\Adapter\ChorusProStubAdapter'
+    # Écriture d'encaissement au journal `ENC` (chaine-encaissement G-2/G-3). Service applicatif public
+    # pour accès direct depuis les tests — même patron que `App\Musee\Service\PrioriteOtaResolver`.
+    # ⚠ SANS `public: true`, IL EST SUPPRIMÉ À LA COMPILATION tant qu'aucun service ne l'injecte, et le
+    # test échoue sur un `ServiceNotFoundException` qui ne dit rien de son objet. Ses consommateurs
+    # arrivent aux étapes suivantes ; il doit être vérifiable avant eux, pas grâce à eux.
+    App\Compta\Service\PaymentLedgerPoster:
+        public: true
+    # Composeur de la facture d'une echeance (chaine-encaissement G-1). Public pour acces direct
+    # depuis les tests, meme patron que ci-dessus : son consommateur est la commande planifiee de
+    # l'etape suivante, et cette etape-ci doit etre verifiable AVANT elle, pas grace a elle.
+    App\Facturation\Service\InstallmentInvoicer:
+        public: true
 
     # --- Verticale Sport/Fitness : ports & adaptateurs (§2 du plan-sport) ---
     # Projection comptable des encaissements/impayés SEPA : file d'attente append-only (Risque n°1,
@@ -166,6 +178,10 @@ services:
     # `App\Sepa\Service\CompositeEcheanceSepaSource` (point d'entrée générique `/sepa/remises/generer`).
     App\Sport\Sepa\SportEcheanceSepaSource:
         tags: ['sepa.echeance_source']
+        # Public pour accès direct depuis les tests (même patron que `App\Musee\Service\PrioriteOtaResolver`).
+        # Le taux de TVA que cette source rend ne se vérifie qu'en l'interrogeant : passer par la remise
+        # entière ferait dépendre le témoin de dix autres mécanismes.
+        public: true
     # Port `RedevablePort` fourni PAR Sport AU moteur de recouvrement partagé App\Recouvrement (refactor
     # extraction) : agrégé par `App\Recouvrement\Service\RedevableRegistry` (même patron que
     # `SportEcheanceSepaSource`/`CompositeEcheanceSepaSource` ci-dessus).

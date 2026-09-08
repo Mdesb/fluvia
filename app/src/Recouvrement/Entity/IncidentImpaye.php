@@ -149,6 +149,60 @@ class IncidentImpaye
     #[Groups(['incident:read'])]
     private ?\DateTimeImmutable $dateResolution = null;
 
+    /**
+     * Le CODE du moyen de paiement par lequel l'impayé a été réglé, et sa référence.
+     *
+     * ⚠ ILS N'EXISTAIENT PAS, ET L'ÉCRAN N'AVAIT DONC RIEN À MONTRER. Jusqu'au 08/09, `resoudre` était
+     * déclarée `input: false` : aucun corps n'était accepté, `canalResolution` était posé en dur à
+     * `app_1_clic`, et la colonne « Par quel canal » du tableau des régularisés affichait donc toujours
+     * la même valeur. On ne savait ni comment ni quand l'argent était rentré.
+     *
+     * Nullables : les incidents résolus avant ce lot n'ont rien de tout ça, et ne peuvent pas
+     * l'acquérir après coup — `resoudre` refuse un incident déjà résolu. Leur vide est l'état d'avant,
+     * pas un défaut à rattraper.
+     */
+    #[ORM\Column(name: 'moyen_resolution', length: 32, nullable: true)]
+    #[Groups(['incident:read'])]
+    private ?string $moyenResolution = null;
+
+    /**
+     * Qui a déclaré que l'argent était rentré.
+     *
+     * ⚠ PERSONNE NE LE SAVAIT. La résolution n'enregistrait aucun acteur — seule la réouverture
+     * FORCÉE en gardait un (`reouvertureForceePar`), parce qu'elle exige un motif. Constater un
+     * règlement rouvre pourtant un accès et éteint une dette : c'est un geste qui engage autant.
+     * `ReglementFacture` exige d'ailleurs un auteur, et sans celui-ci il n'y en aurait aucun à lui
+     * donner.
+     *
+     * `App\Securite` est le socle, pas un module métier : cette relation-ci ne franchit aucune
+     * frontière au sens de D2, exactement comme `reouvertureForceePar` juste en dessous.
+     */
+    #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
+    #[ORM\JoinColumn(name: 'resolu_par_id', nullable: true)]
+    #[Groups(['incident:read'])]
+    private ?Utilisateur $resoluPar = null;
+
+    #[ORM\Column(name: 'reference_resolution', length: 64, nullable: true)]
+    #[Groups(['incident:read'])]
+    private ?string $referenceResolution = null;
+
+    /**
+     * La facture que ce dossier vient solder, quand l'échéance d'origine en a produit une (G-5).
+     *
+     * ⚠ UNE RÉFÉRENCE NUE, PAS UNE RELATION — ET UN CODE PLUS HAUT POUR LA MÊME RAISON. D2 interdit
+     * l'appel direct de module à module : `App\Recouvrement` ne doit connaître ni `App\Facturation`
+     * ni `App\Compta`. Une colonne `uuid` nue est la convention du dépôt pour franchir une frontière,
+     * et c'est un abonné de Facturation qui résout la pièce, sur événement.
+     *
+     * ⚠ NULLABLE, ET CE N'EST PAS UNE TOLÉRANCE : les incidents nés AVANT la facturation des échéances
+     * n'ont aucune pièce derrière eux — l'unique incident de la préproduction est dans ce cas. Les
+     * régler enregistre le règlement et écrit l'encaissement, mais ne crée aucun `ReglementFacture`,
+     * et **l'écran doit le dire** plutôt que de laisser croire à une facture soldée.
+     */
+    #[ORM\Column(name: 'facture_origine_ref', type: UuidType::NAME, nullable: true)]
+    #[Groups(['incident:read'])]
+    private ?Uuid $factureOrigineRef = null;
+
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['incident:read'])]
@@ -361,6 +415,54 @@ class IncidentImpaye
     public function setAccesBloque(bool $accesBloque): self
     {
         $this->accesBloque = $accesBloque;
+
+        return $this;
+    }
+
+    public function getMoyenResolution(): ?string
+    {
+        return $this->moyenResolution;
+    }
+
+    public function setMoyenResolution(?string $moyenResolution): self
+    {
+        $this->moyenResolution = $moyenResolution;
+
+        return $this;
+    }
+
+    public function getReferenceResolution(): ?string
+    {
+        return $this->referenceResolution;
+    }
+
+    public function setReferenceResolution(?string $referenceResolution): self
+    {
+        $this->referenceResolution = $referenceResolution;
+
+        return $this;
+    }
+
+    public function getResoluPar(): ?Utilisateur
+    {
+        return $this->resoluPar;
+    }
+
+    public function setResoluPar(?Utilisateur $resoluPar): self
+    {
+        $this->resoluPar = $resoluPar;
+
+        return $this;
+    }
+
+    public function getFactureOrigineRef(): ?Uuid
+    {
+        return $this->factureOrigineRef;
+    }
+
+    public function setFactureOrigineRef(?Uuid $factureOrigineRef): self
+    {
+        $this->factureOrigineRef = $factureOrigineRef;
 
         return $this;
     }

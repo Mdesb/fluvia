@@ -34,8 +34,8 @@ final class TableauBordTest extends RecouvrementApiTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        // Résolution 1 clic.
-        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
+        // Résolution constatée par un agent : virement reçu.
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete + ['json' => ['canal' => 'virement', 'moyenPaiement' => 'virement']]);
         self::assertResponseIsSuccessful();
 
         $client->request('GET', '/api/recouvrement/tableau-bord', $entete);
@@ -44,6 +44,23 @@ final class TableauBordTest extends RecouvrementApiTestCase
         self::assertSame(0, $tableau['nbEnRepresentation']);
         self::assertSame(0, $tableau['nbEnRecouvrement'], 'Incident résolu, sorti du recouvrement.');
         self::assertSame(0, $tableau['nbAccesBloques'], 'Accès restauré après résolution.');
-        self::assertEquals(1.0, $tableau['tauxResolutionSelfService'], '100% des incidents résolus en self-service (app_1_clic).');
+        self::assertSame(1, $tableau['nbResolus'], 'Le dossier est bien résolu — c\'est le témoin qui donne son sens à la ligne suivante.');
+
+        // ⚠ CE 0 EST JUSTE, ET IL ÉTAIT AUPARAVANT INDISCERNABLE D'UN 1.
+        //
+        // `tauxResolutionSelfService` ne compte QUE les résolutions `app_1_clic` — « réglés par le
+        // client seul ». Ce test attendait 1.0 non pas parce que c'était vrai, mais parce que
+        // `app_1_clic` était l'UNIQUE canal atteignable : l'opération refusait tout corps et le canal
+        // était posé en dur. Le taux mesurait donc « tous les incidents résolus », sous un nom qui
+        // annonçait autre chose.
+        //
+        // Un règlement constaté par un agent n'est pas du self-service. Le taux vaut 0, et c'est ce
+        // qu'il doit valoir.
+        //
+        // ⚠ ET IL VAUDRA 0 EN PRODUCTION AUSSI, TANT QU'AUCUN PSP NE SERA RACCORDÉ — `app_1_clic` est
+        // désormais refusé par l'adaptateur d'encaissement. L'écran doit DIRE pourquoi cette ligne est
+        // à zéro, sans quoi elle se lira comme un échec produit au lieu d'une fonctionnalité non
+        // branchée.
+        self::assertEquals(0.0, $tableau['tauxResolutionSelfService'], 'Un virement constaté par un agent n\'est pas du self-service.');
     }
 }

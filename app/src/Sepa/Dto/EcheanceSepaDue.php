@@ -22,6 +22,21 @@ final class EcheanceSepaDue
         public readonly \DateTimeImmutable $dateEcheance,
         public readonly bool $derniereEcheanceEngagement = false,
         public readonly bool $paiementUnique = false,
+        /**
+         * Taux de TVA applicable à cette échéance, en valeur décimale (« 20.00 »), tel que la
+         * verticale le connaît — `null` quand elle ne sait pas le dire.
+         *
+         * ⚠ AJOUTÉ ICI PLUTÔT QUE DANS UN SECOND PORT, DÉLIBÉRÉMENT. La facturation des échéances
+         * (chaine-encaissement G-1) a besoin d'un taux, et les verticales sont les seules à le
+         * connaître. Créer un port d'énumération parallèle aurait dupliqué la requête qui liste les
+         * échéances dues, et les deux listes auraient divergé au premier correctif apporté à une
+         * seule des deux.
+         *
+         * ⚠ `null` N'EST PAS UN DÉFAUT À COMBLER PAR UNE VALEUR RAISONNABLE. Une échéance sans taux
+         * connu fait REFUSER l'émission de sa facture, en nommant la formule en cause : un taux
+         * inventé partirait dans une facture scellée, qui ne se corrige plus — elle s'avoire.
+         */
+        public readonly ?string $tauxTvaValeur = null,
     ) {
     }
 }

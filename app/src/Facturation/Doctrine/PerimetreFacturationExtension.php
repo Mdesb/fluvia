@@ -10,6 +10,7 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Facturation\Entity\CommercialDocument;
 use App\Facturation\Entity\Facture;
+use App\Facturation\Entity\InstallmentInvoice;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Facturation\Entity\SerieNumerotation;
 use App\Securite\Entity\Utilisateur;
@@ -37,7 +38,9 @@ use Symfony\Bundle\SecurityBundle\Security;
 final class PerimetreFacturationExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** Ressources cloisonnées directement via un champ `etablissement` sur la racine. */
-    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class, CommercialDocument::class];
+    // `InstallmentInvoice` : le registre qui dit qu'une echeance a deja ete facturee. Il nomme une
+    // echeance et une facture ; hors liste, il serait lisible d'un etablissement a l'autre.
+    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class, CommercialDocument::class, InstallmentInvoice::class];
 
     /** Ressources cloisonnées via `{root}.profilExploitant` (principal ou rattachés). */
     private const RESOURCES_VIA_PROFIL = [ParametreFacturationEtablissement::class, SerieNumerotation::class];

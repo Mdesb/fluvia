@@ -736,6 +736,8 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
 
       <BlocParrainage clientId={c.id} droits={droits} onMouvement={onMouvement} />
 
+      <BlocFactures clientId={c.id} droits={droits} />
+
       {/* Indicateurs clés */}
       <div className="fiche-stats">
         <div className="stat-tile">
@@ -1120,6 +1122,89 @@ function BlocFidelite({ fidelite, clientId, droits, onMouvement }) {
  * L'écran dit aussi ce qu'il ne fait pas : le code ne part par aucun canal automatique. L'agent le
  * donne. Le taire laisserait croire que le filleul l'a reçu.
  */
+/**
+ * Les factures de ce client, sur sa fiche.
+ *
+ * ⚠ IL N'EXISTAIT AUCUN CHEMIN DE LA FICHE CLIENT VERS SES FACTURES. Mesuré le 08/09 : le mot
+ * `factures` n'apparaissait pas une seule fois dans cet écran (témoin positif dans le même fichier :
+ * `facturation.gerer` y sortait deux fois). Pour savoir ce qu'un client devait, il fallait ouvrir
+ * l'écran Facturation et retrouver son nom dans une liste — la fiche disait tout de lui sauf ce
+ * qu'il devait.
+ *
+ * ⚠ LE FILTRE PORTE SUR `destinataire.clientRef`, ET IL EST DÉCLARÉ CÔTÉ SERVEUR. Un filtre non
+ * déclaré est accepté par l'API et ne filtre RIEN : cette fiche aurait affiché les factures de tous
+ * les clients sous le nom d'un seul, ce qui a l'air parfaitement normal tant qu'il n'y a qu'un client
+ * en base.
+ */
+function BlocFactures({ clientId, droits }) {
+  const [liste, setListe] = useState(null)
+  const [lu, setLu] = useState(false)
+
+  const peutLire = aLeDroit(droits, 'facturation.lire') || aLeDroit(droits, 'facturation.gerer')
+
+  const charger = useCallback(async () => {
+    if (!clientId || !peutLire) { setListe(null); setLu(false); return }
+    try {
+      setListe(membres(await api.facturesDuClient(clientId)))
+      setLu(true)
+    } catch {
+      // ⚠ ON DISTINGUE « AUCUNE FACTURE » DE « JE N'AI PAS PU LIRE ». Rendre une liste vide sur un
+      //    refus ferait affirmer à l'écran une absence qu'il n'a pas mesurée.
+      setListe(null)
+      setLu(false)
+    }
+  }, [clientId, peutLire])
+
+  useEffect(() => { charger() }, [charger])
+
+  if (!peutLire) return null
+
+  const total = (liste || []).reduce((s, f) => s + Number(f.soldeDu || 0), 0)
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <h3>Factures</h3>
+        {lu && total > 0 && <span className="sub">reste dû : {euros(total)}</span>}
+      </div>
+      <div className="card-b">
+        {!lu && <div className="sub">Les factures de ce client n’ont pas pu être lues.</div>}
+        {lu && (liste || []).length === 0 && (
+          <div className="sub">Aucune facture pour ce client.</div>
+        )}
+        {lu && (liste || []).length > 0 && (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Numéro</th>
+                <th>Émise le</th>
+                <th className="num">Total TTC</th>
+                <th className="num">Reste dû</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liste.map((f) => (
+                <tr key={f.id}>
+                  <td className="mono">{f.numero || <span className="sub">brouillon</span>}</td>
+                  <td>{f.dateEmission ? new Date(f.dateEmission).toLocaleDateString('fr-FR') : '—'}</td>
+                  <td className="num">{euros(f.totalTTC)}</td>
+                  <td className="num">
+                    {Number(f.soldeDu || 0) > 0
+                      ? <b>{euros(f.soldeDu)}</b>
+                      : <span className="sub">soldée</span>}
+                  </td>
+                  <td>{mot(f.statut)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function BlocParrainage({ clientId, droits, onMouvement }) {
   const [code, setCode] = useState(null)
   const [liste, setListe] = useState(null)

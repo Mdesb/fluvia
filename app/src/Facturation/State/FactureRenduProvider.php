@@ -152,8 +152,16 @@ final class FactureRenduProvider implements ProviderInterface
             // justificative est acquittee par construction — et la deduction couvre tous les autres.
             // Le stocke devient un cas particulier de la deduction, jamais son contradicteur.
             'mentionAcquittee' => $facture->isMentionAcquittee() || $this->estSoldeeParLesReglements($facture),
-            'acquitteeLe' => $facture->getAcquitteeLe()?->format(\DATE_ATOM),
-            'acquitteeMoyen' => $facture->getAcquitteeMoyen(),
+            // ⚠ DÉDUITS AUSSI, ET IL LE FALLAIT — la mention l'était déjà, sa date et son moyen non.
+            //
+            // Résultat mesuré le 08/09 sur `FA-2026-00001` : `payee`, deux virements enregistrés, et
+            // le document affichait « Facture acquittée » **sans date ni moyen**. Les deux colonnes
+            // stockées ne sont posées que par l'avoir et la facture justificative ;
+            // `ReglementFactureHandler` ne les écrit jamais — et il ne le doit pas, la facture est
+            // scellée. Une mention amputée sur un document opposable est pire qu'une mention absente :
+            // elle a l'air complète.
+            'acquitteeLe' => ($facture->getAcquitteeLe() ?? $this->dernierReglement($facture))?->format(\DATE_ATOM),
+            'acquitteeMoyen' => $facture->getAcquitteeMoyen() ?? $this->moyenAcquittement($facture),
             'acquitteeReference' => $facture->getAcquitteeReference(),
         ]);
     }
@@ -204,6 +212,47 @@ final class FactureRenduProvider implements ProviderInterface
      * Une facture dont le total est nul n'est pas « acquittee » faute de reglement : elle n'a rien a
      * acquitter. On exige donc au moins un reglement.
      */
+    /**
+     * La date du DERNIER règlement — celle où la facture a effectivement été soldée.
+     *
+     * Le dernier, et pas le premier : une facture réglée en deux fois n'est acquittée qu'au second
+     * versement. Dater la mention du premier annoncerait un acquittement qui n'avait pas eu lieu.
+     */
+    private function dernierReglement(Facture $facture): ?\DateTimeImmutable
+    {
+        $derniere = null;
+        foreach ($facture->getReglements() as $reglement) {
+            $date = $reglement->getDateReglement();
+            if ($derniere === null || $date > $derniere) {
+                $derniere = $date;
+            }
+        }
+
+        return $derniere;
+    }
+
+    /**
+     * Le moyen d'acquittement, quand il n'y en a qu'un.
+     *
+     * ⚠ « PLUSIEURS MOYENS » PLUTÔT QU'UN MOYEN CHOISI AU HASARD. Une facture réglée par un virement
+     * puis un chèque n'a pas été acquittée « par virement » : afficher le premier des deux serait
+     * faux sur un document opposable, et invérifiable pour qui rapproche un relevé. On ne nomme donc
+     * que ce qui est unique.
+     */
+    private function moyenAcquittement(Facture $facture): ?string
+    {
+        $moyens = [];
+        foreach ($facture->getReglements() as $reglement) {
+            $moyens[$reglement->getMoyen()] = true;
+        }
+
+        if ($moyens === []) {
+            return null;
+        }
+
+        return \count($moyens) === 1 ? (string) array_key_first($moyens) : 'plusieurs moyens';
+    }
+
     private function estSoldeeParLesReglements(Facture $facture): bool
     {
         $reglements = $facture->getReglements();

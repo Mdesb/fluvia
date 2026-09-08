@@ -57,6 +57,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const peutForcer = aLeDroit(droits, 'recouvrement.forcer_acces')
   const [exemptions, setExemptions] = useState([])
   const [exemption, setExemption] = useState(null)
+  const [reglement, setReglement] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -130,23 +131,18 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     }
   }
 
-  async function resoudre(incident) {
-    if (
-      !await confirmer(
-        "Marquer cet impayé comme réglé ?\n\nL'accès du redevable est rouvert immédiatement. "
-          + "Ne le faites que si l'encaissement est confirmé : si le paiement échoue à son tour, "
-          + "l'accès aura été rendu pour rien.",
-      )
-    )
-      return
+  // ⚠ CE GESTE N'EST PLUS UNE CONFIRMATION, C'EST UNE DÉCLARATION — et c'est tout le sujet.
+  //
+  // Il ouvrait une simple boîte « êtes-vous sûr ? », puis appelait le serveur SANS RIEN LUI DIRE :
+  // l'opération refusait tout corps, et le canal était posé en dur à `app_1_clic`. La colonne
+  // « Par quel canal » du tableau des régularisés affichait donc éternellement la même valeur, et
+  // personne ne savait ni comment ni quand l'argent était rentré.
+  //
+  // On demande maintenant ce qu'un comptable demandera dans six mois : par quel canal, par quel
+  // moyen, à quelle date, sous quelle référence.
+  function resoudre(incident) {
     setErreur(null)
-    try {
-      await api.resoudreImpaye(incident.id)
-      await recharger()
-      setSucces("Impayé réglé, l'accès est rouvert.")
-    } catch (e) {
-      setErreur(e.message || "La résolution n'a pas abouti.")
-    }
+    setReglement(incident)
   }
 
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
@@ -240,6 +236,18 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                   ? `Réglés par le client seul, sur ${assietteDuTaux} incident${assietteDuTaux > 1 ? 's' : ''}`
                   : 'Réglés par le client seul'}
             </div>
+            {/* ⚠ CE CHIFFRE VAUDRA 0 TANT QU'AUCUN PRESTATAIRE DE PAIEMENT NE SERA RACCORDÉ, et un
+                zéro muet se lit comme un échec produit — « personne ne règle en ligne » — alors que
+                c'est un branchement qui manque. Le taux ne compte que les règlements par carte depuis
+                l'application ; ce chemin est refusé aujourd'hui, faute de PSP. On le DIT, plutôt que
+                de laisser l'exploitant conclure que sa boutique ne sert à rien. */}
+            {listeLue && !rienAMesurer && !(bord.tauxResolutionSelfService > 0) && (
+              <div className="sub">
+                À zéro tant qu'aucun prestataire de paiement n'est raccordé : le règlement par carte
+                depuis l'application n'est pas encore disponible. Les règlements constatés par un agent
+                (virement, caisse) ne comptent pas ici.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -463,7 +471,18 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                     <td className="num">{centimes(i.montantCentimes)}</td>
                     <td>{i.dateResolution ? dateHeureFr(i.dateResolution) : '—'}</td>
                     <td>
+                      {/* ⚠ CETTE CELLULE AFFICHAIT ÉTERNELLEMENT « app_1_clic ». Le canal était posé
+                          en dur côté serveur, faute de pouvoir être déclaré : la colonne existait,
+                          elle ne distinguait rien. On montre désormais aussi le moyen et la référence,
+                          parce que c'est ce qu'on cherche quand on rapproche un relevé bancaire. */}
                       {i.canalResolution ? mot(i.canalResolution) : '—'}
+                      {(i.moyenResolution || i.referenceResolution) && (
+                        <div className="sub">
+                          {i.moyenResolution ? mot(i.moyenResolution) : ''}
+                          {i.moyenResolution && i.referenceResolution ? ' — ' : ''}
+                          {i.referenceResolution ? `réf. ${i.referenceResolution}` : ''}
+                        </div>
+                      )}
                       {i.motifReouvertureForcee && (
                         <div className="sub">Réouverture forcée — « {i.motifReouvertureForcee} »</div>
                       )}
@@ -496,6 +515,13 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         incident={forcage}
         onClose={() => setForcage(null)}
         onFait={(m) => { setForcage(null); setSucces(m); setErreur(null); recharger() }}
+        onErreur={setErreur}
+      />
+
+      <ReglementImpayeModal
+        incident={reglement}
+        onClose={() => setReglement(null)}
+        onFait={(m) => { setReglement(null); setSucces(m); setErreur(null); recharger() }}
         onErreur={setErreur}
       />
     </>
@@ -977,6 +1003,163 @@ function ExemptionModal({ incident, onClose, onFait, onErreur }) {
             <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || motif.trim() === ''}>
               {enCours ? 'En cours…' : 'Ne plus bloquer ce client'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  )
+}
+
+/**
+ * Ce qu'on demande quand quelqu'un déclare qu'un impayé est réglé.
+ *
+ * ⚠ LES QUATRE CHAMPS NE SONT PAS DE LA PAPERASSE. Sans eux, le dossier ne savait dire que « résolu » :
+ * pas par quel canal, pas par quel moyen, pas à quelle date, pas sous quelle référence. Un comptable
+ * qui rapproche son relevé bancaire trois semaines plus tard n'avait rien à quoi se raccrocher.
+ *
+ * ⚠ ET LE CANAL « CARTE » EST PROPOSÉ MAIS REFUSÉ PAR LE SERVEUR, tant qu'aucun prestataire de
+ * paiement n'est raccordé. On le laisse visible plutôt que de le cacher : cacher une option ferait
+ * croire qu'elle n'existe pas, alors que c'est un raccordement qui manque. Le message de refus le dit
+ * et propose les canaux de constat.
+ */
+function ReglementImpayeModal({ incident, onClose, onFait, onErreur }) {
+  const [canal, setCanal] = useState('virement')
+  const [moyen, setMoyen] = useState('')
+  const [moyens, setMoyens] = useState([])
+  const [date, setDate] = useState('')
+  const [reference, setReference] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!incident) return
+    setCanal('virement')
+    setReference('')
+    // ⚠ LA DATE DU JOUR SE CALCULE EN LOCAL, PAS PAR `toISOString()` — celui-ci convertit en UTC et
+    //    rend la veille pour toute soirée française. Une date d'encaissement décalée range l'écriture
+    //    dans le mauvais jour, et personne ne le voit avant la clôture.
+    const a = new Date()
+    const p = (n) => String(n).padStart(2, '0')
+    setDate(`${a.getFullYear()}-${p(a.getMonth() + 1)}-${p(a.getDate())}`)
+
+    let annule = false
+    api.moyensPaiement()
+      .then((r) => {
+        if (annule) return
+        const actifs = membres(r).filter((m) => m.actif !== false)
+        setMoyens(actifs)
+        setMoyen((prec) => prec || actifs[0]?.code || '')
+      })
+      .catch(() => { if (!annule) setMoyens([]) })
+    return () => { annule = true }
+  }, [incident])
+
+  const moyenChoisi = moyens.find((m) => m.code === moyen)
+  const referenceRequise = !!moyenChoisi?.exigeReference
+  const complet = canal && moyen && date && (!referenceRequise || reference.trim())
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      await api.resoudreImpaye(incident.id, {
+        canal,
+        moyenPaiement: moyen,
+        dateEncaissement: date,
+        reference: reference.trim() || null,
+      })
+      onFait("Impayé réglé, l'accès est rouvert.")
+    } catch (err) {
+      onErreur(err.message || "La résolution n'a pas abouti.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!incident} onClose={onClose} titre="Constater le règlement d'un impayé">
+      {incident && (
+        <form onSubmit={envoyer}>
+          <p>
+            Impayé de <b>{centimes(incident.montantCentimes)}</b>, rejeté le{' '}
+            {dateHeureFr(incident.dateRejet)}
+            {incident.libelleMotifBancaire ? ` — ${incident.libelleMotifBancaire}` : ''}.
+          </p>
+
+          {/* ⚠ DIRE CE QU'ON SOLDE, OU DIRE QU'ON NE SOLDE RIEN. Les dossiers ouverts avant la
+              facturation des échéances n'ont aucune pièce derrière eux : l'encaissement est écrit
+              quand même, mais aucune facture n'est soldée. Le taire laisserait croire le contraire. */}
+          <div className={incident.factureOrigineRef ? 'banner' : 'banner banner-warn'}>
+            {incident.factureOrigineRef
+              ? 'Une facture est rattachée à ce dossier : elle sera soldée par ce règlement.'
+              : "Aucune facture n'est rattachée à ce dossier — il est antérieur à la facturation des "
+                + "échéances. L'encaissement sera enregistré en comptabilité, mais aucune facture ne "
+                + 'sera soldée.'}
+          </div>
+
+          <div className="field">
+            <label htmlFor="ri-canal">Par quel canal ? *</label>
+            <select id="ri-canal" className="input" required value={canal} onChange={(e) => setCanal(e.target.value)}>
+              <option value="virement">Virement reçu</option>
+              <option value="caisse">Encaissé à la caisse</option>
+              <option value="autre">Autre</option>
+              <option value="app_1_clic">Carte bancaire (en ligne)</option>
+            </select>
+            {canal === 'app_1_clic' && (
+              <div className="hint">
+                ⚠ Aucun prestataire de paiement n'est raccordé : ce canal sera refusé. Si l'argent est
+                rentré autrement, choisissez le canal correspondant.
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="ri-moyen">Moyen de paiement *</label>
+            <select id="ri-moyen" className="input" required value={moyen} onChange={(e) => setMoyen(e.target.value)}>
+              {moyens.length === 0 && <option value="">Aucun moyen déclaré</option>}
+              {moyens.map((m) => (
+                <option key={m.code} value={m.code}>{m.libelle}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="ri-date">Date d'encaissement *</label>
+            <input
+              id="ri-date"
+              className="input"
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <div className="hint">
+              C'est elle qui datera l'écriture comptable, pas le moment où vous cliquez.
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="ri-reference">
+              Référence {referenceRequise ? '*' : '(facultative)'}
+            </label>
+            <input
+              id="ri-reference"
+              className="input"
+              type="text"
+              required={referenceRequise}
+              value={reference}
+              placeholder="Numéro de virement, de chèque…"
+              onChange={(e) => setReference(e.target.value)}
+            />
+            {referenceRequise && (
+              <div className="hint">Ce moyen de paiement exige une référence.</div>
+            )}
+          </div>
+
+          <div className="row actions">
+            <button className="btn" type="button" onClick={onClose}>Annuler</button>
+            <button className="btn primary" type="submit" disabled={enCours || !complet}>
+              {enCours ? 'Enregistrement…' : 'Constater le règlement'}
             </button>
           </div>
         </form>
