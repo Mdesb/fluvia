@@ -67,6 +67,8 @@ export default function Groupes({ etabActif, droits }) {
   const [reservations, setReservations] = useState([])
   const [creneaux, setCreneaux] = useState([])
   const [taux, setTaux] = useState([])
+  const [forfaits, setForfaits] = useState([])
+  const [produits, setProduits] = useState([])
 
   const [modale, setModale] = useState(null) // { type, ... }
 
@@ -104,6 +106,25 @@ export default function Groupes({ etabActif, droits }) {
       .catch(() => { if (vivant) setTaux([]) })
     return () => { vivant = false }
   }, [etabActif])
+
+  // Produits du catalogue, pour composer forfaits et paniers.
+  useEffect(() => {
+    let vivant = true
+    api.produits({ itemsPerPage: 200 })
+      .then((r) => { if (vivant) setProduits(membres(r)) })
+      .catch(() => { if (vivant) setProduits([]) })
+    return () => { vivant = false }
+  }, [etabActif])
+
+  // Forfaits groupe, rechargeables après édition.
+  const chargerForfaits = useCallback(async () => {
+    try {
+      setForfaits(membres(await api.groupProducts()))
+    } catch {
+      setForfaits([])
+    }
+  }, [])
+  useEffect(() => { chargerForfaits() }, [chargerForfaits, etabActif])
 
   const ouvrir = useCallback(async (id) => {
     setErreur(null)
@@ -144,9 +165,14 @@ export default function Groupes({ etabActif, droits }) {
           <p className="sub">Groupes de participants, transverses à tous les métiers de l’établissement.</p>
         </div>
         {peutGerer && (
-          <button className="btn primary" type="button" onClick={() => setModale({ type: 'groupe' })}>
-            Nouveau groupe
-          </button>
+          <div className="actions">
+            <button className="btn ghost" type="button" onClick={() => setModale({ type: 'forfaits' })}>
+              Forfaits groupe
+            </button>
+            <button className="btn primary" type="button" onClick={() => setModale({ type: 'groupe' })}>
+              Nouveau groupe
+            </button>
+          </div>
         )}
       </div>
 
@@ -281,6 +307,14 @@ export default function Groupes({ etabActif, droits }) {
         />
       )}
 
+      {modale?.type === 'forfaits' && (
+        <FormForfaits produits={produits} taux={taux} onFermer={() => setModale(null)} onChange={chargerForfaits} />
+      )}
+
+      {modale?.type === 'panier' && (
+        <FormPanier reservationId={modale.reservationId} forfaits={forfaits} produits={produits} taux={taux} onFermer={() => setModale(null)} />
+      )}
+
       {modale?.type === 'detailReservation' && (
         <DetailReservation reservationId={modale.reservationId} onFermer={() => setModale(null)} />
       )}
@@ -369,6 +403,8 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                     <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'detailReservation', reservationId: r.id })}>Détail</button>
                     {peutGerer && r.status !== 'cancelled' && (
                       <>
+                        {' '}
+                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'panier', reservationId: r.id })}>Panier</button>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'affecter', reservationId: r.id })}>Affecter</button>
                         {' '}
@@ -727,6 +763,262 @@ function DetailReservation({ reservationId, onFermer }) {
           <div><span>Option jusqu’au</span><span>{resa.optionExpiresAt ? new Date(resa.optionExpiresAt).toLocaleDateString('fr-FR') : '—'}</span></div>
         </div>
       )}
+    </Modal>
+  )
+}
+
+// ── Forfaits groupe : gestion des produits composites réutilisables ─────────────────────────────
+function FormForfaits({ produits, taux, onFermer, onChange }) {
+  const [liste, setListe] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [creation, setCreation] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    try { setListe(membres(await api.groupProducts())) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+  }, [])
+  useEffect(() => { recharger() }, [recharger])
+
+  async function supprimer(id) {
+    if (!await confirmer('Supprimer ce forfait ?')) return
+    setErreur(null)
+    try { await api.supprimerGroupProduct(id); await recharger(); onChange?.() } catch (e) { setErreur(e?.message || 'Suppression impossible.') }
+  }
+  async function basculer(f) {
+    setErreur(null)
+    try { await api.modifierGroupProduct(idDe(f), { actif: !f.actif }); await recharger(); onChange?.() } catch (e) { setErreur(e?.message || 'Modification impossible.') }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Forfaits groupe" taille="lg">
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {creation ? (
+        <FormForfait
+          produits={produits}
+          taux={taux}
+          onAnnuler={() => setCreation(false)}
+          onEnregistre={async () => { setCreation(false); await recharger(); onChange?.() }}
+        />
+      ) : (
+        <>
+          <p className="sub">Un forfait est un mix de produits réutilisable (p. ex. 3 entrées + 5 audioguides + 5 visites) qu’on applique à une réservation.</p>
+          <div className="actions">
+            <button className="btn primary sm" type="button" onClick={() => setCreation(true)}>Nouveau forfait</button>
+          </div>
+          {chargement ? (
+            <div className="center"><div className="spinner" /></div>
+          ) : liste.length === 0 ? (
+            <p className="empty">Aucun forfait pour l’instant.</p>
+          ) : (
+            <table className="tbl">
+              <thead><tr><th>Forfait</th><th className="num">Lignes</th><th>État</th><th /></tr></thead>
+              <tbody>
+                {liste.map((f) => (
+                  <tr key={f.id}>
+                    <td>{f.label}</td>
+                    <td className="num">{(f.lines || []).length}</td>
+                    <td>{f.actif ? <span className="badge good">Actif</span> : <span className="badge mut">Inactif</span>}</td>
+                    <td className="num">
+                      <button className="btn ghost sm" type="button" onClick={() => basculer(f)}>{f.actif ? 'Désactiver' : 'Activer'}</button>
+                      {' '}
+                      <button className="btn danger sm" type="button" onClick={() => supprimer(idDe(f))}>Supprimer</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </Modal>
+  )
+}
+
+function FormForfait({ produits, taux, onAnnuler, onEnregistre }) {
+  const ligneVide = { produit: '', quantite: '1', prixUnitaireHT: '', tauxTva: '' }
+  const [label, setLabel] = useState('')
+  const [lignes, setLignes] = useState([{ ...ligneVide }])
+  const [envoi, setEnvoi] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  const majLigne = (i, champ, val) => setLignes((ls) => ls.map((l, k) => (k === i ? { ...l, [champ]: val } : l)))
+
+  async function soumettre(e) {
+    e.preventDefault()
+    const valides = lignes.filter((l) => l.produit && l.tauxTva)
+    if (label.trim() === '' || valides.length === 0) { setErreur('Un nom et au moins une ligne (produit + TVA) sont requis.'); return }
+    setEnvoi(true); setErreur(null)
+    try {
+      await api.creerGroupProduct({
+        label: label.trim(),
+        lines: valides.map((l) => ({
+          produit: `/api/produits/${l.produit}`,
+          quantite: Math.max(1, parseInt(l.quantite, 10) || 1),
+          prixUnitaireHT: l.prixUnitaireHT.trim() === '' ? '0.00' : l.prixUnitaireHT.trim(),
+          tauxTva: `/api/taux_tvas/${l.tauxTva}`,
+        })),
+      })
+      await onEnregistre()
+    } catch (e) { setErreur(e?.message || 'Création impossible.') } finally { setEnvoi(false) }
+  }
+
+  return (
+    <form onSubmit={soumettre}>
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      <div className="field">
+        <label htmlFor="ff-label">Nom du forfait *</label>
+        <input id="ff-label" className="input" value={label} onChange={(e) => setLabel(e.target.value)} required />
+      </div>
+      <h4>Lignes du forfait</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="tbl">
+          <thead><tr><th>Produit</th><th className="num">Qté</th><th className="num">PU HT</th><th>TVA</th><th /></tr></thead>
+          <tbody>
+            {lignes.map((l, i) => (
+              <tr key={i}>
+                <td>
+                  <select className="input" value={l.produit} onChange={(e) => majLigne(i, 'produit', e.target.value)}>
+                    <option value="">— produit —</option>
+                    {produits.map((p) => <option key={idDe(p)} value={idDe(p)}>{p.libelleRecherche || idDe(p)}</option>)}
+                  </select>
+                </td>
+                <td className="num"><input className="input num" type="number" min="1" value={l.quantite} onChange={(e) => majLigne(i, 'quantite', e.target.value)} /></td>
+                <td className="num"><input className="input num" value={l.prixUnitaireHT} onChange={(e) => majLigne(i, 'prixUnitaireHT', e.target.value)} placeholder="0.00" /></td>
+                <td>
+                  <select className="input" value={l.tauxTva} onChange={(e) => majLigne(i, 'tauxTva', e.target.value)}>
+                    <option value="">— TVA —</option>
+                    {taux.map((t) => <option key={idDe(t)} value={idDe(t)}>{t.taux} %</option>)}
+                  </select>
+                </td>
+                <td className="num"><button className="btn danger sm" type="button" onClick={() => setLignes((ls) => ls.filter((_, k) => k !== i))}>×</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="actions">
+        <button className="btn ghost sm" type="button" onClick={() => setLignes((ls) => [...ls, { ...ligneVide }])}>Ajouter une ligne</button>
+      </div>
+      <div className="modal-actions">
+        <button className="btn ghost" type="button" onClick={onAnnuler}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={envoi}>Créer le forfait</button>
+      </div>
+    </form>
+  )
+}
+
+// ── Panier d'une réservation : forfait appliqué et/ou lignes à la carte ─────────────────────────
+function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
+  const vide = { produit: '', quantite: '1', prixUnitaireHT: '', tauxTva: '' }
+  const [items, setItems] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [forfaitChoisi, setForfaitChoisi] = useState('')
+  const [nouveau, setNouveau] = useState({ ...vide })
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    try { setItems(membres(await api.articlesReservation(reservationId))) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+  }, [reservationId])
+  useEffect(() => { recharger() }, [recharger])
+
+  const nomProduit = (iri) => produits.find((p) => idDe(p) === idDe(iri))?.libelleRecherche || '—'
+  const libTaux = (iri) => { const t = taux.find((x) => idDe(x) === idDe(iri)); return t ? `${t.taux} %` : '—' }
+
+  async function appliquer() {
+    if (!forfaitChoisi) return
+    setErreur(null)
+    try { await api.appliquerForfait(reservationId, { groupProduct: `/api/group_products/${forfaitChoisi}` }); setForfaitChoisi(''); await recharger() } catch (e) { setErreur(e?.message || 'Application impossible.') }
+  }
+  async function ajouter() {
+    if (!nouveau.produit || !nouveau.tauxTva) { setErreur('Produit et TVA requis.'); return }
+    setErreur(null)
+    try {
+      await api.ajouterArticle({
+        booking: `/api/group_bookings/${reservationId}`,
+        produit: `/api/produits/${nouveau.produit}`,
+        quantite: Math.max(1, parseInt(nouveau.quantite, 10) || 1),
+        prixUnitaireHT: nouveau.prixUnitaireHT.trim() === '' ? '0.00' : nouveau.prixUnitaireHT.trim(),
+        tauxTva: `/api/taux_tvas/${nouveau.tauxTva}`,
+      })
+      setNouveau({ ...vide })
+      await recharger()
+    } catch (e) { setErreur(e?.message || 'Ajout impossible.') }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Panier de la réservation" taille="lg">
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      <div className="field">
+        <label htmlFor="pa-forfait">Appliquer un forfait</label>
+        <div className="actions">
+          <select id="pa-forfait" className="input" value={forfaitChoisi} onChange={(e) => setForfaitChoisi(e.target.value)}>
+            <option value="">— choisir un forfait —</option>
+            {forfaits.filter((f) => f.actif).map((f) => <option key={idDe(f)} value={idDe(f)}>{f.label}</option>)}
+          </select>
+          <button className="btn sm" type="button" onClick={appliquer} disabled={!forfaitChoisi}>Appliquer</button>
+        </div>
+      </div>
+
+      <h4>Articles ({items.length})</h4>
+      {chargement ? (
+        <div className="center"><div className="spinner" /></div>
+      ) : items.length === 0 ? (
+        <p className="empty">Panier vide. Appliquez un forfait ou ajoutez des produits ci-dessous.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead><tr><th>Produit</th><th className="num">Qté</th><th className="num">PU HT</th><th>TVA</th><th>Origine</th><th /></tr></thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id}>
+                  <td>{nomProduit(it.produit)}</td>
+                  <td className="num">
+                    <input
+                      className="input num" type="number" min="1" defaultValue={it.quantite} style={{ width: '4.5rem' }}
+                      onBlur={async (e) => { try { await api.modifierArticle(it.id, { quantite: Math.max(1, parseInt(e.target.value, 10) || 1) }); await recharger() } catch (err) { setErreur(err?.message || 'Modification impossible.') } }}
+                    />
+                  </td>
+                  <td className="num">{it.prixUnitaireHT}</td>
+                  <td>{libTaux(it.tauxTva)}</td>
+                  <td className="sub">{it.source ? 'forfait' : 'à la carte'}</td>
+                  <td className="num"><button className="btn danger sm" type="button" onClick={async () => { try { await api.supprimerArticle(it.id); await recharger() } catch (err) { setErreur(err?.message || 'Suppression impossible.') } }}>Retirer</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <h4>Ajouter un produit</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="tbl">
+          <tbody>
+            <tr>
+              <td>
+                <select className="input" value={nouveau.produit} onChange={(e) => setNouveau((n) => ({ ...n, produit: e.target.value }))}>
+                  <option value="">— produit —</option>
+                  {produits.map((p) => <option key={idDe(p)} value={idDe(p)}>{p.libelleRecherche || idDe(p)}</option>)}
+                </select>
+              </td>
+              <td className="num"><input className="input num" type="number" min="1" value={nouveau.quantite} onChange={(e) => setNouveau((n) => ({ ...n, quantite: e.target.value }))} /></td>
+              <td className="num"><input className="input num" value={nouveau.prixUnitaireHT} onChange={(e) => setNouveau((n) => ({ ...n, prixUnitaireHT: e.target.value }))} placeholder="0.00" /></td>
+              <td>
+                <select className="input" value={nouveau.tauxTva} onChange={(e) => setNouveau((n) => ({ ...n, tauxTva: e.target.value }))}>
+                  <option value="">— TVA —</option>
+                  {taux.map((t) => <option key={idDe(t)} value={idDe(t)}>{t.taux} %</option>)}
+                </select>
+              </td>
+              <td className="num"><button className="btn sm" type="button" onClick={ajouter}>Ajouter</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="modal-actions">
+        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+      </div>
     </Modal>
   )
 }

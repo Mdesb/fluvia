@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Group\DataFixtures;
 
+use App\Compta\Entity\TauxTva;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Group\Entity\GroupBooking;
 use App\Group\Entity\GroupParticipant;
-use App\Group\Entity\ParticipantGroup;
+use App\Group\Entity\GroupProduct;
+use App\Group\Entity\GroupProductLine;
 use App\Group\Enum\GroupType;
 use App\Group\Enum\ParticipantCategory;
+use App\Group\Entity\ParticipantGroup;
+use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Reservation\DataFixtures\ReservationFixtures;
@@ -46,8 +51,9 @@ final class GroupFixtures extends Fixture implements DependentFixtureInterface
     /** @return array<int, class-string> */
     public function getDependencies(): array
     {
-        // ReservationFixtures fournit Activités/Créneaux (affectation), CrmFixtures fournit les clients.
-        return [SocleFixtures::class, CrmFixtures::class, ReservationFixtures::class];
+        // ReservationFixtures fournit Activités/Créneaux, CrmFixtures les clients, OffreFixtures les
+        // produits du catalogue et (transitivement) ComptaFixtures les taux de TVA du forfait démo.
+        return [SocleFixtures::class, CrmFixtures::class, OffreFixtures::class, ReservationFixtures::class];
     }
 
     public function load(ObjectManager $manager): void
@@ -115,6 +121,18 @@ final class GroupFixtures extends Fixture implements DependentFixtureInterface
             ->setEtablissement($etabA)
             ->setEffectif(28)
             ->setAccompagnateurs(2));
+
+        // Forfait groupe de démonstration : un « produit groupe » composite (ici une ligne, faute
+        // d'un second produit en fixtures). On l'applique à une réservation pour la facturer en
+        // lignes de devis.
+        $produit = $manager->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_ENTREE]);
+        $taux20 = $manager->getRepository(TauxTva::class)->findOneBy(['taux' => '20.00', 'actif' => true]);
+        if ($produit instanceof Produit && $taux20 instanceof TauxTva) {
+            $forfait = (new GroupProduct())->setEtablissement($etabA)->setLabel('Forfait scolaire');
+            $forfait->addLine((new GroupProductLine())
+                ->setProduit($produit)->setQuantite(3)->setPrixUnitaireHT('10.00')->setTauxTva($taux20));
+            $manager->persist($forfait);
+        }
 
         if ($etabB instanceof Etablissement) {
             $manager->persist((new ParticipantGroup())

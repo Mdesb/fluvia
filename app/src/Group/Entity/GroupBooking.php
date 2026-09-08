@@ -15,6 +15,7 @@ use App\Crm\Entity\Client;
 use App\Facturation\Entity\CommercialDocument;
 use App\Group\Enum\GroupBookingStatus;
 use App\Group\Enum\GroupPaymentStatus;
+use App\Group\State\ApplyGroupProductProcessor;
 use App\Group\State\AssignGroupBookingProcessor;
 use App\Group\State\CancelGroupBookingProcessor;
 use App\Group\State\ConfirmGroupBookingProcessor;
@@ -90,6 +91,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'group.manage')",
             processor: InvoiceGroupBookingProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/group/bookings/{id}/apply-product',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'group.manage')",
+            processor: ApplyGroupProductProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['group_booking:read']],

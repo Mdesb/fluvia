@@ -6,6 +6,7 @@ namespace App\Group\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Group\Entity\GroupProduct;
 use App\Group\Entity\ParticipantGroup;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -30,11 +31,11 @@ final class EstablishmentStampProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
-        if ($data instanceof ParticipantGroup && $data->getEtablissement() === null) {
+        if (($data instanceof ParticipantGroup || $data instanceof GroupProduct) && $data->getEtablissement() === null) {
             $etablissement = $this->contexte->etablissementActif();
             if ($etablissement === null) {
                 throw new UnprocessableEntityHttpException(
-                    'Aucun établissement actif : impossible de rattacher ce groupe (D41).'
+                    'Aucun établissement actif : impossible de rattacher cette création (D41).'
                 );
             }
             $data->setEtablissement($etablissement);

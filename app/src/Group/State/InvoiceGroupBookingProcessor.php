@@ -15,6 +15,7 @@ use App\Facturation\Enum\DocumentNature;
 use App\Facturation\Enum\TypeDestinataire;
 use App\Facturation\Service\ResolveurComptesFacturation;
 use App\Group\Entity\GroupBooking;
+use App\Group\Entity\GroupBookingItem;
 use App\Group\Enum\GroupBookingStatus;
 use App\Group\Enum\GroupPaymentStatus;
 use App\Organisation\Entity\Etablissement;
@@ -77,28 +78,40 @@ final class InvoiceGroupBookingProcessor implements ProcessorInterface
 
         $corps = $this->lecteur->corps();
 
-        $prixUnitaire = \is_string($corps['prixUnitaireHT'] ?? null) && $corps['prixUnitaireHT'] !== ''
-            ? $corps['prixUnitaireHT']
-            : $data->getActivite()?->getTarifReferenceMontant();
-        if ($prixUnitaire === null || $prixUnitaire === '') {
-            throw new UnprocessableEntityHttpException(
-                'Aucun montant : affectez une activité tarifée, ou fournissez « prixUnitaireHT ».'
-            );
-        }
-
-        $effectif = max(1, $data->getEffectif());
-        $designation = \is_string($corps['designation'] ?? null) && trim($corps['designation']) !== ''
-            ? trim($corps['designation'])
-            : $this->designationParDefaut($data);
-
         $auteur = $this->security->getUser();
         \assert($auteur instanceof Utilisateur);
 
-        $ligne = (new DocumentLine())
-            ->setDesignation($designation)
-            ->setQuantite($effectif)
-            ->setPrixUnitaireHT((string) $prixUnitaire)
-            ->setTauxTva($this->taux($corps['tauxTva'] ?? null, $etablissement));
+        // Le panier d'abord : s'il y a des articles (forfait appliqué ou lignes à la carte), chacun
+        // devient une ligne de devis, avec SON prix et SA TVA. Sinon, repli « à la tête ».
+        $items = $this->em->getRepository(GroupBookingItem::class)->findBy(['booking' => $data]);
+
+        $lignes = [];
+        if ($items !== []) {
+            foreach ($items as $item) {
+                $lignes[] = (new DocumentLine())
+                    ->setDesignation($item->getProduit()?->getLibelleRecherche() ?? 'Produit')
+                    ->setQuantite(max(1, $item->getQuantite()))
+                    ->setPrixUnitaireHT($item->getPrixUnitaireHT())
+                    ->setTauxTva($item->getTauxTva());
+            }
+        } else {
+            $prixUnitaire = \is_string($corps['prixUnitaireHT'] ?? null) && $corps['prixUnitaireHT'] !== ''
+                ? $corps['prixUnitaireHT']
+                : $data->getActivite()?->getTarifReferenceMontant();
+            if ($prixUnitaire === null || $prixUnitaire === '') {
+                throw new UnprocessableEntityHttpException(
+                    'Aucun montant : composez un panier (forfait ou produits), affectez une activité tarifée, ou fournissez « prixUnitaireHT ».'
+                );
+            }
+            $designation = \is_string($corps['designation'] ?? null) && trim($corps['designation']) !== ''
+                ? trim($corps['designation'])
+                : $this->designationParDefaut($data);
+            $lignes[] = (new DocumentLine())
+                ->setDesignation($designation)
+                ->setQuantite(max(1, $data->getEffectif()))
+                ->setPrixUnitaireHT((string) $prixUnitaire)
+                ->setTauxTva($this->taux($corps['tauxTva'] ?? null, $etablissement));
+        }
 
         $document = (new CommercialDocument())
             ->setNature(DocumentNature::Quote)
@@ -106,7 +119,9 @@ final class InvoiceGroupBookingProcessor implements ProcessorInterface
             ->setProfilExploitant($this->comptes->profilPour($etablissement))
             ->setDestinataire($this->destinataire($payeur))
             ->setCreePar($auteur);
-        $document->addLigne($ligne);
+        foreach ($lignes as $ligne) {
+            $document->addLigne($ligne);
+        }
         $document->recalculerTotaux();
         $this->em->persist($document);
 

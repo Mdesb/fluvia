@@ -3082,4 +3082,24 @@ export const api = {
     request(`/api/group/bookings/${id}/cancel`, { method: 'POST', body: {} }),
   facturerReservationGroupe: (id, corps) =>
     request(`/api/group/bookings/${id}/invoice`, { method: 'POST', body: corps }),
+  // Forfaits groupe (produits composites réutilisables)
+  groupProducts: () =>
+    request('/api/group_products', { query: { itemsPerPage: 200 } }),
+  creerGroupProduct: (corps) =>
+    request('/api/group_products', { method: 'POST', body: corps, ld: true }),
+  modifierGroupProduct: (id, corps) =>
+    request(`/api/group_products/${id}`, { method: 'PATCH', body: corps }),
+  supprimerGroupProduct: (id) =>
+    request(`/api/group_products/${id}`, { method: 'DELETE' }),
+  // Panier d'une réservation de groupe
+  articlesReservation: (bookingId) =>
+    request('/api/group_booking_items', { query: { booking: bookingId, itemsPerPage: 200 } }),
+  ajouterArticle: (corps) =>
+    request('/api/group_booking_items', { method: 'POST', body: corps, ld: true }),
+  modifierArticle: (id, corps) =>
+    request(`/api/group_booking_items/${id}`, { method: 'PATCH', body: corps }),
+  supprimerArticle: (id) =>
+    request(`/api/group_booking_items/${id}`, { method: 'DELETE' }),
+  appliquerForfait: (bookingId, corps) =>
+    request(`/api/group/bookings/${bookingId}/apply-product`, { method: 'POST', body: corps }),
 }
