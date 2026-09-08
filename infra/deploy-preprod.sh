@@ -162,6 +162,17 @@ log "Migrations de base"
 log "Base de connaissance (doc vivante -> articles d'aide)"
 "${COMPOSE[@]}" exec -T php php bin/console support:importer-aide --no-interaction
 
+# ⚠ SANS CETTE LIGNE, LE REFERENTIEL DES METIERS RESTE VIDE ET PERSONNE NE LE VOIT. Le site sert
+#   alors sa liste de repli : les pages s affichent normalement, le deploiement annonce un succes,
+#   et rien n a bascule. C est exactement ce qui est arrive a `website:blocks:seed`, qui existe
+#   depuis ED-10 et que ce script n appelle nulle part.
+#
+#   La commande est idempotente et ne touche JAMAIS une ligne existante : la relancer a chaque
+#   deploiement ne reecrit pas un chapo qu on vient de corriger. Le total qu elle imprime distingue
+#   « tout existait deja » de « la base est vide ».
+log "Referentiel des metiers"
+"${COMPOSE[@]}" exec -T php php bin/console website:trades:seed --no-interaction
+
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug
 "${COMPOSE[@]}" exec -T php php bin/console cache:warmup --env=prod --no-debug
