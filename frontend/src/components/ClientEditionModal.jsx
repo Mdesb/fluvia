@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client.js'
-import Modal from './Modal.jsx'
 
 // Modification d'une fiche client (D13 : la modale est le défaut).
 //
@@ -35,6 +34,25 @@ const VALEURS_VIDES = {
   pays: '',
 }
 
+/**
+ * ── CE N'EST PLUS UNE MODALE, C'EST UN ÉCRAN — ET LE NOM DU FICHIER MENT ENCORE ────────────────
+ *
+ * Il tenait dans une modale `lg` de 108 lignes de formulaire. Mesuré le 07/09 : Échap et un clic
+ * à huit pixels du bord gauche de la fenêtre la fermaient et jetaient la saisie sans un mot, et
+ * rien ne la rattrapait — aucune modale du produit ne vivant dans l'URL, ni F5 ni « précédent » ne
+ * la ramenaient. « Précédent » quittait même l'écran des clients.
+ *
+ * Le paramètre `edition` de l'écran Clients porte désormais ce qu'on regarde : `nouveau`, ou
+ * l'identifiant du client qu'on modifie.
+ *
+ * ⚠ LE NOM DU FICHIER EST HISTORIQUE, ET IL EST FAUX DEPUIS CE CHANGEMENT. Le renommer touche la
+ * liste du garde-fou des imports ; ça se fera à part, pas en passant. En attendant, ce bloc est le
+ * seul endroit qui dit la vérité sur ce qu'est ce composant.
+ *
+ * ⚠ IL VA CHERCHER SA PROPRE FICHE (`api.client(clientId)`) ET NE DÉPEND D'AUCUNE LISTE. C'est ce
+ * qui rend l'ouverture par URL immédiate ici, là où le formulaire des promotions devait attendre
+ * la liste faute de route unitaire.
+ */
 export default function ClientEditionModal({ open, clientId, onClose, onEnregistre }) {
   const [valeurs, setValeurs] = useState(null)
   const [chargement, setChargement] = useState(false)
@@ -140,8 +158,18 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
 
   const morale = valeurs?.type === 'morale'
 
+  // ⚠ LA GARDE QUE `Modal` PORTAIT, ET QU'IL FAUT REPRENDRE À LA MAIN. C'est lui qui rendait `null`
+  // tant que `open` était faux ; sans elle, le formulaire s'afficherait en permanence sous la
+  // liste. Le parent ne monte ce composant que lorsqu'il le veut, mais la prop reste dans l'API :
+  // la retirer d'un côté seulement ferait apparaître un formulaire entier au mauvais endroit.
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre={clientId ? 'Modifier la fiche' : 'Ajouter un client'} taille="lg">
+    <>
+      <button className="btn ghost sm" type="button" onClick={onClose} style={{ marginBottom: 12 }}>
+        ← Retour
+      </button>
+      <h2>{clientId ? 'Modifier la fiche' : 'Ajouter un client'}</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement || !valeurs ? (
@@ -250,6 +278,6 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
