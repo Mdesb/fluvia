@@ -35,6 +35,10 @@ export default function ReferentielIndicateurs({ droits }) {
   const [edition, setEdition] = useState(null)
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
   const [succes, setSucces] = useState(null)
 
   const peutConfigurer = aLeDroit(droits, 'reporting.configurer')
@@ -42,14 +46,14 @@ export default function ReferentielIndicateurs({ droits }) {
   const recharger = useCallback(() => {
     api.indicateurs()
       .then((r) => setIndicateursLus(membres(r)))
-      .catch(() => setIndicateursLus(null))
+      .catch((e) => { setIndicateursLus(null); setRaisonNonLu(e) })
   }, [])
 
   useEffect(() => {
     let annule = false
     api.indicateurs()
       .then((r) => { if (!annule) setIndicateursLus(membres(r)) })
-      .catch(() => { if (!annule) setIndicateursLus(null) })
+      .catch((e) => { if (!annule) { setIndicateursLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
@@ -98,6 +102,13 @@ export default function ReferentielIndicateurs({ droits }) {
       </div>
       <div className="card-b">
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{erreur}</div>}
+        {raisonNonLu?.message && (
+          <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+            <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+          </div>
+        )}
         {succes && <div className="banner banner-ok" style={{ marginBottom: 'var(--esp-normal)' }}>{succes}</div>}
 
         {indicateursLus === null ? (

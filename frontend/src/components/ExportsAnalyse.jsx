@@ -129,6 +129,10 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
   const [choisis, setChoisis] = useState([])
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
   const [dernier, setDernier] = useState(null)
 
   const etab = etablissements.find((e) => e.id === etabActif) || null
@@ -139,20 +143,20 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
   const recharger = useCallback(() => {
     api.exportsAnalyse()
       .then((r) => setExportsLus(membres(r)))
-      .catch(() => setExportsLus(null))
+      .catch((e) => { setExportsLus(null); setRaisonNonLu(e) })
   }, [])
 
   useEffect(() => {
     let annule = false
     api.exportsAnalyse()
       .then((r) => { if (!annule) setExportsLus(membres(r)) })
-      .catch(() => { if (!annule) setExportsLus(null) })
+      .catch((e) => { if (!annule) { setExportsLus(null); setRaisonNonLu(e) } })
     api.indicateurs()
       .then((r) => { if (!annule) setIndicateursLus(membres(r).filter((i) => i.actif !== false)) })
-      .catch(() => { if (!annule) setIndicateursLus(null) })
+      .catch((e) => { if (!annule) { setIndicateursLus(null); setRaisonNonLu(e) } })
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
-      .catch(() => { if (!annule) setGroupesLus(null) })
+      .catch((e) => { if (!annule) { setGroupesLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
@@ -232,6 +236,13 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
       <div className="card-b">
         {erreur && (
           <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{erreur}</div>
+        )}
+        {raisonNonLu?.message && (
+          <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+            <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+          </div>
         )}
 
         <form onSubmit={generer}>
