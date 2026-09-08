@@ -45,7 +45,7 @@ import { euroCentimes } from './Liste.jsx'
 // plafond, la clôture de la période est REFUSÉE. C'est le seul champ de cet écran dont la valeur
 // change ce que le logiciel accepte de faire, et l'écran le dit à côté du champ plutôt que dans une
 // aide qu'on n'ouvre pas.
-export default function RegiesRecettes({ etabActif, droits = [] }) {
+export default function RegiesRecettes({ etabActif, droits = [], rafraichir = 0, onEcrit }) {
   const peutLire = aLeDroit(droits, 'compta.lire')
   const peutGerer = aLeDroit(droits, 'compta.gerer')
 
@@ -55,6 +55,7 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
   const [regies, setRegies] = useState(null)
   const [profils, setProfils] = useState([])
   const [moyens, setMoyens] = useState([])
+  const [guichets, setGuichets] = useState([])
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [edition, setEdition] = useState(null) // { id?, libelle, plafond, acteNomination, modes[], profil }
@@ -63,14 +64,19 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
   const charger = useCallback(async () => {
     if (!peutLire) return
     setErreur(null)
-    const [r, p, m] = await Promise.allSettled([
+    const [r, p, m, g] = await Promise.allSettled([
       api.regieRecettes(),
       api.profilsExploitant(),
       api.moyensPaiement(),
+      api.pointDeVentes(),
     ])
     setRegies(r.status === 'fulfilled' ? membres(r.value) : null)
     setProfils(p.status === 'fulfilled' ? membres(p.value) : [])
     setMoyens(m.status === 'fulfilled' ? membres(m.value) : [])
+    // ⚠ `null` ET NON `[]` QUAND LA LECTURE RATE. « Aucun guichet ne l'alimente » est une
+    // accusation de mauvais paramétrage : la porter sur une lecture qui a échoué enverrait
+    // l'exploitant corriger une configuration parfaitement saine.
+    setGuichets(g.status === 'fulfilled' ? membres(g.value) : null)
     if (r.status === 'rejected') {
       setErreur(
         r.reason?.status === 403
@@ -80,7 +86,7 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
     }
   }, [peutLire])
 
-  useEffect(() => { charger() }, [etabActif, charger])
+  useEffect(() => { charger() }, [etabActif, charger, rafraichir])
 
   function ouvrirCreation() {
     setSucces(null)
@@ -132,6 +138,7 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
       }
       setEdition(null)
       charger()
+      onEcrit?.()
     } catch (e) {
       setErreur(e.message || 'L’enregistrement n’a pas abouti.')
     } finally {
@@ -219,6 +226,15 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
                   Moyens portés par l’acte : {(r.modesAutorises || []).join(', ')}
                 </div>
               )}
+              {/* ⚠ LE SEUL ENDROIT OÙ UN RATTACHEMENT OUBLIÉ SE VOIT.
+                  Une régie sans guichet n'est alimentée par rien : son encaisse reste à zéro, son
+                  plafond n'est jamais atteint, et l'écran de versement n'aura jamais rien à verser
+                  — exactement l'état d'avant ce lot, mais avec une régie déclarée qui donne
+                  l'impression que tout est en place.
+                  On ne le détecte pas à la clôture de caisse : ce serait une requête à chaque Z de
+                  chaque guichet du produit, pour une ligne d'audit que personne ne lit. On le dit
+                  ici, là où quelqu'un regarde déjà la régie. */}
+              <RattachementGuichets regie={r} guichets={guichets} />
             </div>
           ))
         )}
@@ -336,6 +352,36 @@ export default function RegiesRecettes({ etabActif, droits = [] }) {
         )}
       </div>
     </section>
+  )
+}
+
+// Les guichets qui alimentent une régie — ou l'absence, dite en clair.
+function RattachementGuichets({ regie, guichets }) {
+  if (guichets === null) {
+    return (
+      <div className="hint">
+        Les points de vente n’ont pas pu être lus : <b>on ne peut pas dire</b> lesquels alimentent
+        cette régie.
+      </div>
+    )
+  }
+
+  const iri = regie['@id'] || `/api/regie_recettes/${regie.id}`
+  const rattaches = guichets.filter((g) => g.regie === iri)
+
+  if (rattaches.length === 0) {
+    return (
+      <div className="hint">
+        <b>Aucun guichet n’encaisse pour cette régie</b>, donc son encaisse restera à zéro et il n’y
+        aura jamais rien à verser. Rattachez-la à un point de vente, juste au-dessus.
+      </div>
+    )
+  }
+
+  return (
+    <div className="hint">
+      Alimentée par {rattaches.map((g) => g.libelle || '—').join(', ')}.
+    </div>
   )
 }
 
