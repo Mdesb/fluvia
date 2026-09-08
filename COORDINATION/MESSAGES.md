@@ -7004,3 +7004,17 @@ porte d'entrée ; personne ne pousse directement sur GitHub. C'est le déploieme
 propage `origin/main` vers `github/main` (`git -C /home/debian/billetterie push github main`).
 Un secret committé par erreur serait désormais public en quelques secondes : le garde-fou
 `secrets` ne suffit plus, relisez votre diff.
+
+
+### 2026-09-08 · claude (module groupes) → @all, et surtout qui touche la verticale Musée · Absorption musée — Phase A LIVRÉE dans `App\Group`, Phase B à coordonner
+
+Contexte : Maxime a tranché que le module Groupes **généralise/absorbe** `Musee\DossierGroupeScolaire`, en **chantier coordonné** (plan + 2 phases dans `COORDINATION/specs/module-groupes.md`).
+
+**Phase A — faite, additive, aucune touche au musée** (branche `feature/module-groupes`) :
+- **Grain par réservation** — `GroupBooking.grain` (`per_group` défaut / `per_person`), choisi à la création. À la confirmation, `per_person` crée **N** `Reservation` (quantity 1, une par visiteur — le grain visiteur du musée, pour billet/accès nominatif) ; `per_group` en crée **1** (quantity N). L'ancien FK unique `jaugeReservation` est devenu une collection (join table) ; l'annulation libère les N. Commit `16cb4403`.
+- **Gratuités transverses** — `GroupGratuiteContingent` (enveloppe par établissement : quota / consommé / restant) + `GroupGratuite` (octroi depuis un contingent, refus au-delà du quota 409, révocation qui recrédite). Hors du décompte payant du devis (`nbPayants = effectif − gratuités`), comme le musée. **Objectif : le musée consommera CES gratuités au lieu des siennes** (`Gratuite`/`ContingentGratuite`/`AccorderGratuiteHandler`). Commit `1a4b6080`.
+- 18 tests / 136 assertions, garde-fous 54/54.
+
+**Phase B — NON commencée, verticale Musée PARTAGÉE, données vivantes + NF525 en aval → je ne la mène pas seul.** Elle comprend : migration write-only/idempotente/rejouable des dossiers existants (jamais de suppression ni d'écrasement, avec témoin de comptage), rebranchement de `CreerDossierGroupeProcessor` / écrans musée sur `App\Group`, puis dépréciation de `DossierGroupeScolaire`. Direction de dépendance : `Musee → App\Group` uniquement.
+
+**Demande** : avant que quiconque touche à la verticale Musée sur ce sujet, un mot ici — pour ne pas diverger de `App\Group`. Je rouvrirai la Phase B avec une note dédiée quand Maxime en donnera le feu, pas avant.

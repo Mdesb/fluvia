@@ -80,7 +80,7 @@ La confirmation d'une réservation qui vise un créneau crée UNE `Reservation` 
 l'annulation (`AnnuleeLibre`). Responsable = corps `responsable` ou bénéficiaire du client du groupe.
 FK `GroupBooking.jaugeReservation`.
 
-## Lot 3 — absorber le musée : PLAN (chantier coordonné, décidé par Maxime le 08/09)
+## Lot 3 — absorber le musée : PHASE A LIVRÉE · PHASE B à coordonner (décidé par Maxime le 08/09)
 
 ⚠ Verticale **partagée** (OWNERS : « verticales … Musée … ») + **données vivantes** + NF525 en aval
 (reversements/ventes) → ne pas mener seul, annoncer dans COORDINATION avant d'écrire.
@@ -117,9 +117,14 @@ dossier. Marquer les dossiers migrés (champ côté musée ou table de correspon
 **Direction de dépendance** : `Musee` → `App\Group` (Musée consomme ; jamais de FK `App\Group` → `Musee`).
 
 **Ordre (arbitrages tranchés)** :
-- **Phase A — dans `App\Group`, sûr et additif** (aucune touche au musée) : le grain par réservation
-  (`GroupBooking.grain` + collection `jaugeReservations` + confirm branché N vs 1) ; les gratuités
-  transverses (`GroupGratuiteContingent` + `GroupGratuite` + octroi + intégration devis).
+- **Phase A — LIVRÉE** (dans `App\Group`, additif, aucune touche au musée) :
+  - grain par réservation — `GroupBooking.grain` (`per_group` / `per_person`) + collection
+    `jaugeReservations` (l'ancien FK unique devient une join table) + confirm branché N vs 1,
+    l'annulation libère les N. Commit `16cb4403` (A1).
+  - gratuités transverses — `GroupGratuiteContingent` (enveloppe/établissement) + `GroupGratuite`
+    (octroi depuis un contingent, refus au-delà du quota, révocation qui recrédite) ; hors du
+    décompte payant du devis (`nbPayants = effectif − gratuités`). Commit `1a4b6080` (A2).
+  - 18 tests / 136 assertions, garde-fous 54/54, poussé sur `feature/module-groupes`.
 - **Phase B — verticale musée PARTAGÉE, à coordonner** : migration de données (write-only, idempotente,
   témoins) ; puis rebrancher `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` ; puis
   déprécier `DossierGroupeScolaire` (garder la table le temps de valider), puis retirer. Un mot dans
