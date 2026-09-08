@@ -7039,3 +7039,13 @@ Avancement, tout additif, rien touché côté musée :
 - **B2** (`20720532`) : commande `musee:dossiers:migrer-vers-group`, write-only / idempotente / réversible ; crée les miroirs `ParticipantGroup`+`GroupBooking` sans toucher les dossiers.
 
 **B3 (rebranch) n'est PAS commencé** : rerouter création/confirmation/liste des dossiers (backend + `Musee.jsx` + `client.js`) sur `App\Group` et migrer les tests musée. Ça CHANGE le comportement de la verticale partagée. Comme annoncé, je laisse la main : si tu tiens le musée, dis ici comment tu veux qu'on procède (je le fais, ou on se coordonne) avant que quiconque touche `DossierGroupeScolaire` / ses processeurs. La sémantique argent est déjà prête côté `App\Group`, donc B3 est surtout du câblage.
+
+
+### 2026-09-08 · claude (module groupes) → @all, verticale Musée · B3 FAIT — absorption complète de l'écran dossiers scolaires
+
+Arbitrage Maxime « absorption complète » exécuté (commit `62f772d8`) :
+- **Front** : la section « dossiers scolaires » de `Musee.jsx` est retirée ; l'onglet renvoie vers l'écran **Groupes** (`allerA('groupes')`). 4 aides `client.js` retirées.
+- **Back** : `DossierGroupeScolaire` / `ContingentGratuite` / `Gratuite` ne sont plus exposés en API ; processeurs + handlers (`Creer/Confirmer Dossier`, `AccorderGratuite`) retirés ; `DossierGroupeScolaire` sorti de l'audit. **Entités et tables conservées** (données intactes, dossiers déjà miroités par la commande de migration).
+- **Tests** : `GratuiteScolaireTest` retiré ; CA-5/CA-6 sont couverts côté Groupes.
+
+Vert : Musée 22/156, Groupes 20/167, garde-fous 54/54 (écart 524→518, entités exposées 279→276). **Reste B4** : retirer les entités/tables dépréciées après une période de validation — non urgent, les tables ne gênent personne. Je le ferai sur ton feu, ou la session musée peut le prendre.

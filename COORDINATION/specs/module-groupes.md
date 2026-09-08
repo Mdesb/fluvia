@@ -173,7 +173,8 @@ différé), et le `motif` de gratuité (élève/accompagnateur) + le lien gratui
 - **B2 — migration miroir : FAIT** (commit `20720532`). Commande `musee:dossiers:migrer-vers-group`
   (write-only, idempotente via `GroupBooking.sourceMuseeDossierId`, rejouable, réversible). Vit dans
   `Musee` (Musee → App\Group). Test de miroir fidèle + idempotence.
-- **B3 — rebranch : RESTE.** Rerouter création / confirmation / liste des dossiers musée (backend
+- **B3 — rebranch : FAIT** (commit `62f772d8`, arbitrage « absorption complète »). La section « dossiers scolaires » de `Musee.jsx` est retirée et renvoie vers l'écran Groupes ; `DossierGroupeScolaire` / `ContingentGratuite` / `Gratuite` ne sont plus exposés en API (entités+tables conservées) ; processeurs/handlers retirés ; `GratuiteScolaireTest` retiré (CA-5/CA-6 couverts côté Groupes). Musée 22/156, Groupes 20/167, garde-fous 54/54.
+- ~~B3 (plan initial)~~ : Rerouter création / confirmation / liste des dossiers musée (backend
   `CreerDossierGroupeProcessor` + front `Musee.jsx` + 3 aides `client.js`) sur `App\Group`, migrer les
   tests musée (`GratuiteScolaireTest`…). CHANGE une verticale partagée + argent → laisser à la session
   qui tient le musée le temps de répondre au mot COORDINATION avant d'y toucher ; effort focalisé.
