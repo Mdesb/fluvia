@@ -23,6 +23,7 @@ use App\Group\State\CreateGroupBookingProcessor;
 use App\Group\State\InvoiceGroupBookingProcessor;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\Reservation;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Entity\Vente;
 use Doctrine\ORM\Mapping as ORM;
@@ -180,6 +181,16 @@ class GroupBooking
     #[Groups(['group_booking:read'])]
     private ?CommercialDocument $commercialDocument = null;
 
+    /**
+     * Réservation socle créée à la confirmation pour **décompter la jauge** du créneau
+     * (`Reservation.quantity` = effectif + accompagnateurs). Annulée quand la réservation de groupe
+     * l'est, ce qui libère les places.
+     */
+    #[ORM\ManyToOne(targetEntity: Reservation::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['group_booking:read'])]
+    private ?Reservation $jaugeReservation = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['group_booking:read'])]
     private \DateTimeImmutable $createdAt;
@@ -335,6 +346,18 @@ class GroupBooking
     public function setCommercialDocument(?CommercialDocument $commercialDocument): self
     {
         $this->commercialDocument = $commercialDocument;
+
+        return $this;
+    }
+
+    public function getJaugeReservation(): ?Reservation
+    {
+        return $this->jaugeReservation;
+    }
+
+    public function setJaugeReservation(?Reservation $jaugeReservation): self
+    {
+        $this->jaugeReservation = $jaugeReservation;
 
         return $this;
     }

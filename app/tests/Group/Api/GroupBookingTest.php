@@ -18,12 +18,13 @@ final class GroupBookingTest extends GroupApiTestCase
         [$client, $entete] = $this->gestionnaireSurA();
         $idGroupeA = $this->idGroupe(GroupFixtures::GROUPE_A_LABEL);
 
-        // Création : option par défaut.
+        // Création : option par défaut. Effectif tenu sous la jauge du créneau de démonstration
+        // (capacité 4, une place déjà prise) pour que la confirmation décompte sans déborder.
         $client->request('POST', '/api/group/bookings', $entete + [
             'json' => [
                 'group' => '/api/participant_groups/' . $idGroupeA,
-                'effectif' => 28,
-                'accompagnateurs' => 2,
+                'effectif' => 2,
+                'accompagnateurs' => 0,
             ],
         ]);
         self::assertResponseIsSuccessful();
@@ -40,10 +41,12 @@ final class GroupBookingTest extends GroupApiTestCase
         self::assertNotNull($affecte['creneau'] ?? null, 'Le créneau doit être affecté.');
         self::assertNotNull($affecte['activite'] ?? null, 'L\'activité du créneau doit être reprise.');
 
-        // Confirmation.
+        // Confirmation : décompte la jauge (responsable dérivé du client du groupe).
         $client->request('POST', '/api/group/bookings/' . $id . '/confirm', $entete + ['json' => []]);
         self::assertResponseIsSuccessful();
-        self::assertSame('confirmed', $client->getResponse()->toArray()['status']);
+        $confirme = $client->getResponse()->toArray();
+        self::assertSame('confirmed', $confirme['status']);
+        self::assertNotNull($confirme['jaugeReservation'] ?? null, 'Une réservation socle doit décompter la jauge.');
 
         // Annulation.
         $client->request('POST', '/api/group/bookings/' . $id . '/cancel', $entete + ['json' => []]);
@@ -55,6 +58,26 @@ final class GroupBookingTest extends GroupApiTestCase
             'json' => ['creneau' => '/api/reservation_creneaux/' . $this->unCreneauDeA()],
         ]);
         self::assertResponseStatusCodeSame(422, 'Une réservation annulée ne peut plus être affectée.');
+    }
+
+    public function testConfirmationRefuseeSiJaugeInsuffisante(): void
+    {
+        [$client, $entete] = $this->gestionnaireSurA();
+
+        // Un effectif qui dépasse la jauge du créneau de démonstration (capacité 4).
+        $client->request('POST', '/api/group/bookings', $entete + [
+            'json' => ['group' => '/api/participant_groups/' . $this->idGroupe(GroupFixtures::GROUPE_A_LABEL), 'effectif' => 10],
+        ]);
+        self::assertResponseIsSuccessful();
+        $id = $client->getResponse()->toArray()['id'];
+
+        $client->request('POST', '/api/group/bookings/' . $id . '/assign', $entete + [
+            'json' => ['creneau' => '/api/reservation_creneaux/' . $this->unCreneauDeA()],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/group/bookings/' . $id . '/confirm', $entete + ['json' => []]);
+        self::assertResponseStatusCodeSame(409, 'Une jauge insuffisante refuse la confirmation (RG-M5-01).');
     }
 
     public function testCreationPourUnGroupeEtrangerRefusee(): void

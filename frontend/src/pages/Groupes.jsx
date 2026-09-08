@@ -699,10 +699,12 @@ function FormFacture({ taux, onFermer, onValider }) {
 
   async function soumettre(e) {
     e.preventDefault()
-    if (!tauxTva) return
     setEnvoi(true)
     try {
-      const corps = { tauxTva }
+      // Champs optionnels : s'il y a un panier, le devis le reprend et ces valeurs sont ignorées.
+      // Sinon (facturation « à la tête »), le taux est requis côté serveur (422 explicite).
+      const corps = {}
+      if (tauxTva) corps.tauxTva = tauxTva
       if (prix.trim() !== '') corps.prixUnitaireHT = prix.trim()
       await onValider(corps)
     } finally {
@@ -713,21 +715,22 @@ function FormFacture({ taux, onFermer, onValider }) {
   return (
     <Modal open onClose={onFermer} titre="Facturer — générer un devis">
       <form onSubmit={soumettre}>
-        <p className="sub">Un devis part au payeur du groupe et entre dans la chaîne devis → bon de commande → facture.</p>
+        <p className="sub">Le devis part au payeur du groupe et entre dans la chaîne devis → bon de commande → facture (NF525, comptabilité incluse).</p>
+        <p className="sub">Si un panier est composé, laissez ces champs vides : le devis reprend le panier, chaque ligne avec sa TVA. Sinon, choisissez un taux (le prix par défaut est le tarif de l’activité).</p>
         <div className="field">
-          <label htmlFor="f-tva">Taux de TVA *</label>
-          <select id="f-tva" className="input" value={tauxTva} onChange={(e) => setTauxTva(e.target.value)} required>
-            <option value="">— choisir —</option>
+          <label htmlFor="f-tva">Taux de TVA</label>
+          <select id="f-tva" className="input" value={tauxTva} onChange={(e) => setTauxTva(e.target.value)}>
+            <option value="">— aucun (panier) —</option>
             {taux.map((t) => <option key={idDe(t)} value={idDe(t)}>{t.libelle} ({t.taux} %)</option>)}
           </select>
         </div>
         <div className="field">
-          <label htmlFor="f-prix">Prix unitaire HT (optionnel — défaut : tarif de l’activité)</label>
+          <label htmlFor="f-prix">Prix unitaire HT (facturation à la tête)</label>
           <input id="f-prix" className="input num" value={prix} onChange={(e) => setPrix(e.target.value)} placeholder="ex. 12.00" />
         </div>
         <div className="modal-actions">
           <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
-          <button className="btn primary" type="submit" disabled={envoi || !tauxTva}>Générer le devis</button>
+          <button className="btn primary" type="submit" disabled={envoi}>Générer le devis</button>
         </div>
       </form>
     </Modal>
