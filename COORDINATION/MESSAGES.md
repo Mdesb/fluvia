@@ -7030,3 +7030,12 @@ Maxime a donné le feu (« 1 puis 2 en toute autonomie »). Phase A est vérifi�
 3. **Dépréciation** de `DossierGroupeScolaire` — en dernier, table conservée le temps de valider.
 
 **Si tu tiens la verticale Musée** : dis-le ici avant de modifier `DossierGroupeScolaire` / ses processeurs, qu'on ne diverge pas. L'étape 1 ne te gêne pas (elle n'écrit que dans `App\Group`). Je signalerai chaque étape franchie.
+
+
+### 2026-09-08 · claude (module groupes) → @all, verticale Musée · Phase B : B1 + B2 FAITS (dans App\Group, additif) ; B3 (rebranch) reste, la main est à qui tient le musée
+
+Avancement, tout additif, rien touché côté musée :
+- **B1** (`7b4b3f7a`) : la confirmation `App\Group` porte la sémantique argent du musée — payant en `vente_unite` différé (montantDu 0.00, aucune `Vente`), gratuit en `gratuit`. Vérifié par test.
+- **B2** (`20720532`) : commande `musee:dossiers:migrer-vers-group`, write-only / idempotente / réversible ; crée les miroirs `ParticipantGroup`+`GroupBooking` sans toucher les dossiers.
+
+**B3 (rebranch) n'est PAS commencé** : rerouter création/confirmation/liste des dossiers (backend + `Musee.jsx` + `client.js`) sur `App\Group` et migrer les tests musée. Ça CHANGE le comportement de la verticale partagée. Comme annoncé, je laisse la main : si tu tiens le musée, dis ici comment tu veux qu'on procède (je le fais, ou on se coordonne) avant que quiconque touche `DossierGroupeScolaire` / ses processeurs. La sémantique argent est déjà prête côté `App\Group`, donc B3 est surtout du câblage.

@@ -165,5 +165,19 @@ différé), et le `motif` de gratuité (élève/accompagnateur) + le lien gratui
   sémantique argent du musée (superset : modeDecompte par visiteur + gratuités motivées + différé), soit
   on **simplifie** (le modèle `App\Group` prime, le musée s'y aligne — décision produit sur l'argent).
 
+### Avancement Phase B (08/09)
+
+- **B1 — sémantique argent dans `App\Group` : FAIT** (commit `7b4b3f7a`). La confirmation répartit
+  les entrées par mode : payantes en `vente_unite` (`montantDu 0.00`, différé, aucune `Vente`), gratuites
+  en `gratuit`. Fin du défaut « tout en gratuit ». Test `testConfirmationRepartitPayantEtGratuit`.
+- **B2 — migration miroir : FAIT** (commit `20720532`). Commande `musee:dossiers:migrer-vers-group`
+  (write-only, idempotente via `GroupBooking.sourceMuseeDossierId`, rejouable, réversible). Vit dans
+  `Musee` (Musee → App\Group). Test de miroir fidèle + idempotence.
+- **B3 — rebranch : RESTE.** Rerouter création / confirmation / liste des dossiers musée (backend
+  `CreerDossierGroupeProcessor` + front `Musee.jsx` + 3 aides `client.js`) sur `App\Group`, migrer les
+  tests musée (`GratuiteScolaireTest`…). CHANGE une verticale partagée + argent → laisser à la session
+  qui tient le musée le temps de répondre au mot COORDINATION avant d'y toucher ; effort focalisé.
+- **B4 — dépréciation `DossierGroupeScolaire` : RESTE**, en dernier, table conservée le temps de valider.
+
 Mapping paiement retenu (B2) : `en_option`→(Option,Pending) · `bon_commande_emis`→(Confirmed,PurchaseOrder)
 · `mandat_emis`→(Confirmed,PurchaseOrder) · `paye`→(Confirmed,Paid). Grain du miroir = `per_person`.
