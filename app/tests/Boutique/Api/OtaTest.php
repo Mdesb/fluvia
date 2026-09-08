@@ -24,12 +24,15 @@ final class OtaTest extends BoutiqueApiTestCase
     public function testCa19VenteOtaDecrementeLeMemeInventaireQueLaVenteDirecte(): void
     {
         $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_TIMED_ENTRY_CODE]);
-        $ressourceId = $produit->getChampsPerso()['ressourceId'] ?? null;
-        self::assertIsString($ressourceId, 'Produit timed-entry sans ressource associée (fixture).');
+        // Le créneau se retrouve par l'ACTIVITÉ qui référence le produit — le chemin que la boutique
+        // emprunte depuis le 07/09. Il passait par `champsPerso['ressourceId']`, une convention que
+        // plus aucun code ne lit : ce test aurait continué à passer en interrogeant un lien mort.
         $creneau = $this->em()->getRepository(Creneau::class)->createQueryBuilder('c')
-            ->andWhere('c.ressource = :ressource')->setParameter('ressource', $ressourceId, 'uuid')
+            ->join('c.activite', 'a')
+            ->andWhere('a.produitTarifReference = :produit')
+            ->setParameter('produit', $produit->getId(), 'uuid')
             ->setMaxResults(1)->getQuery()->getOneOrNullResult();
-        self::assertInstanceOf(Creneau::class, $creneau);
+        self::assertInstanceOf(Creneau::class, $creneau, 'Produit timed-entry sans activité porteuse (fixture).');
         $vitrineA = $this->entite(Vitrine::class, ['etablissement' => $this->entite(\App\Organisation\Entity\Etablissement::class, ['nom' => \App\DataFixtures\SocleFixtures::ETAB_A_NOM])]);
 
         $partenaire = (new PartenaireOTA())->setVitrine($vitrineA)->setNom('Partenaire démo')

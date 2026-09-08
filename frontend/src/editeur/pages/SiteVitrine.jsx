@@ -186,6 +186,139 @@ function descripteurRubriques() {
   }
 }
 
+// ── Le referentiel des metiers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Une page de /metiers, sans deploiement.
+ *
+ * ⚠ LES MODULES NE SE SAISISSENT PAS : ils se DEDUISENT des activites cochees, et la reponse du
+ *   serveur les rend. C'est ce qui rend l'ecran honnete — on coche ce que l'etablissement FAIT, et
+ *   on voit ce que le produit en conclut. Un champ « modules » ici permettrait d'annoncer sur une
+ *   page de vente un module qu'aucune activite ne justifie.
+ *
+ * ⚠ LES NEUF ACTIVITES VIENNENT DU SERVEUR. Les reecrire ici ne casserait rien aujourd'hui et
+ *   deriverait au premier libelle corrige : l'ecran proposerait « Reservation de ressource » la ou
+ *   le site vend « Reservation de creneaux », sans que rien ne le signale.
+ */
+function descripteurMetiers(activites) {
+  return {
+    titre: 'Métiers',
+    aQuoiCaSert:
+      'Chaque ligne est une page de /metiers. Ajouter un métier ici suffit : sa page, son entrée au '
+      + 'plan du site et ses modules suggérés en découlent, sans mise en production.',
+    siVide:
+      'Aucun métier en base : le site sert alors les cinq métiers d’origine, écrits dans le code. '
+      + 'Ce n’est pas une panne — mais rien de ce qui est fait ici n’a encore basculé.',
+    consequenceSuppression:
+      'La page du métier disparaît, et son adresse rendra 404 pour qui l’avait en favori ou l’a vue '
+      + 'dans un moteur. Son TEXTE de page n’est pas détruit : il revient si le métier est recréé '
+      + 'avec le même code. Pour retirer la page sans casser de lien, repassez le métier en brouillon.',
+    charger: api.editorMetiers,
+    creer: api.creerEditorMetier,
+    modifier: api.majEditorMetier,
+    supprimer: api.supprimerEditorMetier,
+    champs: [
+      {
+        nom: 'code',
+        libelle: 'Code',
+        type: 'text',
+        requis: true,
+        exemple: 'bowling',
+        // Le refus est structurel cote serveur : la mise a jour ne recoit meme pas ce champ.
+        aide:
+          'Sans accent ni espace. ⚠ Il ne change plus après la création : c’est lui qui relie la page '
+          + 'à son texte, et le modifier détacherait la page de ce qui y est écrit.',
+      },
+      {
+        nom: 'name',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Bowlings',
+        aide: 'Ce que le menu et la liste des métiers affichent.',
+      },
+      {
+        nom: 'searchTitle',
+        libelle: 'Titre de recherche',
+        type: 'text',
+        exemple: 'Logiciel de gestion pour bowling',
+        aide:
+          'Le titre de l’onglet et celui que les moteurs affichent. Il contient les mots qu’on tape, '
+          + 'là où le nom doit tenir sur une ligne. Vide : le nom sert des deux.',
+      },
+      {
+        nom: 'lead',
+        libelle: 'Chapô',
+        type: 'texte-long',
+        lignes: 4,
+        requis: true,
+        aide: 'Les deux phrases en tête de page, et la description servie aux moteurs.',
+      },
+      {
+        nom: 'activities',
+        libelle: 'Ce que fait l’établissement',
+        type: 'choix-multiples',
+        options: activites.map((a) => ({ valeur: a.id, libelle: a.label })),
+        aide:
+          'Les modules proposés sur la page en découlent : cochez ce que l’établissement FAIT, pas ce '
+          + 'que vous voulez lui vendre. ⚠ Les cinq métiers d’origine gardent leur préréglage écrit '
+          + 'dans le produit — pour eux, ces cases ne changent pas les modules affichés.',
+      },
+      {
+        nom: 'slug',
+        libelle: 'Adresse',
+        type: 'text',
+        exemple: 'bowling',
+        aide:
+          'Vide : c’est le code qui sert. ⚠ Une fois le métier publié, elle ne peut plus changer — '
+          + 'les liens partagés et les pages indexées pointeraient dans le vide.',
+      },
+      {
+        nom: 'position',
+        libelle: 'Rang',
+        type: 'nombre',
+        aide: 'L’ordre dans la liste des métiers. Les cinq d’origine vont de 10 à 50.',
+      },
+      {
+        nom: 'status',
+        libelle: 'État',
+        type: 'choix',
+        options: [
+          { valeur: 'draft', libelle: 'Brouillon — invisible du public' },
+          { valeur: 'published', libelle: 'Publié' },
+        ],
+        aide: 'Un brouillon existe ici et n’apparaît nulle part sur le site.',
+      },
+    ],
+    colonnes: [
+      { cle: 'name', titre: 'Métier', rendu: (r) => <span className="nm">{r.name}</span> },
+      { cle: 'slug', titre: 'Adresse', rendu: (r) => <span className="mut">/metiers/{r.slug}</span> },
+      {
+        cle: 'activities',
+        titre: 'Activités',
+        num: true,
+        rendu: (r) => (r.activities || []).length,
+      },
+      {
+        cle: 'modules',
+        titre: 'Modules suggérés',
+        rendu: (r) =>
+          (r.modules || []).length > 0
+            ? <span className="mut">{(r.modules || []).join(', ')}</span>
+            : <span className="mut">aucun</span>,
+      },
+      {
+        cle: 'status',
+        titre: 'État',
+        rendu: (r) =>
+          r.status === 'published'
+            ? <span className="badge ok">Publié</span>
+            : <span className="badge">Brouillon</span>,
+      },
+    ],
+  }
+}
+
 // ── Les blocs de la page d'accueil ──────────────────────────────────────────────────────────────
 
 /**
@@ -417,6 +550,7 @@ function EditeurDeBlocs({ groupe, introduction }) {
 export default function SiteVitrine({ peutEcrire = true }) {
   const [onglet, setOnglet] = useState('articles')
   const [rubriques, setRubriques] = useState([])
+  const [activites, setActivites] = useState([])
 
   // Les rubriques alimentent la liste déroulante du formulaire d'article. Elles sont relues quand
   // on revient sur l'onglet des articles : sans ça, une rubrique créée à l'instant n'apparaîtrait
@@ -435,6 +569,20 @@ export default function SiteVitrine({ peutEcrire = true }) {
     relireLesRubriques()
   }, [relireLesRubriques, onglet])
 
+  /*
+   * Les neuf activites, une fois. Elles ne changent pas d'une session a l'autre — D15 les gele —
+   * mais elles viennent quand meme du serveur : voir `descripteurMetiers`.
+   */
+  useEffect(() => {
+    let vivant = true
+
+    api.editorActivites()
+      .then((r) => { if (vivant) setActivites(membres(r)) })
+      .catch(() => { if (vivant) setActivites([]) })
+
+    return () => { vivant = false }
+  }, [])
+
   return (
     <section>
       <h2>Site vitrine</h2>
@@ -448,6 +596,7 @@ export default function SiteVitrine({ peutEcrire = true }) {
         {[
           ['articles', 'Articles'],
           ['rubriques', 'Rubriques'],
+          ['metiers', 'Métiers'],
           ['accueil', 'Page d’accueil'],
           ['modules', 'Pages de modules'],
         ].map(([cle, libelle]) => (
@@ -473,6 +622,23 @@ export default function SiteVitrine({ peutEcrire = true }) {
           peutEcrire={peutEcrire}
           onEcrit={relireLesRubriques}
         />
+      )}
+      {onglet === 'metiers' && (
+        <>
+          {/* ⚠ SANS LES NEUF, LE FORMULAIRE NE PEUT PAS ETRE HONNETE : une liste d'activites
+              vide laisserait creer un metier sans composition, dont la page n'afficherait aucun
+              module — et rien ne dirait pourquoi. On le dit plutot que de l'afficher quand meme. */}
+          {activites.length === 0 && (
+            <p className="banner banner-error">
+              Les activités n’ont pas pu être chargées. Créer un métier maintenant le laisserait
+              sans composition, et sa page n’afficherait aucun module.
+            </p>
+          )}
+          <ReferentielEditable
+            descripteur={descripteurMetiers(activites)}
+            peutEcrire={peutEcrire && activites.length > 0}
+          />
+        </>
       )}
       {onglet === 'accueil' && (
         <EditeurDeBlocs

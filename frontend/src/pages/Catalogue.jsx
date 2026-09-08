@@ -307,7 +307,13 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
 
   // La fiche prend la page entiere : on n'affiche ni la liste ni le formulaire de creation derriere.
   if (selId) {
-    const connu = produits.find((p) => String(p.id) === String(selId))
+    // ⚠ `produits` vaut `null` tant que la lecture n'a pas repondu, et `selId` peut deja
+    // etre renseigne a CE rendu-la : il vient de l'URL (`?fiche=`), donc d'un lien partage,
+    // d'un signet ou d'un simple F5. Sans le repli, ouvrir une fiche par son URL passe tout
+    // le Catalogue a la frontiere d'erreur -- liste, fiche et formulaire avec elle.
+    // `ProduitFiche` sait se rendre sans l'objet complet : c'est le sens de `connu || { id }`
+    // juste dessous, et c'est ce chemin-la que le repli rend atteignable.
+    const connu = (produits || []).find((p) => String(p.id) === String(selId))
     return (
       <>
         <button

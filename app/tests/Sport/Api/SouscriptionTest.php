@@ -39,7 +39,7 @@ final class SouscriptionTest extends SportApiTestCase
 
         $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
             'json' => [
-                'adherent' => '/api/beneficiaires/' . $adherent->getId(),
+                'adherent' => '/api/clients/' . $enfant->getId(),
                 'payeur' => '/api/clients/' . $payeur->getId(),
                 'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
                 'dureeEngagementMois' => 12,
@@ -54,6 +54,17 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertArrayHasKey('mandatSepa', $abonnement);
 
         $abonnementId = $abonnement['id'];
+
+        // ── TÉMOIN DU NOUVEAU CONTRAT : l'adhérent est un CLIENT, résolu en bénéficiaire ─────────
+        // On a désigné le CLIENT de l'enfant ; le serveur doit l'avoir résolu (forPurchase) en le
+        // bénéficiaire attaché à cet enfant — celui-là même que la souscription au comptoir emploie.
+        $abonnementEntite = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        self::assertNotNull($abonnementEntite);
+        self::assertSame(
+            (string) $adherent->getId(),
+            (string) $abonnementEntite->getAdherent()?->getId(),
+            'Le client adhérent désigné doit être résolu en son bénéficiaire (forPurchase).',
+        );
 
         // Mandat signé, IBAN jamais exposé (embarqué dans la réponse abonnement, groupe `abonnement:read`).
         self::assertSame('actif', $abonnement['mandatSepa']['statut']);
