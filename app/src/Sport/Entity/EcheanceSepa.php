@@ -6,6 +6,7 @@ namespace App\Sport\Entity;
 
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -43,6 +44,21 @@ use Symfony\Component\Validator\Constraints as Assert;
  *
  * `exact` et pas `partial` : un identifiant se compare, il ne se cherche pas.
  */
+/**
+ * ⚠ SANS CE FILTRE, `?order[dateProgrammee]=asc` ETAIT ACCEPTE ET IGNORE — MEME PIEGE QUE CI-DESSUS.
+ *
+ * `FicheAbonnement.jsx:95` envoyait ce parametre depuis le 03/09. API Platform rendait 200 et la
+ * collection dans l'ordre des UUID. Le defaut se DEGUISAIT donc en corrige : l'appel est la, la
+ * reponse est verte, et rien ne dit que le tri n'a pas eu lieu.
+ *
+ * ⚠ Le temoin qui tranche vient du serveur, pas d'une relecture : le gabarit `search` de la reponse
+ * declarait `{?abonnement,abonnement[],statut,statut[]}`. Une ressource dit elle-meme ce qu'elle
+ * sait faire — l'interroger coute moins cher que de deduire.
+ *
+ * Le meme correctif existe depuis longtemps sur `Platform\Entity\Notification` (meme cause, meme
+ * remede) : le frere avait ete repare, pas celui-ci.
+ */
+#[ApiFilter(OrderFilter::class, properties: ['dateProgrammee' => 'ASC'], arguments: ['orderParameterName' => 'order'])]
 #[ApiFilter(SearchFilter::class, properties: ['abonnement' => 'exact', 'statut' => 'exact'])]
 #[ApiResource(
     shortName: 'EcheanceSepa',
@@ -86,6 +102,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: ReduceScheduledDebitProcessor::class,
         ),
     ],
+    // UN ECHEANCIER SE LIT DANS L'ORDRE, ET PERSONNE NE DEVRAIT AVOIR A LE DEMANDER.
+    //
+    // ⚠ `OrderFilter` seul ne suffit pas : il rend le tri POSSIBLE, pas acquis. `Sport.jsx`
+    // ne passe aucun parametre et recevait donc l'ordre des UUID — 25 lignes de septembre 2025
+    // a septembre 2026 entremelees. Un defaut d'affichage la, mais pas seulement : tout calcul
+    // qui prend « le premier a venir » par `find` rend alors une echeance QUELCONQUE.
+    order: ['dateProgrammee' => 'ASC'],
     normalizationContext: ['groups' => ['echeance:read']],
 )]
 class EcheanceSepa

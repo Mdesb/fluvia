@@ -159,16 +159,37 @@ final class CreationCompteHandler
         return $compte;
     }
 
-    /** Trouve ou crée le rôle système RoleClientFinal (idempotent, §1.4/T2 du plan). */
+    /**
+     * Trouve ou crée le rôle système RoleClientFinal, ET réconcilie ses permissions.
+     *
+     * ⚠ **CETTE MÉTHODE SE DISAIT « IDEMPOTENTE » ALORS QU'ELLE NE L'ÉTAIT QUE SUR LE CONTENANT.**
+     * Sa version précédente sortait sur `if ($role instanceof Role) return $role;` : le rôle
+     * trouvé était renvoyé **sans qu'on regarde jamais ce qu'il contient**. Les douze permissions
+     * n'étaient posées qu'au moment de la création.
+     *
+     * Constaté en préproduction le 07/09 : le rôle existait avec **zéro permission**. Deux comptes
+     * clients le portaient, et l'espace client rendait « Access Denied » sur ses commandes et ses
+     * billets — `boutique.lire_soi` étant exigé par `CompteClient`. **Aucune ré-exécution ne
+     * pouvait réparer ça** : chaque création de compte retrouvait le rôle vide et repartait avec.
+     *
+     * ⚠ Le mot « idempotent » dans l'ancien docblock est précisément ce qui décourageait d'aller
+     * vérifier. Un contrôle qui teste la présence du contenant et annonce le contenu est pire
+     * qu'un contrôle absent : il rassure.
+     *
+     * ⚠ **On AJOUTE ce qui manque, on ne RETIRE rien.** Un rôle qu'un exploitant a enrichi à la
+     * main ne doit pas être amputé par une création de compte — la liste ci-dessus est un
+     * plancher, pas une définition exhaustive.
+     */
     private function roleClientFinal(): Role
     {
         $role = $this->em->getRepository(Role::class)->findOneBy(['nom' => self::ROLE_CLIENT_FINAL_NOM]);
-        if ($role instanceof Role) {
-            return $role;
+
+        if (!$role instanceof Role) {
+            $role = new Role();
+            $role->setNom(self::ROLE_CLIENT_FINAL_NOM)->setEstModele(false);
+            $this->em->persist($role);
         }
 
-        $role = new Role();
-        $role->setNom(self::ROLE_CLIENT_FINAL_NOM)->setEstModele(false);
         foreach (self::PERMISSIONS_CLIENT_FINAL as [$module, $action]) {
             $permission = $this->em->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
             if (!$permission instanceof Permission) {
@@ -176,9 +197,11 @@ final class CreationCompteHandler
                 $permission->setModule($module)->setAction($action);
                 $this->em->persist($permission);
             }
-            $role->addPermission($permission);
+
+            if (!$role->getPermissions()->contains($permission)) {
+                $role->addPermission($permission);
+            }
         }
-        $this->em->persist($role);
 
         return $role;
     }

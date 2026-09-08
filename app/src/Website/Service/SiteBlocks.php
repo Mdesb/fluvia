@@ -29,11 +29,13 @@ use App\Website\Enum\BlockType;
 final class SiteBlocks
 {
     /**
+     * @param list<array{code: string, nom: string}> $metiers les metiers a declarer ; VIDE = ceux du repli
+     *
      * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
      */
-    public static function all(): array
+    public static function all(array $metiers = []): array
     {
-        return array_merge(self::blocsDaccueil(), self::blocsDeModule(), self::blocsDeMetier());
+        return array_merge(self::blocsDaccueil(), self::blocsDeModule(), self::blocsDeMetier($metiers));
     }
 
     /**
@@ -133,10 +135,14 @@ final class SiteBlocks
         ];
     }
 
-    /** Le type attendu pour une clé, ou `null` si la clé n'est pas déclarée. */
-    public static function typeOf(string $key): ?BlockType
+    /**
+     * Le type attendu pour une clé, ou `null` si la clé n'est pas déclarée.
+     *
+     * @param list<array{code: string, nom: string}> $metiers les métiers à déclarer ; VIDE = ceux du repli
+     */
+    public static function typeOf(string $key, array $metiers = []): ?BlockType
     {
-        foreach (self::all() as $bloc) {
+        foreach (self::all($metiers) as $bloc) {
             if ($bloc['key'] === $key) {
                 return $bloc['type'];
             }
@@ -146,19 +152,36 @@ final class SiteBlocks
     }
 
     /**
-     * Un corps rédigeable par métier, dérivé de l'énumération des verticales (ED-12).
+     * Un corps rédigeable par métier, un par métier publié.
      *
-     * Même règle que pour les modules : la liste vient du produit, pas d'une saisie. Une sixième
-     * verticale ajoutée à `Metier` fait apparaître sa page ET son bloc, sans que personne ait à s'en
-     * souvenir.
+     * Même règle que pour les modules : la liste vient du produit, pas d'une saisie. Un métier de
+     * plus fait apparaître sa page ET son bloc, sans que personne ait à s'en souvenir — et depuis ce
+     * lot, ce métier de plus peut être une simple ligne en base, sans déploiement.
+     *
+     * ⚠ **LA LISTE ARRIVE, ELLE NE SE CHERCHE PAS.** Cette classe s'annonce, en tête, comme « une
+     * DÉCLARATION : elle doit rester lisible sans conteneur » — on peut lire le catalogue des blocs
+     * sans démarrer l'application. Lui donner accès à la base pour aller chercher les métiers
+     * casserait cet invariant ; lui passer la liste ne le casse pas.
+     *
+     * ⚠ **VIDE VEUT DIRE « CEUX DU REPLI », PAS « AUCUN ».** C'est exactement le comportement
+     * d'avant ce lot : les cinq métiers de `TradeFallback`, via `MetierCatalog::codes()`. Sans ce
+     * défaut, un appelant qui oublierait l'argument déclarerait ZÉRO bloc de métier — et les cinq
+     * textes existants deviendraient inenregistrables, sans erreur et sans page cassée, jusqu'au
+     * jour où quelqu'un essaierait d'en modifier un.
+     *
+     * @param list<array{code: string, nom: string}> $metiers les métiers à déclarer ; VIDE = ceux du repli
      *
      * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
      */
-    private static function blocsDeMetier(): array
+    private static function blocsDeMetier(array $metiers = []): array
     {
         $blocs = [];
 
-        foreach (\App\Website\Service\MetierCatalog::codes() as $metier) {
+        if ([] === $metiers) {
+            $metiers = \App\Website\Service\MetierCatalog::codes();
+        }
+
+        foreach ($metiers as $metier) {
             $blocs[] = [
                 'key' => \App\Website\Service\MetierCatalog::cleDeBloc($metier['code']),
                 'type' => BlockType::Rich,

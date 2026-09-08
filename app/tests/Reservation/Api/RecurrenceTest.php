@@ -109,6 +109,39 @@ final class RecurrenceTest extends ReservationApiTestCase
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
 
+        // ⚠ CE TEST REPOSE SUR UNE ABSENCE, ET L'ABSENCE NE CRIE PAS TOUTE SEULE.
+        //
+        // Il vérifie qu'à défaut d'alternative, le report bascule en validation manuelle. Sa
+        // précondition — qu'AUCUNE autre ressource du même `codeType` et de capacité suffisante
+        // n'existe dans tout le jeu de fixtures — n'était écrite nulle part. Le jour (07/09/2026)
+        // où une fixture a ajouté un second `terrain` de capacité 4, ce test a échoué sur son
+        // assertion finale, en accusant `RecurrenceReportHandler` d'un défaut qu'il n'avait pas.
+        //
+        // La précondition est donc vérifiée ici, et elle nomme sa propre cause : le prochain qui
+        // ajoute une ressource lira pourquoi son ajout casse ce test, au lieu de chercher dans le
+        // handler.
+        $terrain = $this->entite(Ressource::class, ['libelle' => ReservationFixtures::RESSOURCE_TERRAIN_LIBELLE]);
+        $equivalentes = $em->getRepository(Ressource::class)->createQueryBuilder('r')
+            ->andWhere('r.codeType = :type')
+            ->andWhere('r.capacitePropre >= 4')
+            ->andWhere('r.actif = true')
+            ->andWhere('r.id != :soi')
+            ->setParameter('type', $terrain->getCodeType())
+            ->setParameter('soi', $terrain->getId(), 'uuid')
+            ->getQuery()->getResult();
+        // ⚠ ON COMPARE LES LIBELLÉS, PAS LES ENTITÉS. Un `assertSame([], $entites)` qui échoue fait
+        // vider par PHPUnit le graphe Doctrine complet — deux cents lignes de `ClassMetadata`
+        // sérialisées par-dessus le message. Le diagnostic était juste et illisible ; ici l'échec
+        // NOMME la ressource fautive sur une ligne.
+        $libelles = array_map(static fn (Ressource $r): string => $r->getLibelle(), $equivalentes);
+        self::assertSame(
+            [],
+            $libelles,
+            'Précondition CA-7 : ce test exige qu\'AUCUNE ressource de report ne soit disponible. '
+            . 'Une fixture en a ajouté une du même codeType et de capacité >= 4 — ce n\'est pas le '
+            . 'handler qui est en cause, c\'est le décor.',
+        );
+
         $client->request('POST', '/api/reservation/creneaux', $entete + [
             'json' => [
                 'ressource' => '/api/reservation_ressources/' . $this->idRessource(ReservationFixtures::RESSOURCE_TERRAIN_LIBELLE),

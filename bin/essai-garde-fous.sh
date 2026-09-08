@@ -534,6 +534,47 @@ PY
 commiter "banc : relation ecrivable vers du cloisonne"
 essai "écriture transfrontière — relation écrivable vers du cloisonné" refus "écriture qui traverse la frontière"
 
+# --- garde-fou n°55 : l'énumération et le référentiel de repli qui divergent ---------------------
+#
+# ⚠ CE CAS ÉCRIT SES DEUX FICHIERS, il ne mute pas ceux de l'arbre — et c'est la seule forme qui
+#   tienne. Le banc travaille sur un clone dont `app/src` vient de `main` : tant que le lot
+#   « referentiel-metiers » n'y est pas, `TradeFallback.php` n'existe pas du tout. Le garde-fou se
+#   tairait alors de lui-même (voir son en-tête), le push serait accepté, et le cas de REFUS
+#   tomberait en accusant un garde-fou parfaitement sain.
+#
+# Ce qui est éprouvé ici est donc la RÈGLE, pas le contenu du jour : deux fichiers minimaux que le
+# contrôle lit exactement comme les vrais. Aucune remise en état n'est nécessaire — `essai` fait un
+# `reset --hard` + `clean` après chaque cas, et les deux cas sont des refus.
+
+ecrire_metiers() { # ecrire_metiers <codes de l'énumération> <codes du repli>
+    mkdir -p app/src/Fonctionnalite/Enum app/src/Website/Config
+
+    {
+        printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\Fonctionnalite\\Enum;\n\nenum Metier: string\n{\n'
+        for code in $1; do printf "    case Banc%s = '%s';\n" "$code" "$code"; done
+        printf '}\n'
+    } > app/src/Fonctionnalite/Enum/Metier.php
+
+    {
+        printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\Website\\Config;\n\nfinal class TradeFallback\n{\n'
+        printf '    public const NOMS = [\n'
+        for code in $2; do printf "        '%s' => [],\n" "$code"; done
+        printf '    ];\n\n    private const ACTIVITES = [\n'
+        for code in $2; do printf "        '%s' => [],\n" "$code"; done
+        printf '    ];\n}\n'
+    } > app/src/Website/Config/TradeFallback.php
+}
+
+CINQ="piscine sport padel patinoire musee"
+
+ecrire_metiers "$CINQ bowling" "$CINQ"
+commiter "banc : un cas de Metier sans son entree de repli"
+essai "métiers — un cas de l'énumération sans entrée de repli" refus "sans entrée dans"
+
+ecrire_metiers "$CINQ" "$CINQ bowling"
+commiter "banc : une entree de repli sans son cas de Metier"
+essai "métiers — une entrée de repli sans cas dans l'énumération" refus "sans cas dans"
+
 # --- le filet de complétude lui-même ----------------------------------------------------------
 # C'est le mécanisme qui protège tous les autres : un garde-fou ajouté sans être appelé par le
 # hook doit faire refuser le push qui l'ajoute. Sans ce cas, le filet serait la seule pièce de
