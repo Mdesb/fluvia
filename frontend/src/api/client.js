@@ -2432,7 +2432,7 @@ export const api = {
   creerEmploye: (corps) =>
     request('/api/employes', { method: 'POST', body: corps, ld: true }),
   // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
-  absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
+  absences: (params) => request('/api/absences', { query: { itemsPerPage: 200, ...(params || {}) } }),
   declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
   validerAbsence: (id) => request(`/api/personnel/absences/${id}/valider`, { method: 'POST' }),
   refuserAbsence: (id) => request(`/api/personnel/absences/${id}/refuser`, { method: 'POST' }),
@@ -2457,7 +2457,36 @@ export const api = {
     request('/api/qualifications', { query: { itemsPerPage: 200, ...(params || {}) } }),
   creerQualification: (corps) => request('/api/qualifications', { method: 'POST', body: corps, ld: true }),
   majQualification: (id, corps) => request(`/api/qualifications/${id}`, { method: 'PATCH', body: corps }),
-  badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
+
+  // LA FICHE D UN EMPLOYE, ET LE GESTE QUI LE SORT DE L ORPHELINAT.
+  //
+  // `GET /api/employes/{id}` et `PATCH /api/employes/{id}` existaient depuis l origine sans aucun
+  // appelant : on savait DECLARER un employe et jamais le corriger. Une faute de frappe sur un nom,
+  // un mauvais type de contrat ou une date d entree erronee etaient definitifs.
+  //
+  // ⚠ `statut` N EST PAS ECRIVABLE PAR CE CHEMIN : il est dans `employe:read` seul, et se change par
+  // `/suspendre` et `/reactiver` (deja branches). L envoyer ici serait accepte et n enregistrerait
+  // rien -- un champ qui a l air d ecrire et n ecrit pas.
+  employe: (id) => request(`/api/employes/${id}`),
+  majEmploye: (id, corps) => request(`/api/employes/${id}`, { method: 'PATCH', body: corps }),
+
+  // LES RATTACHEMENTS -- CINQ OPERATIONS EXPOSEES, ZERO ECRAN, ET UN CUL-DE-SAC AU BOUT.
+  //
+  // `EmissionBadgeStaffHandler` refuse un badge a tout employe sans rattachement ACTIF sur
+  // l etablissement (RG-PERSO-09). Or `EmployeModal` n envoie jamais de rattachement a la creation,
+  // et aucun ecran ne savait en poser : tout employe cree par le produit naissait orphelin, et le
+  // restait. Un orphelin n appartient a aucun etablissement, donc a aucun client -- il est visible
+  // de tout detenteur de `personnel.gerer_employe`, quel que soit son etablissement actif.
+  //
+  // ⚠ Le rattachement RH et l `Affectation` du socle NE SE CONFONDENT PAS (RG-PERSO-09) : le
+  // premier ouvre l eligibilite au planning et au badge sur un site, la seconde ouvre l acces AU
+  // LOGICIEL. Rattacher quelqu un ne lui donne aucun compte.
+  rattachements: (params) =>
+    request('/api/rattachement_employes', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerRattachement: (corps) => request('/api/rattachement_employes', { method: 'POST', body: corps, ld: true }),
+  majRattachement: (id, corps) => request(`/api/rattachement_employes/${id}`, { method: 'PATCH', body: corps }),
+  supprimerRattachement: (id) => request(`/api/rattachement_employes/${id}`, { method: 'DELETE' }),
+  badgeStaffs: (params) => request('/api/badge_staffs', { query: { itemsPerPage: 200, ...(params || {}) } }),
   revoquerBadgeStaff: (id, motif) =>
     request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
 

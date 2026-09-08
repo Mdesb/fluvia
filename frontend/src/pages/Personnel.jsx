@@ -415,6 +415,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
   // le second pour afficher le bouton de creation produirait un 403 au clic, decouvert trop tard.
   const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
   const [creation, setCreation] = useState(false)
+  const [fiche, setFiche] = useState(null)
   const [rechargement, setRechargement] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -426,6 +427,20 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
     { cle: 'typeContrat', entete: 'Contrat', rendu: (r) => r.typeContrat || '—' },
     { cle: 'dateEntree', entete: 'Entrée', rendu: (r) => dateFr(r.dateEntree) },
     { cle: 'statut', entete: 'Statut', rendu: (r) => <span className={`badge ${STATUT_EMP[r.statut] || 'mut'}`}>{r.statut || '—'}</span> },
+    {
+      cle: 'fiche',
+      entete: '',
+      // La fiche est en LECTURE pour tout le monde : elle rassemble ce qu'on sait deja de la
+      // personne. Ce sont les gestes qu'elle contient qui sont gardes, un par un.
+      rendu: (r) => (
+        <div style={{ textAlign: 'right' }}>
+          <button className="btn ghost sm" type="button" style={{ padding: '1px 8px', fontSize: 11.5 }}
+            onClick={() => setFiche(r)}>
+            Fiche
+          </button>
+        </div>
+      ),
+    },
   ]
 
   if (peutGerer) {
@@ -545,6 +560,14 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
         open={creation}
         onClose={() => setCreation(false)}
         onFait={() => { setCreation(false); setRechargement((n) => n + 1) }}
+      />
+
+      <FicheEmploye
+        employe={fiche}
+        droits={droits}
+        etabActif={etabActif}
+        onClose={() => setFiche(null)}
+        onChange={() => setRechargement((n) => n + 1)}
       />
     </div>
   )
@@ -814,7 +837,7 @@ function OngletQualifications({ etabActif, droits = [] }) {
           + "affectation tant qu'elle n'est pas saisie ici."}
         colonnes={colonnes}
         actions={(
-          <div style={{ display: 'flex', gap: 'var(--esp-moyen, 8px)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center', flexWrap: 'wrap' }}>
             <select className="input sm" value={filtreEmploye} aria-label="Filtrer par employe"
               style={{ fontSize: 12, padding: '2px 6px' }}
               onChange={(e) => setFiltreEmploye(e.target.value)}>
@@ -972,6 +995,443 @@ function QualificationModal({ open, valeur, employes = [], onClose, onFait }) {
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+
+// LA FICHE D'UN EMPLOYE — ET LE GESTE QUI LE SORT DE L'ORPHELINAT.
+//
+// ── LE CUL-DE-SAC QU'ELLE REFERME ───────────────────────────────────────────────────────────────
+//
+// `EmissionBadgeStaffHandler` refuse un badge a tout employe sans `RattachementEmploye` ACTIF sur
+// l'etablissement (RG-PERSO-09). Or `EmployeModal` n'envoie a la creation que
+// `{nom, prenom, poste, typeContrat, matricule, dateEntree}` — JAMAIS de rattachement — et aucun
+// ecran ne savait en poser. Tout employe cree par le produit naissait donc orphelin, et le restait.
+//
+// ⚠ ET L'ORPHELINAT N'EST PAS QU'UNE GENE. Un employe sans rattachement n'appartient a aucun
+// etablissement, donc a AUCUN CLIENT : `PerimetrePersonnelExtension` le rend visible a tout
+// detenteur de `personnel.gerer_employe`, quel que soit son etablissement actif — et il apparait
+// dans la COLLECTION, pas seulement en acces direct par identifiant. Mesure du 08/09.
+//
+// ── CE QUI EST MODIFIABLE, ET CE QUI NE L'EST PAS ───────────────────────────────────────────────
+//
+// ⚠ `statut` N'EST PAS PROPOSE : il est dans `employe:read` seul (`Employe.php:106-108`) et se
+// change par `/suspendre` et `/reactiver`, deja branches dans la liste. L'offrir ici produirait un
+// champ qui a l'air d'ecrire et n'ecrit rien.
+//
+// ⚠ `utilisateur` n'est pas propose non plus, bien qu'il SOIT dans `employe:write` : lier un compte
+// est le lot 3, et l'exposer ici sans ecran de choix de compte offrirait un champ d'adresse brute.
+function FicheEmploye({ employe, droits = [], etabActif, onClose, onChange }) {
+  const ouvert = Boolean(employe && employe.id)
+  const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
+
+  const [nom, setNom] = useState('')
+  const [prenom, setPrenom] = useState('')
+  const [poste, setPoste] = useState('')
+  const [contrat, setContrat] = useState('cdi')
+  const [matricule, setMatricule] = useState('')
+  const [entree, setEntree] = useState('')
+  const [sortie, setSortie] = useState('')
+
+  // ⚠ TROIS ETATS, PAS DEUX : « pas encore charge », « charge », « la demande a echoue ».
+  //
+  // Le bandeau « pas encore rattache » se deduit d'une liste VIDE. Si un refus ou une panne rendait
+  // aussi une liste vide, l'ecran affirmerait une absence qu'il n'a pas mesuree — et inviterait a
+  // creer un rattachement qui existe peut-etre deja. `null` dit « je ne sais pas encore ».
+  const [rattachements, setRattachements] = useState(null)
+  const [erreurRattachements, setErreurRattachements] = useState(null)
+  const [badges, setBadges] = useState(null)
+  const [absences, setAbsences] = useState(null)
+  const [etablissements, setEtablissements] = useState([])
+
+  const [ajout, setAjout] = useState(false)
+  const [siteAjout, setSiteAjout] = useState('')
+  const [posteLocal, setPosteLocal] = useState('')
+  const [debutAjout, setDebutAjout] = useState(jourLocal())
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+  const [rechargement, setRechargement] = useState(0)
+
+  useEffect(() => {
+    if (!ouvert) return
+    setNom(employe.nom || '')
+    setPrenom(employe.prenom || '')
+    setPoste(employe.poste || '')
+    setContrat(employe.typeContrat || 'cdi')
+    setMatricule(employe.matricule || '')
+    setEntree(employe.dateEntree ? String(employe.dateEntree).slice(0, 10) : '')
+    setSortie(employe.dateSortie ? String(employe.dateSortie).slice(0, 10) : '')
+    setErreur(null)
+    setAjout(false)
+  }, [ouvert, employe])
+
+  useEffect(() => {
+    if (!ouvert) return
+    let vivant = true
+    const ref = `/api/employes/${employe.id}`
+
+    setRattachements(null)
+    setErreurRattachements(null)
+    api.rattachements({ employe: ref })
+      .then((r) => { if (vivant) setRattachements(membres(r)) })
+      .catch((e) => {
+        if (!vivant) return
+        // On laisse `rattachements` a `null` : sans mesure, pas de bandeau.
+        setErreurRattachements(e.message || 'Les rattachements n\'ont pas pu etre lus.')
+      })
+
+    api.badgeStaffs({ employe: ref }).then((r) => { if (vivant) setBadges(membres(r)) }).catch(() => { if (vivant) setBadges([]) })
+    api.absences({ employe: ref }).then((r) => { if (vivant) setAbsences(membres(r)) }).catch(() => { if (vivant) setAbsences([]) })
+
+    return () => { vivant = false }
+  }, [ouvert, employe, rechargement])
+
+  // ⚠ CHARGE POUR TOUT LE MONDE, PAS SEULEMENT POUR QUI PEUT ECRIRE.
+  //
+  // Cette liste sert le select d'ajout — mais AUSSI l'affichage du nom de chaque site rattache : la
+  // relation `etablissement` arrive en IRI pure, sans nom (voir plus bas). La conditionner au droit
+  // d'ecriture aurait rendu la colonne « Site » illisible pour un lecteur, alors qu'il a le droit de
+  // voir les rattachements.
+  useEffect(() => {
+    if (!ouvert) return
+    let vivant = true
+    api.etablissements().then((r) => { if (vivant) setEtablissements(membres(r)) }).catch(() => { if (vivant) setEtablissements([]) })
+    return () => { vivant = false }
+  }, [ouvert, etabActif])
+
+  if (!ouvert) return null
+
+  const orphelin = Array.isArray(rattachements) && rattachements.length === 0
+
+  // ⚠ `etablissement` ARRIVE EN IRI PURE, ET LA COLONNE SORTAIT VIDE.
+  //
+  // Mesure du 08/09 sur la pile de test : le serveur rend
+  //
+  //     "etablissement": "/api/etablissements/<uuid>"     ← une CHAINE, pas un objet
+  //     "employe": { "@id": …, "@type": …, "id": … }      ← un objet, mais sans nom ni prenom
+  //
+  // Deux formes differentes DANS LA MEME REPONSE, et aucune ne porte de libelle. C'est la premiere
+  // famille de defauts de ce depot, rencontree deux fois dans la meme journee : sur les
+  // qualifications (objet sans nom) puis ici (IRI pure). `idDe` absorbe les deux formes.
+  //
+  // ⚠ Et quand le site n'est pas dans la liste, on LE DIT. `etablissement` est `nullable: false` :
+  // un tiret affirmerait une absence impossible.
+  const indexSites = new Map(etablissements.map((e) => [e.id, e]))
+
+  const nomDuSite = (reference) => {
+    const id = idDe(reference)
+    if (!id) return 'site non renseigne'
+    const site = indexSites.get(id)
+    return site ? (site.nom || 'site sans nom') : 'site hors de la liste chargee'
+  }
+
+  async function enregistrerIdentite(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.majEmploye(employe.id, {
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        poste: poste.trim(),
+        typeContrat: contrat,
+        matricule: matricule.trim() ? matricule.trim() : null,
+        dateEntree: entree,
+        dateSortie: sortie || null,
+      })
+      onChange?.()
+      onClose()
+    } catch (err) {
+      setErreur(err.message || "La fiche n'a pas pu etre corrigee.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  async function poserRattachement() {
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerRattachement({
+        employe: `/api/employes/${employe.id}`,
+        etablissement: siteAjout,
+        ...(posteLocal.trim() ? { posteLocal: posteLocal.trim() } : {}),
+        debut: debutAjout,
+      })
+      setAjout(false)
+      setSiteAjout('')
+      setPosteLocal('')
+      setRechargement((n) => n + 1)
+      onChange?.()
+    } catch (err) {
+      setErreur(err.message || "Le rattachement n'a pas pu etre pose.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  // CLORE N'EST PAS RETIRER, ET LES DEUX EXISTENT POUR DE BONNES RAISONS.
+  //
+  // On CLOT le rattachement d'un salarie qui ne travaille plus sur ce site : la ligne reste, avec sa
+  // date de fin. `RattachementEmploye::estActifA()` la lit, et `EmissionBadgeStaffHandler` s'en sert
+  // — clore suffit donc a couper l'eligibilite au badge SANS effacer l'historique du planning passe.
+  //
+  // On RETIRE une ligne saisie par erreur, et seulement celle-la. Confondre les deux, c'est soit
+  // garder eligible quelqu'un qui est parti, soit perdre la trace d'une periode reellement
+  // travaillee — et c'est la paie qui la relit.
+  //
+  // Meme distinction que suspendre/revoquer sur un badge, quelques ecrans plus haut.
+  async function cloreRattachement(r) {
+    const site = nomDuSite(r.etablissement)
+    if (!await confirmer(
+      `Clore le rattachement a ${site} aujourd'hui ?\n\n`
+      + "La ligne est conservee avec sa date de fin : le salarie n'est plus eligible au planning ni "
+      + 'au badge sur ce site, et son historique reste lisible.',
+    )) return
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.majRattachement(r.id, { fin: jourLocal() })
+      setRechargement((n) => n + 1)
+      onChange?.()
+    } catch (err) {
+      setErreur(err.message || "Le rattachement n'a pas pu etre clos.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  async function retirerRattachement(r) {
+    const site = nomDuSite(r.etablissement)
+    if (!await confirmer(
+      `Retirer le rattachement a ${site} ?\n\n`
+      + "La ligne est EFFACEE, son historique avec. Pour un depart, prefere « Clore » : la periode "
+      + "travaillee reste lisible.\n\nS'il s'agit du dernier rattachement, l'employe ne pourra plus "
+      + 'recevoir de badge et ne sera plus visible que du role RH.',
+    )) return
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.supprimerRattachement(r.id)
+      setRechargement((n) => n + 1)
+      onChange?.()
+    } catch (err) {
+      setErreur(err.message || "Le rattachement n'a pas pu etre retire.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  const titre = [prenom, nom].filter(Boolean).join(' ') || 'Fiche employe'
+
+  return (
+    <Modal open={ouvert} onClose={onClose} titre={titre} taille="lg">
+      {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+      {/* LE BANDEAU DIT LES DEUX CONSEQUENCES MESUREES, PAS UNE INQUIETUDE VAGUE. */}
+      {orphelin && (
+        <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-large)' }}>
+          Pas encore rattache a un site : il ne peut pas recevoir de badge de service (RG-PERSO-09),
+          et sa fiche n'est visible que des detenteurs du droit de gestion RH.
+        </div>
+      )}
+      {erreurRattachements && (
+        <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>
+          Rattachements illisibles : {erreurRattachements} — l'absence de rattachement n'est donc pas
+          etablie ici.
+        </div>
+      )}
+
+      <form onSubmit={enregistrerIdentite}>
+        <h4 style={{ margin: '0 0 var(--esp-normal)' }}>Identite</h4>
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="fe-prenom">Prenom *</label>
+            <input id="fe-prenom" className="input" value={prenom} maxLength={100}
+              disabled={!peutGererEmploye} onChange={(e) => setPrenom(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="fe-nom">Nom *</label>
+            <input id="fe-nom" className="input" value={nom} maxLength={100}
+              disabled={!peutGererEmploye} onChange={(e) => setNom(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="fe-matricule">Matricule</label>
+            <input id="fe-matricule" className="input" value={matricule} maxLength={40}
+              disabled={!peutGererEmploye} onChange={(e) => setMatricule(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="fe-poste">Poste *</label>
+            <input id="fe-poste" className="input" value={poste} maxLength={80}
+              disabled={!peutGererEmploye} onChange={(e) => setPoste(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="fe-contrat">Type de contrat *</label>
+            <select id="fe-contrat" className="input" value={contrat}
+              disabled={!peutGererEmploye} onChange={(e) => setContrat(e.target.value)}>
+              {CONTRATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ flex: '1 1 140px' }}>
+            <label htmlFor="fe-entree">Date d'entree *</label>
+            <input id="fe-entree" className="input" type="date" value={entree}
+              disabled={!peutGererEmploye} onChange={(e) => setEntree(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 140px' }}>
+            <label htmlFor="fe-sortie">Date de sortie</label>
+            <input id="fe-sortie" className="input" type="date" value={sortie}
+              disabled={!peutGererEmploye} onChange={(e) => setSortie(e.target.value)} />
+            <span className="hint">Le statut, lui, se change par « Suspendre » dans la liste.</span>
+          </div>
+        </div>
+
+        {peutGererEmploye && (
+          <div style={{ textAlign: 'right', marginBottom: 'var(--esp-large)' }}>
+            <button className="btn primary sm" type="submit"
+              disabled={envoi || !nom.trim() || !prenom.trim() || !poste.trim() || !entree}>
+              {envoi ? 'Enregistrement…' : 'Enregistrer les corrections'}
+            </button>
+          </div>
+        )}
+      </form>
+
+      <h4 style={{ margin: 'var(--esp-large) 0 var(--esp-normal)' }}>Rattachements</h4>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Le site ou l'employe travaille. Il ouvre l'eligibilite au planning et au badge — il ne donne
+        aucun acces au logiciel, qui se gere par les roles.
+      </p>
+
+      {rattachements === null && !erreurRattachements && <div className="empty">Lecture des rattachements…</div>}
+
+      {Array.isArray(rattachements) && rattachements.length > 0 && (
+        <table className="tbl">
+          <thead>
+            <tr><th>Site</th><th>Poste local</th><th>Depuis</th><th>Jusqu'au</th><th></th></tr>
+          </thead>
+          <tbody>
+            {rattachements.map((r) => (
+              <tr key={r.id}>
+                <td>{nomDuSite(r.etablissement)}</td>
+                <td>{r.posteLocal || '—'}</td>
+                <td>{dateFr(r.debut)}</td>
+                <td>{r.fin ? dateFr(r.fin) : '—'}</td>
+                <td style={{ textAlign: 'right' }}>
+                  {peutGererEmploye && !r.fin && (
+                    <button className="btn ghost sm" type="button" disabled={envoi}
+                      style={{ padding: '1px 8px', fontSize: 11.5 }}
+                      title="Le salarie ne travaille plus sur ce site : la ligne est conservee avec sa date de fin."
+                      onClick={() => cloreRattachement(r)}>
+                      Clore
+                    </button>
+                  )}
+                  {peutGererEmploye && (
+                    <button className="btn ghost sm" type="button" disabled={envoi}
+                      style={{ padding: '1px 8px', fontSize: 11.5, marginLeft: 'var(--esp-serre)' }}
+                      title="Saisie erronee : la ligne est effacee, et son historique avec."
+                      onClick={() => retirerRattachement(r)}>
+                      Retirer
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {peutGererEmploye && !ajout && (
+        <div style={{ marginTop: 'var(--esp-normal)' }}>
+          <button className="btn ghost sm" type="button" onClick={() => setAjout(true)}>
+            ＋ Rattacher a un site
+          </button>
+        </div>
+      )}
+
+      {peutGererEmploye && ajout && (
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="fe-site">Site *</label>
+            <select id="fe-site" className="input" value={siteAjout} onChange={(e) => setSiteAjout(e.target.value)}>
+              <option value="">Choisir…</option>
+              {etablissements.map((e) => (
+                <option key={e.id} value={`/api/etablissements/${e.id}`}>{e.nom}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="fe-postelocal">Poste local</label>
+            <input id="fe-postelocal" className="input" value={posteLocal} maxLength={80}
+              placeholder="Facultatif" onChange={(e) => setPosteLocal(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 140px' }}>
+            <label htmlFor="fe-debut">Depuis *</label>
+            <input id="fe-debut" className="input" type="date" value={debutAjout}
+              onChange={(e) => setDebutAjout(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '0 0 auto' }}>
+            <button className="btn primary sm" type="button" disabled={!siteAjout || !debutAjout || envoi}
+              onClick={poserRattachement}>
+              Rattacher
+            </button>
+            <button className="btn ghost sm" type="button" style={{ marginLeft: 'var(--esp-serre)' }}
+              onClick={() => setAjout(false)}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ON LIT ICI, ON AGIT LA-BAS. Emettre, revoquer, valider une absence restent dans leurs
+          onglets : deux endroits pour le meme geste divergent des qu'on en modifie un seul. */}
+      <h4 style={{ margin: 'var(--esp-large) 0 var(--esp-normal)' }}>Badges de service</h4>
+      {badges === null && <div className="empty">Lecture…</div>}
+      {Array.isArray(badges) && badges.length === 0 && (
+        <div className="empty">Aucun badge emis. L'emission se fait depuis l'onglet « Employes ».</div>
+      )}
+      {Array.isArray(badges) && badges.length > 0 && (
+        <table className="tbl">
+          <thead><tr><th>Numero</th><th>Statut</th><th>Emis le</th></tr></thead>
+          <tbody>
+            {badges.map((b) => (
+              <tr key={b.id}>
+                <td className="mono">{b.numeroSerie || b.code || '—'}</td>
+                <td><span className={`badge ${STATUT_BADGE[b.statut] || 'mut'}`}>{b.statut || '—'}</span></td>
+                <td>{dateFr(b.dateEmission || b.creeLe)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h4 style={{ margin: 'var(--esp-large) 0 var(--esp-normal)' }}>Absences</h4>
+      {absences === null && <div className="empty">Lecture…</div>}
+      {Array.isArray(absences) && absences.length === 0 && (
+        <div className="empty">Aucune absence declaree. La declaration se fait depuis le panneau « Absences ».</div>
+      )}
+      {Array.isArray(absences) && absences.length > 0 && (
+        <table className="tbl">
+          <thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Statut</th></tr></thead>
+          <tbody>
+            {absences.map((a) => (
+              <tr key={a.id}>
+                <td>{a.type || '—'}</td>
+                <td>{dateFr(a.debut)}</td>
+                <td>{dateFr(a.fin)}</td>
+                <td>{a.statut || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="modal-actions" style={{ marginTop: 'var(--esp-large)' }}>
+        <button className="btn ghost" type="button" onClick={onClose}>Fermer</button>
+      </div>
     </Modal>
   )
 }

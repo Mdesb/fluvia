@@ -27,7 +27,8 @@
       test qui fige le mécanisme réel et mesure la limite ouverte
 - [x] **Étape 3** — onglet « Qualifications » : saisie, correction, échéances (G-1, G-2) — **faite le
       08/09**, vérifiée **en exécutant** (lecture ET écriture) contre une API réelle
-- [ ] **Étape 4** — ⚠ fiche employé : identité modifiable, rattachements, bandeau orphelin (G-3, G-4)
+- [x] **Étape 4** — ⚠ fiche employé : identité modifiable, rattachements, bandeau orphelin (G-3, G-4)
+      — **faite le 08/09**, l'enchaînement complet vérifié en exécutant
 - [ ] **Étape 5** — ⚠ réparer l'émission de badge + portée d'accès (G-9, G-7) — *contrôle d'accès physique*
 - [ ] **Étape 6** — modifier un créneau, lien roster → qualification (G-6)
 - [ ] **Étape 7a** — ⚠ `HrSettings` : entité, migration, résolveur, commande (G-2b) — *entité neuve*
@@ -178,6 +179,55 @@ sa base.
 
 ⚠ Premier essai du montage : le `GET /api/qualifications` **sans en-tête `X-Etablissement`** rend
 `totalItems: 0` avec 4 lignes en base. Le zéro venait du cloisonnement, pas d'une absence.
+
+**2026-09-08 — Étape 4 : la fiche employé. Le second cul-de-sac est refermé.**
+
+Fiche ouverte depuis la liste : identité corrigeable (G-3), rattachements posables, clôturables et
+retirables (G-4), bandeau orphelin, badges et absences **en lecture seule**. Écart : **526 → 520**
+(6 opérations), et `majRattachement` n'est plus un appel orphelin — il en restait 15, il en reste 14,
+tous antérieurs.
+
+**Clore ≠ retirer, et les deux gestes existent.** On *clôt* le rattachement d'un salarié qui ne
+travaille plus sur le site : la ligne reste avec sa date de fin, `estActifA()` la lit, et
+`EmissionBadgeStaffHandler` s'en sert — donc clore suffit à couper l'éligibilité au badge **sans
+effacer l'historique** que la paie relira. On *retire* une ligne saisie par erreur. Même distinction
+que suspendre/révoquer sur un badge.
+
+**⚠ LE MÊME DÉFAUT DE RELATION, UNE SECONDE FOIS — ET SOUS UNE AUTRE FORME.** La colonne « Site »
+sortait vide. Mesuré sur la pile de test, **deux formes dans la même réponse** :
+
+    "employe": { "@id": …, "@type": "Employe", "id": … }   ← objet, sans nom ni prénom
+    "etablissement": "/api/etablissements/<uuid>"          ← IRI PURE, une chaîne
+
+Mon test `typeof === 'object'` échouait donc pour une raison **opposée** à celle des qualifications.
+`idDe` absorbe les deux formes. Et le chargement des établissements a été **sorti de la condition
+`peutGererEmploye`** : il sert aussi à l'affichage, le conditionner au droit d'écriture rendait la
+colonne illisible pour un lecteur.
+
+**Vérifié en exécutant** (Vite sur le worktree, port 5241, proxy vers un serveur PHP jetable sur la
+base `app_testpersonnelrh` — **ni la préproduction ni sa base touchées**) :
+
+- Fiche d'un employé **orphelin** → le bandeau s'affiche avec ses deux conséquences mesurées.
+- Rattachement posé depuis la fiche → **le bandeau disparaît**, le site s'affiche nommé.
+- Poste corrigé → enregistré, visible dans la liste, **et en base** (`Éducateur sportif — natation`).
+- `PATCH` de clôture prouvé par l'API avec le **type de contenu exact du client**
+  (`application/merge-patch+json`) → 200, `fin` posée **et en base**.
+  ⚠ Le geste « Clore » lui-même n'a **pas** pu être déclenché à la souris : `confirmer()` retombe sur
+  `window.confirm`, que le pilote de navigateur rejette automatiquement. Ce qui est prouvé est
+  l'appel, pas le clic.
+
+**⚠ Et le défaut §0.1 du plan est confirmé EN VRAI** : un clic sur « Émettre un badge » rend
+« Référence "etablissement" obligatoire (UUID ou IRI) ». Le bouton n'a jamais pu aboutir — c'est
+l'étape 5.
+
+**Pièges d'outillage rencontrés, tous coûteux en temps :**
+1. Le serveur PHP intégré est monoprocessus — `PHP_CLI_SERVER_WORKERS=6` est nécessaire, sinon le
+   préflight et la requête se bloquent mutuellement.
+2. **L'identifiant d'établissement lu en SQL était périmé** : recharger les fixtures régénère les
+   UUID. Le lire **par l'API**, juste avant usage.
+3. `allow_headers` de la conf CORS ne contient pas `X-Etablissement` — sans effet sur l'application
+   (Vite proxifie, donc même origine), mais tout appel manuel en absolu depuis la page est bloqué.
+4. Le repère de coordonnées du pilote (800×450) n'est pas le viewport CSS (1280×720) : facteur 0,625.
 
 ## Journal de Rétropropagation
 
