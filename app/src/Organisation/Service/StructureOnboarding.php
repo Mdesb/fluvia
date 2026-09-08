@@ -251,14 +251,32 @@ final readonly class StructureOnboarding
         // ici obligeait à les ressaisir dans le menu « qui facture » — un doublon qui finit par
         // diverger, et une facture partie sous un SIREN juste mais sans raison sociale. Le SIREN
         // suffit à identifier l'émetteur français (BT-30) : on ne réclame pas de n° de TVA ici.
-        // L'ADRESSE reste à part : l'inscription la capture en texte libre, la facture EN 16931 la
-        // veut structurée (rue / CP / ville / pays) — c'est une saisie distincte, encore à cadrer.
+        // L'ADRESSE VENDEUR (BT-35/37/38/40) vient elle aussi de l'inscription : l'annuaire l'a
+        // déjà découpée (rue / CP / ville), et le pays est celui de l'établissement (code ISO2). Sans
+        // ces quatre champs, le Factur-X d'une structure neuve serait refusé à l'émission (422).
         $raisonSocialeInscription = trim((string) ($donnees['raisonSociale'] ?? $donnees['denomination'] ?? ''));
         if ($raisonSocialeInscription !== '') {
             $profil->setRaisonSociale($raisonSocialeInscription);
         }
         if (\strlen($siret) === 14) {
             $profil->setSiret($siret);
+        }
+
+        // Les quatre champs vont ensemble : une adresse a moitie remplie ne rend pas la facture
+        // emettable, elle la rend fausse. On ne pose donc l'adresse que lorsque l'annuaire a fourni
+        // la rue, la ville ET le code postal ; sinon on la laisse vide et le rapport de conformite
+        // nomme ce qui manque, plutot qu'une adresse tronquee qui aurait l'air valide.
+        $rue = trim((string) ($donnees['rue'] ?? ''));
+        $ville = trim((string) ($donnees['ville'] ?? ''));
+        $cp = trim((string) ($donnees['codePostal'] ?? ''));
+        if ($rue !== '' && $ville !== '' && $cp !== '') {
+            $profil->setAdresse([
+                'rue' => $rue,
+                'complement' => trim((string) ($donnees['complement'] ?? '')),
+                'cp' => $cp,
+                'ville' => $ville,
+                'pays' => $etablissement->getPays(),
+            ]);
         }
 
         $this->entityManager->persist($profil);
