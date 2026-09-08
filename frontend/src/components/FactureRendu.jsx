@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
-import { api } from '../api/client.js'
+import { api, tokenStore, etablissementStore } from '../api/client.js'
 
 /**
  * LA FACTURE, ENFIN REMISE À CELUI QUI DOIT LA PAYER.
@@ -132,6 +132,42 @@ export default function FactureRendu({ facture, onClose }) {
   const [rendu, setRendu] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [chargement, setChargement] = useState(true)
+  const [tele, setTele] = useState(null) // null | 'en_cours' | message d'erreur
+
+  // Télécharge le Factur-X (PDF/A-3 opposable). Binaire + jeton porteur -> fetch manuel puis blob,
+  // comme le téléchargement DMS. Un 422 = facture incomplète : le serveur NOMME le terme manquant.
+  async function telechargerFacturX() {
+    setTele('en_cours')
+    try {
+      const reponse = await fetch(api.urlFacturX(facture.id), {
+        headers: {
+          Authorization: `Bearer ${tokenStore.get()}`,
+          'X-Etablissement': etablissementStore.get() || '',
+          Accept: 'application/json',
+        },
+      })
+      if (!reponse.ok) {
+        let msg = `Téléchargement refusé (${reponse.status}).`
+        try {
+          const j = await reponse.json()
+          msg = j?.detail || j?.['hydra:description'] || j?.message || msg
+        } catch {
+          /* corps non-JSON : on garde le message par statut */
+        }
+        throw new Error(msg)
+      }
+      const blob = await reponse.blob()
+      const url = URL.createObjectURL(blob)
+      const lien = document.createElement('a')
+      lien.href = url
+      lien.download = `${facture.numero || facture.id}.pdf`
+      lien.click()
+      URL.revokeObjectURL(url)
+      setTele(null)
+    } catch (e) {
+      setTele(e.message || 'Le téléchargement a échoué.')
+    }
+  }
 
   useEffect(() => {
     if (!facture?.id) return undefined
@@ -359,10 +395,16 @@ export default function FactureRendu({ facture, onClose }) {
               ou enregistrez-le en PDF depuis la fenêtre d’impression, puis remettez-le vous-même.
             </span>
             <button className="btn ghost" type="button" onClick={onClose}>Fermer</button>
-            <button className="btn primary" type="button" onClick={() => window.print()}>
+            <button className="btn" type="button" onClick={() => window.print()}>
               Imprimer
             </button>
+            <button className="btn primary" type="button" onClick={telechargerFacturX} disabled={tele === 'en_cours'}>
+              {tele === 'en_cours' ? 'Préparation\u2026' : 'Télécharger (Factur-X)'}
+            </button>
           </div>
+          {tele && tele !== 'en_cours' && (
+            <div className="banner banner-error fact-noprint">{tele}</div>
+          )}
         </>
       )}
     </Modal>

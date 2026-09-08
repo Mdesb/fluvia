@@ -53,20 +53,24 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
   const [email, setEmail] = useState('')
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui l'ignore transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const peutPlanifier = aLeDroit(droits, 'reporting.planifier')
 
   const recharger = useCallback(() => {
     api.rapportsPlanifies()
-      .then((r) => setRapportsLus(membres(r)))
-      .catch(() => setRapportsLus(null))
+      .then((r) => { setRapportsLus(membres(r)); setRaisonNonLu(null) })
+      .catch((e) => { setRapportsLus(null); setRaisonNonLu(e) })
   }, [])
 
   useEffect(() => {
     let annule = false
     api.rapportsPlanifies()
-      .then((r) => { if (!annule) setRapportsLus(membres(r)) })
-      .catch(() => { if (!annule) setRapportsLus(null) })
+      .then((r) => { if (!annule) { setRapportsLus(membres(r)); setRaisonNonLu(null) } })
+      .catch((e) => { if (!annule) { setRapportsLus(null); setRaisonNonLu(e) } })
     api.tableauxDeBord()
       .then((r) => { if (!annule) setTableauxLus(membres(r).filter((t) => t.actif !== false)) })
       .catch(() => { if (!annule) setTableauxLus(null) })
@@ -135,6 +139,13 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
           <div className="banner banner-warn">
             La liste des rapports planifiés n’a pas pu être lue. Ce qui existe déjà n’est pas
             affiché ici — ce n’est pas une absence, c’est une lecture qui a échoué.
+            {raisonNonLu?.message && (
+              <div style={{ marginTop: 'var(--esp-petit)' }}>
+                <b>{raisonNonLu.status === 403
+                  ? 'Refusé par le serveur\u00a0:'
+                  : 'Échec renvoyé par le serveur\u00a0:'}</b> {raisonNonLu.message}
+              </div>
+            )}
           </div>
         ) : rapports.length === 0 ? (
           <p className="hint">Aucun rapport n’a encore été planifié.</p>

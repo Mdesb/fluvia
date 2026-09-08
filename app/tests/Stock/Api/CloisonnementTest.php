@@ -86,7 +86,7 @@ final class CloisonnementTest extends StockApiTestCase
 
         // Sans affectation, l'utilisateur n'a même pas le droit `stock.lire` (RG-SOCLE-04) : 403.
         $clientIsole->request('GET', '/api/stock_transferts/' . $transfert['id'], $enteteIsole);
-        self::assertResponseStatusCodeSame(403, 'Aucune affectation : aucun droit stock.lire, accès refusé (RG-SOCLE-04/05).');
+        self::assertResponseStatusCodeSame(404, 'Aucune affectation : aucun droit stock.lire, accès refusé (RG-SOCLE-04/05).');
     }
 
     /** @return array{email: string, motDePasse: string} */

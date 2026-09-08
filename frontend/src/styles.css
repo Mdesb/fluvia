@@ -772,6 +772,9 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .modal-x { margin-left: auto; background: none; border: none; color: var(--ink-soft); font-size: var(--txt-titre); line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 8px; font-family: inherit; }
 .modal-x:hover { background: var(--panel-2); color: var(--ink); }
 .modal-b { padding: 18px; }
+/* L'avertissement de fermeture (Modal.jsx) : entre l'en-tete et le corps, aligne sur le
+   retrait du corps, et sans la marge basse de `.banner` qui le collerait mal au contenu. */
+.modal-avertissement { margin: 12px 18px 0; }
 
 /* ---- Divers ---- */
 .center { display: grid; place-items: center; min-height: 60vh; color: var(--ink-soft); }

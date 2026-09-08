@@ -14,6 +14,7 @@ use App\Offre\Service\AccountingCategorySeeder;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
+use App\Compta\Enum\VatCategory;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -244,6 +245,40 @@ final readonly class StructureOnboarding
             ->setType($publique ? TypeExploitant::RegieDirecte : TypeExploitant::GroupePrive)
             ->setReferentielComptable($publique ? ReferentielComptable::M57 : ReferentielComptable::Pcg);
 
+        // ── L'IDENTITÉ D'ÉMETTEUR VIENT DE L'INSCRIPTION, PAS D'UNE SECONDE SAISIE ──────────────────
+        // La raison sociale et le SIRET sont ceux que la structure a déjà déclarés au greffe à son
+        // inscription (la `denomination`, la même qui alimente `LegalIdentity`). Les laisser vides
+        // ici obligeait à les ressaisir dans le menu « qui facture » — un doublon qui finit par
+        // diverger, et une facture partie sous un SIREN juste mais sans raison sociale. Le SIREN
+        // suffit à identifier l'émetteur français (BT-30) : on ne réclame pas de n° de TVA ici.
+        // L'ADRESSE VENDEUR (BT-35/37/38/40) vient elle aussi de l'inscription : l'annuaire l'a
+        // déjà découpée (rue / CP / ville), et le pays est celui de l'établissement (code ISO2). Sans
+        // ces quatre champs, le Factur-X d'une structure neuve serait refusé à l'émission (422).
+        $raisonSocialeInscription = trim((string) ($donnees['raisonSociale'] ?? $donnees['denomination'] ?? ''));
+        if ($raisonSocialeInscription !== '') {
+            $profil->setRaisonSociale($raisonSocialeInscription);
+        }
+        if (\strlen($siret) === 14) {
+            $profil->setSiret($siret);
+        }
+
+        // Les quatre champs vont ensemble : une adresse a moitie remplie ne rend pas la facture
+        // emettable, elle la rend fausse. On ne pose donc l'adresse que lorsque l'annuaire a fourni
+        // la rue, la ville ET le code postal ; sinon on la laisse vide et le rapport de conformite
+        // nomme ce qui manque, plutot qu'une adresse tronquee qui aurait l'air valide.
+        $rue = trim((string) ($donnees['rue'] ?? ''));
+        $ville = trim((string) ($donnees['ville'] ?? ''));
+        $cp = trim((string) ($donnees['codePostal'] ?? ''));
+        if ($rue !== '' && $ville !== '' && $cp !== '') {
+            $profil->setAdresse([
+                'rue' => $rue,
+                'complement' => trim((string) ($donnees['complement'] ?? '')),
+                'cp' => $cp,
+                'ville' => $ville,
+                'pays' => $etablissement->getPays(),
+            ]);
+        }
+
         $this->entityManager->persist($profil);
 
         foreach (self::TAUX_TVA_FRANCE as [$taux, $libelle]) {
@@ -253,6 +288,9 @@ final readonly class StructureOnboarding
                     ->setTaux($taux)
                     ->setLibelle($libelle)
                     ->setActif(true)
+                    // Tous les taux positifs français relèvent de la catégorie EN 16931 « Standard »
+                    // (BT-151) — c'est le taux qui distingue 20 % de 5,5 %, pas la catégorie.
+                    ->setVatCategory(VatCategory::Standard)
             );
         }
 
@@ -264,6 +302,8 @@ final readonly class StructureOnboarding
                 ->setTaux('0.00')
                 ->setLibelle(TauxTva::LIBELLE_HORS_CHAMP)
                 ->setActif(true)
+                // « Hors du champ de la TVA » = catégorie EN 16931 « O », et non une exonération.
+                ->setVatCategory(VatCategory::OutOfScope)
         );
 
         // ⚠ LE PROFIL ET LES TAUX NE SUFFISENT PAS : SANS PLAN DE COMPTES NI JOURNAUX, LA

@@ -55,8 +55,11 @@ final class StayChargeRecorder
             return null;
         }
 
-        // Le constructeur refuse un séjour clos — l invariant vit dans l entité, pas ici, pour qu il
+        // Le constructeur refuse un séjour SOLDÉ — l invariant vit dans l entité, pas ici, pour qu il
         // tienne aussi quand la ligne est créée par un autre chemin.
+        //
+        // ⚠ Il disait « clos » jusqu au 07/09, et cette phrase-la accusait un code sain : depuis le
+        // correctif du 05/09, un sejour clos accepte encore des lignes, seul `Settled` les refuse.
         $charge = new StayCharge($stay, $label, $amount, $occurredAt, $sourceModule, $sourceEvent, $sourceSubjectId);
 
         try {

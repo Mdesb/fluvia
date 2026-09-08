@@ -47,6 +47,10 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
   const [choisis, setChoisis] = useState([])
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const peutConfigurer = aLeDroit(droits, 'reporting.configurer')
 
@@ -62,7 +66,7 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
   const recharger = useCallback(() => {
     api.tableauxDeBord()
       .then((r) => setTableauxLus(membres(r)))
-      .catch(() => setTableauxLus(null))
+      .catch((e) => { setTableauxLus(null); setRaisonNonLu(e) })
       .finally(() => { if (onChangement) onChangement() })
   }, [onChangement])
 
@@ -70,13 +74,13 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
     let annule = false
     api.tableauxDeBord()
       .then((r) => { if (!annule) setTableauxLus(membres(r)) })
-      .catch(() => { if (!annule) setTableauxLus(null) })
+      .catch((e) => { if (!annule) { setTableauxLus(null); setRaisonNonLu(e) } })
     api.indicateurs()
       .then((r) => { if (!annule) setIndicateursLus(membres(r).filter((i) => i.actif !== false)) })
-      .catch(() => { if (!annule) setIndicateursLus(null) })
+      .catch((e) => { if (!annule) { setIndicateursLus(null); setRaisonNonLu(e) } })
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
-      .catch(() => { if (!annule) setGroupesLus(null) })
+      .catch((e) => { if (!annule) { setGroupesLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
@@ -129,6 +133,13 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
       <div className="card-b">
         {erreur && (
           <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{erreur}</div>
+        )}
+        {raisonNonLu?.message && (
+          <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+            <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+          </div>
         )}
 
         {tableauxLus === null ? (

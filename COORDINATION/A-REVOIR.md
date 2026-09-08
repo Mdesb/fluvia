@@ -101,10 +101,20 @@ versionnée. Elles ne pèsent pas la même chose :
 | commande | ce qu'il se passe tant qu'elle n'y est pas |
 |---|---|
 | `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
-| `reporting:agreger` | **les mesures cessent d'être produites** — l'Explorateur affiche déjà 3 jours « sans mesure » sur 14, et la consolidation région/groupe est vide de bout en bout |
+| `reporting:agreger` | **les mesures cessent d'être produites** — dernière mesure générée le **04/09 à 21:49** (`genereLe`, mesuré le 07/09) ; depuis, l'Explorateur rend « sans mesure » pour chaque jour écoulé, et la consolidation région/groupe est vide de bout en bout |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
 | `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
 | `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
+
+> ⚠ **Ce point se dégrade pendant qu'il attend.** La version du 06/09 chiffrait « 3 jours sans
+> mesure sur 14 ». Un compte de jours ne vieillit pas en devenant imprécis : il devient faux, et
+> rien ne le signale. Il est remplacé ici par une **date de dernière mesure** et un **rythme** —
+> le retard croît d'un jour par jour tant que la commande n'est pas autorisée.
+>
+> Vérifié le 07/09 : la commande existe bien (`AgregerMesuresCommand`, idempotente, trois passes
+> site → région → groupe) et n'apparaît pas dans `TACHES_AUTORISEES`. Rien à écrire, seulement à
+> autoriser.
+
 
 **Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
 `reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
@@ -120,15 +130,25 @@ Trois issues, et la question est en amont du frontal : **le moteur doit-il les l
 travail est dans l'agrégation, pas dans un formulaire), **le référentiel doit-il rester** en
 attente d'un usage, ou **la ressource doit-elle disparaître** ?
 
-### 3. Une politique de mot de passe, ou pas
+### 3. ~~Une politique de mot de passe, ou pas~~ — **tranche le 06/09, rien a revoir**
 
-Le dépôt n'en a **aucune** — création d'utilisateur comprise : n'importe quelle chaîne non vide est
-acceptée. J'ai posé une longueur minimale de 12 caractères sur les **deux seuls flux** que je
-touchais (activation d'une invitation, réinitialisation), parce que l'écran l'annonçait déjà et
-qu'un formulaire qui affiche une règle que le serveur ignore annonce le trou au lieu de le fermer.
+Ecrit comme une question ouverte le 06/09, et resolu le meme jour par `claude-A` pendant que je
+l'ecrivais. La ligne est gardee plutot qu'effacee, pour que la revue sache qu'elle n'a pas a
+s'en occuper.
 
-L'étendre ailleurs demande deux réponses qui ne sont pas techniques : **quel seuil**, et **que fait-on
-des comptes existants** — les laisser tels quels, ou exiger un changement à la prochaine connexion.
+`App\Securite\Service\PasswordPolicy` (audit du 06/09, constat 7) porte la regle en un seul
+endroit, et **quatre portes l'appellent** — les deux flux que j'avais durcis, plus deux qui
+n'avaient aucune regle : la creation de compte boutique (qui acceptait « aaa », verifie en
+preproduction, HTTP 201) et la creation par un administrateur (qui acceptait « a »).
+
+Les deux questions que je posais ont leur reponse dans le code : **douze caracteres**, adresse
+e-mail refusee, pas de classes imposees — et **rien n'est demande aux comptes existants**, un
+hachage ne se relisant pas. Les « aaa » volontaires de la preproduction continuent d'ouvrir ;
+seuls les nouveaux mots de passe passent par la regle.
+
+> ⚠ Ma fiche disait « le depot n'en a **aucune** ». C'etait vrai a l'ecriture et faux quelques
+> heures plus tard. Une phrase qui decrit un defaut devient un mensonge le jour ou on le
+> corrige — elle se rectifie la ou elle a ete ecrite.
 
 ### 4. Les fichiers d'export s'accumulent sans fin
 
@@ -139,3 +159,61 @@ main).
 
 Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
 premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
+
+### 5. Un créneau validé peut perdre son encadrant — **reformulé le 07/09**
+
+Écrit le 06/09, et déjà à moitié dépassé : `feat(piscine): renouveler un diplôme, retirer une
+affectation (#12)` a câblé le bouton de retrait pendant que je l'examinais. Ma phrase disait
+« aucun écran ne l'appelle — le bouton manquant protège l'invariant par accident ». C'est faux
+depuis ce jour-là.
+
+**Ce qui reste vrai, et qui est le vrai sujet.** Trois lectures, refaites sur `origin/main` :
+
+| ce qui a été lu | ce que ça dit |
+|---|---|
+| l'écran Piscine | le retrait n'est atteignable **que sur un créneau brouillon** — la modale d'affectation ne s'ouvre pas autrement. C'est correct, et c'est du pair |
+| `DELETE /api/affectation_encadrants/{id}` | toujours **aucun processeur** : la seule permission `piscine.configurer` |
+| `ValiderCreneauBassinHandler` | exige une qualification couvrante **au moment de valider**, et rien ne la relit ensuite |
+
+L'invariant n'est donc plus fermé par accident : **il est fermé par l'écran, et par lui seul**. Un
+appel direct à l'API retire encore l'encadrant d'un créneau validé, qui reste `valide` sans
+couverture, sans que rien ne le détecte.
+
+La question n'a pas changé de nature, seulement d'ampleur — elle ne porte plus sur un geste
+manquant mais sur une garde manquante :
+
+- **Refuser la suppression quand le créneau est validé** (409 nommé). Aligne le serveur sur ce que
+  l'écran fait déjà ; bloque un remplacement d'encadrant si le modèle ne permet pas de dévalider.
+- **Dévalider le créneau en même temps** — cohérent, mais un créneau publié qui redevient brouillon
+  a peut-être des conséquences en aval.
+- **Laisser tel quel** et l'assumer : la règle vit dans l'écran, l'API est un outil d'intégration.
+
+> ⚠ Ma phrase du 06/09 est rectifiée ici plutôt qu'effacée. C'est la deuxième fiche de ce relevé
+> qui vieillit en un jour — les autres se relisent avec la même méfiance.
+
+### 6. Un droit d'accès ne dit pas à qui il appartient — et sans ça, on ne peut pas le rattacher
+
+Mesuré en cherchant à câbler `POST /sport/abonnements/{id}/rattacher-droit-acces`, la route qui lie
+un abonnement fitness au badge physique. Elle est complète côté serveur et **aucun écran ne
+l'appelle** ; en base, un seul des cinq statuts d'accès porte un droit, et il vient des fixtures.
+
+Le blocage n'est pas la route, c'est la lecture. `GET /api/droit_acces` rend :
+
+    sourceType, billetSupportRef, produitRef, authorisedSpaces,
+    statutProjection, etablissement, synchroniseLe
+
+**Aucun nom de porteur.** Sept droits, sept identifiants opaques. Un sélecteur bâti là-dessus
+ferait rattacher le badge de quelqu'un d'autre au jugé — sur le mécanisme qui décide qui entre.
+
+⚠ La décision n'est pas seulement technique. Exposer l'identité du porteur sur la liste des droits
+d'accès, c'est de la donnée personnelle rendue à un écran d'exploitation. Trois voies :
+
+- **Exposer le porteur** (nom, ou lien vers le bénéficiaire) sur la lecture des droits — le plus
+  simple à utiliser, le plus large en données personnelles.
+- **Un filtre par bénéficiaire** : l'écran demande « les droits de cette personne » plutôt que de
+  lire la liste entière. Rien n'est exposé qu'on ne demande déjà.
+- **Rattacher au moment de l'appairage** plutôt que depuis la fiche d'abonnement : le badge est
+  physiquement en main, l'ambiguïté n'existe pas.
+
+En attendant, l'onglet « Accès » dit honnêtement « non rattaché » au lieu d'afficher « ouvert »,
+mais le geste reste indisponible dans l'application.

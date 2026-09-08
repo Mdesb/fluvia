@@ -10,6 +10,7 @@ import Markdown from '../public/components/Markdown.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
+import CreneauxProduit from './CreneauxProduit.jsx'
 import { idDe as idDeRef } from '../api/iri'
 import { confirmer } from './Confirmation.jsx'
 
@@ -237,7 +238,16 @@ export default function ProduitFiche({
     // La caisse n'est pas une capacite : tout exploitant vend au guichet. L'onglet est donc
     // toujours la, et il porte ce qui ne concerne QUE le guichet.
     liste.push(['caisse', 'Caisse'])
-    if (capacites.includes('agenda')) liste.push(['agenda', 'Agenda'])
+    // ⚠ DEUX CAPACITÉS POUR UN ONGLET, ET C'EST MESURÉ, PAS ÉLÉGANT.
+    //
+    // `agenda` n'est active chez AUCUN établissement (préprod, 07/09 : zéro octroi — la migration
+    // du 01/09 n'a servi que `comptabilite` et `stock`). L'onglet et sa section Expositions
+    // existaient donc sans jamais s'afficher nulle part. `reservation`, elle, est active, et c'est
+    // elle qui porte les créneaux d'un produit vendu à l'horaire.
+    //
+    // Les deux sections restent conditionnées séparément à l'intérieur : un exploitant qui n'a que
+    // `reservation` n'a pas d'expositions à voir, et réciproquement.
+    if (capacites.includes('agenda') || capacites.includes('reservation')) liste.push(['agenda', 'Agenda'])
     if (capacites.includes('controle_acces')) liste.push(['acces', 'Accès'])
     if (capacites.includes('stock')) liste.push(['stock', 'Stock'])
     if (capacites.includes('comptabilite')) liste.push(['compta', 'Comptabilité'])
@@ -1468,8 +1478,18 @@ export default function ProduitFiche({
         </Section>
       )}
 
-      {/* AGENDA — n'existe que si l'etablissement vend du date. */}
-      {vue === 'agenda' && <AgendaProduit produitId={produitId} />}
+      {/* AGENDA — n'existe que si l'etablissement vend du date.
+
+          Deux sections qui ne repondent pas a la meme question, et qui viennent de deux modules :
+          les CRENEAUX (module Reservation) sont les horaires qu'on vend et qu'on ouvre ; les DATES
+          (une Exposition, module Musee) sont les periodes ou le produit est propose. Les reunir
+          sous un seul titre ferait chercher les horaires dans les dates. */}
+      {vue === 'agenda' && capacites.includes('reservation') && (
+        <Section titre="Créneaux" aide="Les horaires de ce produit, tenus par le planning de réservation.">
+          <CreneauxProduit produitId={produitId} droits={droits} peutModifier={peutModifier} />
+        </Section>
+      )}
+      {vue === 'agenda' && capacites.includes('agenda') && <AgendaProduit produitId={produitId} />}
 
       {/* ── UN SEUL ENREGISTREMENT POUR TOUTE LA FICHE ─────────────────────────────────────
           Demande de Maxime : « naviguer entre les onglets pour modifier les parametres puis avoir
