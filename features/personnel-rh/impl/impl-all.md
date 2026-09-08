@@ -25,7 +25,8 @@
 - [x] **Étape 2** — ⚠ périmètre d'écriture de `RattachementEmploye` (G-5) — **faite le 08/09, mais pas
       comme prévu** : le processeur prévu ne refusait rien et a été **supprimé** ; l'étape livre le
       test qui fige le mécanisme réel et mesure la limite ouverte
-- [ ] **Étape 3** — onglet « Qualifications » : saisie, correction, échéances (G-1, G-2)
+- [x] **Étape 3** — onglet « Qualifications » : saisie, correction, échéances (G-1, G-2) — **faite le
+      08/09**, vérifiée **en exécutant** (lecture ET écriture) contre une API réelle
 - [ ] **Étape 4** — ⚠ fiche employé : identité modifiable, rattachements, bandeau orphelin (G-3, G-4)
 - [ ] **Étape 5** — ⚠ réparer l'émission de badge + portée d'accès (G-9, G-7) — *contrôle d'accès physique*
 - [ ] **Étape 6** — modifier un créneau, lien roster → qualification (G-6)
@@ -138,6 +139,45 @@ condition de groupe). Or un employé sans rattachement **n'appartient à aucun �
 aucun client**, et l'écran de création n'en pose jamais : **tout employé créé par le produit est
 aujourd'hui dans cet état, définitivement.** → L'étape 4 n'est pas un confort. Le fermer entièrement
 demande un ancrage sur `Employe` : migration, lot à part, arbitrage Maxime.
+
+**2026-09-08 — Étape 3 : l'onglet Qualifications, et le défaut que seule l'exécution montre.**
+
+Trois appels clients (`qualifications`, `creerQualification`, `majQualification`) et un 6ᵉ sous-onglet.
+Le `Get` d'item n'est **volontairement pas branché** : aucun écran ne le consomme, et une fonction
+cliente qu'aucun écran n'appelle est comptée comme « appel orphelin » par la mesure d'écart. On
+branche ce qu'on utilise → l'écart descend de **529 à 526** (3 opérations, pas 4 comme le plan
+l'annonçait).
+
+**⚠ LA COLONNE « EMPLOYÉ » SORTAIT VIDE SUR TOUTES LES LIGNES.** `Employe::$nom` et `$prenom` sont
+dans `employe:read`, `affectation_travail:read`, `absence:read`, `badge_staff:read`, `roster:read` —
+**pas dans `qualification:read`**. Le serveur rend donc
+`"employe": { "@id": …, "@type": "Employe", "id": "<uuid>" }` : c'est bien un **objet**, le test
+`typeof === 'object'` passait, et l'affichage rendait « — » partout.
+
+Ni le build, ni les trois garde-fous front, ni un test d'API ne pouvaient le voir. Trouvé en ouvrant
+l'écran contre l'API réelle. Corrigé côté front (résolution par l'index des employés déjà chargé pour
+le filtre) plutôt que d'élargir `qualification:read` — ça aurait alourdi toutes les lectures de
+qualification et touché une entité que d'autres sessions utilisent.
+⚠ Et quand l'employé n'est pas dans l'index, l'écran le **dit** (« employé hors de la liste chargée »)
+au lieu d'un tiret : `employe` est `nullable: false`, donc un tiret affirmerait une absence
+impossible — une ignorance déguisée en fait.
+
+**Vérifié en exécutant, et voici sur quel artefact** : serveur Vite sur le worktree
+(`/home/debian/wt/personnel/frontend`, port 5241) contre un serveur PHP jetable branché sur la base de
+test `app_testpersonnelrh` (port 8241), fixtures rechargées, compte `personnel.rh@itcotation.com`,
+établissement actif « Site A Personnel ». **Rien de partagé n'a été touché** — ni la préproduction, ni
+sa base.
+
+- Lecture : les trois états s'affichent distinctement et dans le bon ordre — *expirée depuis 30 j*
+  (Camille Renard, BNSSA), *expire dans 7 j* (Dominique Alvarez, MNS), *valide* (Dominique Alvarez,
+  BNSSA). Les noms sont résolus ; sans le correctif, trois tirets.
+- Écriture : création d'une qualification BAFA pour Alex Wei, valide au 30/06/2027 → la ligne apparaît,
+  nom résolu, et **la ligne existe en base** (vérifiée par requête SQL, pas au code de retour).
+  C'est le geste qui révèle un défaut de type de contenu (415 sur `ld: true`), qu'aucun test d'API ne
+  voit puisqu'ils posent l'en-tête à la main.
+
+⚠ Premier essai du montage : le `GET /api/qualifications` **sans en-tête `X-Etablissement`** rend
+`totalItems: 0` avec 4 lignes en base. Le zéro venait du cloisonnement, pas d'une absence.
 
 ## Journal de Rétropropagation
 

@@ -5,7 +5,8 @@ import PlanningTravail from '../components/PlanningTravail.jsx'
 import IncidentsBadge from '../components/IncidentsBadge.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { api } from '../api/client.js'
+import { api, membres } from '../api/client.js'
+import { idDe } from '../api/iri.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { confirmer } from '../components/Confirmation.jsx'
@@ -34,6 +35,57 @@ const STATUT_BADGE = { Actif: 'good', actif: 'good', Revoque: 'crit', revoque: '
 // Vérifié dans le `match` du fournisseur, pas déduit des noms.
 const COUV = { complet: 'good', sous_couvert: 'warn', conflit: 'crit' }
 
+// LES SIX TYPES QUE LE SERVEUR ACCEPTE (`TypeQualification`), et rien d'autre : un type inconnu
+// part en 422. La liste est celle de l'enum, pas une liste d'affichage tenue a cote.
+const QUALIFS = [
+  ['MNS', 'MNS — maitre-nageur sauveteur'],
+  ['BNSSA', 'BNSSA — surveillant de baignade'],
+  ['BEESAN', 'BEESAN'],
+  ['BAFA', 'BAFA'],
+  ['BPJEPS', 'BPJEPS'],
+  ['autre', 'Autre (preciser le libelle)'],
+]
+
+// ⚠ VALEUR PROVISOIRE, ET ELLE S'ANNONCE COMME TELLE.
+//
+// Elle double `CheckQualificationsCommand::HORIZON_PAR_DEFAUT` (14 jours). L'etape 7 du plan la
+// remplace par un reglage PAR ETABLISSEMENT, lu par l'ecran ET par la commande — sans quoi les deux
+// repondraient differemment a la meme question : la commande signalerait une echeance que l'ecran
+// affiche encore comme tranquille.
+const SEUIL_EXPIRATION_JOURS = 14
+
+/**
+ * Jours calendaires d'ici a une date ISO, en heure LOCALE.
+ *
+ * ⚠ `new Date('2026-09-15')` est interprete en UTC : passe par un fuseau a l'est, la veille au soir
+ * devient deja « demain », et une qualification bascule d'etat selon l'heure a laquelle on regarde.
+ * On decoupe donc la date et on construit deux minuits locaux.
+ */
+function joursAvant(iso) {
+  if (!iso) return null
+  const [a, m, j] = String(iso).slice(0, 10).split('-').map(Number)
+  if (!a || !m || !j) return null
+  const maintenant = new Date()
+  const aujourdhui = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate())
+  return Math.round((new Date(a, m - 1, j) - aujourdhui) / 86400000)
+}
+
+/**
+ * ⚠ TROIS ETATS A L'ECRAN, DEUX SEULEMENT COTE SERVEUR.
+ *
+ * `Qualification::getStatut()` ne rend que `valide` et `expiree` — « expire bientot » n'existe pas
+ * en base et se calcule ici. On n'indexe donc PAS une table de statuts sur un troisieme nom que le
+ * serveur ne rend jamais : c'est le piege deja paye sur `COUV` plus haut, ou deux etats inconnus
+ * tombaient sur le repli gris et rendaient l'ecran rassurant quand ca allait mal.
+ */
+function etatQualification(r) {
+  const jours = joursAvant(r.dateValidite)
+  if (jours === null) return { cle: 'inconnu', classe: 'mut', texte: 'date absente', jours: null }
+  if (jours < 0) return { cle: 'expiree', classe: 'crit', texte: `expiree depuis ${-jours} j`, jours }
+  if (jours <= SEUIL_EXPIRATION_JOURS) return { cle: 'bientot', classe: 'warn', texte: `expire dans ${jours} j`, jours }
+  return { cle: 'valide', classe: 'good', texte: 'valide', jours }
+}
+
 // Module Personnel : employés, roster (planning), badges staff.
 export default function Personnel({ etabActif, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('employes')
@@ -53,6 +105,7 @@ export default function Personnel({ etabActif, droits = [] }) {
           ['planning', 'Planning'],
           ['roster', 'Roster'],
           ['badges', 'Badges staff'],
+          ['qualifications', 'Qualifications'],
           // Le registre APRES les badges, et c'est l'ordre du raisonnement : on declare un incident
           // depuis la liste des badges, on le relit et on le referme ici.
           ['incidents', 'Incidents de badge'],
@@ -117,6 +170,7 @@ export default function Personnel({ etabActif, droits = [] }) {
       )}
 
       {sousOnglet === 'badges' && <GestionBadges etabActif={etabActif} droits={droits} />}
+      {sousOnglet === 'qualifications' && <OngletQualifications etabActif={etabActif} droits={droits} />}
       {sousOnglet === 'incidents' && <IncidentsBadge etabActif={etabActif} droits={droits} />}
 
       {/* Absences : declarer, accepter, refuser. En bas de l'ecran Personnel parce que c'est une
@@ -630,3 +684,294 @@ const CONTRATS = [
   ['stagiaire', 'Stagiaire'],
   ['prestataire', 'Prestataire'],
 ]
+
+
+// L'ONGLET QUI FERME LE PREMIER CUL-DE-SAC DU MODULE.
+//
+// `AffecterEmployeProcessor` refuse d'affecter un employe a un creneau qui exige une qualification
+// qu'il ne detient pas (CA-5), et le roster affiche deja le badge rouge en NOMMANT le brevet
+// attendu. Le produit designait donc le probleme avec precision, et n'offrait aucun geste pour le
+// resoudre : `POST /api/qualifications` existe depuis l'origine et n'etait appele de nulle part.
+//
+// L'ordre par defaut est l'echeance la plus proche en tete — c'est la question qu'on se pose en
+// ouvrant cet ecran, pas « qui a quoi ».
+function OngletQualifications({ etabActif, droits = [] }) {
+  const peutGerer = aLeDroit(droits, 'personnel.gerer_qualification')
+  const [filtreEmploye, setFiltreEmploye] = useState('')
+  const [filtreType, setFiltreType] = useState('')
+  const [employes, setEmployes] = useState([])
+  const [edition, setEdition] = useState(null)
+  const [rechargement, setRechargement] = useState(0)
+
+  // Les employes servent au filtre ET au formulaire. ⚠ Une erreur ici ne doit pas vider la liste
+  // des qualifications : le filtre se degrade en liste vide, l'onglet continue de fonctionner.
+  useEffect(() => {
+    let vivant = true
+    api.employes()
+      .then((r) => { if (vivant) setEmployes(membres(r)) })
+      .catch(() => { if (vivant) setEmployes([]) })
+    return () => { vivant = false }
+  }, [etabActif])
+
+  const nomEmploye = (e) => [e?.prenom, e?.nom].filter(Boolean).join(' ') || '—'
+
+  // ⚠ LA RELATION `employe` NE PORTE QUE SON `id`, ET LA COLONNE SORTAIT VIDE.
+  //
+  // `Employe::$nom` et `$prenom` sont dans les groupes `employe:read`, `affectation_travail:read`,
+  // `absence:read`, `badge_staff:read`, `roster:read` — PAS dans `qualification:read`. Le serveur
+  // rend donc, pour chaque ligne :
+  //
+  //     "employe": { "@id": "/api/employes/<uuid>", "@type": "Employe", "id": "<uuid>" }
+  //
+  // C'est bien un OBJET : le test `typeof r.employe === 'object'` passait, et la colonne affichait
+  // « — » sur TOUTES les lignes. Ni le build, ni les garde-fous, ni un test d'API ne voient ça —
+  // seulement l'ouverture de l'ecran contre un vrai serveur (mesure du 08/09 sur la pile de test).
+  //
+  // On resout donc par l'index des employes, deja charge pour le filtre et le formulaire.
+  //
+  // ⚠ Et quand l'employe n'y est pas, on le DIT. Un « — » signifierait « pas d'employe », ce qui est
+  // impossible (`employe` est `nullable: false`) : ce serait affirmer une absence a la place d'une
+  // ignorance. La liste des employes est bornee par le cloisonnement et par la pagination reelle.
+  const indexEmployes = new Map(employes.map((e) => [e.id, e]))
+
+  const employeDeLaLigne = (r) => {
+    // ⚠ `idDe` PLUTOT QU'UN `.split('/').pop()` MAISON — et le garde-fou n'a pas eu tort.
+    //
+    // Seize copies de cette extraction vivaient dans seize fichiers et se repartissaient en NEUF
+    // classes d'equivalence : trois rendaient `''` sur une IRI a barre oblique finale, deux
+    // `undefined` sur un objet sans `id`, une inversait la priorite `id`/`@id`. Une chaine vide se
+    // lit comme un identifiant valide plus loin, et fait echouer en silence la recherche par cle.
+    //
+    // Ici la relation arrive en objet `{ '@id', '@type', id }` — mais rien ne garantit qu'elle
+    // restera sous cette forme : c'est la sérialisation qui la decide, et elle a deja change.
+    const id = idDe(r.employe)
+    if (!id) return { texte: 'employe non renseigne', connu: false }
+    const e = indexEmployes.get(id)
+    if (!e) return { texte: 'employe hors de la liste chargee', connu: false }
+    return { texte: nomEmploye(e), connu: true }
+  }
+
+  const colonnes = [
+    {
+      cle: 'employe',
+      entete: 'Employe',
+      rendu: (r) => {
+        const { texte, connu } = employeDeLaLigne(r)
+        return connu
+          ? <span className="nm">{texte}</span>
+          : <span className="sub" title="Le serveur ne renvoie que l'identifiant de l'employe sur cette ressource.">{texte}</span>
+      },
+    },
+    { cle: 'type', entete: 'Type', rendu: (r) => <span className="mono">{r.type || '—'}</span> },
+    { cle: 'libelle', entete: 'Libelle', rendu: (r) => r.libelle || '—' },
+    { cle: 'dateObtention', entete: 'Obtenue le', rendu: (r) => dateFr(r.dateObtention) },
+    { cle: 'dateValidite', entete: 'Valide jusqu\'au', rendu: (r) => dateFr(r.dateValidite) },
+    {
+      cle: 'etat',
+      entete: 'Etat',
+      rendu: (r) => {
+        const etat = etatQualification(r)
+        return <span className={`badge ${etat.classe}`}>{etat.texte}</span>
+      },
+    },
+  ]
+
+  if (peutGerer) {
+    colonnes.push({
+      cle: 'corriger',
+      entete: '',
+      rendu: (r) => (
+        <div style={{ textAlign: 'right' }}>
+          <button className="btn ghost sm" type="button" style={{ padding: '1px 8px', fontSize: 11.5 }}
+            onClick={() => setEdition(r)}>
+            Corriger
+          </button>
+        </div>
+      ),
+    })
+  }
+
+  return (
+    <div>
+      <Liste
+        titre="Qualifications"
+        sous="brevets et habilitations, et ce qui arrive a echeance"
+        deps={[etabActif, rechargement, filtreEmploye, filtreType]}
+        charger={() => api.qualifications({
+          ...(filtreEmploye ? { employe: filtreEmploye } : {}),
+          ...(filtreType ? { type: filtreType } : {}),
+        })}
+        transforme={(liste) => [...liste].sort((a, b) => {
+          // L'echeance la plus proche en tete, les dates absentes en dernier : une ligne sans date
+          // ne doit pas s'installer en haut comme si elle etait urgente.
+          const ja = joursAvant(a.dateValidite)
+          const jb = joursAvant(b.dateValidite)
+          if (ja === null) return 1
+          if (jb === null) return -1
+          return ja - jb
+        })}
+        vide={"Aucune qualification enregistree. Un creneau qui en exige une refusera toute "
+          + "affectation tant qu'elle n'est pas saisie ici."}
+        colonnes={colonnes}
+        actions={(
+          <div style={{ display: 'flex', gap: 'var(--esp-moyen, 8px)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="input sm" value={filtreEmploye} aria-label="Filtrer par employe"
+              style={{ fontSize: 12, padding: '2px 6px' }}
+              onChange={(e) => setFiltreEmploye(e.target.value)}>
+              <option value="">Tous les employes</option>
+              {employes.map((e) => (
+                <option key={e.id} value={`/api/employes/${e.id}`}>{nomEmploye(e)}</option>
+              ))}
+            </select>
+            <select className="input sm" value={filtreType} aria-label="Filtrer par type"
+              style={{ fontSize: 12, padding: '2px 6px' }}
+              onChange={(e) => setFiltreType(e.target.value)}>
+              <option value="">Tous les types</option>
+              {QUALIFS.map(([v]) => <option key={v} value={v}>{v}</option>)}
+            </select>
+            {peutGerer && (
+              <button className="btn primary sm" type="button" onClick={() => setEdition({})}>
+                ＋ Saisir une qualification
+              </button>
+            )}
+          </div>
+        )}
+      />
+
+      <QualificationModal
+        open={edition !== null}
+        valeur={edition}
+        employes={employes}
+        onClose={() => setEdition(null)}
+        onFait={() => { setEdition(null); setRechargement((n) => n + 1) }}
+      />
+    </div>
+  )
+}
+
+// SAISIR OU CORRIGER UN BREVET.
+//
+// ⚠ IL N'Y A PAS DE SUPPRESSION, ET CE N'EST PAS UN OUBLI D'ECRAN : `Qualification` expose
+// `GetCollection`, `Get`, `Post` et `Patch` — pas de `Delete`. Une saisie erronee se corrige, y
+// compris en changeant l'employe. L'ecran le dit plutot que de laisser chercher le bouton.
+//
+// ⚠ LE LIBELLE EST OBLIGATOIRE QUAND LE TYPE EST « autre » : `QualificationLibelleCoherentValidator`
+// refuse en 422 un `autre` sans libelle. Le formulaire l'exige donc AVANT l'envoi — sans quoi
+// l'utilisateur recoit un refus sur un formulaire qui vient de se declarer complet, exactement le
+// defaut deja corrige sur `dateEntree` dans la modale voisine.
+function QualificationModal({ open, valeur, employes = [], onClose, onFait }) {
+  const edite = Boolean(valeur && valeur.id)
+  const [employe, setEmploye] = useState('')
+  const [type, setType] = useState('BNSSA')
+  const [libelle, setLibelle] = useState('')
+  const [obtention, setObtention] = useState('')
+  const [validite, setValidite] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const v = valeur || {}
+    const refEmploye = typeof v.employe === 'object' && v.employe
+      ? `/api/employes/${v.employe.id}`
+      : (typeof v.employe === 'string' ? v.employe : '')
+    setEmploye(refEmploye)
+    setType(v.type || 'BNSSA')
+    setLibelle(v.libelle || '')
+    setObtention(v.dateObtention ? String(v.dateObtention).slice(0, 10) : '')
+    setValidite(v.dateValidite ? String(v.dateValidite).slice(0, 10) : '')
+    setErreur(null)
+  }, [open, valeur])
+
+  const libelleRequis = type === 'autre'
+  const pret = employe && type && validite && (!libelleRequis || libelle.trim())
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      const corps = {
+        employe,
+        type,
+        dateValidite: validite,
+        ...(libelle.trim() ? { libelle: libelle.trim() } : {}),
+        ...(obtention ? { dateObtention: obtention } : {}),
+      }
+      if (edite) await api.majQualification(valeur.id, corps)
+      else await api.creerQualification(corps)
+      onFait()
+    } catch (err) {
+      // La raison rendue par l'API, jamais un texte generique : c'est elle qui dit lequel des
+      // controles serveur a refuse, et l'utilisateur ne peut pas le deviner.
+      setErreur(err.message || "La qualification n'a pas pu etre enregistree.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  const nomEmploye = (e) => [e?.prenom, e?.nom].filter(Boolean).join(' ') || '—'
+
+  return (
+    <Modal open={open} onClose={onClose} titre={edite ? 'Corriger une qualification' : 'Saisir une qualification'}>
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 240px' }}>
+            <label htmlFor="qu-employe">Employe *</label>
+            <select id="qu-employe" className="input" value={employe} onChange={(e) => setEmploye(e.target.value)}>
+              <option value="">Choisir…</option>
+              {employes.map((e) => (
+                <option key={e.id} value={`/api/employes/${e.id}`}>{nomEmploye(e)}</option>
+              ))}
+            </select>
+            {edite && <span className="hint">Corriger l'employe deplace la qualification : c'est le seul moyen de reparer une saisie faite sur la mauvaise personne.</span>}
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="qu-type">Type *</label>
+            <select id="qu-type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
+              {QUALIFS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 240px' }}>
+            <label htmlFor="qu-libelle">Libelle {libelleRequis ? '*' : ''}</label>
+            <input id="qu-libelle" className="input" value={libelle} maxLength={120}
+              placeholder={libelleRequis ? 'Intitule exact du brevet' : 'Facultatif'}
+              onChange={(e) => setLibelle(e.target.value)} />
+            {libelleRequis && <span className="hint">Obligatoire pour le type « autre » : sans lui, le serveur refuse l'enregistrement.</span>}
+          </div>
+        </div>
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="qu-obtention">Date d'obtention</label>
+            <input id="qu-obtention" className="input" type="date" value={obtention}
+              onChange={(e) => setObtention(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="qu-validite">Valide jusqu'au *</label>
+            <input id="qu-validite" className="input" type="date" value={validite}
+              onChange={(e) => setValidite(e.target.value)} />
+            <span className="hint">C'est cette date qui decide si un agent peut etre affecte a un creneau le jour dit.</span>
+          </div>
+        </div>
+
+        <p className="hint" style={{ marginTop: 'var(--esp-large)' }}>
+          Une qualification ne se supprime pas : le serveur n'expose pas ce geste. Une saisie erronee
+          se corrige, y compris en changeant l'employe.
+        </p>
+
+        <div className="modal-actions" style={{ marginTop: 'var(--esp-large)' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={!pret || envoi}>
+            {envoi ? 'Enregistrement…' : (edite ? 'Corriger' : 'Enregistrer')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

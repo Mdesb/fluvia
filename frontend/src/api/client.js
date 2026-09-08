@@ -2437,6 +2437,26 @@ export const api = {
   validerAbsence: (id) => request(`/api/personnel/absences/${id}/valider`, { method: 'POST' }),
   refuserAbsence: (id) => request(`/api/personnel/absences/${id}/refuser`, { method: 'POST' }),
   roster: () => request('/api/personnel/roster'),
+
+  // LES QUALIFICATIONS -- QUATRE OPERATIONS EXPOSEES DEPUIS L ORIGINE, ZERO ECRAN.
+  //
+  // `AffecterEmployeProcessor` REFUSE d affecter un employe a un creneau qui exige une
+  // qualification qu il ne detient pas (CA-5, 422), et `RosterProvider` publie
+  // `qualificationManquanteOuExpiree` que l ecran rend deja en badge rouge, en nommant le brevet
+  // attendu. Le produit DESIGNAIT donc le probleme avec precision, et n offrait aucun geste pour le
+  // resoudre : ajouter le BNSSA d un maitre-nageur passait par la base de donnees.
+  //
+  // ⚠ `method` SUR LA MEME LIGNE que `request(` : la mesure d ecart lit la methode HTTP sur le reste
+  // de la ligne de l appel. Ecrite en dessous, elle retombe sur le defaut GET et l operation est
+  // comptee comme jamais appelee (avertissement pose ligne ~402).
+  //
+  // ⚠ Le `Get` d item (`/api/qualifications/{id}`) n est VOLONTAIREMENT pas branche : aucun ecran ne
+  // le consomme, et une fonction cliente qu aucun ecran n appelle est exactement ce que la mesure
+  // d ecart compte comme « appel orphelin ». On branche ce qu on utilise.
+  qualifications: (params) =>
+    request('/api/qualifications', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerQualification: (corps) => request('/api/qualifications', { method: 'POST', body: corps, ld: true }),
+  majQualification: (id, corps) => request(`/api/qualifications/${id}`, { method: 'PATCH', body: corps }),
   badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
   revoquerBadgeStaff: (id, motif) =>
     request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
