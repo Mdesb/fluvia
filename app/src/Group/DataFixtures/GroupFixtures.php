@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Group\DataFixtures;
 
 use App\Crm\DataFixtures\CrmFixtures;
+use App\Crm\Entity\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Group\Entity\GroupBooking;
 use App\Group\Entity\GroupParticipant;
@@ -89,6 +90,10 @@ final class GroupFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
+        // Payeur de démonstration : le client CRM « Jean Dupont ». Permet de facturer (générer un
+        // devis) une réservation de ce groupe sans configuration préalable.
+        $payeur = $manager->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+
         $groupeA = (new ParticipantGroup())
             ->setEtablissement($etabA)
             ->setLabel(self::GROUPE_A_LABEL)
@@ -96,7 +101,8 @@ final class GroupFixtures extends Fixture implements DependentFixtureInterface
             ->setOrganizerName('Mme Martin')
             ->setOrganizerEmail('martin@ecole-jean-moulin.fr')
             ->setOrganizerPhone('0102030405')
-            ->setHeadcount(28);
+            ->setHeadcount(28)
+            ->setClient($payeur instanceof Client ? $payeur : null);
         $manager->persist($groupeA);
 
         $manager->persist((new GroupParticipant())->setGroup($groupeA)

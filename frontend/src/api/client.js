@@ -3080,4 +3080,6 @@ export const api = {
     request(`/api/group/bookings/${id}/confirm`, { method: 'POST', body: {} }),
   annulerReservationGroupe: (id) =>
     request(`/api/group/bookings/${id}/cancel`, { method: 'POST', body: {} }),
+  facturerReservationGroupe: (id, corps) =>
+    request(`/api/group/bookings/${id}/invoice`, { method: 'POST', body: corps }),
 }

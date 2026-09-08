@@ -12,12 +12,14 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Crm\Entity\Client;
+use App\Facturation\Entity\CommercialDocument;
 use App\Group\Enum\GroupBookingStatus;
 use App\Group\Enum\GroupPaymentStatus;
 use App\Group\State\AssignGroupBookingProcessor;
 use App\Group\State\CancelGroupBookingProcessor;
 use App\Group\State\ConfirmGroupBookingProcessor;
 use App\Group\State\CreateGroupBookingProcessor;
+use App\Group\State\InvoiceGroupBookingProcessor;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
 use App\Organisation\Entity\Etablissement;
@@ -81,6 +83,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'group.manage')",
             processor: CancelGroupBookingProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/group/bookings/{id}/invoice',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'group.manage')",
+            processor: InvoiceGroupBookingProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['group_booking:read']],
@@ -153,6 +162,15 @@ class GroupBooking
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['group_booking:read'])]
     private ?Vente $venteRattachee = null;
+
+    /**
+     * Pièce commerciale (devis) générée pour le payeur — début de la chaîne
+     * devis → bon de commande → facture (NF525). Renseignée par `InvoiceGroupBookingProcessor`.
+     */
+    #[ORM\ManyToOne(targetEntity: CommercialDocument::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['group_booking:read'])]
+    private ?CommercialDocument $commercialDocument = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['group_booking:read'])]
@@ -297,6 +315,18 @@ class GroupBooking
     public function setVenteRattachee(?Vente $venteRattachee): self
     {
         $this->venteRattachee = $venteRattachee;
+
+        return $this;
+    }
+
+    public function getCommercialDocument(): ?CommercialDocument
+    {
+        return $this->commercialDocument;
+    }
+
+    public function setCommercialDocument(?CommercialDocument $commercialDocument): self
+    {
+        $this->commercialDocument = $commercialDocument;
 
         return $this;
     }

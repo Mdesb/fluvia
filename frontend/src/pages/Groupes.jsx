@@ -66,6 +66,7 @@ export default function Groupes({ etabActif, droits }) {
   const [membresSel, setMembresSel] = useState([])
   const [reservations, setReservations] = useState([])
   const [creneaux, setCreneaux] = useState([])
+  const [taux, setTaux] = useState([])
 
   const [modale, setModale] = useState(null) // { type, ... }
 
@@ -92,6 +93,15 @@ export default function Groupes({ etabActif, droits }) {
     api.reservationCreneaux()
       .then((r) => { if (vivant) setCreneaux(membres(r)) })
       .catch(() => { if (vivant) setCreneaux([]) })
+    return () => { vivant = false }
+  }, [etabActif])
+
+  // Taux de TVA de l'exploitant, pour la génération de devis.
+  useEffect(() => {
+    let vivant = true
+    api.tauxTvas()
+      .then((r) => { if (vivant) setTaux(membres(r)) })
+      .catch(() => { if (vivant) setTaux([]) })
     return () => { vivant = false }
   }, [etabActif])
 
@@ -260,6 +270,17 @@ export default function Groupes({ etabActif, droits }) {
         />
       )}
 
+      {modale?.type === 'facturer' && (
+        <FormFacture
+          taux={taux}
+          onFermer={() => setModale(null)}
+          onValider={async (corps) => {
+            await geste(() => api.facturerReservationGroupe(modale.reservationId, corps), 'Devis créé.')
+            setModale(null)
+          }}
+        />
+      )}
+
       {modale?.type === 'detailReservation' && (
         <DetailReservation reservationId={modale.reservationId} onFermer={() => setModale(null)} />
       )}
@@ -352,6 +373,10 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'affecter', reservationId: r.id })}>Affecter</button>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'paiement', reservationId: r.id, paymentStatus: r.paymentStatus })}>Paiement</button>
+                        {' '}
+                        {r.commercialDocument
+                          ? <span className="badge good">Devis</span>
+                          : <button className="btn primary sm" type="button" onClick={() => onModale({ type: 'facturer', reservationId: r.id })}>Facturer</button>}
                         {r.status === 'option' && (
                           <>
                             {' '}
@@ -625,6 +650,48 @@ function FormPaiement({ valeur, onFermer, onValider }) {
         <div className="modal-actions">
           <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
           <button className="btn primary" type="submit" disabled={envoi}>Enregistrer</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function FormFacture({ taux, onFermer, onValider }) {
+  const [tauxTva, setTauxTva] = useState('')
+  const [prix, setPrix] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+
+  async function soumettre(e) {
+    e.preventDefault()
+    if (!tauxTva) return
+    setEnvoi(true)
+    try {
+      const corps = { tauxTva }
+      if (prix.trim() !== '') corps.prixUnitaireHT = prix.trim()
+      await onValider(corps)
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Facturer — générer un devis">
+      <form onSubmit={soumettre}>
+        <p className="sub">Un devis part au payeur du groupe et entre dans la chaîne devis → bon de commande → facture.</p>
+        <div className="field">
+          <label htmlFor="f-tva">Taux de TVA *</label>
+          <select id="f-tva" className="input" value={tauxTva} onChange={(e) => setTauxTva(e.target.value)} required>
+            <option value="">— choisir —</option>
+            {taux.map((t) => <option key={idDe(t)} value={idDe(t)}>{t.libelle} ({t.taux} %)</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="f-prix">Prix unitaire HT (optionnel — défaut : tarif de l’activité)</label>
+          <input id="f-prix" className="input num" value={prix} onChange={(e) => setPrix(e.target.value)} placeholder="ex. 12.00" />
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={envoi || !tauxTva}>Générer le devis</button>
         </div>
       </form>
     </Modal>
