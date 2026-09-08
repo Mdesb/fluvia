@@ -3049,4 +3049,35 @@ export const api = {
   // calendrier qui ne ferme rien. `schoolHolidaysAvailable` distingue « pas de vacances » de
   // « le ministere n'a pas repondu » — deux phrases differentes a l'ecran.
   indicesOuverture: (from, to) => request('/api/opening/calendar-hints', { query: { from, to } }),
+
+  // ── Groupes (module transverse App\Group) ────────────────────────────
+  groupesParticipants: () =>
+    request('/api/participant_groups', { query: { itemsPerPage: 100 } }),
+  groupeParticipant: (id) => request(`/api/participant_groups/${id}`),
+  creerGroupeParticipant: (corps) =>
+    request('/api/participant_groups', { method: 'POST', body: corps, ld: true }),
+  modifierGroupeParticipant: (id, corps) =>
+    request(`/api/participant_groups/${id}`, { method: 'PATCH', body: corps }),
+  membresGroupe: (idGroupe) =>
+    request('/api/group_participants', { query: { group: idGroupe, itemsPerPage: 500 } }),
+  membreGroupe: (id) => request(`/api/group_participants/${id}`),
+  ajouterMembre: (corps) =>
+    request('/api/group_participants', { method: 'POST', body: corps, ld: true }),
+  modifierMembre: (id, corps) =>
+    request(`/api/group_participants/${id}`, { method: 'PATCH', body: corps }),
+  supprimerMembre: (id) =>
+    request(`/api/group_participants/${id}`, { method: 'DELETE' }),
+  reservationsGroupe: () =>
+    request('/api/group_bookings', { query: { itemsPerPage: 200 } }),
+  reservationGroupe: (id) => request(`/api/group_bookings/${id}`),
+  creerReservationGroupe: (corps) =>
+    request('/api/group/bookings', { method: 'POST', body: corps, ld: true }),
+  modifierReservationGroupe: (id, corps) =>
+    request(`/api/group_bookings/${id}`, { method: 'PATCH', body: corps }),
+  affecterReservationGroupe: (id, corps) =>
+    request(`/api/group/bookings/${id}/assign`, { method: 'POST', body: corps }),
+  confirmerReservationGroupe: (id) =>
+    request(`/api/group/bookings/${id}/confirm`, { method: 'POST', body: {} }),
+  annulerReservationGroupe: (id) =>
+    request(`/api/group/bookings/${id}/cancel`, { method: 'POST', body: {} }),
 }

@@ -53,6 +53,10 @@ api_platform:
             - '%kernel.project_dir%/src/Audit/Entity'
             - '%kernel.project_dir%/src/Offre/Entity'
             - '%kernel.project_dir%/src/Marketing/Entity'
+            # Module transverse « groupes de participants » (App\Group). Sans cette ligne, ses
+            # #[ApiFilter] sont DECLARES ET MUETS : `?group=`, `?type=`, `?status=` sortiraient la
+            # collection entiere. Le dossier existe dans le meme commit que cette ligne.
+            - '%kernel.project_dir%/src/Group/Entity'
             # Module « connecteurs » (06/09). Le dossier existe dans le MEME commit que cette ligne :
             # posee avant, elle fait echouer la construction du conteneur ; posee apres, le module
             # reste invisible de l'API sans que rien ne le signale.

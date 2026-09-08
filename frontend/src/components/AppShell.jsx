@@ -91,6 +91,7 @@ const NAV = [
       // permissions `stay.*` SONT attribuees : « Administrateur groupe » et « Responsable de site »
       // les portent. Cette entree-la se verra tout de suite.
       { id: 'sejours', ic: 'stay', label: 'Séjours', perms: ['stay.read', 'stay.write', 'stay.charge', 'stay.settle'] },
+      { id: 'groupes', ic: 'groups', label: 'Groupes', perm: 'group.read' },
       // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.
