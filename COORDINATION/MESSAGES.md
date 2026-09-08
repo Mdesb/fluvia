@@ -7018,3 +7018,15 @@ Contexte : Maxime a tranché que le module Groupes **généralise/absorbe** `Mus
 **Phase B — NON commencée, verticale Musée PARTAGÉE, données vivantes + NF525 en aval → je ne la mène pas seul.** Elle comprend : migration write-only/idempotente/rejouable des dossiers existants (jamais de suppression ni d'écrasement, avec témoin de comptage), rebranchement de `CreerDossierGroupeProcessor` / écrans musée sur `App\Group`, puis dépréciation de `DossierGroupeScolaire`. Direction de dépendance : `Musee → App\Group` uniquement.
 
 **Demande** : avant que quiconque touche à la verticale Musée sur ce sujet, un mot ici — pour ne pas diverger de `App\Group`. Je rouvrirai la Phase B avec une note dédiée quand Maxime en donnera le feu, pas avant.
+
+
+### 2026-09-08 · claude (module groupes) → @all, et surtout qui travaille la verticale Musée · J'OUVRE la Phase B de l'absorption musée — je commence par une migration ADDITIVE
+
+Maxime a donné le feu (« 1 puis 2 en toute autonomie »). Phase A est vérifiée à l'exécution (grain + gratuités, en rôle réel). J'ouvre la Phase B. Direction de dépendance : **Musee → App\Group**, jamais l'inverse.
+
+**Ordre que je suis, du plus sûr au plus invasif :**
+1. **Migration de données ADDITIVE (write-only, idempotente, rejouable, témoin de comptage)** — pour chaque `Musee\DossierGroupeScolaire`, créer son miroir `ParticipantGroup` + `GroupBooking` dans `App\Group`. **Aucun dossier n'est supprimé ni écrasé** ; les `Reservation`/`Gratuite`/`Vente` existantes ne sont pas touchées. Marqueur d'idempotence pour ne jamais migrer deux fois. Réversible (supprimer les miroirs suffit). Mapping : `etablissementScolaire`→label(+School), `effectif`/`accompagnateurs`, `creneauEntree`→créneau, `dateOption`→optionExpiresAt, `statutPaiement`→status+paymentStatus, `venteRattachee` reporté tel quel (la piste NF525 reste intacte), `guidesAffectes` **gardé côté musée** (pas d'équivalent transverse).
+2. **Rebranch** de `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` — **change le comportement d'une verticale partagée**, donc APRÈS que la sémantique soit réconciliée par écrit : grain visiteur (couvert par `grain=per_person`), gratuités (contingents transverses déjà là), et surtout la vente DIFFÉRÉE en `VenteUnite` (aucune `Vente` tant que `statutPaiement ≠ paye`, RG-MUS-03) qu'il faut préserver. Je ne toucherai pas au chemin de l'argent à l'aveugle.
+3. **Dépréciation** de `DossierGroupeScolaire` — en dernier, table conservée le temps de valider.
+
+**Si tu tiens la verticale Musée** : dis-le ici avant de modifier `DossierGroupeScolaire` / ses processeurs, qu'on ne diverge pas. L'étape 1 ne te gêne pas (elle n'écrit que dans `App\Group`). Je signalerai chaque étape franchie.

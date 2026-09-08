@@ -129,3 +129,41 @@ dossier. Marquer les dossiers migrés (champ côté musée ou table de correspon
   témoins) ; puis rebrancher `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` ; puis
   déprécier `DossierGroupeScolaire` (garder la table le temps de valider), puis retirer. Un mot dans
   COORDINATION avant d'ouvrir la Phase B.
+
+
+## Phase B — analyse détaillée (08/09) : couplage mesuré et fourche à trancher
+
+Toutes les références à `DossierGroupeScolaire` mesurées (`grep -rn` sur `src/` + `frontend/`) :
+
+- **Entité + API** : `Musee\Entity\DossierGroupeScolaire` (POST `/musee/dossiers-groupe`, `{id}/confirmer`).
+- **Confirmation** (`ConfirmerDossierGroupeHandler`) : crée **une `Reservation` socle par visiteur** —
+  `nbPayantes = total − gratuités` en `modeDecompte=VenteUnite` (`montantDu=0.00`, **différé** : aucune
+  `Vente` tant que `statutPaiement ≠ paye`, RG-MUS-03), et `gratuités` en `modeDecompte=Gratuit`.
+- **Gratuités** (`AccorderGratuiteHandler`, `Gratuite`, `ContingentGratuite`) : chaque gratuité porte un
+  `motif` (élève / accompagnateur), consomme le contingent **et** la jauge du créneau (une `Reservation`
+  `Gratuit`), et est reliée à sa `Reservation` (`reservationRattachee`).
+- **Cloisonnement** : `PerimetreMuseeExtension` (`{root}.etablissement`).
+- **Audit** : le dossier est inscrit dans `Audit\Doctrine\AuditWriteSubscriber`.
+- **Aval argent** : tests `Facturation/`, `Recouvrement/`, `RevenueRecovery/` touchent la chaîne du
+  dossier ; `venteRattachee` fait le lien NF525.
+- **Frontal** : une section de `frontend/src/pages/Musee.jsx` (liste + création + confirmation) et 3
+  aides `client.js` (`museeDossiersGroupe`, `museeCreerDossierGroupe`, `museeConfirmerDossierGroupe`).
+
+**Ce que `App\Group` modélise déjà** : grain (`per_person` = un billet par visiteur ✓), contingents de
+gratuité transverses ✓, facturation en devis ✓. **Ce qu'il ne modélise PAS encore** : la distinction
+`VenteUnite` / `Gratuit` **par réservation**, la règle « aucune `Vente` tant que non payé » (paiement
+différé), et le `motif` de gratuité (élève/accompagnateur) + le lien gratuité→réservation.
+
+### La fourche (à trancher avant le rebranch — elle touche l'argent / NF525)
+
+- **B2 (migration additive)** est **indépendante** de la fourche : elle ne fait que MIROITER les champs
+  stockés du dossier (`etablissementScolaire`→label+School, `effectif`/`accompagnateurs`,
+  `creneauEntree`, `dateOption`→optionExpiresAt, `statutPaiement`→status+paymentStatus, `venteRattachee`
+  tel quel) dans `ParticipantGroup`+`GroupBooking`, sans toucher dossiers/réservations/ventes. Sûre,
+  rejouable, réversible.
+- **B3 (rebranch)** dépend de la fourche : soit on **étend `App\Group`** pour préserver toute la
+  sémantique argent du musée (superset : modeDecompte par visiteur + gratuités motivées + différé), soit
+  on **simplifie** (le modèle `App\Group` prime, le musée s'y aligne — décision produit sur l'argent).
+
+Mapping paiement retenu (B2) : `en_option`→(Option,Pending) · `bon_commande_emis`→(Confirmed,PurchaseOrder)
+· `mandat_emis`→(Confirmed,PurchaseOrder) · `paye`→(Confirmed,Paid). Grain du miroir = `per_person`.
