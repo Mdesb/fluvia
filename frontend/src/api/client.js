@@ -3102,4 +3102,19 @@ export const api = {
     request(`/api/group_booking_items/${id}`, { method: 'DELETE' }),
   appliquerForfait: (bookingId, corps) =>
     request(`/api/group/bookings/${bookingId}/apply-product`, { method: 'POST', body: corps }),
+  // Gratuités transverses (contingents + octroi)
+  gratuiteContingents: () =>
+    request('/api/group_gratuite_contingents', { query: { itemsPerPage: 200 } }),
+  creerGratuiteContingent: (corps) =>
+    request('/api/group_gratuite_contingents', { method: 'POST', body: corps, ld: true }),
+  modifierGratuiteContingent: (id, corps) =>
+    request(`/api/group_gratuite_contingents/${id}`, { method: 'PATCH', body: corps }),
+  supprimerGratuiteContingent: (id) =>
+    request(`/api/group_gratuite_contingents/${id}`, { method: 'DELETE' }),
+  gratuitesReservation: (bookingId) =>
+    request('/api/group_gratuites', { query: { booking: bookingId, itemsPerPage: 200 } }),
+  accorderGratuite: (bookingId, corps) =>
+    request(`/api/group/bookings/${bookingId}/grant-gratuite`, { method: 'POST', body: corps }),
+  revoquerGratuite: (id) =>
+    request(`/api/group_gratuites/${id}`, { method: 'DELETE' }),
 }

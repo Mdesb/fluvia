@@ -23,6 +23,7 @@ use App\Group\State\AssignGroupBookingProcessor;
 use App\Group\State\CancelGroupBookingProcessor;
 use App\Group\State\ConfirmGroupBookingProcessor;
 use App\Group\State\CreateGroupBookingProcessor;
+use App\Group\State\GrantGratuiteProcessor;
 use App\Group\State\InvoiceGroupBookingProcessor;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
@@ -102,6 +103,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'group.manage')",
             processor: ApplyGroupProductProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/group/bookings/{id}/grant-gratuite',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'group.manage')",
+            processor: GrantGratuiteProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['group_booking:read']],

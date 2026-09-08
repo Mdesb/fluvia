@@ -69,6 +69,7 @@ export default function Groupes({ etabActif, droits }) {
   const [taux, setTaux] = useState([])
   const [forfaits, setForfaits] = useState([])
   const [produits, setProduits] = useState([])
+  const [contingents, setContingents] = useState([])
 
   const [modale, setModale] = useState(null) // { type, ... }
 
@@ -126,6 +127,16 @@ export default function Groupes({ etabActif, droits }) {
   }, [])
   useEffect(() => { chargerForfaits() }, [chargerForfaits, etabActif])
 
+  // Contingents de gratuité, rechargeables après édition ou octroi.
+  const chargerContingents = useCallback(async () => {
+    try {
+      setContingents(membres(await api.gratuiteContingents()))
+    } catch {
+      setContingents([])
+    }
+  }, [])
+  useEffect(() => { chargerContingents() }, [chargerContingents, etabActif])
+
   const ouvrir = useCallback(async (id) => {
     setErreur(null)
     try {
@@ -166,6 +177,9 @@ export default function Groupes({ etabActif, droits }) {
         </div>
         {peutGerer && (
           <div className="actions">
+            <button className="btn ghost" type="button" onClick={() => setModale({ type: 'contingents' })}>
+              Gratuités
+            </button>
             <button className="btn ghost" type="button" onClick={() => setModale({ type: 'forfaits' })}>
               Forfaits groupe
             </button>
@@ -315,6 +329,14 @@ export default function Groupes({ etabActif, droits }) {
         <FormPanier reservationId={modale.reservationId} forfaits={forfaits} produits={produits} taux={taux} onFermer={() => setModale(null)} />
       )}
 
+      {modale?.type === 'contingents' && (
+        <FormContingents onFermer={() => setModale(null)} onChange={chargerContingents} />
+      )}
+
+      {modale?.type === 'gratuites' && (
+        <FormGratuites reservationId={modale.reservationId} contingents={contingents} onFermer={() => setModale(null)} onChange={chargerContingents} />
+      )}
+
       {modale?.type === 'detailReservation' && (
         <DetailReservation reservationId={modale.reservationId} onFermer={() => setModale(null)} />
       )}
@@ -405,6 +427,8 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                       <>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'panier', reservationId: r.id })}>Panier</button>
+                        {' '}
+                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'gratuites', reservationId: r.id })}>Gratuités</button>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'affecter', reservationId: r.id })}>Affecter</button>
                         {' '}
@@ -1028,6 +1052,172 @@ function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
         </table>
       </div>
 
+      <div className="modal-actions">
+        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Gratuités transverses : contingents (enveloppes réutilisables) ──────────────────────────────
+function FormContingents({ onFermer, onChange }) {
+  const [liste, setListe] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [label, setLabel] = useState('')
+  const [quota, setQuota] = useState('')
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    try { setListe(membres(await api.gratuiteContingents())) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+  }, [])
+  useEffect(() => { recharger() }, [recharger])
+
+  async function creer(e) {
+    e.preventDefault()
+    if (label.trim() === '') return
+    setErreur(null)
+    try {
+      await api.creerGratuiteContingent({ label: label.trim(), quota: quota.trim() === '' ? 0 : Math.max(0, parseInt(quota, 10) || 0) })
+      setLabel(''); setQuota(''); await recharger(); onChange?.()
+    } catch (e) { setErreur(e?.message || 'Création impossible.') }
+  }
+  async function supprimer(id) {
+    if (!await confirmer('Supprimer ce contingent ?')) return
+    try { await api.supprimerGratuiteContingent(id); await recharger(); onChange?.() } catch (e) { setErreur(e?.message || 'Suppression impossible.') }
+  }
+  async function basculer(c) {
+    try { await api.modifierGratuiteContingent(idDe(c), { actif: !c.actif }); await recharger(); onChange?.() } catch (e) { setErreur(e?.message || 'Modification impossible.') }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Contingents de gratuité" taille="lg">
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      <p className="sub">Des enveloppes de gratuités réutilisables (scolaires, partenaires…) qu'on accorde ensuite à une réservation depuis sa fiche « Gratuités ».</p>
+      <form onSubmit={creer}>
+        <div className="field">
+          <label htmlFor="ct-label">Nouveau contingent</label>
+          <input id="ct-label" className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nom (ex. Scolaires ville)" />
+        </div>
+        <div className="field">
+          <label htmlFor="ct-quota">Quota</label>
+          <input id="ct-quota" className="input num" type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} placeholder="0" />
+        </div>
+        <div className="actions">
+          <button className="btn primary sm" type="submit">Créer le contingent</button>
+        </div>
+      </form>
+      {chargement ? (
+        <div className="center"><div className="spinner" /></div>
+      ) : liste.length === 0 ? (
+        <p className="empty">Aucun contingent.</p>
+      ) : (
+        <table className="tbl">
+          <thead><tr><th>Contingent</th><th className="num">Quota</th><th className="num">Restant</th><th>État</th><th /></tr></thead>
+          <tbody>
+            {liste.map((c) => (
+              <tr key={c.id}>
+                <td>{c.label}</td>
+                <td className="num">{c.quota}</td>
+                <td className="num">{c.placesRestantes}</td>
+                <td>{c.actif ? <span className="badge good">Actif</span> : <span className="badge mut">Inactif</span>}</td>
+                <td className="num">
+                  <button className="btn ghost sm" type="button" onClick={() => basculer(c)}>{c.actif ? 'Désactiver' : 'Activer'}</button>
+                  {' '}
+                  <button className="btn danger sm" type="button" onClick={() => supprimer(idDe(c))}>Supprimer</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="modal-actions">
+        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Gratuités d'une réservation : octroi depuis un contingent, révocation ───────────────────────
+function FormGratuites({ reservationId, contingents, onFermer, onChange }) {
+  const [liste, setListe] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [contingent, setContingent] = useState('')
+  const [quantite, setQuantite] = useState('1')
+  const [motif, setMotif] = useState('')
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    try { setListe(membres(await api.gratuitesReservation(reservationId))) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+  }, [reservationId])
+  useEffect(() => { recharger() }, [recharger])
+
+  const nomContingent = (ref) => contingents.find((c) => idDe(c) === idDe(ref))?.label || '—'
+
+  async function accorder(e) {
+    e.preventDefault()
+    if (!contingent) return
+    setErreur(null)
+    try {
+      await api.accorderGratuite(reservationId, {
+        contingent: `/api/group_gratuite_contingents/${contingent}`,
+        quantite: Math.max(1, parseInt(quantite, 10) || 1),
+        motif: motif.trim() || null,
+      })
+      setMotif(''); setQuantite('1'); await recharger(); onChange?.()
+    } catch (e) { setErreur(e?.message || 'Octroi impossible.') }
+  }
+  async function revoquer(id) {
+    try { await api.revoquerGratuite(id); await recharger(); onChange?.() } catch (e) { setErreur(e?.message || 'Révocation impossible.') }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre="Gratuités de la réservation" taille="lg">
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      <p className="sub">Les entrées gratuites sortent du décompte payant du devis.</p>
+      <form onSubmit={accorder}>
+        <div className="field">
+          <label htmlFor="gr-cont">Accorder depuis un contingent</label>
+          <select id="gr-cont" className="input" value={contingent} onChange={(e) => setContingent(e.target.value)}>
+            <option value="">— contingent —</option>
+            {contingents.filter((c) => c.actif && c.placesRestantes > 0).map((c) => (
+              <option key={idDe(c)} value={idDe(c)}>{c.label} ({c.placesRestantes} restantes)</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="gr-q">Nombre de gratuités</label>
+          <input id="gr-q" className="input num" type="number" min="1" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="gr-motif">Motif (optionnel)</label>
+          <input id="gr-motif" className="input" value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="ex. élèves" />
+        </div>
+        <div className="actions">
+          <button className="btn primary sm" type="submit" disabled={!contingent}>Accorder</button>
+        </div>
+      </form>
+      <h4>Gratuités accordées</h4>
+      {chargement ? (
+        <div className="center"><div className="spinner" /></div>
+      ) : liste.length === 0 ? (
+        <p className="empty">Aucune gratuité accordée.</p>
+      ) : (
+        <table className="tbl">
+          <thead><tr><th>Contingent</th><th className="num">Nombre</th><th>Motif</th><th /></tr></thead>
+          <tbody>
+            {liste.map((g) => (
+              <tr key={g.id}>
+                <td>{g.contingent?.label ?? nomContingent(g.contingent)}</td>
+                <td className="num">{g.quantite}</td>
+                <td className="sub">{g.motif || '—'}</td>
+                <td className="num"><button className="btn danger sm" type="button" onClick={() => revoquer(g.id)}>Révoquer</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <div className="modal-actions">
         <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
       </div>

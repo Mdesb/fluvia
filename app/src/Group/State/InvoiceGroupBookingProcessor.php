@@ -16,6 +16,7 @@ use App\Facturation\Enum\TypeDestinataire;
 use App\Facturation\Service\ResolveurComptesFacturation;
 use App\Group\Entity\GroupBooking;
 use App\Group\Entity\GroupBookingItem;
+use App\Group\Entity\GroupGratuite;
 use App\Group\Enum\GroupBookingStatus;
 use App\Group\Enum\GroupPaymentStatus;
 use App\Organisation\Entity\Etablissement;
@@ -103,12 +104,23 @@ final class InvoiceGroupBookingProcessor implements ProcessorInterface
                     'Aucun montant : composez un panier (forfait ou produits), affectez une activité tarifée, ou fournissez « prixUnitaireHT ».'
                 );
             }
+            // Les gratuités accordées sortent du décompte payant (nbPayants = effectif − gratuités),
+            // comme le fait le musée. Interaction avec le panier laissée de côté (v1) : le panier se
+            // compose déjà ligne à ligne.
+            $gratuites = 0;
+            foreach ($this->em->getRepository(GroupGratuite::class)->findBy(['booking' => $data]) as $g) {
+                $gratuites += $g->getQuantite();
+            }
+            $payant = $data->getEffectif() - $gratuites;
+            if ($payant < 1) {
+                throw new UnprocessableEntityHttpException('Toutes les entrées sont gratuites : rien à facturer.');
+            }
             $designation = \is_string($corps['designation'] ?? null) && trim($corps['designation']) !== ''
                 ? trim($corps['designation'])
                 : $this->designationParDefaut($data);
             $lignes[] = (new DocumentLine())
                 ->setDesignation($designation)
-                ->setQuantite(max(1, $data->getEffectif()))
+                ->setQuantite($payant)
                 ->setPrixUnitaireHT((string) $prixUnitaire)
                 ->setTauxTva($this->taux($corps['tauxTva'] ?? null, $etablissement));
         }

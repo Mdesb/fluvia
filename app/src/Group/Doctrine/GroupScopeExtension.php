@@ -10,6 +10,8 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Group\Entity\GroupBooking;
 use App\Group\Entity\GroupBookingItem;
+use App\Group\Entity\GroupGratuite;
+use App\Group\Entity\GroupGratuiteContingent;
 use App\Group\Entity\GroupParticipant;
 use App\Group\Entity\GroupProduct;
 use App\Group\Entity\ParticipantGroup;
@@ -34,6 +36,7 @@ final class GroupScopeExtension implements QueryCollectionExtensionInterface, Qu
     private const JOINS = [
         GroupParticipant::class => [['property' => 'group', 'alias' => 'grp']],
         GroupBookingItem::class => [['property' => 'booking', 'alias' => 'bk']],
+        GroupGratuite::class => [['property' => 'booking', 'alias' => 'gbk']],
     ];
 
     /** @var array<class-string, string> Chemin vers `etablissement` une fois les jointures faites. */
@@ -43,6 +46,8 @@ final class GroupScopeExtension implements QueryCollectionExtensionInterface, Qu
         GroupParticipant::class => 'grp.etablissement',
         GroupProduct::class => '{root}.etablissement',
         GroupBookingItem::class => 'bk.etablissement',
+        GroupGratuiteContingent::class => '{root}.etablissement',
+        GroupGratuite::class => 'gbk.etablissement',
     ];
 
     public function __construct(
