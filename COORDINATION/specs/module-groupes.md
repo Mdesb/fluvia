@@ -66,17 +66,48 @@ confronté au profil de l'établissement actif** (RG-SOCLE-05). Montant = tarif 
 facture scellée reste dérivée dans la chaîne Facturation. **11 tests (70 assertions), garde-fous 54/54,
 et vérifié à l'exécution** (UI → `POST → 201`, « Devis créé. », paiement « Bon de commande »).
 
-## Reste à faire — conception (ancrée dans le code lu)
+## Tarif « produit groupe » composite : LIVRÉ (commit `07f3b819`)
 
-- **Tarif groupe (option 2 de Maxime)** : `GroupRate` (établissement, `activite` nullable = défaut,
-  `category`, `prixUnitaireHT`, `tauxTva` → `App\Compta\Entity\TauxTva`, actif) + CRUD + entrée dans
-  `GroupScopeExtension` + migration + **écran de gestion des tarifs**, et un `GroupBookingPricer` qui
-  compte par catégorie (liste nominative sinon effectif→adulte + accompagnateurs→accompagnateur) et
-  alimente le devis à la place du montant unique. ⚠ Atomique (l'écran des tarifs est requis, sinon
-  l'écart n°15 se rouvre).
-- **Impact jauge** : à la confirmation, créer **une** `Reservation` (quantity = effectif+accompagnateurs)
-  sur le `creneau` (la jauge somme `Reservation.quantity`, D16/ACT-1) — exige un `Beneficiaire`
-  responsable saisi à la confirmation, comme le fait le musée (`ConfirmerDossierGroupeHandler`).
-- **Lot 3 — absorber le musée** : faire consommer `App\Group` par `Musee`, migrer les
-  `DossierGroupeScolaire` existants. Migration de **données vivantes** d'un module qu'une autre session
-  peut toucher → en dernier, avec soin.
+Arbitrage Maxime « un produit groupe = un mix de produits » (5 audioguides + 3 entrées + 5 visites),
+« les deux » : `GroupProduct` (+ `GroupProductLine` imbriquées) = forfait réutilisable appliqué via
+`apply-product` ; `GroupBookingItem` = panier (forfait ou à la carte) ; la facturation fait une ligne
+de devis par article, chacune sa TVA. Remplace l'idée « grille par tête ». Vérifié à l'exécution.
+
+## Impact jauge : LIVRÉ (commit `97dcf361`)
+
+La confirmation d'une réservation qui vise un créneau crée UNE `Reservation` socle
+(`quantity` = effectif + accompagnateurs), refuse si jauge insuffisante (409), et libère à
+l'annulation (`AnnuleeLibre`). Responsable = corps `responsable` ou bénéficiaire du client du groupe.
+FK `GroupBooking.jaugeReservation`.
+
+## Lot 3 — absorber le musée : PLAN (chantier coordonné, décidé par Maxime le 08/09)
+
+⚠ Verticale **partagée** (OWNERS : « verticales … Musée … ») + **données vivantes** + NF525 en aval
+(reversements/ventes) → ne pas mener seul, annoncer dans COORDINATION avant d'écrire.
+
+**Ce qui est tissé dans le musée et que `App\Group` n'a PAS** (mesuré — usages de `DossierGroupeScolaire`) :
+`Gratuite` + `ContingentGratuite` + `AccorderGratuiteHandler` (gratuités scolaires par contingent),
+les reversements OTA, `PerimetreMuseeExtension`, l'audit. Et une **divergence de modèle de fond** :
+`ConfirmerDossierGroupeHandler` crée **une `Reservation` par visiteur** (grain visiteur, pour le billet
+/ contrôle d'accès individuel — décision structurante n°2 du plan musée), là où `App\Group` crée **une**
+`Reservation` `quantity=N` (grain groupe).
+
+**Deux arbitrages à trancher AVANT de coder** (produit, pour Maxime) :
+1. **Gratuités/contingents** : les rendre transverses dans `App\Group` (si d'autres métiers en ont
+   besoin) ou les garder en couche musée au-dessus de `GroupBooking` ?
+2. **Grain de réservation** : billet par personne (musée) vs ligne groupe (`App\Group`) — lequel fait foi ?
+
+**Mapping `DossierGroupeScolaire` → `App\Group`** : `etablissementScolaire` → `ParticipantGroup.label`
+(+ `type=School`) ; `effectif`/`accompagnateurs` → `GroupBooking` ; `creneauEntree` → `creneau` ;
+`dateOption` → `optionExpiresAt` ; `venteRattachee` → `venteRattachee` ; `statutPaiement` → `status`
++ `paymentStatus` (mapping à écrire) ; `guidesAffectes` → pas d'équivalent (garder côté musée).
+
+**Migration de données (write-only, idempotente, rejouable, avec témoin de comptage)** : pour chaque
+dossier non encore migré, créer `ParticipantGroup` + `GroupBooking` ; ne jamais supprimer ni écraser un
+dossier. Marquer les dossiers migrés (champ côté musée ou table de correspondance) pour l'idempotence.
+
+**Direction de dépendance** : `Musee` → `App\Group` (Musée consomme ; jamais de FK `App\Group` → `Musee`).
+
+**Ordre** : (1) trancher les 2 arbitrages ; (2) porter dans `App\Group` ce qu'ils imposent ; (3) écrire
+la migration + témoins ; (4) rebrancher `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` ;
+(5) déprécier `DossierGroupeScolaire` (garder la table le temps de valider), puis retirer.
