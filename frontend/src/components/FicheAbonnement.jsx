@@ -161,7 +161,33 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
     // deux heures du matin a Paris en ete. « Prochaine echeance » aurait alors designe celle
     // d'hier, deux heures par nuit. Le garde-fou n°31 l'a attrape sur ce fichier meme.
     const aujourdhui = jourLocal()
-    return echeances.find((e) => (e.dateProgrammee || '') >= aujourdhui) || null
+    // ⚠ UN MINIMUM, PAS UN `find`. `find` rend le PREMIER element du tableau qui satisfait le
+    // test — donc, sur une liste non triee, une echeance future QUELCONQUE. Cette ligne envoyait
+    // `order[dateProgrammee]=asc` au serveur depuis le 03/09 et se croyait donc triee : le
+    // parametre etait accepte en 200 et IGNORE, faute d'`OrderFilter` sur la ressource. Mesure du
+    // 07/09 : la reponse sortait dans l'ordre des UUID, et son propre gabarit `search` ne listait
+    // que `{?abonnement,statut}`.
+    //
+    // Le filtre est desormais declare — et on ne s'appuie pas dessus. Un minimum explicite est
+    // juste quel que soit l'ordre recu, y compris le jour ou quelqu'un le retire.
+    //
+    // ⚠ `annulee` EXCLU, et ce n'est pas un arbitrage de ma part : `StatutEcheanceSepa` le definit
+    // comme « abandon definitif — l'echeance ne reviendra pas ». Annoncer un prelevement qui ne
+    // partira jamais est pire que n'annoncer rien.
+    //
+    // ⚠ RESTE A TRANCHER, et je ne le tranche pas ici : une echeance `gelee` (pause) revient a la
+    // reprise, mais PAS a la date qu'elle porte. Elle reste donc comptee comme prochaine, ce qui
+    // annonce une date qui bougera. Le corriger demande de savoir ce qu'on veut afficher pour un
+    // abonnement en pause — une question de produit, pas de code.
+    let prochaineEcheance = null
+    for (const e of echeances) {
+      const d = e.dateProgrammee || ''
+      if (d < aujourdhui || e.statut === 'annulee') continue
+      if (prochaineEcheance === null || d < (prochaineEcheance.dateProgrammee || '')) {
+        prochaineEcheance = e
+      }
+    }
+    return prochaineEcheance
   }, [echeances])
 
   if (!a) return null
@@ -686,14 +712,24 @@ function OngletAcces({ acces }) {
 
   const [motif, quoiFaire] = MOTIF_ACCES[acces.motifInactivite] || [acces.motifInactivite, null]
 
+  // ⚠ `actif` NE DIT PAS QUE LA PORTE S'OUVRE. Il porte l'état métier de l'abonnement — à jour, non
+  // suspendu. Le lien vers le support physique est `droitAcces`, nul jusqu'à l'appairage. Cet
+  // onglet rendait « ouvert » sur le seul `actif` : mesuré en préproduction, un seul des cinq
+  // statuts porte un `droitAcces`, et les autres s'affichaient donc « ouvert » alors qu'aucun badge
+  // ne leur est rattaché. Un exploitant qui lit « ouvert » ne cherche pas pourquoi l'adhérent reste
+  // dehors.
+  const rattache = Boolean(acces.droitAcces)
+
   return (
     <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
       <div className="fiche-stats">
         <div className="stat-tile">
           <div className="st-val">
-            {acces.actif
-              ? <span className="badge good">ouvert</span>
-              : <span className="badge crit">fermé</span>}
+            {!rattache
+              ? <span className="badge warn">non rattaché</span>
+              : acces.actif
+                ? <span className="badge good">ouvert</span>
+                : <span className="badge crit">fermé</span>}
           </div>
           <div className="st-lbl">Accès</div>
         </div>
@@ -705,7 +741,18 @@ function OngletAcces({ acces }) {
         </div>
       </div>
 
-      {!acces.actif && acces.motifInactivite && (
+      {!rattache && (
+        <div className="banner banner-warn">
+          <b>Aucun support physique n’est rattaché à cet abonnement.</b> Le contrôle d’accès ne
+          connaît donc pas cet adhérent&nbsp;: quel que soit l’état du contrat, la porte ne
+          s’ouvrira pas. Le rattachement se fait à l’appairage du badge ou du bracelet.
+          {acces.actif && (
+            <> L’abonnement, lui, est en règle&nbsp;— ce n’est pas un impayé ni une suspension.</>
+          )}
+        </div>
+      )}
+
+      {rattache && !acces.actif && acces.motifInactivite && (
         <div className="banner banner-warn">
           <b>Fermé pour {motif}.</b>{quoiFaire ? ` ${quoiFaire}` : null}
         </div>

@@ -533,6 +533,13 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setPaiements([])
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
+      // Contexte RENVOYÉ pour un encaissement en un seul geste : `setVente`/`setMontant`
+      // ci-dessus ne sont pas encore lus dans ce tick, donc `encaisserRapide` règle d'après ceci.
+      return {
+        vObj: { id: v.id, numero: v.numero ?? null, reste: resteServeur, total: totalServeur },
+        resteServeur,
+        defautMoyen: moyensDispo[0] || null,
+      }
     } catch (e) {
       const msg = e.message || "Impossible d'ouvrir la vente."
       // Garde « bénéficiaire requis » (RG-M2-04) : on invite à rattacher un client via la modale.
@@ -549,8 +556,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   // Ajoute un règlement (paiement scindé). CB/chèque exigeant une référence => passage TPE simulé.
-  async function reglerUnMoyen() {
-    if (!vente || !moyenCourant) return
+  async function encaisserMoyen(venteObj, moyen, montantStr, tpe, paiementsPrecedents) {
+    if (!venteObj || !moyen) return
     setBusy(true)
     setErreur(null)
     setAvis(null)
@@ -558,20 +565,20 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     // de son `catch`, pour qu'un échec de validation ne se dise jamais « règlement refusé ».
     let aSolde = null
     try {
-      const corps = { moyen: moyenCourant.code }
-      const m = parseFloat(montant)
+      const corps = { moyen: moyen.code }
+      const m = parseFloat(montantStr)
       if (!Number.isNaN(m) && m > 0) corps.montant = m.toFixed(2)
-      const headers = moyenCourant.exigeReference ? { 'X-Tpe-Simule': tpeSimule } : undefined
-      const res = await api.payer(vente.id, corps, headers)
+      const headers = moyen.exigeReference ? { 'X-Tpe-Simule': tpe } : undefined
+      const res = await api.payer(venteObj.id, corps, headers)
 
       if (!res.reglementEnregistre) {
         // TPE refusé / timeout : aucun règlement ajouté, reste inchangé.
-        setAvis(`Transaction ${moyenCourant.libelle} ${res.statutTPE || 'refusée'} — aucun règlement enregistré.`)
+        setAvis(`Transaction ${moyen.libelle} ${res.statutTPE || 'refusée'} — aucun règlement enregistré.`)
         return
       }
       setPaiements((p) => [
         ...p,
-        { moyen: res.moyen, libelle: moyenCourant.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
+        { moyen: res.moyen, libelle: moyen.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
       ])
       const nouveauReste = res.resteAPayer ?? '0.00'
       setVente((v) => ({ ...v, reste: nouveauReste }))
@@ -588,8 +595,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       // encaissé : le caissier lirait un refus sur une vente payée et réencaisserait le client.
       if (parseFloat(nouveauReste) <= 0) {
         aSolde = [
-          ...paiements,
-          { moyen: res.moyen, libelle: moyenCourant.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
+          ...paiementsPrecedents,
+          { moyen: res.moyen, libelle: moyen.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
         ]
       }
     } catch (e) {
@@ -608,9 +615,31 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
     const { proposables, horsPortee } = trierAppairables(panier)
     if (proposables.length > 0 || horsPortee.length > 0) {
-      setAppairageEnAttente({ venteId: vente.id, reglements: aSolde, proposables, horsPortee })
+      setAppairageEnAttente({ venteId: venteObj.id, reglements: aSolde, proposables, horsPortee })
     } else {
-      await validerVente(null, { venteId: vente.id, paiements: aSolde })
+      await validerVente(null, { venteId: venteObj.id, paiements: aSolde })
+    }
+  }
+
+  // Le geste classique du pavé : régler le moyen sélectionné, avec l'état courant.
+  async function reglerUnMoyen() {
+    await encaisserMoyen(vente, moyenCourant, montant, tpeSimule, paiements)
+  }
+
+  // ENCAISSEMENT EN UN SEUL GESTE (demande de Maxime : « Encaisser puis Régler = une étape en trop »).
+  //
+  // Le pavé sert à CHOISIR le moyen et le montant. Quand le moyen par défaut n'exige pas de
+  // référence (espèces, porte-monnaie) et que le montant dû est exact, il n'y a rien à choisir :
+  // on ouvre la vente ET on la solde d'un coup. Un moyen à référence (CB, chèque) garde le pavé —
+  // sa référence se saisit avant l'encaissement — et « Paiement détaillé » reste là pour le rendu
+  // ou le paiement scindé.
+  //
+  // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses `setVente`
+  // /`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait une vente `null`.
+  async function encaisserRapide() {
+    const ctx = await demarrerPaiement()
+    if (ctx?.defautMoyen && !ctx.defautMoyen.exigeReference && parseFloat(ctx.resteServeur) > 0) {
+      await encaisserMoyen(ctx.vObj, ctx.defautMoyen, ctx.resteServeur, 'accepte', [])
     }
   }
 
@@ -1006,9 +1035,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   </div>
 
                   {!enPaiement ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
                     <button
                       className="btn primary lg"
-                      onClick={demarrerPaiement}
+                      onClick={encaisserRapide}
                       disabled={busy || !peutEncaisser}
                       title={peutEncaisser
                         ? undefined
@@ -1016,6 +1046,14 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                     >
                       {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
                     </button>
+                    <button
+                      className="btn ghost sm"
+                      onClick={demarrerPaiement}
+                      disabled={busy || !peutEncaisser}
+                    >
+                      Paiement détaillé (autre moyen, rendu, scindé)
+                    </button>
+                    </div>
                   ) : (
                     <PanneauPaiement
                       moyensDispo={moyensDispo}

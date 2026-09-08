@@ -104,6 +104,116 @@ final class FiltreEcheanceTest extends SportApiTestCase
      * Il reprend l'adherent, le payeur, la formule et le mandat de la demonstration : ce test porte
      * sur le FILTRE, et fabriquer cinq entites de plus n'y ajouterait rien.
      */
+    /**
+     * `?order[dateProgrammee]=` ÉTAIT ACCEPTÉ ET IGNORÉ — LE MÊME PIÈGE QUE CE FICHIER DOCUMENTE.
+     *
+     * `FicheAbonnement.jsx:95` envoyait ce paramètre depuis le 03/09. Le serveur rendait 200 et la
+     * collection dans l'ordre des UUID. Mesure du 07/09 contre la préproduction :
+     * `2026-04, 2026-05, 2026-06, 2026-07, 2025-10, 2026-01, 2025-09, 2026-08, ...`
+     *
+     * ⚠ **Le témoin qui tranche venait du serveur, pas d'une relecture.** Le gabarit `search` de la
+     * réponse déclarait `{?abonnement,abonnement[],statut,statut[]}` : `order` n'y figurait pas.
+     * Une ressource dit elle-même ce qu'elle sait faire.
+     *
+     * ⚠ **Et l'écran n'était pas seulement mal rangé.** `FicheAbonnement` lisait la « prochaine
+     * échéance » par un `find`, qui rend le PREMIER élément du tableau — donc, sur une liste non
+     * triée, une échéance future quelconque. La tuile répondait « quand suis-je prélevé ? » par une
+     * date arbitraire.
+     *
+     * ⚠ **POURQUOI CE TEST NE SE CONTENTE PAS D'ASSERTER « C'EST TRIÉ ».** L'ordre des UUID est
+     * aléatoire : sur cinq lignes, « croissant » serait vert une fois sur cent vingt sans le
+     * correctif. Un filet qui n'attrape que la plupart du temps n'en est pas un. On demande donc
+     * `asc` **puis** `desc` : sans le filtre les deux réponses sont identiques — toujours, et pas
+     * seulement souvent. C'est cette identité que le test interdit.
+     */
+    public function testLOrdreEstChronologiqueEtLeSensEstRespecte(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $this->echeancesDansLeDesordre();
+
+        $client->request('GET', '/api/echeance_sepas?itemsPerPage=200&order%5BdateProgrammee%5D=asc', $entete);
+        self::assertResponseIsSuccessful();
+        $asc = $this->datesProgrammees($client);
+
+        $client->request('GET', '/api/echeance_sepas?itemsPerPage=200&order%5BdateProgrammee%5D=desc', $entete);
+        self::assertResponseIsSuccessful();
+        $desc = $this->datesProgrammees($client);
+
+        // Témoin de non-vacuité : sans plusieurs dates DISTINCTES, « trié » et « inversé » sont la
+        // même chose et les assertions suivantes seraient vraies sans rien mesurer.
+        self::assertGreaterThan(
+            2,
+            \count(array_unique($asc)),
+            'Il faut au moins trois dates distinctes pour que le sens du tri veuille dire quelque chose.',
+        );
+
+        $attendu = $asc;
+        sort($attendu);
+        self::assertSame($attendu, $asc, 'La collection demandée en `asc` n\'est pas chronologique.');
+
+        // ⚠ L'ASSERTION QUI NE PEUT PAS PASSER PAR CHANCE : sans `OrderFilter`, `asc` et `desc`
+        // rendent la MÊME liste, parce que les deux paramètres sont ignorés en silence.
+        self::assertSame(
+            array_reverse($asc),
+            $desc,
+            'Le sens du tri est ignoré : `asc` et `desc` rendent le même ordre.',
+        );
+    }
+
+    /**
+     * L'ordre par défaut, pour les appelants qui ne demandent rien.
+     *
+     * ⚠ `Sport.jsx` ne passe aucun paramètre. Déclarer `OrderFilter` sans poser `order:` sur la
+     * ressource aurait donc corrigé la fiche et laissé l'écran principal dans l'ordre des UUID —
+     * une moitié de correctif, et la moitié la plus visible restée cassée.
+     */
+    public function testSansParametreLEcheancierArriveDejaChronologique(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $this->echeancesDansLeDesordre();
+
+        $client->request('GET', '/api/echeance_sepas?itemsPerPage=200', $entete);
+        self::assertResponseIsSuccessful();
+        $dates = $this->datesProgrammees($client);
+
+        self::assertGreaterThan(2, \count(array_unique($dates)), 'Témoin : il faut de quoi trier.');
+
+        $attendu = $dates;
+        sort($attendu);
+        self::assertSame($attendu, $dates, 'L\'échéancier n\'arrive pas trié par défaut.');
+    }
+
+    /**
+     * Quatre échéances écrites dans un ordre chronologique VOLONTAIREMENT faux.
+     *
+     * L'ordre d'insertion n'est pas l'ordre rendu (c'est celui des UUID qui l'était), mais écrire
+     * en désordre évite qu'un test soit vert parce que la base a rendu par hasard ce qu'on voulait.
+     */
+    private function echeancesDansLeDesordre(): void
+    {
+        $em = $this->em();
+        $abonnement = $this->abonnementDemo();
+
+        foreach (['2027-03-05', '2026-10-05', '2027-01-05', '2026-12-05'] as $jour) {
+            $em->persist((new EcheanceSepa())
+                ->setAbonnement($abonnement)
+                ->setDateProgrammee(new \DateTimeImmutable($jour))
+                ->setMontantCentimes(3990)
+                ->setStatut(\App\Sport\Enum\StatutEcheanceSepa::AVenir));
+        }
+
+        $em->flush();
+    }
+
+    /** @return list<string> */
+    private function datesProgrammees(object $client): array
+    {
+        return array_values(array_map(
+            static fn (array $l): string => substr((string) ($l['dateProgrammee'] ?? ''), 0, 10),
+            $this->lignes($client),
+        ));
+    }
+
     private function echeanceChezLeVoisin(\App\Sport\Entity\AbonnementFitness $demo): void
     {
         $em = $this->em();

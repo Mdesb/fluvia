@@ -182,6 +182,7 @@ fi
 [ -f "$RACINE/bin/garde-fou-capacites-de-module.php" ] && { lancer_gf garde-fou-capacites-de-module.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-blocs-orphelins.php" ] && { lancer_gf garde-fou-blocs-orphelins.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-numeros-de-decision.php" ] && { lancer_gf garde-fou-numeros-de-decision.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-metiers-sans-ligne.php" ] && { lancer_gf garde-fou-metiers-sans-ligne.php || ECHEC=1; }
 
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"

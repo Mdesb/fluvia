@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { confirmer } from './Confirmation.jsx'
 
 // L'EXPLORATEUR — le seul endroit d'où l'on peut interroger le moteur d'analyse.
 //
@@ -86,6 +87,10 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   const [points, setPoints] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const etab = etablissements.find((e) => e.id === etabActif) || null
   const regionId = etab?.region?.id || null
@@ -95,20 +100,20 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
     let annule = false
     api.indicateurs()
       .then((r) => { if (!annule) setIndicateursLus(membres(r).filter((i) => i.actif !== false)) })
-      .catch(() => { if (!annule) setIndicateursLus(null) })
+      .catch((e) => { if (!annule) { setIndicateursLus(null); setRaisonNonLu(e) } })
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
-      .catch(() => { if (!annule) setGroupesLus(null) })
+      .catch((e) => { if (!annule) { setGroupesLus(null); setRaisonNonLu(e) } })
     api.objectifsIndicateur()
       .then((r) => { if (!annule) setObjectifsLus(membres(r)) })
-      .catch(() => { if (!annule) setObjectifsLus(null) })
+      .catch((e) => { if (!annule) { setObjectifsLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
   const rechargerObjectifs = useCallback(() => {
     api.objectifsIndicateur()
       .then((r) => setObjectifsLus(membres(r)))
-      .catch(() => setObjectifsLus(null))
+      .catch((e) => { setObjectifsLus(null); setRaisonNonLu(e) })
   }, [])
 
   // Le premier indicateur actif sert de choix par défaut, pour que l'écran ouvre sur quelque chose.
@@ -181,6 +186,28 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
     : null
   const valeurCible = objectif ? Number(objectif.valeurCible) : null
   const ecart = moyenneMesuree !== null && valeurCible !== null ? moyenneMesuree - valeurCible : null
+
+  async function retirerObjectif() {
+    if (!objectif) return
+    const ok = await confirmer({
+      titre: 'Retirer la cible ?',
+      texte: `Cible de ${formatValeur(objectif.valeurCible, indicateur?.unite)}, du `
+        + `${(objectif.periodeDebut || '').slice(0, 10)} au ${(objectif.periodeFin || '').slice(0, 10)}.`,
+      consequence: 'L’écart cesse d’être calculé. Les mesures, elles, ne changent pas.',
+      libelleOk: 'Retirer',
+    })
+    if (!ok) return
+    setPoseEnCours(true)
+    setErreur(null)
+    try {
+      await api.supprimerObjectif(objectif.id)
+      rechargerObjectifs()
+    } catch (err) {
+      setErreur(err?.message || 'La cible n’a pas pu être retirée.')
+    } finally {
+      setPoseEnCours(false)
+    }
+  }
 
   async function poserObjectif(e) {
     e.preventDefault()
@@ -260,6 +287,13 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
             )}
 
             {erreur && <div className="banner banner-error" style={{ marginTop: 'var(--esp-normal)' }}>{erreur}</div>}
+            {raisonNonLu?.message && (
+              <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+                <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+              </div>
+            )}
 
             {/* ⚠ TROIS ÉTATS PAR JOUR, JAMAIS DEUX. Une barre absente n'est pas une barre à zéro :
                 elle porte sa propre marque, et la légende sous le graphe la nomme. */}
@@ -345,10 +379,18 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                     {poseEnCours ? 'Enregistrement…' : 'Enregistrer la cible'}
                   </button>
                   {objectif && (
-                    <span className="hint">
-                      Cible actuelle&nbsp;: {formatValeur(objectif.valeurCible, indicateur?.unite)} du{' '}
-                      {(objectif.periodeDebut || '').slice(0, 10)} au {(objectif.periodeFin || '').slice(0, 10)}
-                    </span>
+                    <>
+                      <span className="hint">
+                        Cible actuelle&nbsp;: {formatValeur(objectif.valeurCible, indicateur?.unite)} du{' '}
+                        {(objectif.periodeDebut || '').slice(0, 10)} au {(objectif.periodeFin || '').slice(0, 10)}
+                      </span>
+                      {/* On pouvait poser et remplacer, jamais retirer : une cible mal saisie
+                          restait, et l'ecart se calculait contre elle sans recours. */}
+                      <button className="btn ghost sm" type="button" onClick={retirerObjectif}
+                        disabled={poseEnCours}>
+                        Retirer la cible
+                      </button>
+                    </>
                   )}
                 </form>
 
