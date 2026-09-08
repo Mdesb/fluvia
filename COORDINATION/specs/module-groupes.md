@@ -54,22 +54,26 @@ ad hoc arrêtés ; `groupes-db` conservé.
 - **Base du montant = les DEUX** : tarif de référence de l'activité × effectif **et** une grille
   tarifaire GROUPE par catégorie (à construire).
 
+## Lot 2 — facturation (devis) : LIVRÉ (commit `4f22ca39`, poussé)
+
+`POST /group/bookings/{id}/invoice` → `InvoiceGroupBookingProcessor` crée un `CommercialDocument`
+(`DocumentNature::Quote`) pour le payeur (`payer`, à défaut `group.client`), en reprenant la logique de
+`CreateDocumentProcessor` : destinataire mappé depuis le `Client`, ligne effectif × prix, **taux de TVA
+confronté au profil de l'établissement actif** (RG-SOCLE-05). Montant = tarif de référence de l'activité
+(option 1) ou `prixUnitaireHT` du corps. FK `GroupBooking.commercialDocument` (→ `billing_document`),
+`paymentStatus` → `purchase_order`, refus si annulée / déjà facturée / sans payeur. Front : bouton
+« Facturer » (modale choix TVA + prix) → badge « Devis ». Le devis (Quote) n'est PAS scellé NF525 ; la
+facture scellée reste dérivée dans la chaîne Facturation. **11 tests (70 assertions), garde-fous 54/54,
+et vérifié à l'exécution** (UI → `POST → 201`, « Devis créé. », paiement « Bon de commande »).
+
 ## Reste à faire — conception (ancrée dans le code lu)
 
-- **Lot 2 — tarif + facturation (atomique)**. Ne peut pas se livrer en moitiés : toute route CRUD neuve
-  sans écran rouvre l'écart n°15 que Lot 1 a refermé (524/524).
-  - `GroupRate` (établissement, `activite` nullable = défaut, `category`, `prixUnitaireHT`, `tauxTva`
-    → `App\Compta\Entity\TauxTva`, actif) + CRUD + entrée dans `GroupScopeExtension` + migration + écran.
-  - Service `GroupBookingPricer` : compte par catégorie (liste nominative sinon effectif→adulte +
-    accompagnateurs→accompagnateur), applique la `GroupRate` (activité puis défaut), **repli** sur
-    `activite.tarifReferenceMontant` × effectif (option 1 de Maxime).
-  - `InvoiceGroupBookingProcessor` : `POST /group/bookings/{id}/invoice` → crée un `CommercialDocument`
-    (`DocumentNature::Quote`) en reprenant `CreateDocumentProcessor` : destinataire mappé depuis
-    `payer` (Client → raisonSociale/nom/siret/adresse), lignes du pricer, **chaque ligne porte un
-    `TauxTva` du profil de l'établissement actif** (RG-SOCLE-05, vérifié dans `CreateDocumentProcessor::taux`).
-    Nouvelle FK `commercialDocument` sur `GroupBooking`, `paymentStatus` avancé, bouton « Facturer ».
-  - ⚠ Le devis (Quote) n'est PAS scellé NF525 — c'est le chemin sûr ; la facture scellée reste dérivée
-    dans la chaîne Facturation existante.
+- **Tarif groupe (option 2 de Maxime)** : `GroupRate` (établissement, `activite` nullable = défaut,
+  `category`, `prixUnitaireHT`, `tauxTva` → `App\Compta\Entity\TauxTva`, actif) + CRUD + entrée dans
+  `GroupScopeExtension` + migration + **écran de gestion des tarifs**, et un `GroupBookingPricer` qui
+  compte par catégorie (liste nominative sinon effectif→adulte + accompagnateurs→accompagnateur) et
+  alimente le devis à la place du montant unique. ⚠ Atomique (l'écran des tarifs est requis, sinon
+  l'écart n°15 se rouvre).
 - **Impact jauge** : à la confirmation, créer **une** `Reservation` (quantity = effectif+accompagnateurs)
   sur le `creneau` (la jauge somme `Reservation.quantity`, D16/ACT-1) — exige un `Beneficiaire`
   responsable saisi à la confirmation, comme le fait le musée (`ConfirmerDossierGroupeHandler`).
