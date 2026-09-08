@@ -637,9 +637,18 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses `setVente`
   // /`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait une vente `null`.
   async function encaisserRapide() {
+    // Le moyen CHOISI sur les pastilles (par defaut le premier proposable), capture AVANT
+    // `demarrerPaiement` qui reinitialise la selection au defaut du point de vente.
+    const choisi = moyensDispo.find((m) => m.code === moyenSel) || moyensDispo[0] || null
     const ctx = await demarrerPaiement()
-    if (ctx?.defautMoyen && !ctx.defautMoyen.exigeReference && parseFloat(ctx.resteServeur) > 0) {
-      await encaisserMoyen(ctx.vObj, ctx.defautMoyen, ctx.resteServeur, 'accepte', [])
+    if (!ctx) return
+    // On restaure le moyen choisi : `demarrerPaiement` vient de le remettre au defaut, et si le
+    // moyen exige une reference (CB, cheque) c'est lui que le pave doit presenter.
+    if (choisi) setMoyenSel(choisi.code)
+    // Un moyen sans reference et le montant exact : rien a saisir, on solde d'un geste. Un moyen
+    // a reference garde le pave ouvert -- la reference se saisit, puis Regler.
+    if (choisi && !choisi.exigeReference && parseFloat(ctx.resteServeur) > 0) {
+      await encaisserMoyen(ctx.vObj, choisi, ctx.resteServeur, 'accepte', [])
     }
   }
 
@@ -1036,6 +1045,22 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 
                   {!enPaiement ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
+                    {/* pastilles moyen en amont : le choix du moyen redevient visible dans le geste principal */}
+                    {moyensDispo.length > 1 && (
+                      <div className="pay-moyens">
+                        {moyensDispo.map((m) => (
+                          <button
+                            key={m.code}
+                            type="button"
+                            className={`pay-chip${moyenSel === m.code ? ' on' : ''}`}
+                            onClick={() => setMoyenSel(m.code)}
+                            disabled={busy}
+                          >
+                            {m.libelle}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <button
                       className="btn primary lg"
                       onClick={encaisserRapide}
@@ -1044,14 +1069,16 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                         ? undefined
                         : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
                     >
-                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
+                      {busy
+                        ? 'Ouverture…'
+                        : `Encaisser ${euros(total)}${moyenCourant && moyensDispo.length > 1 ? ` · ${moyenCourant.libelle}` : ''}`}
                     </button>
                     <button
                       className="btn ghost sm"
                       onClick={demarrerPaiement}
                       disabled={busy || !peutEncaisser}
                     >
-                      Paiement détaillé (autre moyen, rendu, scindé)
+                      Paiement détaillé (rendu, paiement scindé)
                     </button>
                     </div>
                   ) : (
