@@ -8,6 +8,7 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
+use App\Compta\Enum\VatCategory;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Securite\SecuriteApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -60,6 +61,20 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
         sort($valeurs);
 
         self::assertSame(['0.00', '2.10', '5.50', '10.00', '20.00'], $valeurs, 'les cinq taux légaux français');
+
+        // ── L'ÉMETTEUR EST DÉJÀ RENSEIGNÉ, ET SES TAUX PORTENT LEUR CATÉGORIE EN 16931 ─────────────
+        // Sans ces deux acquis, une structure neuve « sait vendre » mais ne sait pas ÉMETTRE : sa
+        // facture partirait sans raison sociale, et son Factur-X serait refusé faute de catégorie
+        // de TVA (BT-151). Les deux viennent de l'inscription, jamais d'une seconde saisie.
+        self::assertSame('CLUB TEST SAS', $profil->getRaisonSociale(), 'la raison sociale vient de la denomination d\'inscription');
+        self::assertSame('81240390500019', $profil->getSiret(), 'le SIRET complet est repris de l\'inscription');
+
+        $categories = [];
+        foreach ($taux as $t) {
+            $categories[$t->getTaux()] = $t->getVatCategory();
+        }
+        self::assertSame(VatCategory::Standard, $categories['20.00'], 'un taux positif porte la catégorie EN 16931 « S » (BT-151)');
+        self::assertSame(VatCategory::OutOfScope, $categories['0.00'], 'le hors-champ porte la catégorie « O », pas une exonération');
     }
 
     /**
