@@ -4,16 +4,7 @@ declare(strict_types=1);
 
 namespace App\Musee\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Patch;
-use ApiPlatform\Metadata\Post;
 use App\Musee\Enum\StatutPaiementDossier;
-use App\Musee\State\ConfirmerDossierGroupeProcessor;
-use App\Musee\State\CreerDossierGroupeProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Creneau;
 use App\Vente\Entity\Vente;
@@ -27,35 +18,16 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Dossier groupe/scolaire (US-MUSEE-06, RG-MUS-03) : réservation anticipée avec **paiement différé**
- * (bon de commande / mandat), indépendant de la confirmation du créneau/de la salle. `dateOption`
- * (⚠ HYPOTHÈSE non chiffrée, §4.6) défaut = aujourd'hui + `ParametreMuseeEtablissement.
- * delaiOptionDossierGroupeJours`.
+ * (bon de commande / mandat), indépendant de la confirmation du créneau/de la salle.
+ *
+ * ⚠ DÉPRÉCIÉ — ABSORBÉ PAR `App\Group` (absorption musée, Phase B, arbitrage Maxime « absorption
+ * complète », 08/09). Les groupes scolaires se gèrent désormais dans le module transverse Groupes
+ * (`ParticipantGroup` + `GroupBooking`, grain visiteur, gratuités transverses). Cette entité n'est
+ * plus exposée en API ni écrite par un écran ; la table est **conservée le temps de valider** (les
+ * dossiers historiques sont miroités par `MigrateGroupDossiersCommand`). À retirer en B4.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'musee_dossier_groupe_scolaire')]
-#[ApiResource(
-    shortName: 'MuseeDossierGroupeScolaire',
-    operations: [
-        new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
-        new Get(security: "is_granted('PERM', 'musee.lire')"),
-        new Post(
-            uriTemplate: '/musee/dossiers-groupe',
-            security: "is_granted('PERM', 'musee.gerer_dossier_groupe')",
-            processor: CreerDossierGroupeProcessor::class,
-        ),
-        new Patch(security: "is_granted('PERM', 'musee.gerer_dossier_groupe')"),
-        new Post(
-            uriTemplate: '/musee/dossiers-groupe/{id}/confirmer',
-            read: true,
-            input: false,
-            security: "is_granted('PERM', 'musee.gerer_dossier_groupe')",
-            processor: ConfirmerDossierGroupeProcessor::class,
-        ),
-    ],
-    normalizationContext: ['groups' => ['dossier:read']],
-    denormalizationContext: ['groups' => ['dossier:write']],
-)]
-#[ApiFilter(SearchFilter::class, properties: ['etablissement' => 'exact', 'statutPaiement' => 'exact', 'creneauEntree' => 'exact'])]
 class DossierGroupeScolaire
 {
     #[ORM\Id]

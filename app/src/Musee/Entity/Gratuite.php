@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace App\Musee\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\GetCollection;
 use App\Reservation\Entity\Reservation;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -20,18 +16,13 @@ use Symfony\Component\Uid\Uuid;
  * (via `reservationRattachee`, `Reservation.modeDecompte=gratuit`, module socle Réservation
  * **réutilisé**) et le `ContingentGratuite` dédié. Lecture seule — dérivée de la confirmation du
  * dossier groupe/scolaire (`ConfirmerDossierGroupeHandler`/`AccorderGratuiteHandler`).
+ *
+ * ⚠ DÉPRÉCIÉ — remplacé par `App\Group\Entity\GroupGratuite` (absorption musée, Phase B). Plus exposé
+ * en API ; table conservée le temps de valider. À retirer en B4.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'musee_gratuite')]
 #[ORM\UniqueConstraint(name: 'uniq_gratuite_reservation', columns: ['reservation_rattachee_id'])]
-#[ApiResource(
-    shortName: 'MuseeGratuite',
-    operations: [
-        new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
-    ],
-    normalizationContext: ['groups' => ['gratuite:read']],
-)]
-#[ApiFilter(SearchFilter::class, properties: ['dossier' => 'exact', 'contingent' => 'exact'])]
 class Gratuite
 {
     #[ORM\Id]

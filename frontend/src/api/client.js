@@ -2772,10 +2772,6 @@ export const api = {
     request('/api/musee_qualification_langue_guides', { query: { itemsPerPage: 200 } }),
   museeBasculesAudioguide: () =>
     request('/api/musee_bascule_audioguides', { query: { itemsPerPage: 100 } }),
-  museeContingentsGratuite: () =>
-    request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
-  museeDossiersGroupe: () =>
-    request('/api/musee_dossier_groupe_scolaires', { query: { itemsPerPage: 100 } }),
   // L'etat d'une salle se lit salle par salle : il n'existe pas de vue d'ensemble cote serveur.
   museeEtatSalle: (id) => request(`/api/musee/salles/${id}/etat`),
   // ⚠ CE COMMENTAIRE DISAIT L'INVERSE, ET LES DEUX CRÉATIONS CI-DESSOUS RENDAIENT 415.
@@ -2790,10 +2786,6 @@ export const api = {
     request('/api/musee/visites-guidees', { method: 'POST', body: corps, ld: true }),
   museeConfirmerVisite: (id) =>
     request(`/api/musee/visites-guidees/${id}/confirmer`, { method: 'POST', body: {} }),
-  museeCreerDossierGroupe: (corps) =>
-    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps, ld: true }),
-  museeConfirmerDossierGroupe: (id, corps) =>
-    request(`/api/musee/dossiers-groupe/${id}/confirmer`, { method: 'POST', body: corps }),
 
   // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué

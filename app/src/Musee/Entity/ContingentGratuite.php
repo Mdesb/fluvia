@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace App\Musee\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Patch;
-use ApiPlatform\Metadata\Post;
 use App\Musee\Enum\PerimetreContingent;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Creneau;
@@ -24,21 +17,12 @@ use Symfony\Component\Validator\Constraints as Assert;
  * Contingent de gratuités dédié (décision actée « Gratuités scolaires », §4.5, RG-MUS-03) : une
  * gratuité décrémente **simultanément** le quota de jauge du créneau (RG-MUS-01) et ce contingent,
  * pour ne pas assécher la vente grand public.
+ *
+ * ⚠ DÉPRÉCIÉ — remplacé par les contingents transverses `App\Group\Entity\GroupGratuiteContingent`
+ * (absorption musée, Phase B). Plus exposé en API ; table conservée le temps de valider. À retirer en B4.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'musee_contingent_gratuite')]
-#[ApiResource(
-    shortName: 'MuseeContingentGratuite',
-    operations: [
-        new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
-        new Get(security: "is_granted('PERM', 'musee.lire')"),
-        new Post(security: "is_granted('PERM', 'musee.configurer')"),
-        new Patch(security: "is_granted('PERM', 'musee.configurer')"),
-    ],
-    normalizationContext: ['groups' => ['contingent:read']],
-    denormalizationContext: ['groups' => ['contingent:write']],
-)]
-#[ApiFilter(SearchFilter::class, properties: ['etablissement' => 'exact', 'exposition' => 'exact', 'creneau' => 'exact', 'perimetre' => 'exact'])]
 class ContingentGratuite
 {
     #[ORM\Id]
