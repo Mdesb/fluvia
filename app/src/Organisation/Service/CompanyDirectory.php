@@ -112,6 +112,16 @@ final readonly class CompanyDirectory
         $siege = \is_array($brut['siege'] ?? null) ? $brut['siege'] : [];
         $tva = $brut['tva'] ?? null;
 
+        // L'annuaire publie la rue en morceaux (numero_voie / type_voie / libelle_voie) et la
+        // ville a part (libelle_commune). La facture EN 16931 veut l'adresse vendeur decoupee
+        // (BT-35 rue / BT-38 CP / BT-37 ville) : on la transmet deja decoupee plutot que de
+        // redecouper le texte libre `adresse`, ce qui serait fragile et faux sur les cas limites.
+        $rue = trim(implode(' ', array_filter([
+            (string) ($siege['numero_voie'] ?? ''),
+            (string) ($siege['type_voie'] ?? ''),
+            (string) ($siege['libelle_voie'] ?? ''),
+        ], static fn (string $part): bool => $part !== '')));
+
         return [
             'denomination' => (string) ($brut['nom_complet'] ?? $brut['nom_raison_sociale'] ?? ''),
             'raisonSociale' => (string) ($brut['nom_raison_sociale'] ?? ''),
@@ -123,7 +133,10 @@ final readonly class CompanyDirectory
             'formeJuridique' => (string) ($brut['nature_juridique'] ?? ''),
             'codeNaf' => (string) ($brut['activite_principale'] ?? ''),
             'adresse' => (string) ($siege['adresse'] ?? ''),
+            'rue' => $rue,
+            'complement' => (string) ($siege['complement_adresse'] ?? ''),
             'codePostal' => (string) ($siege['code_postal'] ?? ''),
+            'ville' => (string) ($siege['libelle_commune'] ?? ''),
             'dateCreation' => (string) ($brut['date_creation'] ?? ''),
         ];
     }
