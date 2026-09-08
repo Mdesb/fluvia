@@ -479,6 +479,10 @@ export const api = {
   // affiche verbatim et n'additionne rien : recalculer depuis `tauxTva`, qui est lu vivant sur la
   // fiche du taux, fabriquerait un troisieme chiffre.
   renduFacture: (id) => request(`/api/factures/${id}/rendu`),
+  // Le Factur-X (PDF/A-3 + XML CII EN 16931 embarqué) d'une facture : un BINAIRE, pas du JSON.
+  // À récupérer par `fetch` avec le jeton porteur (comme le téléchargement DMS), pas via
+  // `request()` ; route hors `/api`, servie par TelechargerFacturXController.
+  urlFacturX: (id) => `/factures/${id}/facturx`,
   // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
   // qui permet de se tromper sans trouer la sequence legale des numeros.
   creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
