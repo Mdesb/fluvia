@@ -113,6 +113,23 @@ class LigneVente
     #[Groups(['vente:read', 'ticket:read'])]
     private ?string $libelleTypeTarif = null;
 
+    /**
+     * Le taux de TVA que portait le produit ce jour-là — **exactement la même règle que le libellé**.
+     *
+     * Un taux légal change (la restauration est passée de 19,6 à 5,5 puis à 10). Recalculer la
+     * ventilation d'une vente ancienne depuis le catalogue d'aujourd'hui la ferait mentir, et le
+     * duplicata d'un ticket de l'an dernier annoncerait une TVA qui n'a jamais été collectée. Un
+     * document opposable dit ce qui a été appliqué, pas ce qui s'appliquerait maintenant.
+     *
+     * ⚠ **Nul est une valeur, et elle n'est pas « 20 % ».** `Produit::$tauxTva` est nullable et
+     * presque aucun produit ne le renseigne aujourd'hui. Poser un défaut ferait porter à un ticket
+     * l'affirmation d'un taux que personne n'a choisi — la ventilation doit dire qu'elle est
+     * incomplète, pas inventer. Voir `VentilationTvaVente`.
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?string $tauxTva = null;
+
     #[ORM\Column(options: ['default' => 1])]
     #[Groups(['vente:read'])]
     private int $quantite = 1;
@@ -255,6 +272,18 @@ class LigneVente
     public function setLibelleTypeTarif(?string $libelleTypeTarif): self
     {
         $this->libelleTypeTarif = $libelleTypeTarif;
+
+        return $this;
+    }
+
+    public function getTauxTva(): ?string
+    {
+        return $this->tauxTva;
+    }
+
+    public function setTauxTva(?string $tauxTva): self
+    {
+        $this->tauxTva = $tauxTva;
 
         return $this;
     }

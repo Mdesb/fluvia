@@ -12,7 +12,12 @@ use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Events;
 
 /**
- * Grave sur la ligne, à sa création, **le nom que portaient le produit et le tarif ce jour-là**.
+ * Grave sur la ligne, à sa création, **ce que portaient le produit et le tarif ce jour-là** — leurs
+ * noms, et le taux de TVA du produit.
+ *
+ * ⚠ **Le nom de cette classe ne dit plus tout ce qu'elle fait** : elle ne grave plus seulement des
+ * libellés. Je ne la renomme pas dans le même lot que l'ajout du taux — un renommage se relit seul,
+ * pas mélangé à un changement de comportement — mais elle mérite de devenir `LineStamper`.
  *
  * **Pourquoi ça n'est pas fait par les appelants.** Six endroits du dépôt construisent une
  * `LigneVente` — caisse, boutique, abonnement en ligne, réservation, synchronisation hors ligne, jeu
@@ -44,10 +49,22 @@ final class LineLabelStamper
 
         $em = $args->getObjectManager();
 
-        if ($ligne->getLibelleProduit() === null) {
+        if ($ligne->getLibelleProduit() === null || $ligne->getTauxTva() === null) {
             $produit = $em->getRepository(Produit::class)->find($ligne->getProduit());
             if ($produit instanceof Produit) {
-                $ligne->setLibelleProduit($produit->getLibelle());
+                if ($ligne->getLibelleProduit() === null) {
+                    $ligne->setLibelleProduit($produit->getLibelle());
+                }
+                // Le taux suit la même règle que le libellé, et pour la même raison : un taux légal
+                // change (la restauration : 19,6 → 5,5 → 10), et une ventilation recalculée depuis le
+                // catalogue d'aujourd'hui ferait mentir tous les tickets déjà émis.
+                //
+                // ⚠ Il reste NUL quand le produit n'en porte pas, ce qui est le cas de presque tous
+                // aujourd'hui. Poser 20 % ferait porter au ticket un taux que personne n'a choisi —
+                // et un ticket faux est pire qu'un ticket qui dit ne pas savoir.
+                if ($ligne->getTauxTva() === null) {
+                    $ligne->setTauxTva($produit->getTauxTva());
+                }
             }
         }
 
