@@ -202,13 +202,30 @@ export default function ProduitFiche({
   // vide ; le champ reste, en saisie libre. Un ecran qui disparait sur un refus de lecture fait
   // conclure que la fonction n'existe pas.
   const [tauxTva, setTauxTva] = useState([])
+  // `true` quand le référentiel de TVA a été REFUSÉ (403), et non trouvé vide. Les deux donnent une
+  // liste vide ; un seul des deux a un remède, et ce n'est pas celui que l'écran conseillait.
+  const [tvaRefusee, setTvaRefusee] = useState(false)
 
   useEffect(() => {
     if (!peutModifierCompta) return undefined
     let annule = false
     api.tauxTvas()
       .then((r) => { if (!annule) setTauxTva(membres(r).filter((t) => t.actif !== false)) })
-      .catch(() => { if (!annule) setTauxTva([]) })
+      // ⚠ LE RÉFÉRENTIEL DE TVA APPARTIENT À UN AUTRE MODULE, ET C'EST TOUT LE PIÈGE.
+      //
+      // `TauxTva` exige `compta.lire` — vérifié — alors que ce bloc s'ouvre sur
+      // `offre.modifier_compta`. Un exploitant peut donc parfaitement avoir le droit de RÉGLER la
+      // comptabilité d'un produit sans avoir celui de LIRE les taux déclarés. Sa liste retombait
+      // alors à `[]`, et l'écran lui affirmait « aucun taux n'est déclaré pour cet établissement :
+      // renseignez-les dans Paramètres » — un endroit où il n'aura pas plus le droit d'aller.
+      //
+      // Il partait donc déclarer un doublon d'un taux existant, ce qui crée exactement les deux
+      // vérités que le commentaire du sélecteur, plus bas, cherche à éviter.
+      .catch((e) => {
+        if (annule) return
+        setTauxTva([])
+        if (e?.status === 403) setTvaRefusee(true)
+      })
     return () => { annule = true }
   }, [peutModifierCompta])
   const [enregistrement, setEnregistrement] = useState(false)
@@ -1362,9 +1379,11 @@ export default function ProduitFiche({
                       )}
                   </select>
                   <p className="hint">
-                    {tauxTva.length === 0
-                      ? 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'
-                      : 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'}
+                    {tauxTva.length > 0
+                      ? 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'
+                      : tvaRefusee
+                        ? 'Les taux déclarés n’ont pas pu être lus : ce compte peut régler la comptabilité d’un produit, mais pas lire le référentiel de TVA (droit compta.lire). Il en existe peut-être — n’en déclarez pas un double ; le taux saisi ici reste enregistré.'
+                        : 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'}
                   </p>
                 </div>
 
