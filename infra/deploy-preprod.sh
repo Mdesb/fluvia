@@ -200,6 +200,20 @@ log "Base de connaissance (doc vivante -> articles d'aide)"
 log "Referentiel des metiers"
 "${COMPOSE[@]}" exec -T php php bin/console website:trades:seed --no-interaction
 
+# ⚠ MEME DEFAUT QUE CI-DESSUS, ET IL ETAIT DEJA ECRIT DEUX LIGNES PLUS HAUT : `website:blocks:seed`
+#   existe depuis ED-10 et ce script ne l appelait nulle part. Un bloc jamais seme n a pas de
+#   valeur, la page ne rend rien pour lui, et le deploiement annonce un succes.
+#
+#   Ca s est vu le 09/09 en posant la page de contact : elle publie une adresse qui vit dans un
+#   bloc. Sans semis, elle serait arrivee en production en disant « aucune adresse n est publiee » —
+#   200, aucune erreur, aucun moyen de joindre Fluvia.
+#
+#   La commande NE REECRIT JAMAIS un bloc rempli, et elle SAUTE ceux dont la valeur d origine est
+#   vide : un corps de page qui nait vide reste « jamais rempli » dans l ecran, ce qui est le seul
+#   signal qui dit au redacteur ou il reste quelque chose a ecrire.
+log "Contenus du site (blocs editables)"
+"${COMPOSE[@]}" exec -T php php bin/console website:blocks:seed --no-interaction
+
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug
 "${COMPOSE[@]}" exec -T php php bin/console cache:warmup --env=prod --no-debug
