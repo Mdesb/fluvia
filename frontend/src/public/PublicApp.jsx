@@ -11,6 +11,7 @@ import FicheProduit from './pages/FicheProduit.jsx'
 import Panier from './pages/Panier.jsx'
 import Tunnel from './pages/Tunnel.jsx'
 import MonCompte from './pages/MonCompte.jsx'
+import VerificationEmail from './pages/VerificationEmail.jsx'
 import { HoteConfirmation } from '../components/Confirmation.jsx'
 
 // Racine de la ZONE PUBLIQUE (front client final), totalement indépendante de l'app staff :
@@ -60,6 +61,24 @@ export default function PublicApp() {
     for (const p of catalogue?.produits || []) m[p.produit] = p
     return m
   }, [catalogue])
+
+  // ⚠ ON ARRIVE ICI DEPUIS UN COURRIEL, DONC PAR UNE URL — alors que tout le reste du routage vit
+  // dans l'etat. Sans cette lecture au montage, le lien de confirmation afficherait la vitrine et
+  // perdrait le jeton en silence.
+  //
+  // ⚠ ET LE JETON SORT DE LA BARRE D'ADRESSE AUSSITOT LU. Un secret a usage unique laisse dans
+  // l'URL part dans l'historique, dans le referrer de la premiere ressource tierce, et dans ce que
+  // le navigateur synchronise entre appareils. `replaceState` ne recharge pas la page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const jeton = params.get('jeton')
+    if (!jeton) return
+    setRoute({ vue: 'verification-email', jeton })
+    params.delete('jeton')
+    const reste = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (reste ? '?' + reste : ''))
+  }, [])
 
   const onNaviguer = useCallback((r) => {
     setErreurPanier(null)
@@ -368,6 +387,8 @@ export default function PublicApp() {
           slug={route.slug}
           onNaviguer={onNaviguer}
         />
+      ) : route.vue === 'verification-email' ? (
+        <VerificationEmail jeton={route.jeton} onNaviguer={onNaviguer} />
       ) : route.vue === 'compte' ? (
         <MonCompte connecte={connecte} onConnexionChange={setConnecte} onNaviguer={onNaviguer} />
       ) : erreur ? (
