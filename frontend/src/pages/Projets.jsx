@@ -103,6 +103,44 @@ export default function Projets({ etabActif, droits = [] }) {
   const ouverts = projets.filter((p) => p.statut !== 'done' && p.statut !== 'cancelled')
   const clos = projets.filter((p) => p.statut === 'done' || p.statut === 'cancelled')
 
+  // ── LA FICHE D'UN PROJET, EN ÉCRAN ──────────────────────────────────────────────────────────
+  //
+  // Son identifiant vivait déjà dans l'adresse — c'est l'enveloppe qui était une modale de
+  // 124 lignes. Les trois états sont déjà démêlés plus haut : `chargement` a son retour anticipé,
+  // `lectureRefusee` distingue « pas pu lire » de « aucun projet », et `ouvert` vaut `null` quand
+  // l'identifiant ne désigne rien.
+  if (params.fiche) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => majParams({ fiche: '' }, { pousser: true })}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux projets
+      </button>
+    )
+    return (
+      <div className="view">
+        {retour}
+        {ouvert ? (
+          <FicheProjet
+            projet={ouvert}
+            peutGerer={peutGerer}
+            onFermer={() => majParams({ fiche: '' }, { pousser: true })}
+            onChange={recharger}
+          />
+        ) : (
+          <div className="banner banner-warn">
+            {lectureRefusee
+              ? 'Les projets n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Ce projet n’est plus dans la liste — il a sans doute été clos ou supprimé depuis que ce lien a été copié.'}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="view">
       <div className="view-head">
@@ -183,13 +221,6 @@ export default function Projets({ etabActif, droits = [] }) {
         busy={busy}
         onFermer={() => setNouveau(false)}
         onCreer={(corps) => agir(async () => { await api.creerProjet(corps); setNouveau(false) })}
-      />
-
-      <FicheProjet
-        projet={ouvert}
-        peutGerer={peutGerer}
-        onFermer={() => majParams({ fiche: '' }, { pousser: true })}
-        onChange={recharger}
       />
     </div>
   )
@@ -296,7 +327,8 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
   const aujourdhui = jourLocal()
 
   return (
-    <Modal open={!!projet} onClose={onFermer} titre={projet?.nom || 'Projet'} taille="lg">
+    <>
+      <h2>{projet?.nom || 'Projet'}</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
@@ -421,6 +453,6 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
           )}
         </div>
       )}
-    </Modal>
+    </>
   )
 }

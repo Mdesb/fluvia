@@ -11,6 +11,7 @@ import NoShowSection from '../components/NoShowSection.jsx'
 import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
 import { confirmer } from '../components/Confirmation.jsx'
+import { useEtatUrl } from '../api/url.js'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
 
@@ -133,6 +134,8 @@ const LIBELLE_STATUT = {
   honoree: 'Honorée',
 }
 
+const DEFAUTS_URL = { vue: 'semaine', activite: '' }
+
 export default function Reservation({ etabActif, droits = [], session }) {
   // ⚠ `null` = PAS LU. << 0 ressource(s) · 0 créneau(x) >> se lit << ce site n'a rien de
   // reservable >>, ce qui fait refuser une reservation au telephone.
@@ -144,7 +147,12 @@ export default function Reservation({ etabActif, droits = [], session }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
-  const [vue, setVue] = useState('semaine')
+  // ⚠ LA VUE ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. Sans elle, un F5 sur
+  // `?activite=…` retomberait sur « Semaine » — une vue qui ne rend même pas le composant d'où
+  // l'écran vient. Cinq vues, une seule porte des activités.
+  const [params, majParams] = useEtatUrl('reservation', DEFAUTS_URL)
+  const vue = params.vue
+  const setVue = (v) => majParams({ vue: v, activite: '' })
   const [jour, setJour] = useState('')
   const [reserverPour, setReserverPour] = useState(null) // id du créneau en cours de réservation
   const [inscritsPour, setInscritsPour] = useState(null) // id du créneau dont on déplie les inscrits
@@ -673,8 +681,12 @@ export default function Reservation({ etabActif, droits = [], session }) {
     }
   }
 
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.activite)
+
   return (
     <div className="view">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Réservation</h1>
@@ -720,13 +732,14 @@ export default function Reservation({ etabActif, droits = [], session }) {
           style={{ marginBottom: 14 }}
         />
       )}
+      </>)}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
       ) : vue === 'rdv' ? (
         <PriseRendezVous onReserve={recharger} />
       ) : vue === 'activites' ? (
-        <ActivitesReservation droits={droits} />
+        <ActivitesReservation droits={droits} params={params} majParams={majParams} />
       ) : vue === 'horaires' ? (
         <Disponibilites droits={droits} />
       ) : vue === 'semaine' ? (

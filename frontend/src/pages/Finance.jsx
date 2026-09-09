@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import Tabs from '../components/Tabs.jsx'
+import { useEtatUrl } from '../api/url.js'
 import FacturesFournisseur from '../components/FacturesFournisseur.jsx'
 import NotesDeFrais from '../components/NotesDeFrais.jsx'
 import ComptesBancaires from '../components/ComptesBancaires.jsx'
@@ -26,11 +26,22 @@ import TresorerieDashboard from '../components/TresorerieDashboard.jsx'
 // que ce qu'il rend. Le dernier, « Position & prévision », ouvre les quatre lectures live du serveur
 // (`/finance/treasury/position|payment-schedule|cashflow-forecast|discrepancies`) — position, prévision,
 // échéancier, écarts — qui n'avaient elles non plus aucun écran.
+// ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE LES ÉCRANS. Sans lui, revenir d'un écran
+// retomberait sur « Factures fournisseur » quel que soit l'onglet d'où l'on venait.
+const DEFAUTS_URL = { tab: 'fournisseurs', facture: '', depense: '' }
+
 export default function Finance({ etabActif, droits }) {
-  const [onglet, setOnglet] = useState('fournisseurs')
+  const [params, majParams] = useEtatUrl('finance', DEFAUTS_URL)
+  const onglet = params.tab
+  // Changer d'onglet ferme les écrans : un identifiant laissé dans l'adresse rouvrirait
+  // l'écran d'un autre onglet dès qu'on y reviendrait.
+  const setOnglet = (v) => majParams({ tab: v, facture: '', depense: '' })
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.facture || params.depense)
 
   return (
     <div className="view large">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Achats &amp; trésorerie</h1>
@@ -53,9 +64,12 @@ export default function Finance({ etabActif, droits }) {
           ['position', 'Position & prévision'],
         ]}
       />
+      </>)}
 
-      {onglet === 'fournisseurs' && <FacturesFournisseur etabActif={etabActif} droits={droits} />}
-      {onglet === 'frais' && <NotesDeFrais etabActif={etabActif} droits={droits} />}
+      {onglet === 'fournisseurs'
+        && <FacturesFournisseur etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
+      {onglet === 'frais'
+        && <NotesDeFrais etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
       {onglet === 'comptes' && <ComptesBancaires etabActif={etabActif} droits={droits} />}
       {onglet === 'import' && <ImportReleve etabActif={etabActif} droits={droits} />}
       {onglet === 'rapprochement' && <RapprochementBancaire etabActif={etabActif} droits={droits} />}
