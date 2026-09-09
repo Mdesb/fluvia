@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 524,
+    "plafond": 521,
     "releve": {
-        "exposees": 1194,
+        "exposees": 1200,
         "sansEcran": 9,
-        "attendues": 1185,
-        "appelees": 671,
-        "atteignables": 661,
-        "inatteignables": 524,
+        "attendues": 1191,
+        "appelees": 680,
+        "atteignables": 670,
+        "inatteignables": 521,
         "orphelins": [
             "ajouterLigneReleve  (back-office)",
             "editorArticle  (back-office)",
@@ -47,8 +47,7 @@
             "pieceCommerciale  (back-office)",
             "planningOuverture  (back-office)",
             "rattacherDroitAccesAbonnement  (back-office)",
-            "reversementsOta  (back-office)",
-            "supprimerObjectif  (back-office)"
+            "reversementsOta  (back-office)"
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
@@ -74,8 +73,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 647,
-                "atteignables": 637
+                "appelees": 656,
+                "atteignables": 646
             },
             {
                 "nom": "boutique en ligne",
@@ -89,16 +88,16 @@
                 36
             ],
             [
+                "editor",
+                35
+            ],
+            [
                 "stock",
                 34
             ],
             [
-                "editor",
-                30
-            ],
-            [
                 "reservation",
-                29
+                30
             ],
             [
                 "musee",
@@ -145,6 +144,10 @@
                 10
             ],
             [
+                "padel",
+                10
+            ],
+            [
                 "opening",
                 10
             ],
@@ -154,10 +157,6 @@
             ],
             [
                 "utilisateurs",
-                9
-            ],
-            [
-                "padel",
                 9
             ],
             [
@@ -389,6 +388,10 @@
                 3
             ],
             [
+                "regie",
+                3
+            ],
+            [
                 "mapping",
                 3
             ],
@@ -582,10 +585,6 @@
             ],
             [
                 "ecriture",
-                1
-            ],
-            [
-                "regie",
                 1
             ],
             [
