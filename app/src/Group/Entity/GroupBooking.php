@@ -209,15 +209,6 @@ class GroupBooking
     #[Groups(['group_booking:read'])]
     private Collection $jaugeReservations;
 
-    /**
-     * Provenance (absorption musée, Phase B) : l'id opaque du `Musee\DossierGroupeScolaire` dont
-     * cette réservation est le miroir. Uuid NU, aucune FK vers Musee (la dépendance ne va que
-     * Musee → App\Group) ; sert à l'idempotence de la migration — ne jamais migrer deux fois le
-     * même dossier. Interne : hors de tout groupe de sérialisation.
-     */
-    #[ORM\Column(type: UuidType::NAME, nullable: true)]
-    private ?Uuid $sourceMuseeDossierId = null;
-
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['group_booking:read'])]
     private \DateTimeImmutable $createdAt;
@@ -232,18 +223,6 @@ class GroupBooking
     public function getId(): Uuid
     {
         return $this->id;
-    }
-
-    public function getSourceMuseeDossierId(): ?Uuid
-    {
-        return $this->sourceMuseeDossierId;
-    }
-
-    public function setSourceMuseeDossierId(?Uuid $sourceMuseeDossierId): self
-    {
-        $this->sourceMuseeDossierId = $sourceMuseeDossierId;
-
-        return $this;
     }
 
     public function getEtablissement(): ?Etablissement

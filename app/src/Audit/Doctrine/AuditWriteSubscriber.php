@@ -122,7 +122,6 @@ final class AuditWriteSubscriber
         // et gratuités, partenaires/allocations OTA, pass annuel — traçabilité RG-SOCLE-07.
         \App\Musee\Entity\Salle::class,
         \App\Musee\Entity\SousQuotaSalle::class,
-        \App\Musee\Entity\Gratuite::class,
         \App\Musee\Entity\PartenaireOTA::class,
         \App\Musee\Entity\AllocationQuotaOTA::class,
         \App\Musee\Entity\PassAnnuel::class,
