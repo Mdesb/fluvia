@@ -12,7 +12,9 @@ use App\Offre\Entity\Produit;
 use App\Sepa\Entity\MandatSepa;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
+use App\Signature\Entity\ElectronicSignature;
 use App\Sport\Entity\StatutAccesFitness;
+use App\Sport\Entity\SubscriptionContract;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -23,6 +25,70 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class SouscriptionTest extends SportApiTestCase
 {
+    /**
+     * LA SOUSCRIPTION AU COMPTOIR SIGNE ET SCELLE LE MANDAT ET LE CONTRAT.
+     *
+     * Jusqu'ici, poser IBAN + titulaire marquait le mandat « actif » sans aucune preuve de
+     * consentement, et aucun contrat n'existait. Ce témoin prouve le câblage bout-en-bout : le
+     * processor appelle les signers, deux signatures scellées atterrissent en base, le contrat est
+     * gelé et lié à la sienne, et l'image manuscrite du tunnel est portée.
+     */
+    public function testLaSouscriptionSigneEtScelleLeMandatEtLeContrat(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $enfant = $em->getRepository(Client::class)->findOneBy(['prenom' => CrmFixtures::ENFANT_PRENOM]);
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'adherent' => '/api/clients/' . $enfant->getId(),
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+                // Le tunnel enverra l'image manuscrite ; ici on prouve que le chemin la porte.
+                'signatureMandat' => 'faux-png-mandat',
+                'signatureContrat' => 'faux-png-contrat',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $abonnementId = $client->getResponse()->toArray()['id'];
+        $em->clear();
+
+        $abonnement = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        self::assertNotNull($abonnement);
+        $etablissement = $abonnement->getEtablissement();
+
+        // Deux signatures pour cet établissement : le mandat et le contrat, chacune scellée.
+        $signatures = $em->getRepository(ElectronicSignature::class)->findBy(['etablissement' => $etablissement]);
+        $parType = [];
+        foreach ($signatures as $sig) {
+            $parType[$sig->getDocumentType()->value] = $sig;
+        }
+        self::assertArrayHasKey('sepa_mandate', $parType, 'le mandat est signé');
+        self::assertArrayHasKey('subscription_contract', $parType, 'le contrat est signé');
+        foreach ($parType as $sig) {
+            self::assertNotSame('', $sig->getSeal(), 'chaque signature est scellée (HMAC)');
+            self::assertNotSame('', $sig->getDocumentHash(), 'chaque signature est liée à un document');
+        }
+        // La signature du mandat porte l'image manuscrite reçue du tunnel.
+        self::assertSame('faux-png-mandat', $parType['sepa_mandate']->getSignatureImage());
+
+        // Le contrat existe, gelé, lié à sa signature, et son hash colle à son texte.
+        $contrat = $em->getRepository(SubscriptionContract::class)->findOneBy(['subscription' => $abonnement]);
+        self::assertNotNull($contrat, 'un contrat signé est créé');
+        self::assertNotSame('', $contrat->getDocumentText());
+        self::assertSame(
+            hash('sha256', $contrat->getDocumentText()),
+            $contrat->getSignature()?->getDocumentHash(),
+            'la preuve du contrat colle à son texte gelé',
+        );
+    }
+
     public function testCa1SouscriptionCreeAbonnementActifMandatEtEcheancier(): void
     {
         [$client, $entete] = $this->adminSurA();
