@@ -99,7 +99,18 @@ export default function VersementRegie({ etabActif, droits = [], onVersement }) 
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {succes && <div className="banner banner-ok">{succes}</div>}
 
-        {regies.length === 0 && !erreur && <div className="empty">Aucune régie.</div>}
+        {/* ⚠ « AUCUNE RÉGIE. » ÉTAIT VRAI ET INUTILE — ET IL L'EST RESTÉ UN AN.
+            Le point final disait « il n'y en a pas », jamais « vous pouvez en déclarer une », parce
+            qu'on ne le pouvait effectivement pas : aucun écran n'appelait `POST /api/regie_recettes`
+            et l'entité n'était instanciée que par les jeux d'essai. Un exploitant lisait donc une
+            phrase close sur un onglet définitivement vide.
+            Maintenant que Paramètres › Caisse porte la déclaration, l'absence a une suite. */}
+        {regies.length === 0 && !erreur && (
+          <div className="empty">
+            Aucune régie de recettes n’est déclarée. Tant qu’il n’y en a pas, il n’y a rien à verser
+            ici — on en déclare une dans <b>Paramètres › Caisse &amp; moyens de paiement</b>.
+          </div>
+        )}
 
         {regies.map((r) => {
           const solde = r.soldeEncaisseCentimes || 0

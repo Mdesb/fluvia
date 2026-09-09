@@ -16,7 +16,7 @@ import { confirmer } from '../components/Confirmation.jsx'
 // filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
 // `nouveau` vit dans l'URL comme `fiche` : recharger la page ne doit pas faire perdre le formulaire
 // commence, et le bouton « precedent » du navigateur doit ramener au catalogue.
-const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '' }
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '' }
 
 /**
  * LA FICHE VIERGE — ce qu'on voit apres « Nouveau produit », avant que le produit n'existe.
@@ -123,7 +123,10 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
-  const setTab = (v) => majParams({ tab: v, fiche: '' })
+  // ⚠ ET IL EFFACE LES ECRANS DE NIVEAU 2. Un `promo` ou un `fiche` laisse dans l'adresse
+  // rouvrirait un formulaire d'un AUTRE onglet des qu'on y revient — un ecran surgi de nulle
+  // part, sur des donnees qu'on ne regardait plus.
+  const setTab = (v) => majParams({ tab: v, fiche: '', nouveau: '', promo: '' })
 
   // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
   // avant que la liste ne tente de l'ouvrir.
@@ -150,11 +153,17 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
   // C'est le préalable à la refonte de la fiche : y ajouter ses propres onglets sans retirer ceux
   // du parent donnerait deux rangées superposées qui ne désignent pas la même chose — pire que
   // l'état d'avant.
-  const ficheOuverte = tab === 'produits' && !!params.fiche
+  //
+  // ⚠ ET LA REGLE VAUT POUR LES TROIS ECRANS DE NIVEAU 2, PAS POUR LA SEULE FICHE. La fiche
+  // vierge (`nouveau=1`) gardait le titre et les onglets au-dessus d'elle, et le formulaire
+  // d'une promotion aurait fait pareil : le meme defaut que celui decrit ci-dessus, aux memes
+  // endroits, pour n'avoir nomme qu'un seul cas.
+  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1'))
+    || (tab === 'promotions' && !!params.promo)
 
   return (
     <div className="view large">
-      {!ficheOuverte && (
+      {!ecranDeNiveau2 && (
         <>
           <div className="view-head">
             <div className="ttl">
@@ -189,7 +198,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
       ) : tab === 'grilles' ? (
         <GrillesTarifaires etabActif={etabActif} majParams={majParams} />
       ) : tab === 'promotions' ? (
-        <PromotionsCatalogue etabActif={etabActif} droits={droits} />
+        <PromotionsCatalogue etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
       ) : (
         <OngletOptions />
       )}
