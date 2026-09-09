@@ -1225,6 +1225,19 @@ export const api = {
   // `SearchFilter(activite: exact)` et `DateFilter(debut)`. Un parametre non declare est ignore en
   // SILENCE par API Platform — la reponse serait complete, l'ecran afficherait tous les creneaux de
   // tout le monde, et rien ne signalerait que le filtre n'a pas mordu.
+  // CE QUI SE PASSE SUR UNE RESSOURCE PENDANT UNE PLAGE — creneaux AVEC leur occupation reelle.
+  //
+  // ⚠ CE CHIFFRE NE SE CALCULE PAS ICI, ET C'EST UNE REGLE, PAS UNE PARESSE. L'occupation compte
+  // les reservations qui CONSOMMENT le creneau, pas celles qui le visent : une table reservee a
+  // 20 h consomme le service du soir de la salle (D33), et `Reservation::$consumedSlots` n'est
+  // deliberement pas serialise. Un ecran qui filtrerait les reservations par creneau afficherait
+  // ZERO sur un service complet — un chiffre plausible, et faux.
+  //
+  // La route est servie par `JaugeCreneauGuard`, le meme service qui DECIDE si une reservation est
+  // acceptee. Deux implementations de la jauge seraient la pire divergence possible : l'ecran
+  // annoncerait de la place la ou le serveur refuse.
+  occupationRessource: (ressourceId, du, au) =>
+    request(`/api/reservation/ressources/${ressourceId}/occupation`, { query: { du, au } }),
   creneauxDeActivite: (activiteId, depuis) =>
     request('/api/reservation_creneaus', {
       query: {
