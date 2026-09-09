@@ -2445,12 +2445,61 @@ export const api = {
   creerEmploye: (corps) =>
     request('/api/employes', { method: 'POST', body: corps, ld: true }),
   // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
-  absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
+  absences: (params) => request('/api/absences', { query: { itemsPerPage: 200, ...(params || {}) } }),
   declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
   validerAbsence: (id) => request(`/api/personnel/absences/${id}/valider`, { method: 'POST' }),
   refuserAbsence: (id) => request(`/api/personnel/absences/${id}/refuser`, { method: 'POST' }),
   roster: () => request('/api/personnel/roster'),
-  badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
+
+  // LES QUALIFICATIONS -- QUATRE OPERATIONS EXPOSEES DEPUIS L ORIGINE, ZERO ECRAN.
+  //
+  // `AffecterEmployeProcessor` REFUSE d affecter un employe a un creneau qui exige une
+  // qualification qu il ne detient pas (CA-5, 422), et `RosterProvider` publie
+  // `qualificationManquanteOuExpiree` que l ecran rend deja en badge rouge, en nommant le brevet
+  // attendu. Le produit DESIGNAIT donc le probleme avec precision, et n offrait aucun geste pour le
+  // resoudre : ajouter le BNSSA d un maitre-nageur passait par la base de donnees.
+  //
+  // ⚠ `method` SUR LA MEME LIGNE que `request(` : la mesure d ecart lit la methode HTTP sur le reste
+  // de la ligne de l appel. Ecrite en dessous, elle retombe sur le defaut GET et l operation est
+  // comptee comme jamais appelee (avertissement pose ligne ~402).
+  //
+  // ⚠ Le `Get` d item (`/api/qualifications/{id}`) n est VOLONTAIREMENT pas branche : aucun ecran ne
+  // le consomme, et une fonction cliente qu aucun ecran n appelle est exactement ce que la mesure
+  // d ecart compte comme « appel orphelin ». On branche ce qu on utilise.
+  qualifications: (params) =>
+    request('/api/qualifications', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerQualification: (corps) => request('/api/qualifications', { method: 'POST', body: corps, ld: true }),
+  majQualification: (id, corps) => request(`/api/qualifications/${id}`, { method: 'PATCH', body: corps }),
+
+  // LA FICHE D UN EMPLOYE, ET LE GESTE QUI LE SORT DE L ORPHELINAT.
+  //
+  // `GET /api/employes/{id}` et `PATCH /api/employes/{id}` existaient depuis l origine sans aucun
+  // appelant : on savait DECLARER un employe et jamais le corriger. Une faute de frappe sur un nom,
+  // un mauvais type de contrat ou une date d entree erronee etaient definitifs.
+  //
+  // ⚠ `statut` N EST PAS ECRIVABLE PAR CE CHEMIN : il est dans `employe:read` seul, et se change par
+  // `/suspendre` et `/reactiver` (deja branches). L envoyer ici serait accepte et n enregistrerait
+  // rien -- un champ qui a l air d ecrire et n ecrit pas.
+  employe: (id) => request(`/api/employes/${id}`),
+  majEmploye: (id, corps) => request(`/api/employes/${id}`, { method: 'PATCH', body: corps }),
+
+  // LES RATTACHEMENTS -- CINQ OPERATIONS EXPOSEES, ZERO ECRAN, ET UN CUL-DE-SAC AU BOUT.
+  //
+  // `EmissionBadgeStaffHandler` refuse un badge a tout employe sans rattachement ACTIF sur
+  // l etablissement (RG-PERSO-09). Or `EmployeModal` n envoie jamais de rattachement a la creation,
+  // et aucun ecran ne savait en poser : tout employe cree par le produit naissait orphelin, et le
+  // restait. Un orphelin n appartient a aucun etablissement, donc a aucun client -- il est visible
+  // de tout detenteur de `personnel.gerer_employe`, quel que soit son etablissement actif.
+  //
+  // ⚠ Le rattachement RH et l `Affectation` du socle NE SE CONFONDENT PAS (RG-PERSO-09) : le
+  // premier ouvre l eligibilite au planning et au badge sur un site, la seconde ouvre l acces AU
+  // LOGICIEL. Rattacher quelqu un ne lui donne aucun compte.
+  rattachements: (params) =>
+    request('/api/rattachement_employes', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerRattachement: (corps) => request('/api/rattachement_employes', { method: 'POST', body: corps, ld: true }),
+  majRattachement: (id, corps) => request(`/api/rattachement_employes/${id}`, { method: 'PATCH', body: corps }),
+  supprimerRattachement: (id) => request(`/api/rattachement_employes/${id}`, { method: 'DELETE' }),
+  badgeStaffs: (params) => request('/api/badge_staffs', { query: { itemsPerPage: 200, ...(params || {}) } }),
   revoquerBadgeStaff: (id, motif) =>
     request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
 
@@ -2468,8 +2517,24 @@ export const api = {
     request(`/api/personnel/badges/${id}/suspendre`, { method: 'POST', body: { motif }, ld: true }),
   reactiverBadgeStaff: (id) =>
     request(`/api/personnel/badges/${id}/reactiver`, { method: 'POST', body: {}, ld: true }),
-  emettreBadgeStaff: (employeId) =>
-    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
+  // ⚠ CET APPEL ENVOYAIT UN CORPS VIDE, ET N A DONC JAMAIS PU ABOUTIR.
+  //
+  // `EmissionBadgeStaffProcessor` exige TROIS champs du corps, et refuse au premier manquant :
+  //
+  //     etablissement      -> 422 « Reference "etablissement" obligatoire (UUID ou IRI). »
+  //     modeHoraire        -> 422 « Champ "modeHoraire" invalide ou manquant »
+  //     espacesAutorises   -> 422 « Au moins un espace autorise est requis (RG-PERSO-06/07) »
+  //
+  // Le bouton « Emettre un badge » rendait donc 422 depuis l origine. Constate EN CLIQUANT le 08/09 :
+  // aucun test d API ne pouvait le voir, parce que `BadgeStaffTest` envoie le corps COMPLET. Le
+  // serveur etait prouve, l ecran ne l etait pas -- deux moities, une seule preuve.
+  emettreBadgeStaff: (employeId, corps) =>
+    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: corps, ld: true }),
+
+  // Ce qu un badge OUVRE reellement : espaces, mode horaire, marge. Lecture seule cote serveur --
+  // la portee est creee en side-effet de l emission, jamais directement.
+  porteesAcces: (params) =>
+    request('/api/portee_acces_employes', { query: { itemsPerPage: 200, ...(params || {}) } }),
 
   // ─── LE PLANNING, LA SORTIE, L'INCIDENT ──────────────────────────────────────────────────
   //
@@ -2502,6 +2567,16 @@ export const api = {
     request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
   annulerCreneauTravail: (id) =>
     request(`/api/personnel/creneaux-travail/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // MODIFIER UN CRENEAU PLUTOT QUE L ANNULER ET LE REFAIRE.
+  //
+  // Le `Patch` existait sans appelant : corriger un horaire imposait d annuler puis recreer, ce qui
+  // PERD LES AFFECTATIONS deja posees dessus. Sur un planning monte pour la semaine, refaire les
+  // affectations une par une est exactement le genre de corvee qui fait qu on ne corrige pas.
+  //
+  // ⚠ `statut` n est PAS ecrivable par ce chemin (il n est pas dans `creneau_travail:write`) :
+  // l annulation garde sa route dediee, qui porte ses propres regles.
+  majCreneauTravail: (id, corps) => request(`/api/creneau_travails/${id}`, { method: 'PATCH', body: corps }),
 
   // ⚠ SUSPENDRE UN EMPLOYE SUSPEND AUSSI SES BADGES. Le processeur le fait en cascade
   // (« Suspension de l'employe »), et la reactivation les remet. Ce n'est pas un detail : la
