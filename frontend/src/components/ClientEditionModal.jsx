@@ -166,7 +166,7 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
 
   return (
     <>
-      <button className="btn ghost sm" type="button" onClick={onClose} style={{ marginBottom: 12 }}>
+      <button className="btn ghost sm" type="button" onClick={onClose} style={{ marginBottom: 'var(--esp-large)' }}>
         ← Retour
       </button>
       <h2>{clientId ? 'Modifier la fiche' : 'Ajouter un client'}</h2>
