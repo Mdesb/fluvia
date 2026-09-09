@@ -26,7 +26,27 @@ final readonly class ContentBlocks
     public function __construct(
         private EntityManagerInterface $em,
         private BodySanitizer $assainisseur,
+        private TradeReference $trades,
     ) {
+    }
+
+    /**
+     * Les metiers a declarer : ceux du referentiel s'il en porte, sinon ceux du repli.
+     *
+     * ⚠ **MEME REGLE TOUT-OU-RIEN QUE `MetierCatalog`**, et pour la meme raison : une liste
+     * melangee rendrait une base a moitie semee indiscernable d'une base saine.
+     *
+     * @return list<array{code: string, nom: string}>
+     */
+    private function metiers(): array
+    {
+        $metiers = [];
+
+        foreach ($this->trades->published() as $ligne) {
+            $metiers[] = ['code' => $ligne->getCode(), 'nom' => $ligne->getName()];
+        }
+
+        return $metiers;
     }
 
     /**
@@ -62,7 +82,7 @@ final readonly class ContentBlocks
         $valeurs = $this->valeurs();
         $lignes = [];
 
-        foreach (SiteBlocks::all() as $declare) {
+        foreach (SiteBlocks::all($this->metiers()) as $declare) {
             $lignes[] = [
                 'key' => $declare['key'],
                 'type' => $declare['type']->value,
@@ -83,7 +103,7 @@ final readonly class ContentBlocks
      */
     public function enregistrer(string $cle, array $valeur, \DateTimeImmutable $instant): ContentBlock
     {
-        $type = SiteBlocks::typeOf($cle);
+        $type = SiteBlocks::typeOf($cle, $this->metiers());
 
         if (null === $type) {
             throw new UnknownBlockException(sprintf(

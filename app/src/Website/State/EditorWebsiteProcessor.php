@@ -11,13 +11,20 @@ use App\Subscription\Security\EditorOnly;
 use App\Website\ApiResource\EditorBlogCategory;
 use App\Website\ApiResource\EditorBlogPost;
 use App\Website\ApiResource\EditorContentBlock;
+use App\Website\ApiResource\EditorTrade;
 use App\Website\Entity\BlogCategory;
 use App\Website\Entity\BlogPost;
+use App\Website\Entity\Trade;
+use App\Website\Enum\PublicationStatus;
+use App\Website\Exception\BuiltInTradeIsProtectedException;
 use App\Website\Exception\PublishedSlugIsFrozenException;
+use App\Website\Exception\TradeAlreadyExistsException;
+use App\Website\Exception\UnknownActivityException;
 use App\Website\Exception\UnknownBlockException;
 use App\Website\Service\BlogEditor;
 use App\Website\Service\ContentBlocks;
 use App\Website\Service\SlugGenerator;
+use App\Website\Service\TradeEditor;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -55,6 +62,8 @@ final class EditorWebsiteProcessor implements ProcessorInterface
         private readonly BlogEditor $redaction,
         private readonly ContentBlocks $blocs,
         private readonly SlugGenerator $slugs,
+        private readonly TradeEditor $redactionMetier,
+        private readonly EditorTradeView $vueMetier,
     ) {
     }
 
@@ -68,6 +77,10 @@ final class EditorWebsiteProcessor implements ProcessorInterface
             return $this->ecrireLeBloc($data, $maintenant);
         }
 
+        if ($data instanceof EditorTrade) {
+            return $this->ecrireLeMetier($data, $operation, $uriVariables);
+        }
+
         if ($data instanceof EditorBlogCategory) {
             return $this->ecrireLaRubrique($data, $operation, $uriVariables);
         }
@@ -77,6 +90,74 @@ final class EditorWebsiteProcessor implements ProcessorInterface
         }
 
         return $data;
+    }
+
+    /**
+     * ⚠ **LES REFUS DEVIENNENT DES CODES QUE L'ÉCRAN SAIT LIRE**, comme pour les articles : 409 pour
+     * une adresse gelée ou un code déjà pris — on corrige et on renvoie —, 422 pour une activité ou
+     * un statut qui n'existent pas, 409 pour un métier que le produit porte lui-même. Laisser
+     * remonter l'exception donnerait un 500 sur des gestes parfaitement ordinaires.
+     *
+     * ⚠ **AUCUNE RÈGLE N'EST ÉCRITE ICI**, conformément à l'en-tête de cette classe : elles vivent
+     * toutes dans {@see TradeEditor}, pour qu'un import ou une reprise obtiennent exactement les
+     * mêmes sans passer par une requête.
+     *
+     * @param array<string, mixed> $uriVariables
+     */
+    private function ecrireLeMetier(EditorTrade $vue, Operation $operation, array $uriVariables): ?EditorTrade
+    {
+        $ligne = isset($uriVariables['id'])
+            ? $this->em->getRepository(Trade::class)->find($this->uuid($uriVariables['id']))
+            : null;
+
+        if (isset($uriVariables['id']) && !$ligne instanceof Trade) {
+            throw new NotFoundHttpException('Ce métier n’existe pas.');
+        }
+
+        if ($operation instanceof Delete) {
+            \assert($ligne instanceof Trade);
+
+            try {
+                $this->redactionMetier->supprimer($ligne);
+            } catch (BuiltInTradeIsProtectedException $refus) {
+                throw new ConflictHttpException($refus->getMessage(), $refus);
+            }
+
+            return null;
+        }
+
+        if ('' === trim($vue->name)) {
+            throw new UnprocessableEntityHttpException('Un métier a besoin d’un nom : c’est ce que le menu affiche.');
+        }
+
+        $statut = PublicationStatus::tryFrom($vue->status);
+
+        if (null === $statut) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Le statut « %s » n’existe pas : un métier est « %s » ou « %s », et rien d’autre.',
+                $vue->status,
+                PublicationStatus::Draft->value,
+                PublicationStatus::Published->value,
+            ));
+        }
+
+        try {
+            $ligne = $ligne instanceof Trade
+                ? $this->redactionMetier->mettreAJour($ligne, $vue->slug, $vue->name, $vue->searchTitle, $vue->lead, $vue->position, $statut, $vue->activities)
+                : $this->redactionMetier->creer($vue->code, $vue->slug, $vue->name, $vue->searchTitle, $vue->lead, $vue->position, $statut, $vue->activities);
+        } catch (UnknownActivityException $refus) {
+            throw new UnprocessableEntityHttpException($refus->getMessage(), $refus);
+        } catch (PublishedSlugIsFrozenException|TradeAlreadyExistsException $refus) {
+            throw new ConflictHttpException($refus->getMessage(), $refus);
+        }
+
+        /*
+         * On relit ce qui a été rangé plutôt que de rendre ce qui a été reçu — et ici ce n'est pas
+         * une précaution de forme : les MODULES sont déduits des activités, ils n'étaient pas dans
+         * la requête. Renvoyer la vue reçue afficherait une liste de modules vide juste après
+         * l'enregistrement, et la vraie au rechargement.
+         */
+        return $this->vueMetier->depuis($ligne);
     }
 
     private function ecrireLeBloc(EditorContentBlock $vue, \DateTimeImmutable $maintenant): EditorContentBlock

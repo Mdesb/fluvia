@@ -5,6 +5,7 @@ import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
+import { useEtatUrl } from '../api/url.js'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -145,7 +146,13 @@ function nomEspace(espace) {
   return espace.libelle || espace.nom || null
 }
 
+// ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. On lui en pose un, avec le seul paramètre dont elle a
+// besoin : la souscription ouverte. Tout le reste de l'écran reste en état local, parce que
+// rien d'autre n'a de raison d'être partagé, mis en signet, ni retrouvé après un F5.
+const DEFAUTS_URL = { souscrire: '' }
+
 export default function Sport({ etabActif, droits = [] }) {
+  const [params, majParams] = useEtatUrl('sport', DEFAUTS_URL)
   // Le droit exige par le serveur est `sport.superviser_nocturne`, et lui seul : afficher le
   // bouton a qui ne l'a pas produirait un 403 sur un geste d'urgence -- le pire moment pour
   // decouvrir qu'on n'avait pas le droit.
@@ -197,7 +204,6 @@ export default function Sport({ etabActif, droits = [] }) {
     })
     setDetection(false)
   }
-  const [souscription, setSouscription] = useState(false)
   const [echeances, setEcheances] = useState(null)
   const [rejet, setRejet] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
@@ -296,6 +302,24 @@ export default function Sport({ etabActif, droits = [] }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // ── LA SOUSCRIPTION, EN ÉCRAN ───────────────────────────────────────────────────────────────
+  //
+  // Elle prend la page entière. Placée AVANT la garde de chargement : le formulaire va chercher
+  // ses propres listes (bénéficiaires, clients, produits) et n'a besoin de rien de ce que la page
+  // lit pour elle-même — attendre les alertes et les abonnements ne ferait que retarder un écran
+  // qui n'en dépend pas.
+  if (params.souscrire === '1') {
+    return (
+      <div className="view">
+        <SouscriptionModal
+          open
+          onClose={() => majParams({ souscrire: '' }, { pousser: true })}
+          onFait={() => { majParams({ souscrire: '' }, { pousser: true }); recharger() }}
+        />
+      </div>
+    )
   }
 
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
@@ -445,7 +469,7 @@ export default function Sport({ etabActif, droits = [] }) {
           <span className="sub" style={{ marginLeft: 8 }}>{abonnements === null ? '—' : abonnements.length}</span>
           {peutGererAbonnement && (
             <div className="actions" style={{ marginLeft: 'auto' }}>
-              <button className="btn sm" type="button" onClick={() => setSouscription(true)}>
+              <button className="btn sm" type="button" onClick={() => majParams({ souscrire: '1' }, { pousser: true })}>
                 ＋ Souscrire un abonnement
               </button>
             </div>
@@ -525,11 +549,6 @@ export default function Sport({ etabActif, droits = [] }) {
           souscription, pas par la fiche.
         </div>
 
-        <SouscriptionModal
-          open={souscription}
-          onClose={() => setSouscription(false)}
-          onFait={() => { setSouscription(false); recharger() }}
-        />
       </section>
 
       <Echeancier
@@ -629,6 +648,17 @@ function Echeancier({
     null,
   )
 
+  // ⚠ L'ECHEANCIER ARRIVAIT DANS L'ORDRE DES UUID — 25 lignes de septembre 2025 a septembre 2026
+  // entremelees. Mesure du 07/09 contre l'API de preprod, pas une impression.
+  //
+  // La ressource porte desormais `order: ['dateProgrammee' => 'ASC']`, donc cette liste arrive
+  // triee. On la trie QUAND MEME ici, et ce n'est pas de la redondance : un ecran qui depend d'un
+  // ordre qu'il ne controle pas se recasse en silence le jour ou la ressource change, sans qu'une
+  // seule ligne de ce fichier bouge. Le tri est un invariant de l'affichage, on l'ecrit ici aussi.
+  const rangees = [...(echeances || [])].sort(
+    (x, y) => (x.dateProgrammee || '').localeCompare(y.dateProgrammee || ''),
+  )
+
   // Le talon `{ id }` se recoupe avec les abonnements deja charges par la page. Si CETTE liste-la
   // n'a pas pu etre lue, on ne remplace pas le nom par un tiret muet : on le dit.
   function adherent(echeance) {
@@ -684,7 +714,7 @@ function Echeancier({
                 </tr>
               </thead>
               <tbody>
-                {echeances.map((e) => {
+                {rangees.map((e) => {
                   const etat = etatEcheance(e.statut)
                   return (
                     <tr key={e.id}>
@@ -851,6 +881,8 @@ function AnnulationEcheanceModal({ echeance, onClose, onFait }) {
 // que ce rattachement n'a pas eu lieu, l'adhérent paie et la porte refuse. La modale le dit — ce
 // serait le symétrique exact du blocage pour impayé qu'on vient de démêler, en pire : celui-là
 // frapperait quelqu'un qui est en règle.
+// ⚠ CE N'EST PLUS UNE MODALE — le nom est historique. La garde `if (!open) return null`
+// remplace celle que `Modal` portait : sans elle, le formulaire s'afficherait sous la page.
 function SouscriptionModal({ open, onClose, onFait }) {
   const [beneficiaires, setBeneficiaires] = useState([])
   const [clients, setClients] = useState([])
@@ -924,6 +956,8 @@ function SouscriptionModal({ open, onClose, onFait }) {
   const tarifAffiche = grilleTarif
     ? Number(grilleTarif.prix).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
     : null
+  if (!open) return null
+
   const pret = adherent && payeur && produit
     // ⚠ `tarifAffiche` REMPLACE `centimes > 0` dans la garde : sans tarif au catalogue, le
     //    serveur refusera la souscription. Bloquer ici évite un aller-retour et une erreur
@@ -953,7 +987,11 @@ function SouscriptionModal({ open, onClose, onFait }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre="Souscrire un abonnement" taille="lg">
+    <>
+      <button className="btn ghost sm" type="button" onClick={onClose} style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux abonnements
+      </button>
+      <h2>Souscrire un abonnement</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
@@ -1100,7 +1138,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
