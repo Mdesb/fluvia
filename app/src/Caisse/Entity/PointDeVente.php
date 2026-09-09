@@ -9,6 +9,8 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Caisse\Validator\RevenueOfficeWithinTenant;
+use App\Compta\Entity\RegieRecettes;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Nf525\Entity\DailyClosure;
 use App\Vente\State\CloseDayProcessor;
@@ -55,6 +57,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['pdv:read']],
     denormalizationContext: ['groups' => ['pdv:write']],
 )]
+#[RevenueOfficeWithinTenant]
 class PointDeVente
 {
     #[ORM\Id]
@@ -117,6 +120,42 @@ class PointDeVente
     #[Groups(['pdv:read', 'pdv:write'])]
     private string $toleranceEcartCaisse = '0.00';
 
+    /**
+     * Régie de recettes pour le compte de laquelle ce guichet encaisse (RG-REGIE-02).
+     *
+     * ── POURQUOI CE LIEN EXISTE, ET CE QU'IL DÉBLOQUE ─────────────────────────────────────
+     *
+     * `RegieRecettes::soldeEncaisseCentimes` ne montait JAMAIS : `enregistrerEncaissement()`
+     * n'avait aucun appelant en production. Le plafond ne se dépassait donc jamais,
+     * `ClotureGuard` ne bloquait jamais une clôture pour ce motif, et l'écran de versement
+     * n'avait jamais rien à verser. Toute la moitié « régie » du module était inerte.
+     *
+     * La clôture Z alimente désormais l'encaisse, et c'est ce champ qui lui dit LAQUELLE.
+     *
+     * ── ⚠ POURQUOI SUR LE GUICHET ET PAS SUR LE PROFIL COMPTABLE ──────────────────────────
+     *
+     * Une régie pend au `ProfilExploitant`, donc à l'établissement. Résoudre par ce chemin
+     * marche tant qu'il n'y a qu'une régie, et devient une DEVINETTE dès qu'il y en a deux —
+     * une collectivité qui tient piscine et patinoire sur le même profil. L'argent de l'une
+     * entrerait dans l'encaisse de l'autre, et le symptôme serait un plafond qui déborde là
+     * où personne n'a encaissé.
+     *
+     * Sur le guichet, la question ne se pose pas : la session porte son point de vente, et le
+     * point de vente porte sa régie. `ManyToOne` et non `ManyToMany` : un guichet n'encaisse
+     * que pour une régie à la fois, et la contrainte est structurelle plutôt qu'écrite.
+     *
+     * ⚠ `null` EST LE CAS NORMAL, PAS UNE OMISSION. Un exploitant privé ou un délégataire n'a
+     * pas de régie, et la très grande majorité des guichets n'en aura jamais. Rien ne doit
+     * échouer parce que ce champ est vide.
+     *
+     * `onDelete: 'SET NULL'` plutôt que `RESTRICT` : supprimer une régie ne doit pas rendre un
+     * guichet inouvrable. Le guichet cesse simplement d'alimenter une encaisse.
+     */
+    #[ORM\ManyToOne(targetEntity: RegieRecettes::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private ?RegieRecettes $regie = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -125,6 +164,18 @@ class PointDeVente
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getRegie(): ?RegieRecettes
+    {
+        return $this->regie;
+    }
+
+    public function setRegie(?RegieRecettes $regie): self
+    {
+        $this->regie = $regie;
+
+        return $this;
     }
 
     public function getLibelle(): string
