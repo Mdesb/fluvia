@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Website\Service;
 
+use App\Fonctionnalite\Config\ActivityCapabilities;
 use App\Fonctionnalite\Config\PresetVerticale;
 use App\Fonctionnalite\Enum\Metier;
 use App\Fonctionnalite\Service\CatalogueCapacites;
+use App\Website\Config\TradeFallback;
+use App\Website\Entity\Trade;
 
 /**
  * Les métiers tels que le site public les présente (ED-12).
@@ -30,10 +33,13 @@ use App\Fonctionnalite\Service\CatalogueCapacites;
  * existent, et quiconque en doute peut ouvrir le fichier. Une promesse commerciale sans entité
  * derrière serait invendable le jour de la démonstration — c'est le moment où le prospect la teste.
  */
+
 final readonly class MetierCatalog
 {
-    public function __construct(private CatalogueCapacites $capacites)
-    {
+    public function __construct(
+        private CatalogueCapacites $capacites,
+        private TradeReference $trades,
+    ) {
     }
 
     /**
@@ -46,13 +52,120 @@ final readonly class MetierCatalog
      */
     public function tous(): array
     {
-        $metiers = [];
+        $lignes = $this->trades->published();
 
-        foreach (Metier::cases() as $metier) {
-            $metiers[] = $this->versMetier($metier);
+        /*
+         * ⚠ LE REPLI EST TOUT-OU-RIEN, ET C'EST LE POINT LE PLUS IMPORTANT DE CETTE METHODE.
+         *
+         * Zero ligne -> les constantes. Au moins une ligne -> les lignes SEULES. Pas de fusion,
+         * pas de `?? NOMS[$code]` champ par champ.
+         *
+         * Un repli PAR CHAMP rendrait une base a moitie semee indiscernable d'une base saine : un
+         * metier dont la ligne existe mais dont le nom est vide sortirait avec le nom de la
+         * constante, et personne ne saurait jamais que la ligne est cassee. Le tout-ou-rien n'a
+         * qu'un seul etat ambigu — « quatre lignes sur cinq » — et il est ferme par le temoin
+         * d'integrite.
+         */
+        if ([] === $lignes) {
+            $metiers = [];
+
+            foreach (Metier::cases() as $metier) {
+                $metiers[] = $this->versMetier($metier);
+            }
+
+            return $metiers;
         }
 
-        return $metiers;
+        return array_map($this->depuisLaLigne(...), $lignes);
+    }
+
+    /**
+     * Un metier tel qu'une LIGNE le decrit.
+     *
+     * La forme rendue est exactement celle de {@see self::versMetier()} : c'est le contrat avec les
+     * gabarits, et aucun d'eux n'est touche par ce lot.
+     *
+     * @return array{
+     *     slug: string, code: string, nom: string, titre: string, chapo: string,
+     *     specificites: list<array{titre: string, texte: string}>,
+     *     ecran: array{etablissement: string, entrees: list<string>, note: string, colonnes: list<string>, occupations: list<string>}|null,
+     *     modules: list<array{slug: string, libelle: string, description: string}>
+     * }
+     */
+    private function depuisLaLigne(Trade $ligne): array
+    {
+        $code = $ligne->getCode();
+
+        /*
+         * ⚠ `Metier::tryFrom()` EST ICI EMPLOYE POUR CE QU'IL FAIT BIEN, et pas comme dans le
+         *   defaut n°1 des faits etablis : il ne decide PAS si le metier existe — la ligne le
+         *   decide — il decide seulement de quelle SOURCE viennent les modules. Un `null` n'ouvre
+         *   pas une plateforme vide, il ouvre l'autre branche.
+         *
+         *   Un code que l'application connait garde son prereglage, inchange : c'est ce qui rend le
+         *   rendu identique pour les cinq metiers d'aujourd'hui. Un metier cree en base, lui, n'a
+         *   aucun prereglage, et ses modules se deduisent de ses activites.
+         */
+        $metier = Metier::tryFrom($code);
+
+        if (null !== $metier) {
+            $capacites = PresetVerticale::capacites($metier);
+        } else {
+            $activites = [];
+
+            foreach ($ligne->getActivities() as $activite) {
+                $activites[] = $activite->getActivity();
+            }
+
+            $capacites = ActivityCapabilities::modulesFor($activites);
+        }
+
+        return [
+            'slug' => $ligne->getSlug(),
+            'code' => $code,
+            'nom' => $ligne->getName(),
+            'titre' => $ligne->getSearchTitle(),
+            'chapo' => $ligne->getLead(),
+            'specificites' => self::SPECIFICITES[$code] ?? [],
+            'ecran' => self::ECRANS[$code] ?? null,
+            'modules' => $this->modulesVendables($capacites),
+        ];
+    }
+
+    /**
+     * Les modules affichables pour un jeu de capacites.
+     *
+     * ⚠ **EXTRAIT DE `versMetier()` SANS UNE LIGNE DE CHANGEMENT**, pour que les deux chemins
+     * partagent exactement le meme filtre et le meme tri. Deux copies divergeraient au premier
+     * ajustement, et la page ne dirait plus la meme chose selon que la base porte des lignes ou non.
+     *
+     * @param list<string> $capacites
+     *
+     * @return list<array{slug: string, libelle: string, description: string}>
+     */
+    private function modulesVendables(array $capacites): array
+    {
+        $modules = [];
+
+        foreach ($capacites as $capacite) {
+            $descripteur = $this->capacites->trouve($capacite);
+
+            // Une capacité du préréglage absente du catalogue serait une incohérence interne ; on la
+            // saute plutôt que d'afficher un code technique sur une page de vente.
+            if (null === $descripteur || $descripteur->estVerticale) {
+                continue;
+            }
+
+            $modules[] = [
+                'slug' => ModuleCatalog::slugDe($descripteur->code),
+                'libelle' => $descripteur->libelle,
+                'description' => $descripteur->description,
+            ];
+        }
+
+        usort($modules, static fn (array $a, array $b): int => strcmp($a['libelle'], $b['libelle']));
+
+        return $modules;
     }
 
     /**
@@ -79,8 +192,19 @@ final readonly class MetierCatalog
      *
      * ⚠ **C'EST LA DÉMONSTRATION DE LA PROMESSE, PAS UNE ILLUSTRATION.** Le site affirme qu'un
      * créneau n'est pas la même chose partout — une réservation de terrain au padel, une séance à la
-     * piscine, une visite au musée. Un seul gabarit rendu cinq fois avec cinq tables de mots le
-     * montre, au lieu de l'écrire.
+     * piscine, une visite au musée, une partie au bowling. Un seul gabarit rendu huit fois avec huit
+     * tables de mots le montre, au lieu de l'écrire.
+     *
+     * ⚠ **ELLE EST FACULTATIVE, ET C'EST CE QUI LA REND COMPATIBLE AVEC LE RÉFÉRENTIEL.** La lecture
+     * est `self::ECRANS[$code] ?? null` : un métier créé en base sans entrée ici a sa page, ses
+     * modules et son texte, simplement sans écran de démonstration. Ajouter cet écran reste, lui, un
+     * déploiement — c'est le seul morceau d'une page métier qui n'ait pas basculé en base, et c'est
+     * assumé : ce sont des mots de vente, comme les spécificités juste en dessous.
+     *
+     * ⚠ **TROIS ENTRÉES N'ONT PAS DE LIGNE AUJOURD'HUI** — `bowling`, `escalade`, `parcs-de-loisirs`.
+     * Elles ne rendent donc rien, et c'est sans danger : ce sont les lignes qui décident quelles
+     * pages existent, jamais cette table. Elles attendent que les métiers soient créés dans
+     * l'administration, avec exactement ces codes.
      *
      * ⚠ **AUCUN CHIFFRE D'AFFAIRE, AUCUN NOM DE CLIENT RÉEL.** Ce sont des établissements
      * d'illustration. Un écran de démonstration qui exhibe des données ressemblant à celles d'un
@@ -127,6 +251,35 @@ final readonly class MetierCatalog
             'colonnes' => ['S1', 'S2', 'S3', 'S4'],
             'occupations' => ['Visite guidée', 'Scolaires', 'Groupe', 'Atelier', 'Conférence', 'Libre'],
         ],
+
+        // ── Les trois qui n'ont pas encore de ligne ─────────────────────────────────────────────
+        //
+        // ⚠ Le libellé de la quatrième entrée du menu change d'un métier à l'autre, et c'est tout le
+        //   propos : « Location de chaussures » au bowling, « Location de matériel » à l'escalade,
+        //   « Billetterie » au parc. Un menu identique partout démentirait la phrase que la page
+        //   vient d'écrire.
+
+        'bowling' => [
+            'etablissement' => 'Bowling du Stade',
+            'entrees' => ['Parties', 'Pistes', 'Joueurs', 'Location de chaussures', 'Paramètres'],
+            'note' => '4 pistes',
+            'colonnes' => ['P1', 'P2', 'P3', 'P4'],
+            'occupations' => ['Anniversaire', 'Ligue', 'Public', 'Entreprise', 'Scolaires', 'Tournoi'],
+        ],
+        'escalade' => [
+            'etablissement' => 'Bloc & Cie',
+            'entrees' => ['Séances', 'Secteurs', 'Grimpeurs', 'Location de matériel', 'Paramètres'],
+            'note' => '4 secteurs',
+            'colonnes' => ['S1', 'S2', 'S3', 'S4'],
+            'occupations' => ['Grimpe libre', 'Cours enfants', 'Scolaires', 'Perfectionnement', 'Groupe', 'Compétition'],
+        ],
+        'parcs-de-loisirs' => [
+            'etablissement' => 'Parc des Cimes',
+            'entrees' => ['Créneaux', 'Attractions', 'Visiteurs', 'Billetterie', 'Paramètres'],
+            'note' => '4 attractions',
+            'colonnes' => ['A1', 'A2', 'A3', 'A4'],
+            'occupations' => ['Public', 'Scolaires', 'Groupe', 'Anniversaire', 'Privatisation', 'Nocturne'],
+        ],
     ];
 
     /** La clé du bloc de texte long d'un métier — celle que l'écran d'administration remplit. */
@@ -139,52 +292,11 @@ final readonly class MetierCatalog
     public static function codes(): array
     {
         return array_map(
-            static fn (Metier $m): array => ['code' => $m->value, 'nom' => self::NOMS[$m->value]['nom']],
+            static fn (Metier $m): array => ['code' => $m->value, 'nom' => TradeFallback::NOMS[$m->value]['nom']],
             Metier::cases(),
         );
     }
 
-    /**
-     * Ce que chaque métier appelle son quotidien.
-     *
-     * Le `nom` sert au menu, le `titre` à l'onglet et aux moteurs — les deux diffèrent parce qu'un
-     * titre de recherche contient les mots qu'on tape, et un libellé de menu doit tenir sur une ligne.
-     *
-     * @var array<string, array{nom: string, titre: string, chapo: string}>
-     */
-    private const NOMS = [
-        'piscine' => [
-            'nom' => 'Piscines et centres aquatiques',
-            'titre' => 'Logiciel de gestion pour piscine et centre aquatique',
-            'chapo' => "Entrées, créneaux de bassin, casiers, encadrants : la journée d'une piscine tient "
-                ."sur des contraintes que peu de logiciels connaissent. Fluvia les porte, du POSS à la caution "
-                ."d'un casier forcé.",
-        ],
-        'sport' => [
-            'nom' => 'Salles de sport et fitness',
-            'titre' => 'Logiciel de gestion pour salle de sport et club de fitness',
-            'chapo' => "Abonnements prélevés, accès contrôlé, ouverture sans personnel : une salle vit de la "
-                ."régularité de ses encaissements et de la fiabilité de sa porte. Fluvia lie les deux.",
-        ],
-        'padel' => [
-            'nom' => 'Padel et sports de raquette',
-            'titre' => 'Logiciel de réservation pour club de padel',
-            'chapo' => "Terrains réservés à la demi-heure, joueurs qui ne viennent pas, tournois à organiser, "
-                ."éclairage à ne pas laisser allumé. Un club de padel se pilote au créneau.",
-        ],
-        'patinoire' => [
-            'nom' => 'Patinoires',
-            'titre' => 'Logiciel de gestion pour patinoire',
-            'chapo' => "Un parc de patins à louer, à affûter et à rendre, des séances publiques et scolaires, "
-                ."une saison qui dure quelques mois. Une patinoire ne se gère pas comme une salle ouverte à l'année.",
-        ],
-        'musee' => [
-            'nom' => 'Musées et sites de visite',
-            'titre' => 'Logiciel de billetterie pour musée et site de visite',
-            'chapo' => "Billetterie horodatée, jauges par salle, visites guidées, gratuités à justifier, "
-                ."revendeurs en ligne à rapprocher. Un musée compte ses entrées autrement qu'un équipement sportif.",
-        ],
-    ];
 
     /**
      * Ce que le produit sait faire pour ce métier, et que les autres n'ont pas.
@@ -293,32 +405,14 @@ final readonly class MetierCatalog
     private function versMetier(Metier $metier): array
     {
         $code = $metier->value;
-        $modules = [];
-
-        foreach (PresetVerticale::capacites($metier) as $capacite) {
-            $descripteur = $this->capacites->trouve($capacite);
-
-            // Une capacité du préréglage absente du catalogue serait une incohérence interne ; on la
-            // saute plutôt que d'afficher un code technique sur une page de vente.
-            if (null === $descripteur || $descripteur->estVerticale) {
-                continue;
-            }
-
-            $modules[] = [
-                'slug' => ModuleCatalog::slugDe($descripteur->code),
-                'libelle' => $descripteur->libelle,
-                'description' => $descripteur->description,
-            ];
-        }
-
-        usort($modules, static fn (array $a, array $b): int => strcmp($a['libelle'], $b['libelle']));
+        $modules = $this->modulesVendables(PresetVerticale::capacites($metier));
 
         return [
             'slug' => ModuleCatalog::slugDe($code),
             'code' => $code,
-            'nom' => self::NOMS[$code]['nom'],
-            'titre' => self::NOMS[$code]['titre'],
-            'chapo' => self::NOMS[$code]['chapo'],
+            'nom' => TradeFallback::NOMS[$code]['nom'],
+            'titre' => TradeFallback::NOMS[$code]['titre'],
+            'chapo' => TradeFallback::NOMS[$code]['chapo'],
             'specificites' => self::SPECIFICITES[$code] ?? [],
             // Absent pour un métier sans table d'écran : le gabarit n'affiche alors rien, plutôt
             // que de montrer le vocabulaire d'un autre métier.

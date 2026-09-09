@@ -239,6 +239,12 @@ executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-mod
 executer "Blocs editables orphelins" php_racine bin/garde-fou-blocs-orphelins.php
 executer "Numeros de decision (n°46)" php_racine bin/garde-fou-numeros-de-decision.php
 
+# 55. Un metier de `Metier` sans son entree dans `TradeFallback` n'aurait de page dans AUCUN des
+#     deux etats du site — ni celui des constantes, ni celui des lignes, puisque la commande de
+#     peuplement lit cette meme liste. Et l'inverse est refuse aussi : `TradeFallback` ne grandit
+#     jamais, un metier de plus est une LIGNE EN BASE.
+executer "Metiers sans ligne (n°55)" php_racine bin/garde-fou-metiers-sans-ligne.php
+
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que

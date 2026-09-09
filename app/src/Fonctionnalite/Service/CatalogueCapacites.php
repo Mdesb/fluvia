@@ -99,7 +99,15 @@ final class CatalogueCapacites
         };
     }
 
-    private static function estVerticale(CapaciteCode $code): bool
+    /**
+     * Cette capacite porte-t-elle le nom d'une verticale ?
+     *
+     * ⚠ **PUBLIQUE DEPUIS LE 07/09**, pour que {@see \App\Fonctionnalite\Config\ActivityCapabilities}
+     * la delegue au lieu de recopier les cinq noms. Le commentaire de {@see self::descripteur()}
+     * dit deja pourquoi : « il se derive de l'enum `Metier`, une fois, ici ». Deux derivations, ce
+     * serait deux endroits a corriger le jour d'une sixieme verticale.
+     */
+    public static function estVerticale(CapaciteCode $code): bool
     {
         return Metier::tryFrom($code->value) !== null;
     }

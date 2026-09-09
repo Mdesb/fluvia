@@ -48,11 +48,33 @@ const VIDE = {
 // est une convention de FORMULAIRE, pas une réponse à « quel est l'identifiant ». Une fonction qui
 // rendrait tantôt `null` tantôt `''` redeviendrait celle qu'on vient de retirer.
 
-export default function ActivitesReservation({ droits = [] }) {
+/** Les valeurs du formulaire, telles qu'une activité enregistrée les remplit. */
+function valeursDe(a) {
+  return {
+    id: a.id,
+    libelle: a.libelle || '',
+    typeActivite: a.typeActivite || '',
+    dureeMinutes: String(a.dureeMinutes ?? 60),
+    battementMinutes: String(a.battementMinutes ?? 0),
+    rappelHeuresAvant: String(a.rappelHeuresAvant ?? 0),
+    natureVersement: a.natureVersement || 'none',
+    versementMontant: String(a.versementMontant ?? '0.00'),
+    niveauRequis: a.niveauRequis || '',
+    competenceExigee: a.competenceExigee || '',
+    tarifReferenceMontant: a.tarifReferenceMontant || '0.00',
+    produit: idDe(a.produitTarifReference) ?? '',
+    actif: a.actif !== false,
+  }
+}
+
+export default function ActivitesReservation({ droits = [], params = {}, majParams }) {
+  // `nouvelle`, ou l'identifiant de l'activité qu'on modifie.
+  const ouvert = params.activite || ''
+  const ouvrir = (v) => majParams({ activite: v }, { pousser: true })
+  const fermer = () => ouvrir('')
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   const [activites, setActivites] = useState(null)
   const [produits, setProduits] = useState(null)
-  const [edition, setEdition] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
 
@@ -85,6 +107,72 @@ export default function ActivitesReservation({ droits = [] }) {
     ? activites.filter((a) => !a.produitTarifReference).length
     : 0
 
+  // ── LE FORMULAIRE D'UNE ACTIVITÉ, EN ÉCRAN ──────────────────────────────
+  //
+  // Il tenait dans une modale déclarée `sm` — 480 px — pour 129 lignes de formulaire.
+  //
+  // ⚠ `activites` vaut `null` tant qu'on lit et `undefined` sur un refus : trois états, et
+  // aucun ne doit se faire passer pour un autre. Un formulaire vide qu'on enregistre CRÉE une
+  // activité — on ne le monte donc qu'une fois les valeurs connues.
+  if (ouvert) {
+    const creation = ouvert === 'nouvelle'
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux activités
+      </button>
+    )
+    if (!creation && activites === null) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="empty">Lecture des activités…</div>
+        </div></section>
+      )
+    }
+    if (!creation && activites === undefined) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            Les activités n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même
+            chose que « elle n’existe pas ».
+          </div>
+        </div></section>
+      )
+    }
+    const connue = creation ? null : (activites || []).find((a) => String(a.id) === String(ouvert))
+    if (!creation && !connue) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            Cette activité n’est plus dans la liste — elle a sans doute été supprimée depuis que
+            ce lien a été copié. Revenez à la liste plutôt que d’en recréer une.
+          </div>
+        </div></section>
+      )
+    }
+    return (
+      <section className="card"><div className="card-b">
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <EditionActivite
+          key={ouvert}
+          valeurs={connue ? valeursDe(connue) : { ...VIDE }}
+          produits={produits}
+          onFermer={fermer}
+          onFait={(message) => { setSucces(message); setErreur(null); charger(); fermer() }}
+          onErreur={setErreur}
+        />
+      </div></section>
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-h">
@@ -97,7 +185,7 @@ export default function ActivitesReservation({ droits = [] }) {
             className="btn primary sm"
             type="button"
             style={{ marginLeft: 'auto' }}
-            onClick={() => setEdition({ ...VIDE })}
+            onClick={() => ouvrir('nouvelle')}
           >
             Nouvelle activité
           </button>
@@ -199,21 +287,7 @@ export default function ActivitesReservation({ droits = [] }) {
                           <button
                             className="btn ghost sm"
                             type="button"
-                            onClick={() => setEdition({
-                              id: a.id,
-                              libelle: a.libelle || '',
-                              typeActivite: a.typeActivite || '',
-                              dureeMinutes: String(a.dureeMinutes ?? 60),
-                              battementMinutes: String(a.battementMinutes ?? 0),
-                              rappelHeuresAvant: String(a.rappelHeuresAvant ?? 0),
-                              natureVersement: a.natureVersement || 'none',
-                              versementMontant: String(a.versementMontant ?? '0.00'),
-                              niveauRequis: a.niveauRequis || '',
-                              competenceExigee: a.competenceExigee || '',
-                              tarifReferenceMontant: a.tarifReferenceMontant || '0.00',
-                              produit: pid,
-                              actif: a.actif !== false,
-                            })}
+                            onClick={() => ouvrir(String(a.id))}
                           >
                             Modifier
                           </button>
@@ -227,14 +301,6 @@ export default function ActivitesReservation({ droits = [] }) {
           </div>
         )}
       </div>
-
-      <EditionActivite
-        valeurs={edition}
-        produits={produits}
-        onFermer={() => setEdition(null)}
-        onFait={(message) => { setEdition(null); setSucces(message); setErreur(null); charger() }}
-        onErreur={setErreur}
-      />
     </section>
   )
 }
@@ -251,10 +317,12 @@ export default function ActivitesReservation({ droits = [] }) {
  * de le renseigner — et c'est cet ordre-là qui compte.
  */
 function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
-  const [v, setV] = useState(VIDE)
+  // ⚠ INITIALISATION PARESSEUSE, ET PLUS D'EFFET DE SYNCHRONISATION. Le parent recalcule
+  // `valeurs` à chaque rendu : un `useEffect([valeurs])` qui les réinjecterait effacerait la
+  // frappe en cours à chaque caractère. C'est la clé posée par le parent qui remonte ce
+  // formulaire quand on change d'activité — le seul moment où il doit repartir de zéro.
+  const [v, setV] = useState(() => valeurs || VIDE)
   const [busy, setBusy] = useState(false)
-
-  useEffect(() => { if (valeurs) setV(valeurs) }, [valeurs])
 
   if (!valeurs) return null
 
@@ -295,12 +363,8 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
   const pret = v.libelle.trim() !== '' && Number(v.dureeMinutes) > 0
 
   return (
-    <Modal
-      open
-      onClose={onFermer}
-      titre={v.id ? 'Modifier l’activité' : 'Nouvelle activité'}
-      taille="sm"
-    >
+    <>
+      <h2>{v.id ? 'Modifier l’activité' : 'Nouvelle activité'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Nom de l’activité *</span>
@@ -430,6 +494,6 @@ function EditionActivite({ valeurs, produits, onFermer, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

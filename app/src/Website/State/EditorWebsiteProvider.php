@@ -8,11 +8,15 @@ use ApiPlatform\Metadata\CollectionOperationInterface;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Subscription\Security\EditorOnly;
+use App\Fonctionnalite\Enum\EstablishmentActivity;
+use App\Website\ApiResource\EditorActivity;
 use App\Website\ApiResource\EditorBlogCategory;
 use App\Website\ApiResource\EditorBlogPost;
 use App\Website\ApiResource\EditorContentBlock;
+use App\Website\ApiResource\EditorTrade;
 use App\Website\Entity\BlogCategory;
 use App\Website\Entity\BlogPost;
+use App\Website\Entity\Trade;
 use App\Website\Service\ContentBlocks;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -42,7 +46,7 @@ use Symfony\Component\Uid\Uuid;
  * qu'ils décrivent le site de l'éditeur et non les données d'un client. Il n'existe donc pas deux
  * périmètres entre lesquels un identifiant pourrait faire passer quelqu'un.
  *
- * @implements ProviderInterface<EditorBlogPost|EditorBlogCategory|EditorContentBlock>
+ * @implements ProviderInterface<EditorBlogPost|EditorBlogCategory|EditorContentBlock|EditorTrade|EditorActivity>
  */
 final class EditorWebsiteProvider implements ProviderInterface
 {
@@ -50,6 +54,7 @@ final class EditorWebsiteProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly EditorOnly $editorOnly,
         private readonly ContentBlocks $blocs,
+        private readonly EditorTradeView $vueMetier,
     ) {
     }
 
@@ -62,6 +67,21 @@ final class EditorWebsiteProvider implements ProviderInterface
 
         if (EditorContentBlock::class === $classe) {
             return $collection ? $this->blocsDeclares() : $this->bloc((string) ($uriVariables['id'] ?? ''));
+        }
+
+        if (EditorActivity::class === $classe) {
+            return $this->activites();
+        }
+
+        if (EditorTrade::class === $classe) {
+            if ($collection) {
+                return $this->metiers();
+            }
+
+            // Creation : API Platform reclame un objet a hydrater, sans identifiant.
+            return isset($uriVariables['id'])
+                ? $this->vueMetier->depuis($this->metier($this->uuid($uriVariables['id'])))
+                : new EditorTrade();
         }
 
         if (EditorBlogCategory::class === $classe) {
@@ -102,6 +122,57 @@ final class EditorWebsiteProvider implements ProviderInterface
         }
 
         return $this->versArticle($article);
+    }
+
+    /**
+     * ⚠ **ELLE REND LES BROUILLONS, comme pour les articles** : c'est le seul endroit ou un metier
+     * non publie peut etre repris. {@see \App\Website\Service\TradeReference} ne rend, elle, que
+     * les publies, et les deux lectures restent separees — une seule fonction parametree par un
+     * booleen finirait, un jour, par recevoir le mauvais booleen depuis le controleur public.
+     *
+     * @return list<EditorTrade>
+     */
+    private function metiers(): array
+    {
+        /** @var list<Trade> $lignes */
+        $lignes = $this->em->getRepository(Trade::class)->findBy([], ['position' => 'ASC', 'code' => 'ASC']);
+
+        return array_map($this->vueMetier->depuis(...), $lignes);
+    }
+
+    /**
+     * Les neuf activites de D15, avec leurs libelles.
+     *
+     * ⚠ **L'ECRAN NE LES REECRIT PAS.** Les libelles vivent dans l'enumeration ; une seconde
+     * orthographe en JavaScript deriverait au premier libelle corrige, et l'ecran proposerait
+     * autre chose que ce que le site vend.
+     *
+     * @return list<EditorActivity>
+     */
+    private function activites(): array
+    {
+        $lignes = [];
+
+        foreach (EstablishmentActivity::cases() as $activite) {
+            $vue = new EditorActivity();
+            $vue->id = $activite->value;
+            $vue->label = $activite->label();
+
+            $lignes[] = $vue;
+        }
+
+        return $lignes;
+    }
+
+    private function metier(Uuid $id): Trade
+    {
+        $ligne = $this->em->getRepository(Trade::class)->find($id);
+
+        if (!$ligne instanceof Trade) {
+            throw new NotFoundHttpException('Ce métier n’existe pas.');
+        }
+
+        return $ligne;
     }
 
     /** @return list<EditorBlogCategory> */

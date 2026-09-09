@@ -6,6 +6,7 @@ namespace App\Website\Command;
 
 use App\Website\Entity\ContentBlock;
 use App\Website\Service\SiteBlocks;
+use App\Website\Service\TradeReference;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -33,8 +34,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 final class SeedContentBlocksCommand extends Command
 {
-    public function __construct(private readonly EntityManagerInterface $em)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly TradeReference $trades,
+    ) {
         parent::__construct();
     }
 
@@ -55,7 +58,19 @@ final class SeedContentBlocksCommand extends Command
         $poses = 0;
         $gardes = 0;
 
-        foreach (SiteBlocks::all() as $declare) {
+        /*
+         * ⚠ LES METIERS DU REFERENTIEL, PAS SEULEMENT CEUX DU REPLI. Sans cette liste, un metier
+         *   cree en base n'aurait aucun bloc de corps seme, et son texte de page serait
+         *   inenregistrable — la page existerait, le plan du site la citerait, et le redacteur
+         *   recevrait une erreur.
+         */
+        $metiers = [];
+
+        foreach ($this->trades->published() as $ligne) {
+            $metiers[] = ['code' => $ligne->getCode(), 'nom' => $ligne->getName()];
+        }
+
+        foreach (SiteBlocks::all($metiers) as $declare) {
             // ⚠ UN BLOC SANS VALEUR D'ORIGINE NE S'ÉCRIT PAS, ET CE N'EST PAS UNE OPTIMISATION.
             //
             // Les corps de pages de modules naissent vides, délibérément. Les écrire quand même

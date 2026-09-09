@@ -8,6 +8,10 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
+use App\Compta\Enum\VatCategory;
+use App\Facturation\Einvoicing\BusinessTerm;
+use App\Facturation\Einvoicing\InvoiceReadiness;
+use App\Facturation\Entity\Facture;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Securite\SecuriteApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -37,6 +41,12 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
                 'denomination' => 'CLUB TEST SAS',
                 'siret' => '81240390500019',
                 'formeJuridique' => '5710',
+                // L'annuaire renvoie l'adresse deja decoupee ; le formulaire d'ouverture
+                // transmet l'ensemble du resultat tel quel.
+                'rue' => '9 RUE DU COLONEL PIERRE AVIA',
+                'complement' => '',
+                'codePostal' => '75015',
+                'ville' => 'PARIS',
             ],
         ]);
 
@@ -60,6 +70,53 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
         sort($valeurs);
 
         self::assertSame(['0.00', '2.10', '5.50', '10.00', '20.00'], $valeurs, 'les cinq taux légaux français');
+
+        // ── L'ÉMETTEUR EST DÉJÀ RENSEIGNÉ, ET SES TAUX PORTENT LEUR CATÉGORIE EN 16931 ─────────────
+        // Sans ces deux acquis, une structure neuve « sait vendre » mais ne sait pas ÉMETTRE : sa
+        // facture partirait sans raison sociale, et son Factur-X serait refusé faute de catégorie
+        // de TVA (BT-151). Les deux viennent de l'inscription, jamais d'une seconde saisie.
+        self::assertSame('CLUB TEST SAS', $profil->getRaisonSociale(), 'la raison sociale vient de la denomination d\'inscription');
+        self::assertSame('81240390500019', $profil->getSiret(), 'le SIRET complet est repris de l\'inscription');
+
+        $categories = [];
+        foreach ($taux as $t) {
+            $categories[$t->getTaux()] = $t->getVatCategory();
+        }
+        self::assertSame(VatCategory::Standard, $categories['20.00'], 'un taux positif porte la catégorie EN 16931 « S » (BT-151)');
+        self::assertSame(VatCategory::OutOfScope, $categories['0.00'], 'le hors-champ porte la catégorie « O », pas une exonération');
+
+        // ── ET SON ADRESSE VENDEUR EST STRUCTURÉE, DONC SA FACTURE DEVIENT ÉMETTABLE ────────
+        // L'inscription capture l'adresse déjà découpée par l'annuaire (rue / CP / ville) ; le pays
+        // est celui de l'établissement. Ces quatre termes (BT-35/37/38/40) étaient le dernier
+        // verrou : sans eux, le Factur-X d'une structure neuve partait en 422.
+        self::assertSame(
+            ['rue' => '9 RUE DU COLONEL PIERRE AVIA', 'complement' => '', 'cp' => '75015', 'ville' => 'PARIS', 'pays' => 'FR'],
+            $profil->getAdresse(),
+            'l\'adresse vendeur est reprise structurée de l\'inscription',
+        );
+
+        // Preuve par l'autorité, pas par relecture des champs : on demande à InvoiceReadiness ce
+        // qui manque encore pour émettre, et aucun terme d'adresse vendeur ne doit y figurer.
+        $manques = array_map(
+            static fn (array $m): BusinessTerm => $m['terme'],
+            (new InvoiceReadiness())->manques((new Facture())->setProfilExploitant($profil)),
+        );
+        // ⚠ Contre une liste vide, assertNotContains passerait sans rien regarder. On établit
+        // d'abord qu'il y avait quelque chose à voir : la facture nue manque encore de son
+        // acheteur et de ses lignes, donc le rapport n'est pas vide — l'absence des termes
+        // vendeur est alors un vrai constat, pas un artefact de liste vide.
+        self::assertNotEmpty($manques, 'le rapport doit signaler d\'autres manques, sinon le test ne prouve rien');
+        foreach ([
+            BusinessTerm::SellerStreet,
+            BusinessTerm::SellerPostcode,
+            BusinessTerm::SellerCity,
+            BusinessTerm::SellerCountryCode,
+        ] as $terme) {
+            self::assertNotContains($terme, $manques, sprintf(
+                '%s vient de l\'inscription : InvoiceReadiness ne doit plus le réclamer.',
+                $terme->libelle(),
+            ));
+        }
     }
 
     /**

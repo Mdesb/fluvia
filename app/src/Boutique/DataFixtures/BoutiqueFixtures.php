@@ -34,6 +34,7 @@ use App\Offre\Enum\StatutProduit;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\DataFixtures\ReservationFixtures;
+use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\StatutCreneau;
@@ -237,26 +238,39 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
             $physique->addGrille((new GrilleTarifaire())->setProduit($physique)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('18.00'));
             $manager->persist($physique->getGrilles()->last());
 
-            // --- Produit timed-entry (RG-M3-02) : Ressource + Créneau dédiés Boutique ---
+            // --- Produit timed-entry (RG-M3-02) : Ressource, Activité et Créneau dédiés Boutique ---
+            //
+            // ⚠ C'EST L'ACTIVITÉ QUI RELIE LE PRODUIT À SES CRÉNEAUX, ET NON LA RESSOURCE.
+            //
+            // `Activite::$produitTarifReference` est la relation typée que le planning connaît, et
+            // celle que `CreneauxProduitProvider` interroge depuis l'arbitrage du 07/09. Une visite
+            // programmée dans deux salles est UNE activité et DEUX ressources : passer par la salle
+            // n'en aurait vendu qu'une. `champsPerso['timedEntry']` reste l'interrupteur — un
+            // produit peut servir de tarif de référence à une activité sans être vendu à l'horaire.
             $ressource = (new Ressource())->setEtablissement($etabA)->setCodeType('salle')
                 ->setLibelle('Visite guidée boutique')->setCapacitePropre(20);
             $manager->persist($ressource);
 
-            $debutCreneau = (new \DateTimeImmutable('next monday'))->setTime(10, 0);
-            $creneau = (new Creneau())->setRessource($ressource)
-                ->setDebut($debutCreneau)->setFin($debutCreneau->modify('+1 hour'))
-                ->setCapacite(20)->setEtablissement($etabA)->setStatut(StatutCreneau::Planifie);
-            $manager->persist($creneau);
-
             $timedEntry = (new Produit())->setType($typeEntree)
                 ->setLibelle(['fr' => 'Visite guidée (créneau)'])->setLibelleRecherche('Visite guidée (créneau)')
                 ->setCode(self::PRODUIT_TIMED_ENTRY_CODE)->setCanaux(['guichet', 'en_ligne'])
-                ->setChampsPerso(['timedEntry' => true, 'ressourceId' => (string) $ressource->getId()])
+                ->setChampsPerso(['timedEntry' => true])
                 ->setStatut(StatutProduit::Publie);
             $timedEntry->addEtablissement($etabA);
             $manager->persist($timedEntry);
             $timedEntry->addGrille((new GrilleTarifaire())->setProduit($timedEntry)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('15.00'));
             $manager->persist($timedEntry->getGrilles()->last());
+
+            $activiteVisiteBoutique = (new Activite())->setEtablissement($etabA)
+                ->setLibelle('Visite guidée boutique')->setTypeActivite('culture')->setDureeMinutes(60)
+                ->setTarifReferenceMontant('15.00')->setProduitTarifReference($timedEntry);
+            $manager->persist($activiteVisiteBoutique);
+
+            $debutCreneau = (new \DateTimeImmutable('next monday'))->setTime(10, 0);
+            $creneau = (new Creneau())->setRessource($ressource)->setActivite($activiteVisiteBoutique)
+                ->setDebut($debutCreneau)->setFin($debutCreneau->modify('+1 hour'))
+                ->setCapacite(20)->setEtablissement($etabA)->setStatut(StatutCreneau::Planifie);
+            $manager->persist($creneau);
 
             // --- Panier invité de démonstration (RG-M3-03) ---
             $sessionDemo = (new SessionClient())->setToken(PanierProprietaireGuard::hacher('jeton-demo-boutique'))

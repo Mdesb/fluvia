@@ -14,6 +14,7 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Caisse\Enum\EtatCaisse;
 use App\Caisse\Enum\EtatSession;
 use App\Caisse\Enum\TypeMouvement;
+use App\Compta\Service\RegieHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\Vente;
@@ -55,6 +56,7 @@ final class CloturerSessionProcessor implements ProcessorInterface
         private readonly ScellementHandler $scellement,
         private readonly Security $security,
         private readonly JournalAudit $journal,
+        private readonly RegieHandler $regieHandler,
     ) {
     }
 
@@ -205,6 +207,8 @@ final class CloturerSessionProcessor implements ProcessorInterface
         $data->fermer();
         $data->getCaisse()?->setEtat(EtatCaisse::Securisee);
 
+        $this->alimenterRegie($data, $pdv, $comptages, $fondReporte);
+
         $this->em->flush();
 
         // Branchement de la réponse (RG-CAISSEZ-01/02/09) : le calcul ci-dessus est strictement
@@ -232,6 +236,92 @@ final class CloturerSessionProcessor implements ProcessorInterface
             'horodatageCloture' => $cloture->getHorodatage()->format(\DateTimeInterface::ATOM),
             'message' => 'Caisse fermée.',
         ], JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * L'ARGENT COMPTÉ AU TIROIR PASSE DANS L'ENCAISSE DE LA RÉGIE.
+     *
+     * ── LE MAILLON QUI MANQUAIT, ET TOUT CE QU'IL PARALYSAIT ──────────────────────────────
+     *
+     * `RegieHandler::enregistrerEncaissement()` est la seule méthode qui incrémente
+     * `RegieRecettes::soldeEncaisseCentimes`, et `soldeEncaisseCentimes` n'est pas dans le
+     * groupe d'écriture de l'API. Relevé sur `app/src/` : AUCUN appelant en production.
+     * L'encaisse partait de zéro et ne savait que descendre.
+     *
+     * En cascade : `depassePlafond()` ne pouvait jamais être vrai, `ClotureGuard` ne bloquait
+     * jamais une clôture comptable pour ce motif, et l'écran de versement n'avait jamais rien
+     * à verser. Les tests étaient verts parce qu'ils appellent le handler eux-mêmes.
+     *
+     * ── ⚠ LE MONTANT NUL N'EST PAS UN CAS D'ERREUR, ET C'EST VITAL ────────────────────────
+     *
+     * `enregistrerEncaissement()` lève une 422 sur un montant `<= 0`. Appelée sans garde,
+     * **toute session sans espèces — ou dont le fond reporté égale les espèces comptées —
+     * ferait échouer la clôture de caisse**. Une caisse qu'on ne peut plus fermer le soir est
+     * un incident d'exploitation bien plus grave que le défaut qu'on corrige ici.
+     *
+     * La garde est donc en amont, et elle ne signale rien : une session sans espèces n'a
+     * simplement rien à remettre au régisseur.
+     *
+     * ── CE QUI EST PRIS : LE COMPTÉ, PAS LE THÉORIQUE ─────────────────────────────────────
+     *
+     * `$comptages` porte, pour chaque moyen, le montant RÉELLEMENT compté au tiroir (à défaut
+     * de comptage, le théorique — c'est la règle du processor, pas la nôtre). On en retire le
+     * fond reporté, qui reste dans la caisse pour la session suivante. La différence est ce
+     * que le régisseur emporte, donc ce dont il devient comptable.
+     *
+     * Prendre le théorique ferait porter à l'encaisse un montant qu'un écart de caisse rend
+     * faux le soir même, et l'écart est précisément ce que la Z sert à constater.
+     *
+     * ── AUCUNE RÉGIE : LE CAS NORMAL, PAS UNE OMISSION ────────────────────────────────────
+     *
+     * Un exploitant privé ou un délégataire n'en a pas. On ne cherche donc pas à savoir si
+     * l'établissement en possède une ailleurs : ce serait une requête à chaque clôture de
+     * chaque guichet du produit, pour une ligne d'audit que personne ne lit. Un guichet
+     * oublié se voit là où quelqu'un regarde déjà — la fiche de la régie, dans les
+     * paramètres, liste les guichets qui l'alimentent et dit quand il n'y en a aucun.
+     *
+     * ⚠ LE CONTENU SCELLÉ NE CHANGE PAS. `etatDeRegie` garde exactement sa forme : le sceau
+     * couvre la caisse telle qu'elle a été comptée, et ce mouvement en est une conséquence.
+     * Changer la charge scellée changerait ce que valent les sceaux déjà posés.
+     *
+     * @param list<array<string, string>> $comptages
+     */
+    private function alimenterRegie(
+        SessionCaisse $session,
+        ?\App\Caisse\Entity\PointDeVente $pdv,
+        array $comptages,
+        string $fondReporte,
+    ): void {
+        $regie = $pdv?->getRegie();
+        if ($regie === null) {
+            return;
+        }
+
+        $especesComptees = 0;
+        foreach ($comptages as $ligne) {
+            if (($ligne['moyen'] ?? null) === 'especes') {
+                $especesComptees = $this->calc->centimes($ligne['compte']);
+                break;
+            }
+        }
+
+        $montant = $especesComptees - $this->calc->centimes($fondReporte);
+        if ($montant <= 0) {
+            return;
+        }
+
+        $this->regieHandler->enregistrerEncaissement($regie, $montant);
+
+        // Un solde de régie qui bouge sans trace est inacceptable pour de l'argent public. On
+        // emprunte le mécanisme que ce processor emploie déjà pour l'alerte d'écart.
+        $auteur = $this->security->getUser();
+        $this->journal->enregistrer(
+            'compta.regie_encaissement',
+            'RegieRecettes',
+            (string) $regie->getId(),
+            $session->getEtablissement()?->getId(),
+            $auteur instanceof Utilisateur ? $auteur->getEmail() : null,
+        );
     }
 
     private function mouvementsEspeces(SessionCaisse $session): int

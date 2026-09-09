@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { lireHash } from '../api/url.js'
+import { useEtatUrl } from '../api/url.js'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
+import RegiesRecettes from '../components/RegiesRecettes.jsx'
 import TopologieAcces from './TopologieAcces.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
@@ -386,7 +387,7 @@ function descripteurSaisons(api) {
   }
 }
 
-function descripteurPointsDeVente(api, etabActif, moyens = []) {
+function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
   return {
     titre: 'Points de vente',
     aQuoiCaSert:
@@ -440,9 +441,45 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
         type: 'bool',
         aide: 'Détermine si le paiement par carte passe par un terminal plutôt que par une saisie.',
       },
+      // CE QUI FAIT ENFIN MONTER L'ENCAISSE D'UNE RÉGIE.
+      //
+      // `RegieHandler::enregistrerEncaissement()` n'avait aucun appelant en production : l'encaisse
+      // partait de zéro et ne savait que descendre. Le plafond ne pouvait donc jamais être dépassé,
+      // la clôture comptable n'était jamais bloquée pour ce motif, et l'écran de versement n'avait
+      // jamais rien à verser. La clôture Z alimente désormais l'encaisse, et ce champ lui dit
+      // LAQUELLE.
+      //
+      // ⚠ « AUCUNE » EST LA PREMIÈRE OPTION, ET CE N'EST PAS DE LA COURTOISIE.
+      // `ReferentielEditable` présélectionne `options[0]` à la création. Sans une entrée vide en
+      // tête, créer un guichet le rattacherait SILENCIEUSEMENT à la première régie de la liste —
+      // et son argent partirait dans une encaisse que personne n'a choisie.
+      ...(regies.length > 0 ? [{
+        nom: 'regie',
+        libelle: 'Encaisse pour la régie de recettes',
+        type: 'choix',
+        options: [
+          { valeur: '', libelle: '— aucune —' },
+          ...regies.map((r) => ({
+            valeur: r['@id'] || `/api/regie_recettes/${r.id}`,
+            libelle: r.libelle || 'régie',
+          })),
+        ],
+        aide: 'À la clôture de caisse, les espèces comptées moins le fond laissé dans le tiroir '
+          + 'entrent dans l’encaisse de cette régie. Laissez « aucune » si ce guichet n’encaisse '
+          + 'pas pour une régie de recettes : c’est le cas de tous les exploitants privés.',
+      }] : []),
     ],
     colonnes: [
       { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      ...(regies.length > 0 ? [{
+        cle: 'regie',
+        titre: 'Régie',
+        aide: 'La régie de recettes que les clôtures de ce guichet alimentent.',
+        rendu: (r) => {
+          const cible = regies.find((g) => (g['@id'] || `/api/regie_recettes/${g.id}`) === r.regie)
+          return cible ? <span className="nm">{cible.libelle}</span> : <span className="sub">aucune</span>
+        },
+      }] : []),
       {
         cle: 'tpe',
         titre: 'Terminal de paiement',
@@ -479,15 +516,28 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '' }
+
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
-  const [ouvertureStructure, setOuvertureStructure] = useState(false)
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
   // « Paramètres › Contrôle d'accès » devient PARTAGEABLE — il ne l'était pas —, et le panneau de
   // déménagement de l'ancien `#topologie_acces` peut y déposer qui le cherchait.
   //
-  // Lu UNE FOIS au démarrage : ensuite c'est l'écran qui commande ses onglets. Le relire à chaque
-  // rendu ferait revenir l'onglet d'arrivée sous les doigts de qui vient d'en choisir un autre.
-  const [sousOnglet, setSousOnglet] = useState(() => lireHash().params.sousOnglet || 'entites')
+  // ⚠ IL EST DÉSORMAIS LU *ET* ÉCRIT, par `useEtatUrl`. La version d'avant le lisait une seule
+  // fois au montage, en redoutant qu'un relecture à chaque rendu ramène l'onglet d'arrivée sous
+  // les doigts de qui vient d'en choisir un autre. Cette crainte tombe quand l'adresse suit le
+  // choix : c'est justement parce que l'ancienne version n'écrivait rien qu'il fallait ne lire
+  // qu'une fois.
+  //
+  // ⚠ ET `sousOnglet` DOIT ÊTRE DÉCLARÉ ICI MÊME SI CE LOT NE VISE QUE L'ÉCRAN : `ecrireHash`
+  // réécrit toute la requête à partir des seules clés déclarées. N'y mettre que `structure`
+  // aurait effacé `?sousOnglet=…` de l'adresse dès la première ouverture — on aurait cassé le
+  // lien partageable en croyant en ajouter un.
+  const [params, majParams] = useEtatUrl('parametres', DEFAUTS_URL)
+  const sousOnglet = params.sousOnglet
+  // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
+  // le formulaire dès qu'on reviendrait ici.
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -522,6 +572,44 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       .catch(() => { if (!annule) setMoyens([]) })
     return () => { annule = true }
   }, [etabActif])
+
+  // Les régies déclarées, pour rattacher un guichet à la sienne. Relue à chaque écriture de
+  // référentiel : on en déclare une juste en dessous, dans le même onglet, et la liste doit la
+  // proposer sans recharger la page.
+  const [regies, setRegies] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.regieRecettes()
+      .then((r) => { if (!annule) setRegies(membres(r)) })
+      // Un référentiel illisible ne doit pas empêcher de renommer un point de vente : le champ
+      // disparaît, le reste du formulaire fonctionne.
+      .catch(() => { if (!annule) setRegies([]) })
+    return () => { annule = true }
+  }, [etabActif, versionReferentiels])
+
+  // ── L'OUVERTURE D'UNE STRUCTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // 151 lignes de formulaire, et un geste qui crée un établissement. Il prend la page : le
+  // sous-onglet reste dans l'adresse à côté, donc le retour ramène là d'où l'on vient.
+  if (params.structure === '1') {
+    return (
+      <div className="view">
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => majParams({ structure: '' }, { pousser: true })}
+          style={{ marginBottom: 'var(--esp-large)' }}
+        >
+          ← Retour aux paramètres
+        </button>
+        <OuvrirStructure
+          ouvert
+          onFermer={() => majParams({ structure: '' }, { pousser: true })}
+          onOuverte={() => window.location.reload()}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -567,7 +655,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
                   dénomination, le SIRET, le numéro de TVA et l’adresse du siège. La structure est
                   ouverte avec son point de vente, prête à encaisser.
                 </p>
-                <button className="btn primary" type="button" onClick={() => setOuvertureStructure(true)}>
+                <button className="btn primary" type="button" onClick={() => majParams({ structure: '1' }, { pousser: true })}>
                   Ouvrir une structure
                 </button>
               </div>
@@ -673,12 +761,20 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
-            descripteur={descripteurPointsDeVente(api, etabActif, moyens)}
+            descripteur={descripteurPointsDeVente(api, etabActif, moyens, regies)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
           <MoyensPaiement etabActif={etabActif} />
+          {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
+              Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
+              elle, ne se declarait a AUCUN endroit. `POST /api/regie_recettes` existait, et le
+              seul code qui instanciait l'entite etait celui des jeux d'essai.
+              Sa place est ici par le critere de R21 : le libelle, le plafond et l'acte se
+              reglent a l'arrete puis on n'y revient plus. Verser, en revanche, reste dans
+              Comptabilite -- c'est un geste quotidien. */}
+          <RegiesRecettes etabActif={etabActif} droits={droits} rafraichir={versionReferentiels} onEcrit={referentielEcrit} />
         </div>
       )}
 
@@ -692,11 +788,6 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           Posée à l'intérieur de l'un d'eux — ce qui est arrivé deux fois — elle n'existe pas quand
           on clique depuis un autre onglet : le bouton ne fait rien, sans erreur ni trace. Le bloc
           « droits » court sur quatre cents lignes, ce qui rend la faute facile et invisible. */}
-      <OuvrirStructure
-        ouvert={ouvertureStructure}
-        onFermer={() => setOuvertureStructure(false)}
-        onOuverte={() => window.location.reload()}
-      />
     </div>
   )
 }
