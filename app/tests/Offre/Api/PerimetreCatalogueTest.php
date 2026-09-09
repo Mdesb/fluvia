@@ -138,15 +138,22 @@ final class PerimetreCatalogueTest extends OffreApiTestCase
         $client = static::createClient();
         $token = $this->jeton($client, SocleFixtures::LECTEUR_EMAIL, SocleFixtures::LECTEUR_MDP);
         $idB = $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
+        $idA = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
 
         $client->request('GET', '/api/produits', [
             'headers' => ['Authorization' => 'Bearer ' . $token, 'X-Etablissement' => $idB],
         ]);
 
         self::assertResponseStatusCodeSame(
-            403,
+            404,
             'Un en-tête forgé vers un site sans affectation doit être refusé avant toute lecture.',
         );
+
+        // TÉMOIN DU VOTER (07/09) : l'en-tête EST dans la portée (le listener laisse passer),
+        // mais la permission d'écriture manque (LECTEUR n'a que *.lire) → le voter doit refuser.
+        // Sans ce cas, depuis e915c94e ce test ne prouve plus que le refus du listener (404).
+        $client->request('POST', '/api/categories', ['headers' => ['Authorization' => 'Bearer ' . $token, 'X-Etablissement' => $idA], 'json' => []]);
+        self::assertResponseStatusCodeSame(403, 'Le voter refuse une écriture dans la portée sans la permission requise (le listener, lui, a laissé passer l\'en-tête).');
     }
 
     /** @return list<string> */

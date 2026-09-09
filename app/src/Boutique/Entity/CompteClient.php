@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Boutique\State\CreerCompteClientProcessor;
 use App\Boutique\State\MeCompteClientProvider;
+use App\Boutique\State\VerifyAccountEmailProcessor;
 use App\Boutique\State\MesBilletsProvider;
 use App\Boutique\State\MesCommandesProvider;
 use App\Boutique\State\SouscrireAbonnementEnLigneProcessor;
@@ -42,6 +43,15 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PUBLIC_ACCESS')",
             processor: CreerCompteClientProcessor::class,
+        ),
+        // ⚠ PUBLIQUE PAR NECESSITE : on clique ce lien depuis sa boite mail, donc sans session.
+        //    C'est le jeton qui authentifie, et lui seul — d'ou le debit limite dans le processeur.
+        new Post(
+            uriTemplate: '/boutique/comptes/verifier-email',
+            read: false,
+            input: false,
+            security: "is_granted('PUBLIC_ACCESS')",
+            processor: VerifyAccountEmailProcessor::class,
         ),
         new Get(
             uriTemplate: '/boutique/comptes/me',
@@ -119,6 +129,28 @@ class CompteClient
     public function setUtilisateur(?Utilisateur $utilisateur): self
     {
         $this->utilisateur = $utilisateur;
+
+        return $this;
+    }
+
+    /**
+     * Le moment ou l'adresse a ete prouvee. `null` = jamais confirmee.
+     *
+     * ⚠ AUCUN GROUPE DE SERIALISATION : ni lue ni ecrite par l'API. Un champ « je suis verifie »
+     * qu'un compte pourrait ecrire lui-meme ne prouverait rien ; il se pose par
+     * `VerifyAccountEmailProcessor`, qui exige le jeton recu par courriel.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $emailVerifiedAt = null;
+
+    public function getEmailVerifiedAt(): ?\DateTimeImmutable
+    {
+        return $this->emailVerifiedAt;
+    }
+
+    public function setEmailVerifiedAt(?\DateTimeImmutable $emailVerifiedAt): self
+    {
+        $this->emailVerifiedAt = $emailVerifiedAt;
 
         return $this;
     }

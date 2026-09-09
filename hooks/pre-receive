@@ -180,6 +180,12 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-numeros-de-decision.php
     fi
 
+    # Metiers sans ligne (n°55) — il se tait de lui-meme sur un arbre qui ne porte pas encore
+    # `TradeFallback.php` ET ou personne ne le cite ; voir son en-tete.
+    if [ -f "$ARBRE/bin/garde-fou-metiers-sans-ligne.php" ]; then
+        lancer garde-fou-metiers-sans-ligne.php
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
 

@@ -157,7 +157,28 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     // `relations-muettes.py` cessait de voir les groupes de cette propriete, et le compte des
     // relations muettes MONTAIT au lieu de baisser. Une variante de forme qui n'apporte rien
     // coute la mesure.
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'message:read', 'document_version:read', 'session:read', 'sos:read'])]
+    //
+    // `qualif:read` / `affect:read` s'ajoutent pour la Piscine : `QualificationEncadrant::$encadrant`
+    // portait deja les deux groupes, mais AUCUNE propriete d'`Utilisateur` n'y etait — la relation
+    // repartait donc en IRI, et les trois surfaces de l'onglet « Qualifications d'encadrants »
+    // affichaient « encadrant 5540c580… » : la liste, la modale « Renouveler le diplome » et le
+    // choix de la modale d'affectation. Le repli de `libelleEncadrant()` faisait son travail ;
+    // c'est la charge utile qui etait pauvre.
+    //
+    // ⚠ PORTEE MESUREE AVANT D'ELARGIR, parce que ces deux groupes ne sont PAS reserves a la
+    // Piscine. `qualif:read` est le groupe de normalisation de TROIS ressources sans rapport —
+    // `Piscine\QualificationEncadrant`, `Musee\QualificationLangueGuide`, `Compta\QualificationEquipement`
+    // — et `affect:read` de `Piscine\AffectationEncadrant`, qui embarque aussi `CreneauBassin`.
+    // Le nom ne sort donc que la ou un `Utilisateur` est reellement embarque sous l'un des deux :
+    // `QualificationEncadrant::$encadrant`, et lui seul. `Musee\Guide::$utilisateur` porte
+    // `guide:read`/`guide:write` et non `qualif:read` ; `QualificationEquipement` et `CreneauBassin`
+    // ne referencent aucun `Utilisateur`. Zero surface collaterale — mais la mesure vaut pour AUJOURD'HUI :
+    // brancher un `Utilisateur` sur une de ces ressources l'exposerait sans que rien ne le signale.
+    //
+    // L'e-mail reste dehors, pour la meme raison qu'au-dessus : nommer l'encadrant d'un creneau
+    // demande de savoir QUI encadre, pas comment le joindre. Le repli du frontal le prefere quand il
+    // est la (`e.email || e.nom`) et retombe sur le nom quand il ne l'est pas — c'est le cas ici.
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'message:read', 'document_version:read', 'session:read', 'sos:read', 'qualif:read', 'affect:read'])]
     private string $nom = '';
 
     /**

@@ -96,6 +96,7 @@ const NAV = [
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.
       { id: 'sport', ic: 'fitness', label: 'Sport & fitness', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
+      { id: 'abonnements', ic: 'subscriptions', label: 'Abonnements', perms: ['sport.lire', 'sport.gerer_abonnement'] },
     ],
   },
   {

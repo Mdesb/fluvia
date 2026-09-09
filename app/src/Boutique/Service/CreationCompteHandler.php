@@ -11,12 +11,15 @@ use App\Boutique\Entity\Vitrine;
 use App\Crm\Entity\Client;
 use App\Crm\Enum\StatutClient;
 use App\Crm\Enum\TypeClient;
+use App\Boutique\Notification\AccountEmailVerificationMailer;
 use App\Securite\Entity\Affectation;
+use App\Securite\Entity\EmailVerificationToken;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Enum\StatutUtilisateur;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -53,6 +56,8 @@ final class CreationCompteHandler
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly PasswordPolicy $passwords,
+        private readonly AccountEmailVerificationMailer $verification,
+        private readonly LoggerInterface $journal,
     ) {
     }
 
@@ -122,21 +127,69 @@ final class CreationCompteHandler
         $affectation->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement);
         $this->em->persist($affectation);
 
+        // ⚠ LA PREUVE D'ADRESSE, SANS LAQUELLE ON NE RATTACHE RIEN. Un achat en invite laisse ses
+        //    commandes sans compte ; les rendre au compte cree ensuite avec la meme adresse suppose
+        //    d'avoir prouve que l'adresse est bien la sienne. Le clair part par courriel, la table
+        //    n'en garde que le SHA-256.
+        $jetonClair = bin2hex(random_bytes(32));
+        $jeton = new EmailVerificationToken();
+        $jeton->setUtilisateur($utilisateur)
+            ->setJeton(hash('sha256', $jetonClair))
+            ->setAdresse($email);
+        $this->em->persist($jeton);
+
         $this->em->flush();
+
+        // ⚠ APRES LE FLUSH, ET SANS FAIRE ECHOUER L'INSCRIPTION. Un relais indisponible ne doit pas
+        //    empecher un compte d'exister : il resterait non verifie, ce qui est son etat reel.
+        //    On journalise pour que l'absence d'envoi soit constatable, jamais silencieuse.
+        try {
+            if (!$this->verification->envoyer($jeton, $jetonClair)) {
+                $this->journal->warning('Compte cree sans courriel de confirmation : BOUTIQUE_BASE_URL absente.', [
+                    'compte' => (string) $compte->getId(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->journal->error('Envoi du courriel de confirmation impossible.', [
+                'compte' => (string) $compte->getId(),
+                'erreur' => $e->getMessage(),
+            ]);
+        }
 
         return $compte;
     }
 
-    /** Trouve ou crée le rôle système RoleClientFinal (idempotent, §1.4/T2 du plan). */
+    /**
+     * Trouve ou crée le rôle système RoleClientFinal, ET réconcilie ses permissions.
+     *
+     * ⚠ **CETTE MÉTHODE SE DISAIT « IDEMPOTENTE » ALORS QU'ELLE NE L'ÉTAIT QUE SUR LE CONTENANT.**
+     * Sa version précédente sortait sur `if ($role instanceof Role) return $role;` : le rôle
+     * trouvé était renvoyé **sans qu'on regarde jamais ce qu'il contient**. Les douze permissions
+     * n'étaient posées qu'au moment de la création.
+     *
+     * Constaté en préproduction le 07/09 : le rôle existait avec **zéro permission**. Deux comptes
+     * clients le portaient, et l'espace client rendait « Access Denied » sur ses commandes et ses
+     * billets — `boutique.lire_soi` étant exigé par `CompteClient`. **Aucune ré-exécution ne
+     * pouvait réparer ça** : chaque création de compte retrouvait le rôle vide et repartait avec.
+     *
+     * ⚠ Le mot « idempotent » dans l'ancien docblock est précisément ce qui décourageait d'aller
+     * vérifier. Un contrôle qui teste la présence du contenant et annonce le contenu est pire
+     * qu'un contrôle absent : il rassure.
+     *
+     * ⚠ **On AJOUTE ce qui manque, on ne RETIRE rien.** Un rôle qu'un exploitant a enrichi à la
+     * main ne doit pas être amputé par une création de compte — la liste ci-dessus est un
+     * plancher, pas une définition exhaustive.
+     */
     private function roleClientFinal(): Role
     {
         $role = $this->em->getRepository(Role::class)->findOneBy(['nom' => self::ROLE_CLIENT_FINAL_NOM]);
-        if ($role instanceof Role) {
-            return $role;
+
+        if (!$role instanceof Role) {
+            $role = new Role();
+            $role->setNom(self::ROLE_CLIENT_FINAL_NOM)->setEstModele(false);
+            $this->em->persist($role);
         }
 
-        $role = new Role();
-        $role->setNom(self::ROLE_CLIENT_FINAL_NOM)->setEstModele(false);
         foreach (self::PERMISSIONS_CLIENT_FINAL as [$module, $action]) {
             $permission = $this->em->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
             if (!$permission instanceof Permission) {
@@ -144,9 +197,11 @@ final class CreationCompteHandler
                 $permission->setModule($module)->setAction($action);
                 $this->em->persist($permission);
             }
-            $role->addPermission($permission);
+
+            if (!$role->getPermissions()->contains($permission)) {
+                $role->addPermission($permission);
+            }
         }
-        $this->em->persist($role);
 
         return $role;
     }

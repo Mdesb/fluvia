@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
+import { useEtatUrl } from '../api/url.js'
 
 // RELANCE DES RECETTES — huit routes servies, aucun écran, et un module qui n'a jamais tourné.
 //
@@ -139,11 +139,20 @@ function statutTentative(code) {
   return badge(STATUTS_TENTATIVE[code] || [code || '—', 'mut'])
 }
 
+const DEFAUTS_URL = { tab: 'dossiers', dossier: '', politique: '' }
+
 export default function RelanceRecettes({ etabActif, droits }) {
   const peutConfigurer = aLeDroit(droits, 'revenue_recovery.configure')
   const peutPiloter = aLeDroit(droits, 'revenue_recovery.manage')
 
-  const [onglet, setOnglet] = useState('dossiers')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE LES ÉCRANS, ET PAS APRÈS. Sans lui, un
+  // F5 sur l'écran d'une politique ramènerait bien l'écran, mais le « retour » retomberait sur
+  // l'onglet « Dossiers » — on reviendrait d'un écran vers une liste qu'on ne regardait pas.
+  const [params, majParams] = useEtatUrl('relance_recettes', DEFAUTS_URL)
+  const onglet = params.tab
+  // Changer d'onglet ferme les écrans de niveau 2 : un identifiant laissé dans l'adresse
+  // rouvrirait un écran de l'autre onglet dès qu'on y reviendrait.
+  const setOnglet = (v) => majParams({ tab: v, dossier: '', politique: '' })
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -156,8 +165,6 @@ export default function RelanceRecettes({ etabActif, droits }) {
   const [tentativesTronquees, setTentativesTronquees] = useState(false)
 
   const [filtreStatut, setFiltreStatut] = useState('active')
-  const [dossierOuvert, setDossierOuvert] = useState(null)
-  const [politiqueOuverte, setPolitiqueOuverte] = useState(null)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -229,7 +236,7 @@ export default function RelanceRecettes({ etabActif, droits }) {
     try {
       await api.arreterDossierRelance(idDe(dossier), motif)
       setSucces('Dossier arrêté : les relances qui restaient ne partiront pas.')
-      setDossierOuvert(null)
+      majParams({ dossier: '' }, { pousser: false })
       await charger()
     } catch (e) {
       setErreur(e?.message || "L'arrêt du dossier a échoué.")
@@ -243,11 +250,100 @@ export default function RelanceRecettes({ etabActif, droits }) {
       if (id) await api.majPolitiqueRelance(id, valeurs)
       else await api.creerPolitiqueRelance(valeurs)
       setSucces(id ? 'Politique enregistrée.' : 'Politique créée.')
-      setPolitiqueOuverte(null)
+      majParams({ politique: '' }, { pousser: false })
       await charger()
     } catch (e) {
       setErreur(e?.message || "L'enregistrement a échoué.")
     }
+  }
+
+  // ── LES DEUX ÉCRANS DE NIVEAU 2, QUAND L'ADRESSE EN DÉSIGNE UN ──────────────────────────────
+  //
+  // ⚠ TROIS ÉTATS AVANT L'ÉCRAN, ET AUCUN NE DOIT SE FAIRE PASSER POUR UN AUTRE. « on n'a pas
+  // encore lu », « on n'a pas pu lire » et « cet identifiant ne désigne rien » mènent au même
+  // écran vide si on les confond — et pour une politique, un écran vide qu'on enregistre EN CRÉE
+  // une. `dossiers` et `politiques` partent à `[]` et non à `null` : c'est `chargement` et
+  // `erreur` qui portent la distinction, pas la longueur de la liste.
+  const retourListe = (
+    <button
+      className="btn ghost sm"
+      type="button"
+      onClick={() => majParams({ dossier: '', politique: '' }, { pousser: true })}
+      style={{ marginBottom: 'var(--esp-large)' }}
+    >
+      ← Retour
+    </button>
+  )
+
+  if (params.dossier || params.politique) {
+    if (chargement) {
+      return (
+        <div className="view large">
+          {retourListe}
+          <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
+        </div>
+      )
+    }
+    if (erreur) {
+      return (
+        <div className="view large">
+          {retourListe}
+          <div className="banner banner-error">{erreur}</div>
+        </div>
+      )
+    }
+  }
+
+  if (params.dossier) {
+    const ouvert = dossiers.find((d) => String(idDe(d)) === String(params.dossier))
+    return (
+      <div className="view large">
+        {retourListe}
+        {ouvert ? (
+          <DetailDossier
+            dossier={ouvert}
+            tentatives={tentativesParDossier[idDe(ouvert)] || []}
+            peutPiloter={peutPiloter}
+            onFermer={() => majParams({ dossier: '' }, { pousser: true })}
+            onArreter={arreter}
+          />
+        ) : (
+          <div className="banner banner-warn">
+            Ce dossier n’est plus dans la file — il a sans doute été traité depuis que ce lien a
+            été copié. Rien n’a été perdu : revenez à la liste.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (params.politique) {
+    const creation = params.politique === 'nouvelle'
+    const ouverte = creation
+      ? null
+      : politiques.find((p) => String(idDe(p)) === String(params.politique))
+    if (!creation && !ouverte) {
+      return (
+        <div className="view large">
+          {retourListe}
+          <div className="banner banner-warn">
+            Cette politique n’existe plus — elle a sans doute été supprimée depuis que ce lien a
+            été copié. Revenez à la liste plutôt que d’en recréer une.
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="view large">
+        {retourListe}
+        <EditionPolitique
+          politique={ouverte}
+          dejaPosees={politiques.map((p) => p.triggerType)}
+          onFermer={() => majParams({ politique: '' }, { pousser: true })}
+          onEnregistrer={enregistrerPolitique}
+        />
+      </div>
+    )
   }
 
   return (
@@ -291,7 +387,10 @@ export default function RelanceRecettes({ etabActif, droits }) {
         <OngletPolitiques
           politiques={politiques}
           peutConfigurer={peutConfigurer}
-          onEditer={setPolitiqueOuverte}
+          onEditer={(p) => majParams(
+            { politique: p === 'nouvelle' ? 'nouvelle' : String(idDe(p)) },
+            { pousser: true },
+          )}
         />
       ) : (
         <OngletDossiers
@@ -303,28 +402,10 @@ export default function RelanceRecettes({ etabActif, droits }) {
           politiquesActives={politiquesActives}
           politiquesTotal={politiques.length}
           onOuvrirPolitiques={() => setOnglet('politiques')}
-          onOuvrir={setDossierOuvert}
+          onOuvrir={(d) => majParams({ dossier: String(idDe(d)) }, { pousser: true })}
         />
       )}
 
-      {dossierOuvert && (
-        <DetailDossier
-          dossier={dossierOuvert}
-          tentatives={tentativesParDossier[idDe(dossierOuvert)] || []}
-          peutPiloter={peutPiloter}
-          onFermer={() => setDossierOuvert(null)}
-          onArreter={arreter}
-        />
-      )}
-
-      {politiqueOuverte && (
-        <EditionPolitique
-          politique={politiqueOuverte === 'nouvelle' ? null : politiqueOuverte}
-          dejaPosees={politiques.map((p) => p.triggerType)}
-          onFermer={() => setPolitiqueOuverte(null)}
-          onEnregistrer={enregistrerPolitique}
-        />
-      )}
     </div>
   )
 }
@@ -452,7 +533,8 @@ function DetailDossier({ dossier, tentatives, peutPiloter, onFermer, onArreter }
   }
 
   return (
-    <Modal open onClose={onFermer} titre={libelleDeclencheur(dossier.triggerType)} taille="lg">
+    <>
+      <h2>{libelleDeclencheur(dossier.triggerType)}</h2>
       <div className="deflist">
         <div><span>Statut</span><span>{statutDossier(dossier.status)}</span></div>
         <div><span>Objet</span><span className="mono">{dossier.subjectType} {dossier.subjectRef}</span></div>
@@ -547,7 +629,7 @@ function DetailDossier({ dossier, tentatives, peutPiloter, onFermer, onArreter }
           <button type="button" className="btn" onClick={onFermer}>Fermer</button>
         </div>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -706,12 +788,8 @@ function EditionPolitique({ politique, dejaPosees, onFermer, onEnregistrer }) {
   }
 
   return (
-    <Modal
-      open
-      onClose={onFermer}
-      titre={creation ? 'Nouvelle politique de relance' : libelleDeclencheur(politique.triggerType)}
-      taille="lg"
-    >
+    <>
+      <h2>{creation ? 'Nouvelle politique de relance' : libelleDeclencheur(politique.triggerType)}</h2>
       {creation ? (
         <div className="field">
           <label htmlFor="rr-decl">Déclencheur</label>
@@ -852,6 +930,6 @@ function EditionPolitique({ politique, dejaPosees, onFermer, onEnregistrer }) {
           {enCours ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
-    </Modal>
+    </>
   )
 }

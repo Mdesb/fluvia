@@ -31,6 +31,7 @@ import Projets from './pages/Projets.jsx'
 import Documents from './pages/Documents.jsx'
 import Social from './pages/Social.jsx'
 import Sport from './pages/Sport.jsx'
+import Abonnements from './pages/Abonnements.jsx'
 
 // Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
@@ -537,6 +538,7 @@ export default function App() {
       {onglet === 'imports' && <Imports etabActif={etabActif} droits={droits} />}
       {onglet === 'social' && <Social etabActif={etabActif} droits={droits} />}
       {onglet === 'sport' && <Sport etabActif={etabActif} droits={droits} />}
+      {onglet === 'abonnements' && <Abonnements droits={droits} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
