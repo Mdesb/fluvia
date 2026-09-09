@@ -7004,3 +7004,48 @@ porte d'entrée ; personne ne pousse directement sur GitHub. C'est le déploieme
 propage `origin/main` vers `github/main` (`git -C /home/debian/billetterie push github main`).
 Un secret committé par erreur serait désormais public en quelques secondes : le garde-fou
 `secrets` ne suffit plus, relisez votre diff.
+
+
+### 2026-09-08 · claude (module groupes) → @all, et surtout qui touche la verticale Musée · Absorption musée — Phase A LIVRÉE dans `App\Group`, Phase B à coordonner
+
+Contexte : Maxime a tranché que le module Groupes **généralise/absorbe** `Musee\DossierGroupeScolaire`, en **chantier coordonné** (plan + 2 phases dans `COORDINATION/specs/module-groupes.md`).
+
+**Phase A — faite, additive, aucune touche au musée** (branche `feature/module-groupes`) :
+- **Grain par réservation** — `GroupBooking.grain` (`per_group` défaut / `per_person`), choisi à la création. À la confirmation, `per_person` crée **N** `Reservation` (quantity 1, une par visiteur — le grain visiteur du musée, pour billet/accès nominatif) ; `per_group` en crée **1** (quantity N). L'ancien FK unique `jaugeReservation` est devenu une collection (join table) ; l'annulation libère les N. Commit `16cb4403`.
+- **Gratuités transverses** — `GroupGratuiteContingent` (enveloppe par établissement : quota / consommé / restant) + `GroupGratuite` (octroi depuis un contingent, refus au-delà du quota 409, révocation qui recrédite). Hors du décompte payant du devis (`nbPayants = effectif − gratuités`), comme le musée. **Objectif : le musée consommera CES gratuités au lieu des siennes** (`Gratuite`/`ContingentGratuite`/`AccorderGratuiteHandler`). Commit `1a4b6080`.
+- 18 tests / 136 assertions, garde-fous 54/54.
+
+**Phase B — NON commencée, verticale Musée PARTAGÉE, données vivantes + NF525 en aval → je ne la mène pas seul.** Elle comprend : migration write-only/idempotente/rejouable des dossiers existants (jamais de suppression ni d'écrasement, avec témoin de comptage), rebranchement de `CreerDossierGroupeProcessor` / écrans musée sur `App\Group`, puis dépréciation de `DossierGroupeScolaire`. Direction de dépendance : `Musee → App\Group` uniquement.
+
+**Demande** : avant que quiconque touche à la verticale Musée sur ce sujet, un mot ici — pour ne pas diverger de `App\Group`. Je rouvrirai la Phase B avec une note dédiée quand Maxime en donnera le feu, pas avant.
+
+
+### 2026-09-08 · claude (module groupes) → @all, et surtout qui travaille la verticale Musée · J'OUVRE la Phase B de l'absorption musée — je commence par une migration ADDITIVE
+
+Maxime a donné le feu (« 1 puis 2 en toute autonomie »). Phase A est vérifiée à l'exécution (grain + gratuités, en rôle réel). J'ouvre la Phase B. Direction de dépendance : **Musee → App\Group**, jamais l'inverse.
+
+**Ordre que je suis, du plus sûr au plus invasif :**
+1. **Migration de données ADDITIVE (write-only, idempotente, rejouable, témoin de comptage)** — pour chaque `Musee\DossierGroupeScolaire`, créer son miroir `ParticipantGroup` + `GroupBooking` dans `App\Group`. **Aucun dossier n'est supprimé ni écrasé** ; les `Reservation`/`Gratuite`/`Vente` existantes ne sont pas touchées. Marqueur d'idempotence pour ne jamais migrer deux fois. Réversible (supprimer les miroirs suffit). Mapping : `etablissementScolaire`→label(+School), `effectif`/`accompagnateurs`, `creneauEntree`→créneau, `dateOption`→optionExpiresAt, `statutPaiement`→status+paymentStatus, `venteRattachee` reporté tel quel (la piste NF525 reste intacte), `guidesAffectes` **gardé côté musée** (pas d'équivalent transverse).
+2. **Rebranch** de `CreerDossierGroupeProcessor` / écrans musée sur `App\Group` — **change le comportement d'une verticale partagée**, donc APRÈS que la sémantique soit réconciliée par écrit : grain visiteur (couvert par `grain=per_person`), gratuités (contingents transverses déjà là), et surtout la vente DIFFÉRÉE en `VenteUnite` (aucune `Vente` tant que `statutPaiement ≠ paye`, RG-MUS-03) qu'il faut préserver. Je ne toucherai pas au chemin de l'argent à l'aveugle.
+3. **Dépréciation** de `DossierGroupeScolaire` — en dernier, table conservée le temps de valider.
+
+**Si tu tiens la verticale Musée** : dis-le ici avant de modifier `DossierGroupeScolaire` / ses processeurs, qu'on ne diverge pas. L'étape 1 ne te gêne pas (elle n'écrit que dans `App\Group`). Je signalerai chaque étape franchie.
+
+
+### 2026-09-08 · claude (module groupes) → @all, verticale Musée · Phase B : B1 + B2 FAITS (dans App\Group, additif) ; B3 (rebranch) reste, la main est à qui tient le musée
+
+Avancement, tout additif, rien touché côté musée :
+- **B1** (`7b4b3f7a`) : la confirmation `App\Group` porte la sémantique argent du musée — payant en `vente_unite` différé (montantDu 0.00, aucune `Vente`), gratuit en `gratuit`. Vérifié par test.
+- **B2** (`20720532`) : commande `musee:dossiers:migrer-vers-group`, write-only / idempotente / réversible ; crée les miroirs `ParticipantGroup`+`GroupBooking` sans toucher les dossiers.
+
+**B3 (rebranch) n'est PAS commencé** : rerouter création/confirmation/liste des dossiers (backend + `Musee.jsx` + `client.js`) sur `App\Group` et migrer les tests musée. Ça CHANGE le comportement de la verticale partagée. Comme annoncé, je laisse la main : si tu tiens le musée, dis ici comment tu veux qu'on procède (je le fais, ou on se coordonne) avant que quiconque touche `DossierGroupeScolaire` / ses processeurs. La sémantique argent est déjà prête côté `App\Group`, donc B3 est surtout du câblage.
+
+
+### 2026-09-08 · claude (module groupes) → @all, verticale Musée · B3 FAIT — absorption complète de l'écran dossiers scolaires
+
+Arbitrage Maxime « absorption complète » exécuté (commit `62f772d8`) :
+- **Front** : la section « dossiers scolaires » de `Musee.jsx` est retirée ; l'onglet renvoie vers l'écran **Groupes** (`allerA('groupes')`). 4 aides `client.js` retirées.
+- **Back** : `DossierGroupeScolaire` / `ContingentGratuite` / `Gratuite` ne sont plus exposés en API ; processeurs + handlers (`Creer/Confirmer Dossier`, `AccorderGratuite`) retirés ; `DossierGroupeScolaire` sorti de l'audit. **Entités et tables conservées** (données intactes, dossiers déjà miroités par la commande de migration).
+- **Tests** : `GratuiteScolaireTest` retiré ; CA-5/CA-6 sont couverts côté Groupes.
+
+Vert : Musée 22/156, Groupes 20/167, garde-fous 54/54 (écart 524→518, entités exposées 279→276). **Reste B4** : retirer les entités/tables dépréciées après une période de validation — non urgent, les tables ne gênent personne. Je le ferai sur ton feu, ou la session musée peut le prendre.

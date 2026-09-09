@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import Liste, { dateHeureFr, jourLocal } from '../components/Liste.jsx'
+import Liste from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import ReversementsOta from '../components/ReversementsOta.jsx'
 import { api, membres } from '../api/client.js'
+import { allerA } from '../api/url.js'
 import AudioguidesMusee from '../components/AudioguidesMusee.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -57,7 +58,7 @@ export default function Musee({ etabActif, droits }) {
       {onglet === 'salles' && <SallesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'audioguides' && <AudioguidesMusee etabActif={etabActif} droits={droits} />}
       {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} />}
-      {onglet === 'groupes' && <GroupesSection etabActif={etabActif} droits={droits} />}
+      {onglet === 'groupes' && <GroupesRenvoi />}
       {onglet === 'reversements' && (
         <ReversementsOta etabActif={etabActif} droits={droits} />
       )}
@@ -519,414 +520,31 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
 }
 
 // --------------------------------------------------------------------------------------------
-// Les dossiers de groupes scolaires.
+// Groupes scolaires — absorbés par le module transverse Groupes (renvoi, absorption Phase B).
 // --------------------------------------------------------------------------------------------
-function GroupesSection({ etabActif, droits }) {
-  const [dossiers, setDossiers] = useState([])
-  const [creneaux, setCreneaux] = useState([])
-  const [chargement, setChargement] = useState(true)
-  const [erreur, setErreur] = useState(null)
-  const [succes, setSucces] = useState(null)
-  const [nouveau, setNouveau] = useState(false)
-  const [aConfirmer, setAConfirmer] = useState(null)
-
-  const peutGerer = aUnDesDroits(droits, ['musee.gerer_dossier_groupe', 'musee.gerer'])
-
-  const recharger = useCallback(async () => {
-    setChargement(true)
-    try {
-      const [d, c] = await Promise.all([api.museeDossiersGroupe(), api.reservationCreneaux()])
-      setDossiers(membres(d))
-      setCreneaux(membres(c))
-    } catch (e) {
-      setErreur(e.message)
-    } finally {
-      setChargement(false)
-    }
-  }, [etabActif])
-
-  useEffect(() => {
-    recharger()
-  }, [recharger])
-
-  const enOption = dossiers.filter((d) => d.statutPaiement === 'en_option')
-  const suite = dossiers.filter((d) => d.statutPaiement !== 'en_option')
-  const aujourdHui = jourLocal()
-
+function GroupesRenvoi() {
   return (
-    <>
-      {erreur && <div className="banner banner-error">{erreur}</div>}
-      {succes && <div className="banner banner-ok">{succes}</div>}
-
-      <section className="card">
-        <div className="card-h">
-          <h3>Dossiers en option</h3>
-          <span className="sub">
-            {enOption.length === 0 ? 'aucune option en cours' : `${enOption.length} à confirmer`}
-          </span>
-          {peutGerer && (
-            <div className="r">
-              <button className="btn primary sm" type="button" onClick={() => setNouveau(true)}>
-                ＋ Nouveau dossier
-              </button>
-            </div>
-          )}
+    <section className="card">
+      <div className="card-h">
+        <h3>Groupes scolaires</h3>
+        <span className="sub">gérés dans le module Groupes</span>
+      </div>
+      <div className="card-b">
+        <div className="empty">
+          Les dossiers de groupes scolaires se gèrent désormais dans le module <b>Groupes</b> —
+          transverse à tous les métiers. On y crée un groupe, on réserve un créneau au grain
+          visiteur (un billet par personne), on accorde des gratuités depuis un contingent, et on facture.
         </div>
-        <div className="card-b">
-          {chargement ? (
-            <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
-          ) : enOption.length === 0 ? (
-            <div className="empty">
-              Aucun dossier en option. Une classe réserve d'abord une option — un créneau tenu sans
-              engagement — puis le dossier se confirme quand l'école s'engage.
-            </div>
-          ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>École</th>
-                  <th className="num">Élèves</th>
-                  <th className="num">Accompagnateurs</th>
-                  <th>Option jusqu'au</th>
-                  {peutGerer && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {enOption.map((d) => {
-                  const perimee = d.dateOption && String(d.dateOption).slice(0, 10) < aujourdHui
-                  return (
-                    <tr key={d.id}>
-                      <td><span className="nm">{d.etablissementScolaire || '—'}</span></td>
-                      <td className="num">{d.effectif}</td>
-                      <td className="num">{d.accompagnateurs}</td>
-                      <td>
-                        {d.dateOption ? (
-                          <>
-                            {String(d.dateOption).slice(0, 10)}
-                            {perimee && (
-                              <div>
-                                <span className="badge crit">option échue</span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <span className="sub">sans échéance</span>
-                        )}
-                      </td>
-                      {peutGerer && (
-                        <td className="num">
-                          <button className="btn primary sm" type="button" onClick={() => setAConfirmer(d)}>
-                            Confirmer
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {enOption.some((d) => d.dateOption && String(d.dateOption).slice(0, 10) < aujourdHui) && (
-            <div className="banner banner-warn">
-              Une ou plusieurs options ont dépassé leur échéance. Le créneau reste tenu tant que le
-              dossier n'est pas annulé : vérifiez auprès de l'école avant de le libérer.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {suite.length > 0 && (
-        <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
-          <div className="card-h">
-            <h3>Dossiers engagés</h3>
-            <span className="sub">bon de commande, mandat ou payés</span>
-          </div>
-          <div className="card-b">
-            <table className="tbl">
-              <thead>
-                <tr><th>École</th><th className="num">Élèves</th><th>Paiement</th></tr>
-              </thead>
-              <tbody>
-                {suite.map((d) => (
-                  <tr key={d.id}>
-                    <td>{d.etablissementScolaire || '—'}</td>
-                    <td className="num">{d.effectif}</td>
-                    <td>
-                      <span className={`badge ${d.statutPaiement === 'paye' ? 'good' : 'info'}`}>
-                        {mot(d.statutPaiement)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <NouveauDossierModal
-        open={nouveau}
-        creneaux={creneaux}
-        onClose={() => setNouveau(false)}
-        onFait={(m) => { setNouveau(false); setSucces(m); recharger() }}
-        onErreur={setErreur}
-      />
-
-      <ConfirmationDossierModal
-        dossier={aConfirmer}
-        onClose={() => setAConfirmer(null)}
-        onFait={(m) => { setAConfirmer(null); setSucces(m); recharger() }}
-        onErreur={setErreur}
-      />
-    </>
-  )
-}
-
-// Confirmer un dossier : l'engagement de l'école, et le décompte des gratuités.
-//
-// LES GRATUITÉS SONT LE VRAI SUJET, ET ELLES SE DÉCIDENT ICI.
-//
-// Un musée accorde un nombre d'entrées gratuites par groupe — souvent aux accompagnateurs, parfois
-// aux élèves d'un contingent. Ce décompte fixe ce que l'école paiera : c'est la ligne qui finit sur
-// le bon de commande. On le saisit donc au moment où l'on s'engage, pas après.
-//
-// Les deux champs partent à zéro et non pré-remplis : une gratuité accordée par défaut est une
-// gratuité que personne n'a décidée, et elle se découvre à la facturation.
-function ConfirmationDossierModal({ dossier, onClose, onFait, onErreur }) {
-  const [beneficiaires, setBeneficiaires] = useState([])
-  const [contingents, setContingents] = useState([])
-  const [responsable, setResponsable] = useState('')
-  const [contingent, setContingent] = useState('')
-  const [gratuitesEleve, setGratuitesEleve] = useState('0')
-  const [gratuitesAccompagnateur, setGratuitesAccompagnateur] = useState('0')
-  const [enCours, setEnCours] = useState(false)
-  const [chargement, setChargement] = useState(false)
-
-  useEffect(() => {
-    if (!dossier) return
-    setResponsable('')
-    setContingent('')
-    setGratuitesEleve('0')
-    setGratuitesAccompagnateur('0')
-    setChargement(true)
-    Promise.all([api.beneficiaires(), api.museeContingentsGratuite()])
-      .then(([b, c]) => {
-        setBeneficiaires(membres(b))
-        setContingents(membres(c))
-      })
-      .catch(() => {
-        setBeneficiaires([])
-        setContingents([])
-      })
-      .finally(() => setChargement(false))
-  }, [dossier])
-
-  async function envoyer(e) {
-    e.preventDefault()
-    setEnCours(true)
-    try {
-      await api.museeConfirmerDossierGroupe(dossier.id, {
-        responsable,
-        ...(contingent ? { contingent } : {}),
-        nbGratuitesEleve: Number(gratuitesEleve || 0),
-        nbGratuitesAccompagnateur: Number(gratuitesAccompagnateur || 0),
-      })
-      onFait('Dossier confirmé. Il sort des options.')
-    } catch (err) {
-      onErreur(err.message || "La confirmation n'a pas abouti.")
-    } finally {
-      setEnCours(false)
-    }
-  }
-
-  const trop =
-    Number(gratuitesEleve || 0) > (dossier?.effectif || 0)
-    || Number(gratuitesAccompagnateur || 0) > (dossier?.accompagnateurs || 0)
-
-  return (
-    <Modal open={!!dossier} onClose={onClose} titre="Confirmer un dossier de groupe">
-      {dossier && (
-        <form onSubmit={envoyer}>
-          <p style={{ marginTop: 0 }}>
-            <b>{dossier.etablissementScolaire}</b> — {dossier.effectif} élève
-            {dossier.effectif > 1 ? 's' : ''} et {dossier.accompagnateurs} accompagnateur
-            {dossier.accompagnateurs > 1 ? 's' : ''}.
-          </p>
-
-          {chargement ? (
-            <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
-          ) : (
-            <>
-              <div className="field">
-                <label htmlFor="cd-resp">Responsable du groupe *</label>
-                <select id="cd-resp" className="input" required value={responsable} onChange={(e) => setResponsable(e.target.value)}>
-                  <option value="">Choisir…</option>
-                  {beneficiaires.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {[b.client?.prenom, b.client?.nom].filter(Boolean).join(' ').trim()
-                        || `Bénéficiaire ${String(b.id).slice(0, 8)}`}
-                    </option>
-                  ))}
-                </select>
-                <div className="hint">
-                  {beneficiaires.length === 0
-                    ? "Aucun bénéficiaire enregistré : créez d'abord la fiche de l'enseignant référent."
-                    : "L'enseignant qui accompagne : c'est à lui qu'on s'adressera le jour de la visite."}
-                </div>
-              </div>
-
-              <div className="fiche-sec">Entrées gratuites accordées</div>
-
-              <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="cd-ge">Élèves</label>
-                  <input id="cd-ge" className="input" type="number" min="0" value={gratuitesEleve} onChange={(e) => setGratuitesEleve(e.target.value)} />
-                </div>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="cd-ga">Accompagnateurs</label>
-                  <input id="cd-ga" className="input" type="number" min="0" value={gratuitesAccompagnateur} onChange={(e) => setGratuitesAccompagnateur(e.target.value)} />
-                </div>
-              </div>
-
-              {trop && (
-                <div className="banner banner-warn">
-                  Vous accordez plus de gratuités qu'il n'y a de personnes dans le groupe. Le serveur
-                  le refusera probablement, et si ce n'est pas le cas, la facture sera fausse.
-                </div>
-              )}
-
-              {contingents.length > 0 && (
-                <div className="field">
-                  <label htmlFor="cd-cont">Imputer sur un contingent</label>
-                  <select id="cd-cont" className="input" value={contingent} onChange={(e) => setContingent(e.target.value)}>
-                    <option value="">Aucun</option>
-                    {contingents.map((c) => (
-                      <option key={c.id} value={c.id}>{c.libelle || c.nom || String(c.id).slice(0, 8)}</option>
-                    ))}
-                  </select>
-                  <div className="hint">
-                    Facultatif. Un contingent est une enveloppe de gratuités décidée à l'année : l'y
-                    imputer permet de savoir ce qu'il en reste.
-                  </div>
-                </div>
-              )}
-
-              <div className="hint" style={{ marginTop: 0 }}>
-                Les deux compteurs partent à zéro volontairement : une gratuité accordée par défaut
-                est une gratuité que personne n'a décidée, et elle se découvre à la facturation.
-              </div>
-            </>
-          )}
-
-          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
-            <button className="btn" type="button" onClick={onClose}>Annuler</button>
-            <button className="btn primary" type="submit" disabled={enCours || chargement || !responsable}>
-              {enCours ? 'Confirmation…' : 'Confirmer le dossier'}
-            </button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  )
-}
-
-function NouveauDossierModal({ open, creneaux, onClose, onFait, onErreur }) {
-  const [ecole, setEcole] = useState('')
-  const [effectif, setEffectif] = useState('')
-  const [accompagnateurs, setAccompagnateurs] = useState('')
-  const [creneau, setCreneau] = useState('')
-  const [dateOption, setDateOption] = useState('')
-  const [enCours, setEnCours] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    setEcole('')
-    setEffectif('')
-    setAccompagnateurs('')
-    setCreneau('')
-    setDateOption('')
-  }, [open])
-
-  async function envoyer(e) {
-    e.preventDefault()
-    setEnCours(true)
-    try {
-      await api.museeCreerDossierGroupe({
-        etablissementScolaire: ecole.trim(),
-        effectif: Number(effectif),
-        accompagnateurs: Number(accompagnateurs || 0),
-        creneauEntree: creneau,
-        ...(dateOption ? { dateOption } : {}),
-      })
-      onFait('Dossier créé en option.')
-    } catch (err) {
-      onErreur(err.message || "Le dossier n'a pas pu être créé.")
-    } finally {
-      setEnCours(false)
-    }
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} titre="Nouveau dossier de groupe scolaire">
-      <form onSubmit={envoyer}>
-        <div className="field">
-          <label htmlFor="dg-ecole">Établissement scolaire *</label>
-          <input id="dg-ecole" className="input" required value={ecole} placeholder="Collège Jean-Moulin, Beauvais" onChange={(e) => setEcole(e.target.value)} />
-        </div>
-
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="dg-eff">Nombre d'élèves *</label>
-            <input id="dg-eff" className="input" type="number" min="1" required value={effectif} onChange={(e) => setEffectif(e.target.value)} />
-          </div>
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="dg-acc">Accompagnateurs</label>
-            <input id="dg-acc" className="input" type="number" min="0" value={accompagnateurs} onChange={(e) => setAccompagnateurs(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="dg-creneau">Créneau d'entrée *</label>
-          <select id="dg-creneau" className="input" required value={creneau} onChange={(e) => setCreneau(e.target.value)}>
-            <option value="">Choisir…</option>
-            {creneaux.map((c) => (
-              <option key={c.id} value={c.id}>
-                {dateHeureFr(c.debut)}
-                {c.libelle ? ` — ${c.libelle}` : ''}
-              </option>
-            ))}
-          </select>
-          <div className="hint">
-            {creneaux.length === 0
-              ? "Aucun créneau n'est ouvert : créez-en un dans la réservation avant de poser une option."
-              : "L'heure à laquelle le groupe se présente à l'entrée."}
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="dg-option">Option tenue jusqu'au</label>
-          <input id="dg-option" className="input" type="date" value={dateOption} onChange={(e) => setDateOption(e.target.value)} />
-          <div className="hint">
-            Facultatif. Passée cette date, l'option est signalée comme échue — mais le créneau reste
-            tenu tant que le dossier n'est pas annulé : c'est un rappel, pas une libération
-            automatique.
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
-          <button className="btn" type="button" onClick={onClose}>Annuler</button>
-          <button className="btn primary" type="submit" disabled={enCours || !ecole.trim() || !effectif || !creneau}>
-            {enCours ? 'Création…' : "Créer l'option"}
+        <div className="r" style={{ marginTop: 'var(--esp-normal)' }}>
+          <button className="btn primary" type="button" onClick={() => allerA('groupes')}>
+            Ouvrir le module Groupes
           </button>
         </div>
-      </form>
-    </Modal>
+      </div>
+    </section>
   )
 }
 
-// Un guide est un utilisateur : le nom lisible vient de là, et l'identifiant court sert de repli
-// plutôt qu'une ligne vide dans un menu déroulant.
 function nomGuide(g) {
   const u = g?.utilisateur
   return u?.nomComplet || u?.email || `Guide ${String(g?.id || '').slice(0, 8)}`

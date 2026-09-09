@@ -11,10 +11,7 @@ use ApiPlatform\Metadata\Operation;
 use App\Musee\Entity\AllocationQuotaOTA;
 use App\Musee\Entity\Audioguide;
 use App\Musee\Entity\BasculeAudioguide;
-use App\Musee\Entity\ContingentGratuite;
-use App\Musee\Entity\DossierGroupeScolaire;
 use App\Musee\Entity\Exposition;
-use App\Musee\Entity\Gratuite;
 use App\Musee\Entity\Guide;
 use App\Musee\Entity\ParametreMuseeEtablissement;
 use App\Musee\Entity\PartenaireOTA;
@@ -40,7 +37,6 @@ final class PerimetreMuseeExtension implements QueryCollectionExtensionInterface
     /** @var array<class-string, list<array{property: string, alias: string}>> */
     private const JOINS = [
         QualificationLangueGuide::class => [['property' => 'guide', 'alias' => 'gd']],
-        Gratuite::class => [['property' => 'dossier', 'alias' => 'dos']],
         ReservationOTA::class => [['property' => 'allocation', 'alias' => 'alloc']],
     ];
 
@@ -56,9 +52,6 @@ final class PerimetreMuseeExtension implements QueryCollectionExtensionInterface
         QualificationLangueGuide::class => 'gd.etablissement',
         VisiteGuidee::class => '{root}.etablissement',
         BasculeAudioguide::class => '{root}.etablissement',
-        ContingentGratuite::class => '{root}.etablissement',
-        DossierGroupeScolaire::class => '{root}.etablissement',
-        Gratuite::class => 'dos.etablissement',
         PartenaireOTA::class => '{root}.etablissement',
         AllocationQuotaOTA::class => '{root}.etablissement',
         ReservationOTA::class => 'alloc.etablissement',
