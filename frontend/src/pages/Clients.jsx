@@ -146,7 +146,7 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '' }
+const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '' }
 
 // Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
 const INCLUABLES = [
@@ -169,7 +169,9 @@ const PAR_PAGE = 50
 // Écran Clients (CRM) : liste large, fiche en page, état porté par l'URL.
 export default function Clients({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
   const [params, majParams] = useEtatUrl('clients', DEFAUTS)
-  const [edition, setEdition] = useState(null) // { id } = modification, { creation: true } = ajout
+  // ⚠ PLUS D'ÉTAT LOCAL ICI : c'est l'adresse qui porte le formulaire ouvert. Un état local
+  // aurait survécu au « précédent » du navigateur sans que l'URL le sache, et disparu au F5
+  // sans que rien ne le dise — les deux defauts qu'on corrige.
 
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -192,6 +194,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const [devisPour, setDevisPour] = useState(null)
 
   const selId = params.fiche || null
+  // `nouveau` = creation, sinon l'identifiant du client qu'on modifie.
+  const enEdition = params.edition || ''
   const page = Math.max(1, parseInt(params.page, 10) || 1)
 
   const rechercher = useCallback(async () => {
@@ -329,6 +333,42 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const peutFusionner = aLeDroit(droits, 'crm.fusionner')
   const [fusionPour, setFusionPour] = useState(null)
 
+  // ── LE FORMULAIRE D'UNE FICHE, EN ÉCRAN ─────────────────────────────────────────────────────
+  //
+  // Il prend la place de tout le reste — liste ou fiche — parce que c'est le seul moyen de le
+  // rendre adressable. Deux entrées y menaient, et elles sont maintenant la même : « Ajouter un
+  // client » depuis la liste (`edition=nouveau`) et « Modifier » depuis une fiche
+  // (`edition=<identifiant>`).
+  //
+  // ⚠ CE QUI SE PASSE APRÈS L'ENREGISTREMENT DÉPEND D'OÙ L'ON VENAIT, et `params.fiche` le dit.
+  // Depuis une fiche, on y retourne et elle se recharge ; depuis la liste, on ouvre la fiche qu'on
+  // vient de créer. C'étaient deux composants montés à deux endroits avec deux comportements : il
+  // n'en reste qu'un, et la distinction se lit dans l'adresse au lieu d'être dupliquée.
+  if (enEdition) {
+    return (
+      <div className="view large">
+        <ClientEditionModal
+          open
+          clientId={enEdition === 'nouveau' ? null : enEdition}
+          onClose={() => majParams({ edition: '' }, { pousser: true })}
+          onEnregistre={(cree) => {
+            if (selId) {
+              chargerFiche(selId)
+              majParams({ edition: '' }, { pousser: true })
+              return
+            }
+            rechercher()
+            // Une fiche qu'on vient de créer s'ouvre : c'est ce qu'on veut faire ensuite.
+            majParams(
+              { edition: '', ...(cree?.id ? { fiche: String(cree.id) } : {}) },
+              { pousser: true },
+            )
+          }}
+        />
+      </div>
+    )
+  }
+
   // ---------------------------------------------------------------- La fiche, en page
   if (selId) {
     return (
@@ -343,7 +383,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
           </div>
           {fiche?.client && peutModifier && (
             <div className="actions">
-              <button className="btn" type="button" onClick={() => setEdition({ id: selId })}>Modifier</button>
+              <button className="btn" type="button" onClick={() => majParams({ edition: String(selId) }, { pousser: true })}>Modifier</button>
             </div>
           )}
         </div>
@@ -366,12 +406,6 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
           </div></section>
         ) : null}
 
-        <ClientEditionModal
-          open={!!edition}
-          clientId={edition?.id || null}
-          onClose={() => setEdition(null)}
-          onEnregistre={() => chargerFiche(selId)}
-        />
       </div>
     )
   }
@@ -401,7 +435,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             // une structure » des Paramètres désigne une SOCIÉTÉ cliente de l'éditeur, pas un
             // contact. Deux boutons du même nom pour deux objets sans rapport, c'est la collision
             // qu'on n'aggrave pas.
-            <button className="btn primary" type="button" onClick={() => setEdition({ creation: true })}>
+            <button className="btn primary" type="button" onClick={() => majParams({ edition: 'nouveau' }, { pousser: true })}>
               Ajouter un client
             </button>
           )}
@@ -618,17 +652,6 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
           mais sans cet ecran, personne ne saurait ou cliquer. On aurait donne le pouvoir d'ecraser
           deux fiches en une sans donner celui de revenir, ce qui est pire que de ne rien livrer. */}
       {peutFusionner && <JournalDesFusions />}
-
-      <ClientEditionModal
-        open={!!edition}
-        clientId={edition?.id || null}
-        onClose={() => setEdition(null)}
-        onEnregistre={(cree) => {
-          rechercher()
-          // Une fiche qu'on vient de créer s'ouvre : c'est ce qu'on veut faire ensuite.
-          if (cree?.id) majParams({ fiche: String(cree.id) }, { pousser: true })
-        }}
-      />
 
       <DevisModal
         open={!!devisPour}
