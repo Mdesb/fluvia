@@ -4,6 +4,7 @@ import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { lireHash } from '../api/url.js'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
+import RegiesRecettes from '../components/RegiesRecettes.jsx'
 import TopologieAcces from './TopologieAcces.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
@@ -386,7 +387,7 @@ function descripteurSaisons(api) {
   }
 }
 
-function descripteurPointsDeVente(api, etabActif, moyens = []) {
+function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
   return {
     titre: 'Points de vente',
     aQuoiCaSert:
@@ -440,9 +441,45 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
         type: 'bool',
         aide: 'Détermine si le paiement par carte passe par un terminal plutôt que par une saisie.',
       },
+      // CE QUI FAIT ENFIN MONTER L'ENCAISSE D'UNE RÉGIE.
+      //
+      // `RegieHandler::enregistrerEncaissement()` n'avait aucun appelant en production : l'encaisse
+      // partait de zéro et ne savait que descendre. Le plafond ne pouvait donc jamais être dépassé,
+      // la clôture comptable n'était jamais bloquée pour ce motif, et l'écran de versement n'avait
+      // jamais rien à verser. La clôture Z alimente désormais l'encaisse, et ce champ lui dit
+      // LAQUELLE.
+      //
+      // ⚠ « AUCUNE » EST LA PREMIÈRE OPTION, ET CE N'EST PAS DE LA COURTOISIE.
+      // `ReferentielEditable` présélectionne `options[0]` à la création. Sans une entrée vide en
+      // tête, créer un guichet le rattacherait SILENCIEUSEMENT à la première régie de la liste —
+      // et son argent partirait dans une encaisse que personne n'a choisie.
+      ...(regies.length > 0 ? [{
+        nom: 'regie',
+        libelle: 'Encaisse pour la régie de recettes',
+        type: 'choix',
+        options: [
+          { valeur: '', libelle: '— aucune —' },
+          ...regies.map((r) => ({
+            valeur: r['@id'] || `/api/regie_recettes/${r.id}`,
+            libelle: r.libelle || 'régie',
+          })),
+        ],
+        aide: 'À la clôture de caisse, les espèces comptées moins le fond laissé dans le tiroir '
+          + 'entrent dans l’encaisse de cette régie. Laissez « aucune » si ce guichet n’encaisse '
+          + 'pas pour une régie de recettes : c’est le cas de tous les exploitants privés.',
+      }] : []),
     ],
     colonnes: [
       { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      ...(regies.length > 0 ? [{
+        cle: 'regie',
+        titre: 'Régie',
+        aide: 'La régie de recettes que les clôtures de ce guichet alimentent.',
+        rendu: (r) => {
+          const cible = regies.find((g) => (g['@id'] || `/api/regie_recettes/${g.id}`) === r.regie)
+          return cible ? <span className="nm">{cible.libelle}</span> : <span className="sub">aucune</span>
+        },
+      }] : []),
       {
         cle: 'tpe',
         titre: 'Terminal de paiement',
@@ -522,6 +559,20 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       .catch(() => { if (!annule) setMoyens([]) })
     return () => { annule = true }
   }, [etabActif])
+
+  // Les régies déclarées, pour rattacher un guichet à la sienne. Relue à chaque écriture de
+  // référentiel : on en déclare une juste en dessous, dans le même onglet, et la liste doit la
+  // proposer sans recharger la page.
+  const [regies, setRegies] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.regieRecettes()
+      .then((r) => { if (!annule) setRegies(membres(r)) })
+      // Un référentiel illisible ne doit pas empêcher de renommer un point de vente : le champ
+      // disparaît, le reste du formulaire fonctionne.
+      .catch(() => { if (!annule) setRegies([]) })
+    return () => { annule = true }
+  }, [etabActif, versionReferentiels])
 
   return (
     <div className="view">
@@ -673,12 +724,20 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
-            descripteur={descripteurPointsDeVente(api, etabActif, moyens)}
+            descripteur={descripteurPointsDeVente(api, etabActif, moyens, regies)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
           <MoyensPaiement etabActif={etabActif} />
+          {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
+              Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
+              elle, ne se declarait a AUCUN endroit. `POST /api/regie_recettes` existait, et le
+              seul code qui instanciait l'entite etait celui des jeux d'essai.
+              Sa place est ici par le critere de R21 : le libelle, le plafond et l'acte se
+              reglent a l'arrete puis on n'y revient plus. Verser, en revanche, reste dans
+              Comptabilite -- c'est un geste quotidien. */}
+          <RegiesRecettes etabActif={etabActif} droits={droits} rafraichir={versionReferentiels} onEcrit={referentielEcrit} />
         </div>
       )}
 
