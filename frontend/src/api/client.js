@@ -2909,10 +2909,6 @@ export const api = {
     request('/api/musee_qualification_langue_guides', { query: { itemsPerPage: 200 } }),
   museeBasculesAudioguide: () =>
     request('/api/musee_bascule_audioguides', { query: { itemsPerPage: 100 } }),
-  museeContingentsGratuite: () =>
-    request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
-  museeDossiersGroupe: () =>
-    request('/api/musee_dossier_groupe_scolaires', { query: { itemsPerPage: 100 } }),
   // L'etat d'une salle se lit salle par salle : il n'existe pas de vue d'ensemble cote serveur.
   museeEtatSalle: (id) => request(`/api/musee/salles/${id}/etat`),
   // ⚠ CE COMMENTAIRE DISAIT L'INVERSE, ET LES DEUX CRÉATIONS CI-DESSOUS RENDAIENT 415.
@@ -2927,10 +2923,6 @@ export const api = {
     request('/api/musee/visites-guidees', { method: 'POST', body: corps, ld: true }),
   museeConfirmerVisite: (id) =>
     request(`/api/musee/visites-guidees/${id}/confirmer`, { method: 'POST', body: {} }),
-  museeCreerDossierGroupe: (corps) =>
-    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps, ld: true }),
-  museeConfirmerDossierGroupe: (id, corps) =>
-    request(`/api/musee/dossiers-groupe/${id}/confirmer`, { method: 'POST', body: corps }),
 
   // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
@@ -3195,4 +3187,72 @@ export const api = {
   // calendrier qui ne ferme rien. `schoolHolidaysAvailable` distingue « pas de vacances » de
   // « le ministere n'a pas repondu » — deux phrases differentes a l'ecran.
   indicesOuverture: (from, to) => request('/api/opening/calendar-hints', { query: { from, to } }),
+
+  // ── Groupes (module transverse App\Group) ────────────────────────────
+  groupesParticipants: () =>
+    request('/api/participant_groups', { query: { itemsPerPage: 100 } }),
+  groupeParticipant: (id) => request(`/api/participant_groups/${id}`),
+  creerGroupeParticipant: (corps) =>
+    request('/api/participant_groups', { method: 'POST', body: corps, ld: true }),
+  modifierGroupeParticipant: (id, corps) =>
+    request(`/api/participant_groups/${id}`, { method: 'PATCH', body: corps }),
+  membresGroupe: (idGroupe) =>
+    request('/api/group_participants', { query: { group: idGroupe, itemsPerPage: 500 } }),
+  membreGroupe: (id) => request(`/api/group_participants/${id}`),
+  ajouterMembre: (corps) =>
+    request('/api/group_participants', { method: 'POST', body: corps, ld: true }),
+  modifierMembre: (id, corps) =>
+    request(`/api/group_participants/${id}`, { method: 'PATCH', body: corps }),
+  supprimerMembre: (id) =>
+    request(`/api/group_participants/${id}`, { method: 'DELETE' }),
+  reservationsGroupe: () =>
+    request('/api/group_bookings', { query: { itemsPerPage: 200 } }),
+  reservationGroupe: (id) => request(`/api/group_bookings/${id}`),
+  creerReservationGroupe: (corps) =>
+    request('/api/group/bookings', { method: 'POST', body: corps, ld: true }),
+  modifierReservationGroupe: (id, corps) =>
+    request(`/api/group_bookings/${id}`, { method: 'PATCH', body: corps }),
+  affecterReservationGroupe: (id, corps) =>
+    request(`/api/group/bookings/${id}/assign`, { method: 'POST', body: corps }),
+  confirmerReservationGroupe: (id) =>
+    request(`/api/group/bookings/${id}/confirm`, { method: 'POST', body: {} }),
+  annulerReservationGroupe: (id) =>
+    request(`/api/group/bookings/${id}/cancel`, { method: 'POST', body: {} }),
+  facturerReservationGroupe: (id, corps) =>
+    request(`/api/group/bookings/${id}/invoice`, { method: 'POST', body: corps }),
+  // Forfaits groupe (produits composites réutilisables)
+  groupProducts: () =>
+    request('/api/group_products', { query: { itemsPerPage: 200 } }),
+  creerGroupProduct: (corps) =>
+    request('/api/group_products', { method: 'POST', body: corps, ld: true }),
+  modifierGroupProduct: (id, corps) =>
+    request(`/api/group_products/${id}`, { method: 'PATCH', body: corps }),
+  supprimerGroupProduct: (id) =>
+    request(`/api/group_products/${id}`, { method: 'DELETE' }),
+  // Panier d'une réservation de groupe
+  articlesReservation: (bookingId) =>
+    request('/api/group_booking_items', { query: { booking: bookingId, itemsPerPage: 200 } }),
+  ajouterArticle: (corps) =>
+    request('/api/group_booking_items', { method: 'POST', body: corps, ld: true }),
+  modifierArticle: (id, corps) =>
+    request(`/api/group_booking_items/${id}`, { method: 'PATCH', body: corps }),
+  supprimerArticle: (id) =>
+    request(`/api/group_booking_items/${id}`, { method: 'DELETE' }),
+  appliquerForfait: (bookingId, corps) =>
+    request(`/api/group/bookings/${bookingId}/apply-product`, { method: 'POST', body: corps }),
+  // Gratuités transverses (contingents + octroi)
+  gratuiteContingents: () =>
+    request('/api/group_gratuite_contingents', { query: { itemsPerPage: 200 } }),
+  creerGratuiteContingent: (corps) =>
+    request('/api/group_gratuite_contingents', { method: 'POST', body: corps, ld: true }),
+  modifierGratuiteContingent: (id, corps) =>
+    request(`/api/group_gratuite_contingents/${id}`, { method: 'PATCH', body: corps }),
+  supprimerGratuiteContingent: (id) =>
+    request(`/api/group_gratuite_contingents/${id}`, { method: 'DELETE' }),
+  gratuitesReservation: (bookingId) =>
+    request('/api/group_gratuites', { query: { booking: bookingId, itemsPerPage: 200 } }),
+  accorderGratuite: (bookingId, corps) =>
+    request(`/api/group/bookings/${bookingId}/grant-gratuite`, { method: 'POST', body: corps }),
+  revoquerGratuite: (id) =>
+    request(`/api/group_gratuites/${id}`, { method: 'DELETE' }),
 }
