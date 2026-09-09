@@ -54,7 +54,7 @@ const CRITERES = [
   },
 ]
 
-const DEFAUTS = { tab: 'campagnes' }
+const DEFAUTS = { tab: 'campagnes', redaction: '' }
 
 export default function Campagnes({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'campagne.gerer')
@@ -68,7 +68,6 @@ export default function Campagnes({ etabActif, droits = [] }) {
   const setOnglet = (v) => majParams({ tab: v })
   // ⚠ `null` = PAS LU.
   const [campagnes, setCampagnes] = useState(null)
-  const [redigee, setRedigee] = useState(null)
   const [resultat, setResultat] = useState(null)
   const [segments, setSegments] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -199,6 +198,65 @@ export default function Campagnes({ etabActif, droits = [] }) {
     }
   }
 
+  // ── LA RÉDACTION D'UNE CAMPAGNE, EN ÉCRAN ───────────────────────────────────────────────────
+  //
+  // `nouvelle`, ou l'identifiant d'une campagne. L'onglet reste dans l'adresse à côté : sans lui,
+  // le retour depuis l'écran retomberait sur l'onglet par défaut.
+  if (params.redaction) {
+    const creation = params.redaction === 'nouvelle'
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => majParams({ redaction: '' }, { pousser: true })}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux campagnes
+      </button>
+    )
+    if (!creation && chargement) {
+      return (
+        <div className="view">
+          {retour}
+          <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
+        </div>
+      )
+    }
+    const connue = creation
+      ? {}
+      : (campagnes || []).find((c) => String(c.id) === String(params.redaction))
+    if (!creation && !connue) {
+      return (
+        <div className="view">
+          {retour}
+          <div className="banner banner-warn">
+            {campagnes === null
+              ? 'Les campagnes n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même chose que « elle n’existe pas ».'
+              : 'Cette campagne n’est plus dans la liste — elle a sans doute été supprimée depuis que ce lien a été copié.'}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="view">
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <RedactionCampagne
+          key={params.redaction}
+          campagne={connue}
+          segments={segments}
+          onFermer={() => majParams({ redaction: '' }, { pousser: true })}
+          onEnregistre={async (message) => {
+            setSucces(message)
+            majParams({ redaction: '' }, { pousser: true })
+            await recharger()
+          }}
+          onErreur={setErreur}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="view">
       <div className="view-head">
@@ -214,7 +272,9 @@ export default function Campagnes({ etabActif, droits = [] }) {
           <button
             className="btn primary"
             type="button"
-            onClick={() => (onglet === 'campagnes' ? setRedigee({}) : setEdite({}))}
+            onClick={() => (onglet === 'campagnes'
+              ? majParams({ redaction: 'nouvelle' }, { pousser: true })
+              : setEdite({}))}
           >
             {onglet === 'campagnes' ? '+ Nouvelle campagne' : '+ Nouveau segment'}
           </button>
@@ -247,7 +307,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
           segments={segments}
           peutGerer={peutGerer}
           busy={busy}
-          onRediger={setRedigee}
+          onRediger={(c) => majParams({ redaction: String(c.id) }, { pousser: true })}
           onEnvoyer={envoyer}
           onResultat={voirResultat}
         />
@@ -326,14 +386,6 @@ export default function Campagnes({ etabActif, droits = [] }) {
       <ApercuSegment apercu={apercu} onFermer={() => setApercu(null)} />
 
       <ResultatCampagne resultat={resultat} onFermer={() => setResultat(null)} />
-
-      <RedactionCampagne
-        campagne={redigee}
-        segments={segments}
-        onFermer={() => setRedigee(null)}
-        onEnregistre={async (message) => { setRedigee(null); setSucces(message); await recharger() }}
-        onErreur={setErreur}
-      />
 
       <EditionSegment
         segment={edite}
@@ -848,12 +900,8 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
   }
 
   return (
-    <Modal
-      open={ouvert}
-      onClose={onFermer}
-      titre={existante ? 'Modifier la campagne' : 'Nouvelle campagne'}
-      taille="lg"
-    >
+    <>
+      <h2>{existante ? 'Modifier la campagne' : 'Nouvelle campagne'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-large)' }}>
           <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
@@ -974,7 +1022,7 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 
