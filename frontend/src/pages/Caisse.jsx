@@ -74,7 +74,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // valider ensuite sans relire un etat qui aura change.
   const [appairageEnAttente, setAppairageEnAttente] = useState(null)
   const [paiements, setPaiements] = useState([]) // règlements acceptés
-  const [moyenSel, setMoyenSel] = useState('')
+  const [moyenSel, setMoyenSel] = useState('especes')
   const [montant, setMontant] = useState('')
   const [tpeSimule, setTpeSimule] = useState('accepte')
   const [busy, setBusy] = useState(false)
@@ -254,18 +254,6 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const peutEncaisser = aLeDroit(droits, 'vente.encaisser')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
-
-  // « Choisir PUIS Encaisser » : un seul moyen proposable est pré-sélectionné (rien à choisir) ;
-  // dès qu'il y en a plusieurs, AUCUN défaut — le caissier tape son moyen, et rien ne se solde
-  // avant. Sans ça, « Encaisser » soldait l'espèce par défaut avant qu'on ait le temps de choisir.
-  useEffect(() => {
-    if (moyensDispo.length === 1) {
-      setMoyenSel(moyensDispo[0].code)
-    } else if (!moyensDispo.some((m) => m.code === moyenSel)) {
-      setMoyenSel('')
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moyensDispo])
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
   // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
@@ -1057,48 +1045,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 
                   {!enPaiement ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                    {/* pastilles moyen en amont : le choix du moyen redevient visible dans le geste principal */}
-                    {moyensDispo.length > 1 && (
-                      <>
-                        <div className="pay-moyens">
-                          {moyensDispo.map((m) => (
-                            <button
-                              key={m.code}
-                              type="button"
-                              className={`pay-chip${moyenSel === m.code ? ' on' : ''}`}
-                              onClick={() => setMoyenSel(m.code)}
-                              disabled={busy}
-                            >
-                              {m.libelle}
-                            </button>
-                          ))}
-                        </div>
-                        {!moyenCourant && (
-                          <small className="sub">Choisissez le moyen de paiement, puis Encaisser.</small>
-                        )}
-                      </>
-                    )}
+                    {/* Le geste par défaut ouvre le pavé détaillé : moyen, montant, rendu et paiement
+                        scindé s'y choisissent, et rien ne se solde avant « Régler ». */}
                     <button
                       className="btn primary lg"
-                      onClick={encaisserRapide}
-                      disabled={busy || !peutEncaisser || !moyenCourant}
-                      title={peutEncaisser
-                        ? (moyenCourant ? undefined : 'Choisissez d’abord un moyen de paiement.')
-                        : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                    >
-                      {busy
-                        ? 'Ouverture…'
-                        : (moyenCourant
-                          ? `Encaisser ${euros(total)} · ${moyenCourant.libelle}`
-                          : `Encaisser ${euros(total)}`)}
-                    </button>
-                    <button
-                      className="btn ghost sm"
                       onClick={demarrerPaiement}
                       disabled={busy || !peutEncaisser}
+                      title={peutEncaisser
+                        ? undefined
+                        : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
                     >
-                      Paiement détaillé (rendu, paiement scindé)
+                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
                     </button>
+                    <small className="sub">Moyen de paiement, montant, rendu ou paiement scindé à l’étape suivante.</small>
                     </div>
                   ) : (
                     <PanneauPaiement
