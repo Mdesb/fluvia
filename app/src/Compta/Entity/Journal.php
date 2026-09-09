@@ -52,7 +52,7 @@ class Journal
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
-    #[Groups(['journal:read', 'journal:write'])]
+    #[Groups(['journal:read', 'journal:write', 'ecriture:read'])]
     private string $libelle = '';
 
     public function __construct()

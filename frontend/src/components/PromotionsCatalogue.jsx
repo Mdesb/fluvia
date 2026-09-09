@@ -70,14 +70,54 @@ function idsEligibles(p) {
   return Array.isArray(l) ? l.map(String) : []
 }
 
-export default function PromotionsCatalogue({ etabActif, droits = [] }) {
+/** Les valeurs du formulaire, telles qu'une promotion enregistrée les remplit. */
+function valeursDe(p) {
+  return {
+    id: p.id,
+    nom: p.nom || '',
+    type: p.type || 'pourcentage',
+    valeur: p.valeur || '',
+    conditions: p.conditions || '',
+    dateDebut: p.dateDebut ? String(p.dateDebut).slice(0, 10) : '',
+    dateFin: p.dateFin ? String(p.dateFin).slice(0, 10) : '',
+    cumul: p.cumul || 'cumulable',
+    canaux: Array.isArray(p.canaux) ? p.canaux : [],
+    produits: idsEligibles(p),
+  }
+}
+
+/**
+ * ── LE FORMULAIRE EST UN ÉCRAN, ET IL VIT DANS L'ADRESSE ────────────────────────────────────────
+ *
+ * Il tenait dans une modale de 480 px de large. Mesuré le 07/09 : 918 px de haut dans une fenêtre
+ * de 720, vingt champs, et huit cents pixels de largeur d'écran inutilisés de part et d'autre. La
+ * boîte débordait donc de 278 px, et c'est son FOND qui défilait.
+ *
+ * Le paramètre `promo` porte désormais ce qu'on regarde — `nouveau`, ou l'identifiant d'une
+ * promotion — comme `fiche` le fait pour un produit dans le même écran. Ce qui en découle, et qui
+ * n'existait pour aucune des 139 modales du produit : l'adresse se partage et se met en signet, F5
+ * ramène là où on était, et « précédent » ferme le formulaire au lieu de quitter le Catalogue.
+ *
+ * ⚠ LE PARENT NE MONTE LE FORMULAIRE QU'UNE FOIS LES VALEURS CONNUES. Il n'existe pas de route
+ * `GET /promotions/{id}` : les valeurs viennent de la LISTE, qui met un aller-retour à arriver.
+ * Monter le formulaire avant elle l'aurait laissé vide — et « Enregistrer » aurait alors CRÉÉ une
+ * seconde promotion au lieu de modifier la première, puisque c'est `v.id` qui tranche entre POST
+ * et PATCH.
+ */
+export default function PromotionsCatalogue({ etabActif, droits = [], params = {}, majParams }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   const [promotions, setPromotions] = useState(null)
   const [produits, setProduits] = useState(null)
-  const [edition, setEdition] = useState(null)
   const [aSupprimer, setASupprimer] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
+
+  // ⚠ `params` ET `majParams` SONT REQUIS, ET AUCUN REPLI NE LES REMPLACE. Un repli « si le
+  // parent ne les passe pas, on ne fait rien » rendrait les deux boutons muets : on clique, rien
+  // ne s'ouvre, et rien ne dit pourquoi. Le seul appelant est `Catalogue`, qui les passe.
+  const ouvert = params.promo || ''
+  const ouvrir = (v) => majParams({ promo: v }, { pousser: true })
+  const fermer = () => ouvrir('')
 
   const peutGerer = aLeDroit(droits, 'offre.gerer')
 
@@ -106,6 +146,85 @@ export default function PromotionsCatalogue({ etabActif, droits = [] }) {
     ? promotions.filter((p) => idsEligibles(p).length === 0).length
     : 0
 
+  // ── L'ÉCRAN DU FORMULAIRE, QUAND L'ADRESSE EN DÉSIGNE UN ────────────────────────────────────
+  //
+  // Il prend la place de la liste, comme la fiche produit prend la place du catalogue.
+  if (ouvert) {
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}>
+        ← Retour aux promotions
+      </button>
+    )
+
+    // ⚠ TROIS ÉTATS AVANT LE FORMULAIRE, ET AUCUN NE DOIT SE FAIRE PASSER POUR UN AUTRE.
+    // « on n'a pas encore lu », « on n'a pas pu lire » et « cet identifiant ne désigne rien »
+    // conduisent chacun à un formulaire vide si on les confond — et un formulaire vide qu'on
+    // enregistre CRÉE une promotion.
+    if (ouvert !== 'nouveau' && promotions === null) {
+      return (
+        <section className="card">
+          <div className="card-b">
+            {retour}
+            <div className="empty">Lecture des promotions…</div>
+          </div>
+        </section>
+      )
+    }
+
+    if (ouvert !== 'nouveau' && promotions === undefined) {
+      return (
+        <section className="card">
+          <div className="card-b">
+            {retour}
+            <div className="banner banner-warn">
+              Les promotions n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même
+              chose que « elle n’existe pas » : réessayez avant d’en recréer une.
+            </div>
+          </div>
+        </section>
+      )
+    }
+
+    const connue = ouvert === 'nouveau'
+      ? null
+      : (promotions || []).find((p) => String(p.id) === String(ouvert))
+
+    if (ouvert !== 'nouveau' && !connue) {
+      return (
+        <section className="card">
+          <div className="card-b">
+            {retour}
+            <div className="banner banner-warn">
+              Cette promotion n’est plus dans la liste — elle a sans doute été supprimée depuis que
+              ce lien a été copié. Rien n’a été perdu : revenez à la liste.
+            </div>
+          </div>
+        </section>
+      )
+    }
+
+    return (
+      <section className="card">
+        <div className="card-b">
+          {retour}
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <EditionPromotion
+            // ⚠ LA CLÉ, ET PAS UN EFFET DE SYNCHRONISATION. `valeurs` est recalculé à chaque rendu,
+            // donc d'identité neuve à chaque frappe : un `useEffect([valeurs])` qui réinjecte les
+            // valeurs enregistrées effacerait la saisie à chaque caractère. La clé remonte le
+            // formulaire quand on change de promotion, et le laisse tranquille sinon.
+            key={ouvert}
+            valeurs={connue ? valeursDe(connue) : { ...VIDE }}
+            produits={produits}
+            onFermer={fermer}
+            onFait={(m) => { setSucces(m); setErreur(null); charger(); fermer() }}
+            onErreur={setErreur}
+          />
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
       <div className="card-h">
@@ -118,7 +237,7 @@ export default function PromotionsCatalogue({ etabActif, droits = [] }) {
             className="btn primary sm"
             type="button"
             style={{ marginLeft: 'auto' }}
-            onClick={() => { setEdition({ ...VIDE }); setErreur(null); setSucces(null) }}
+            onClick={() => { setErreur(null); setSucces(null); ouvrir('nouveau') }}
           >
             Nouvelle promotion
           </button>
@@ -222,18 +341,7 @@ export default function PromotionsCatalogue({ etabActif, droits = [] }) {
                             <button
                               className="btn ghost sm"
                               type="button"
-                              onClick={() => setEdition({
-                                id: p.id,
-                                nom: p.nom || '',
-                                type: p.type || 'pourcentage',
-                                valeur: p.valeur || '',
-                                conditions: p.conditions || '',
-                                dateDebut: p.dateDebut ? String(p.dateDebut).slice(0, 10) : '',
-                                dateFin: p.dateFin ? String(p.dateFin).slice(0, 10) : '',
-                                cumul: p.cumul || 'cumulable',
-                                canaux,
-                                produits: ids,
-                              })}
+                              onClick={() => ouvrir(String(p.id))}
                             >
                               Modifier
                             </button>
@@ -256,14 +364,6 @@ export default function PromotionsCatalogue({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
-
-      <EditionPromotion
-        valeurs={edition}
-        produits={produits}
-        onFermer={() => setEdition(null)}
-        onFait={(m) => { setEdition(null); setSucces(m); setErreur(null); charger() }}
-        onErreur={setErreur}
-      />
 
       <SuppressionPromotion
         promotion={aSupprimer}
@@ -288,13 +388,15 @@ export default function PromotionsCatalogue({ etabActif, droits = [] }) {
  * devinent pas.
  */
 function EditionPromotion({ valeurs, produits, onFermer, onFait, onErreur }) {
-  const [v, setV] = useState(null)
+  // ⚠ INITIALISATION PARESSEUSE, ET AUCUN EFFET DE SYNCHRONISATION. Le parent recalcule `valeurs`
+  // à chaque rendu : un `useEffect([valeurs])` qui réinjecterait les valeurs enregistrées
+  // effacerait la frappe en cours à chaque caractère. C'est la clé posée par le parent qui remonte
+  // ce formulaire quand on change de promotion — le seul moment où il DOIT repartir de zéro.
+  const [v, setV] = useState(() => valeurs)
   const [busy, setBusy] = useState(false)
   const [recherche, setRecherche] = useState('')
 
-  useEffect(() => { setV(valeurs); setRecherche('') }, [valeurs])
-
-  if (!valeurs || !v) return null
+  if (!v) return null
 
   function champ(nom, valeur) { setV((p) => ({ ...p, [nom]: valeur })) }
 
@@ -335,12 +437,8 @@ function EditionPromotion({ valeurs, produits, onFermer, onFait, onErreur }) {
   }
 
   return (
-    <Modal
-      open
-      onClose={onFermer}
-      titre={v.id ? 'Modifier la promotion' : 'Nouvelle promotion'}
-      taille="sm"
-    >
+    <>
+      <h2>{v.id ? 'Modifier la promotion' : 'Nouvelle promotion'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Nom *</span>
@@ -469,7 +567,7 @@ function EditionPromotion({ valeurs, produits, onFermer, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 

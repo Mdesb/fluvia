@@ -27,8 +27,14 @@ final class CloisonnementTest extends PadelApiTestCase
             self::assertResponseIsSuccessful(sprintf('%s : accessible sur l\'établissement affecté.', $chemin));
 
             $client->request('GET', $chemin, ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-            self::assertResponseStatusCodeSame(403, sprintf('RG-SOCLE-05 : %s inaccessible hors périmètre affecté.', $chemin));
+            self::assertResponseStatusCodeSame(404, sprintf('RG-SOCLE-05 : %s inaccessible hors périmètre affecté.', $chemin));
         }
+
+        // TÉMOIN DU VOTER (07/09) : l'en-tête EST dans la portée (le listener laisse passer),
+        // mais la permission d'écriture manque (LECTEUR n'a que *.lire) → le voter doit refuser.
+        // Sans ce cas, depuis e915c94e ce test ne prouve plus que le refus du listener (404).
+        $client->request('POST', '/api/padel_grille_tarifaire_terrains', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA], 'json' => []]);
+        self::assertResponseStatusCodeSame(403, 'Le voter refuse une écriture dans la portée sans la permission requise (le listener, lui, a laissé passer l\'en-tête).');
     }
 
     public function testAdminNeVoitPasLesRessourcesDunAutreGroupe(): void
@@ -42,6 +48,6 @@ final class CloisonnementTest extends PadelApiTestCase
             'auth_bearer' => $entete['auth_bearer'],
             'headers' => [ContexteEtablissement::HEADER => $idEtabC],
         ]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : cloisonnement Groupe (admin du groupe A non affecté sur le groupe B/établissement C).');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : cloisonnement Groupe (admin du groupe A non affecté sur le groupe B/établissement C).');
     }
 }

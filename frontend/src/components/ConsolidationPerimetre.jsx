@@ -87,6 +87,10 @@ export default function ConsolidationPerimetre({ etabActif, etablissements }) {
   const [lu, setLu] = useState(false)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // ⚠ POURQUOI la lecture a echoue, et pas seulement QU'ELLE a echoue. Le client d'API
+  // redige pour un 403 une phrase qui dit quoi faire ; un `catch` qui la jette transforme
+  // « il vous manque un droit » en « c'est casse », et envoie chercher au mauvais endroit.
+  const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const etab = etablissements.find((e) => e.id === etabActif) || null
   const regionId = etab?.region?.id || null
@@ -98,7 +102,7 @@ export default function ConsolidationPerimetre({ etabActif, etablissements }) {
     let annule = false
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
-      .catch(() => { if (!annule) setGroupesLus(null) })
+      .catch((e) => { if (!annule) { setGroupesLus(null); setRaisonNonLu(e) } })
     return () => { annule = true }
   }, [])
 
@@ -162,6 +166,13 @@ export default function ConsolidationPerimetre({ etabActif, etablissements }) {
 
         {erreur && (
           <div className="banner banner-error" style={{ marginTop: 'var(--esp-normal)' }}>{erreur}</div>
+        )}
+        {raisonNonLu?.message && (
+          <div className="banner banner-warn" style={{ marginBottom: 'var(--esp-normal)' }}>
+            <b>{raisonNonLu.status === 403
+                  ? 'Une lecture a été refusée\u00a0:'
+                  : 'Une lecture a échoué\u00a0:'}</b> {raisonNonLu.message}
+          </div>
         )}
 
         {!cibleId ? (

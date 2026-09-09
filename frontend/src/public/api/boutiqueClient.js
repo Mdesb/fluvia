@@ -169,7 +169,23 @@ export const boutique = {
   vitrineCourante: () => request('/api/boutique/vitrine-courante'),
   vitrine: (id) => request(`/api/boutique/vitrines/${id}`),
   catalogue: (id) => request(`/api/boutique/vitrines/${id}/catalogue`),
-  creneaux: (produitId) => request(`/api/boutique/produits/${produitId}/creneaux`),
+  // LES HORAIRES D'UN PRODUIT, DANS LE PERIMETRE DE CETTE BOUTIQUE-CI.
+  //
+  // ⚠ LA VITRINE N'EST PAS UN CONFORT D'AFFICHAGE, C'EST LE CLOISONNEMENT. Depuis le 07/09, un
+  // produit trouve ses creneaux par les ACTIVITES qui le referencent — et deux etablissements qui
+  // diffusent le meme produit ont chacun les leurs. Sans ce parametre, le serveur retombe sur tous
+  // les etablissements ou le produit est diffuse : la boutique de l'un annoncerait les horaires de
+  // l'autre, et un client reserverait a cent kilometres de chez lui sans que rien ne le signale.
+  //
+  // Elle est lue dans le magasin plutot que passee par l'appelant : `FicheProduit` recoit une
+  // entree de catalogue, pas la vitrine qui l'a servie, et la lui faire descendre a travers deux
+  // composants aurait cree un chemin de plus ou l'oublier.
+  creneaux: (produitId) => {
+    const vitrine = vitrineStore.get()
+    return request(
+      `/api/boutique/produits/${produitId}/creneaux${vitrine ? `?vitrine=${encodeURIComponent(vitrine)}` : ''}`,
+    )
+  },
 
   // Mentions obligatoires, en acces PUBLIC et sans jeton.
   //

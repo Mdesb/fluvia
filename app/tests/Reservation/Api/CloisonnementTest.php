@@ -28,7 +28,13 @@ final class CloisonnementTest extends ReservationApiTestCase
 
         // Sur B : aucune affectation → aucune permission effective → accès refusé.
         $client->request('GET', '/api/reservation_ressources', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : aucun accès hors périmètre affecté.');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : aucun accès hors périmètre affecté.');
+
+        // TÉMOIN DU VOTER (07/09) : l'en-tête EST dans la portée (le listener laisse passer),
+        // mais la permission d'écriture manque (LECTEUR n'a que *.lire) → le voter doit refuser.
+        // Sans ce cas, depuis e915c94e ce test ne prouve plus que le refus du listener (404).
+        $client->request('POST', '/api/reservation_activites', ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA], 'json' => []]);
+        self::assertResponseStatusCodeSame(403, 'Le voter refuse une écriture dans la portée sans la permission requise (le listener, lui, a laissé passer l\'en-tête).');
     }
 
     /**
@@ -216,6 +222,6 @@ final class CloisonnementTest extends ReservationApiTestCase
             'auth_bearer' => $entete['auth_bearer'],
             'headers' => [ContexteEtablissement::HEADER => $idEtabC],
         ]);
-        self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : cloisonnement Groupe (l\'admin du groupe A n\'est pas affecté sur le groupe B/établissement C).');
+        self::assertResponseStatusCodeSame(404, 'RG-SOCLE-05 : cloisonnement Groupe (l\'admin du groupe A n\'est pas affecté sur le groupe B/établissement C).');
     }
 }

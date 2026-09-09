@@ -479,6 +479,10 @@ export const api = {
   // affiche verbatim et n'additionne rien : recalculer depuis `tauxTva`, qui est lu vivant sur la
   // fiche du taux, fabriquerait un troisieme chiffre.
   renduFacture: (id) => request(`/api/factures/${id}/rendu`),
+  // Le Factur-X (PDF/A-3 + XML CII EN 16931 embarqué) d'une facture : un BINAIRE, pas du JSON.
+  // À récupérer par `fetch` avec le jeton porteur (comme le téléchargement DMS), pas via
+  // `request()` ; route hors `/api`, servie par TelechargerFacturXController.
+  urlFacturX: (id) => `/factures/${id}/facturx`,
   // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
   // qui permet de se tromper sans trouer la sequence legale des numeros.
   creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
@@ -970,6 +974,8 @@ export const api = {
     request(`/api/compta/ventes-impayees-regie/${id}/regler`, { method: 'POST', body: corps }),
   reduireEcheance: (id, corps) =>
     request(`/api/sport/echeances/${id}/reduire`, { method: 'POST', body: corps }),
+  listerAbonnements: () =>
+    request('/api/abonnement_fitnesses', { query: { itemsPerPage: 100 } }),
   abonnementsDuPayeur: (clientId) =>
     request('/api/abonnement_fitnesses', { query: { payeur: clientId, itemsPerPage: 100 } }),
   beneficiairesDuClient: (clientId) =>
@@ -1209,6 +1215,25 @@ export const api = {
   creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
   creerCreneau: (corps) =>
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
+  // LES CRENEAUX D'UNE ACTIVITE, A PARTIR D'UN INSTANT.
+  //
+  // `reservationCreneaux()` (plus haut) rend les 200 premiers creneaux de l'etablissement, tous
+  // confondus : la fiche produit y aurait cherche les siens a l'aveugle, et un etablissement actif
+  // en aurait rempli la page avant d'arriver a l'activite demandee.
+  //
+  // ⚠ LES DEUX FILTRES SONT DECLARES SUR L'ENTITE, ET C'EST CE QUI LES REND SURS :
+  // `SearchFilter(activite: exact)` et `DateFilter(debut)`. Un parametre non declare est ignore en
+  // SILENCE par API Platform — la reponse serait complete, l'ecran afficherait tous les creneaux de
+  // tout le monde, et rien ne signalerait que le filtre n'a pas mordu.
+  creneauxDeActivite: (activiteId, depuis) =>
+    request('/api/reservation_creneaus', {
+      query: {
+        activite: `/api/reservation_activites/${activiteId}`,
+        'debut[after]': depuis,
+        'order[debut]': 'asc',
+        itemsPerPage: 100,
+      },
+    }),
   // ── ANNULER UNE RESERVATION ───────────────────────────────────────────────────────────────────
   //
   // ⚠ L'ECRAN N'A RIEN A DECIDER : tout vit dans `AnnulerReservationProcessor`. Dans le delai franc
@@ -2087,6 +2112,19 @@ export const api = {
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
+  // ── DECLARER ET MODIFIER UNE REGIE (Parametres > Caisse) ────────────────────────────────────
+  //
+  // `POST` et `PATCH` existent depuis l'origine du module, tous deux sous `compta.gerer`, et
+  // n'etaient appeles d'aucun ecran : `RegieRecettes` n'etait instanciee que par `ComptaFixtures`.
+  // Sur un etablissement reellement ouvert, il n'y avait donc AUCUN moyen de creer une regie, et
+  // l'onglet Comptabilite > Regie restait vide sans que rien n'explique pourquoi.
+  //
+  // ⚠ `profilExploitant` est obligatoire a la creation (`nullable: false`, `NotNull`) : l'omettre
+  // rend un 422 sur un champ que l'ecran n'aurait jamais montre.
+  creerRegieRecettes: (corps) =>
+    request('/api/regie_recettes', { method: 'POST', body: corps, ld: true }),
+  majRegieRecettes: (id, corps) =>
+    request(`/api/regie_recettes/${id}`, { method: 'PATCH', body: corps }),
   ventesImpayeesRegie: () =>
     request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
   // ── VERSER UNE REGIE (US-L4-02, CA-5) ─────────────────────────────────────────────────────────
@@ -2743,9 +2781,20 @@ export const api = {
   // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
   padelEclairageManuel: (id, corps) =>
     request(`/api/padel/terrains/${id}/eclairage/repli-manuel`, { method: 'POST', body: corps }),
-  // Pas de collection listable pour les tournois (seulement des routes custom
-  // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
-  padelTournois: () => Promise.resolve({ 'hydra:member': [] }),
+  // ⚠ CETTE FONCTION NE DEMANDAIT RIEN ET RÉPONDAIT « AUCUN TOURNOI ».
+  //
+  // Elle rendait `Promise.resolve({ 'hydra:member': [] })`, justifiée par un commentaire qui
+  // affirmait qu'aucune collection n'existait — « seulement des routes custom
+  // /api/padel/tournois/{id}/... ». C'était faux : le document OpenAPI que l'API sert publie
+  // `GET, POST /api/padel_tournois`, et la collection répond 200 avec un tournoi en base sur la
+  // préproduction. L'écran qui l'aurait appelée aurait donc affirmé une absence en contradiction
+  // avec les données, sans qu'aucune requête n'ait eu lieu.
+  //
+  // Le commentaire était le cœur du défaut : il ne décrivait pas un choix, il posait un fait — et
+  // un fait faux ferme la question pour tous ceux qui le lisent ensuite. Réfutable en une commande :
+  //
+  //     curl -H "Authorization: Bearer <jeton>" .../api/padel_tournois
+  padelTournois: () => request('/api/padel_tournois', { query: { itemsPerPage: 100 } }),
   // Musée
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
@@ -2826,6 +2875,15 @@ export const api = {
   creerEditorRubrique: (corps) => request('/api/editor/website/categories', { method: 'POST', body: corps, ld: true }),
   majEditorRubrique: (id, corps) => request(`/api/editor/website/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorRubrique: (id) => request(`/api/editor/website/categories/${id}`, { method: 'DELETE' }),
+
+  // Le referentiel des metiers : chaque ligne est une page de /metiers, sans deploiement.
+  editorMetiers: () => request('/api/editor/website/trades'),
+  creerEditorMetier: (corps) => request('/api/editor/website/trades', { method: 'POST', body: corps, ld: true }),
+  majEditorMetier: (id, corps) => request(`/api/editor/website/trades/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorMetier: (id) => request(`/api/editor/website/trades/${id}`, { method: 'DELETE' }),
+
+  // Les neuf activites de D15, servies par le serveur pour que l'ecran ne les reecrive pas.
+  editorActivites: () => request('/api/editor/website/activities'),
 
   editorBlocs: () => request('/api/editor/website/blocks'),
   editorBloc: (cle) => request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`),
