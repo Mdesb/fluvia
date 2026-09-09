@@ -24,7 +24,7 @@ import { dateFr, jourLocal } from './Liste.jsx'
  * réellement mappées : une nature absente du référentiel existerait quand même côté serveur, mais
  * sans imputation la note ne pourrait pas passer en comptabilité.
  */
-export default function NotesDeFrais({ etabActif, droits = [] }) {
+export default function NotesDeFrais({ etabActif, droits = [], params = {}, majParams }) {
   // La note dont on a deplie les lignes. `null` = aucune, et c'est l'etat normal : une liste de
   // notes se lit d'abord en survol, le detail se demande.
   const [depliee, setDepliee] = useState(null)
@@ -41,7 +41,6 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
   const [creation, setCreation] = useState(false)
-  const [lignePour, setLignePour] = useState(null)
   const [remboursePour, setRemboursePour] = useState(null)
 
   const peutSoumettre = aLeDroit(droits, 'finance.expense_report_submit')
@@ -105,6 +104,52 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
 
   if (chargement && notes === null && !erreur) {
     return <div className="center"><div className="spinner" /></div>
+  }
+
+  // ── L'AJOUT D'UNE DÉPENSE, EN ÉCRAN ─────────────────────────────────────────────────────────
+  //
+  // ⚠ `notes` est un `useState(null)` : `null` veut dire « pas lu », pas « aucune note ». On ne
+  // monte donc le formulaire qu'une fois la note retrouvée, et on dit laquelle des deux absences
+  // on regarde.
+  if (params.depense) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => majParams({ depense: '' }, { pousser: true })}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux notes de frais
+      </button>
+    )
+    const note = (notes || []).find((n) => String(n.id) === String(params.depense))
+    if (!note) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            {notes === null
+              ? 'Les notes de frais n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même chose que « elle n’existe pas ».'
+              : 'Cette note de frais n’est plus dans la liste — elle a sans doute été remboursée ou supprimée depuis que ce lien a été copié.'}
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        <LigneModal
+          note={note}
+          natures={natures}
+          onClose={() => majParams({ depense: '' }, { pousser: true })}
+          onFait={() => {
+            majParams({ depense: '' }, { pousser: true })
+            setSucces('Dépense ajoutée.')
+            recharger()
+          }}
+        />
+      </>
+    )
   }
 
   return (
@@ -194,7 +239,7 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
                                 className="btn sm"
                                 type="button"
                                 disabled={busy}
-                                onClick={() => setLignePour(n)}
+                                onClick={() => majParams({ depense: String(n.id) }, { pousser: true })}
                               >
                                 Ajouter une dépense
                               </button>
@@ -306,13 +351,6 @@ export default function NotesDeFrais({ etabActif, droits = [] }) {
         profils={profils}
         onClose={() => setCreation(false)}
         onFait={() => { setCreation(false); setSucces('Note de frais créée.'); recharger() }}
-      />
-
-      <LigneModal
-        note={lignePour}
-        natures={natures}
-        onClose={() => setLignePour(null)}
-        onFait={() => { setLignePour(null); setSucces('Dépense ajoutée.'); recharger() }}
       />
 
       <RemboursementModal
@@ -545,7 +583,8 @@ function LigneModal({ note, natures, onClose, onFait }) {
   }
 
   return (
-    <Modal open={Boolean(note)} onClose={onClose} titre="Ajouter une dépense">
+    <>
+      <h2>Ajouter une dépense</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -657,7 +696,7 @@ function LigneModal({ note, natures, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
