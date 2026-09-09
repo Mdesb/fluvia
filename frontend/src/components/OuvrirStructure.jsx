@@ -45,6 +45,8 @@ const NAF_VERS_METIER = {
   '91.03Z': 'musee',
 }
 
+// ⚠ CE N'EST PLUS UNE MODALE. La garde `if (!ouvert) return null` remplace celle que `Modal`
+// portait : sans elle, le formulaire s'afficherait en permanence sous les paramètres.
 export default function OuvrirStructure({ ouvert, onFermer, onOuverte }) {
   const [terme, setTerme] = useState('')
   const [resultats, setResultats] = useState([])
@@ -97,8 +99,11 @@ export default function OuvrirStructure({ ouvert, onFermer, onOuverte }) {
     }
   }
 
+  if (!ouvert) return null
+
   return (
-    <Modal open={ouvert} onClose={onFermer} titre="Ouvrir une structure" taille="md">
+    <>
+      <h2>Ouvrir une structure</h2>
       {!choisie ? (
         <div style={{ display: 'grid', gap: 12 }}>
           <div className="field" style={{ marginBottom: 0 }}>
@@ -250,6 +255,6 @@ export default function OuvrirStructure({ ouvert, onFermer, onOuverte }) {
           </div>
         </div>
       )}
-    </Modal>
+    </>
   )
 }

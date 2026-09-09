@@ -11,12 +11,15 @@ use App\Boutique\Entity\Vitrine;
 use App\Crm\Entity\Client;
 use App\Crm\Enum\StatutClient;
 use App\Crm\Enum\TypeClient;
+use App\Boutique\Notification\AccountEmailVerificationMailer;
 use App\Securite\Entity\Affectation;
+use App\Securite\Entity\EmailVerificationToken;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Enum\StatutUtilisateur;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -53,6 +56,8 @@ final class CreationCompteHandler
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly PasswordPolicy $passwords,
+        private readonly AccountEmailVerificationMailer $verification,
+        private readonly LoggerInterface $journal,
     ) {
     }
 
@@ -122,7 +127,34 @@ final class CreationCompteHandler
         $affectation->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement);
         $this->em->persist($affectation);
 
+        // ⚠ LA PREUVE D'ADRESSE, SANS LAQUELLE ON NE RATTACHE RIEN. Un achat en invite laisse ses
+        //    commandes sans compte ; les rendre au compte cree ensuite avec la meme adresse suppose
+        //    d'avoir prouve que l'adresse est bien la sienne. Le clair part par courriel, la table
+        //    n'en garde que le SHA-256.
+        $jetonClair = bin2hex(random_bytes(32));
+        $jeton = new EmailVerificationToken();
+        $jeton->setUtilisateur($utilisateur)
+            ->setJeton(hash('sha256', $jetonClair))
+            ->setAdresse($email);
+        $this->em->persist($jeton);
+
         $this->em->flush();
+
+        // ⚠ APRES LE FLUSH, ET SANS FAIRE ECHOUER L'INSCRIPTION. Un relais indisponible ne doit pas
+        //    empecher un compte d'exister : il resterait non verifie, ce qui est son etat reel.
+        //    On journalise pour que l'absence d'envoi soit constatable, jamais silencieuse.
+        try {
+            if (!$this->verification->envoyer($jeton, $jetonClair)) {
+                $this->journal->warning('Compte cree sans courriel de confirmation : BOUTIQUE_BASE_URL absente.', [
+                    'compte' => (string) $compte->getId(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->journal->error('Envoi du courriel de confirmation impossible.', [
+                'compte' => (string) $compte->getId(),
+                'erreur' => $e->getMessage(),
+            ]);
+        }
 
         return $compte;
     }
