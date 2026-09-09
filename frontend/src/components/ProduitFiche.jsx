@@ -147,6 +147,14 @@ const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['
 // le jour où un second axe d'affichage arrive, il s'ajoute ici et nulle part ailleurs.
 const AXES_MULTIPLES = ['rayon']
 
+// ⚠ PENDANT COMBIEN DE TEMPS `allerA` CORRIGE SON DEFILEMENT. Mesuré le 07/09/2026 sur la fiche
+// de GI-ONE FITNESS : l'onglet « Vente » se posait 333 ms après le clic dans un cas, ~490 ms dans
+// un autre — et entre les deux il restait immobile assez longtemps pour tromper un test de
+// stabilité sur deux ou trois trames. On corrige donc pendant une seconde pleine, ce qui laisse
+// de la marge sur les deux mesures sans jamais dépasser le temps où l'utilisateur regarde encore
+// le résultat de son clic.
+const DELAI_CORRECTION_MS = 1000
+
 /**
  * Le mode, en mots de l'utilisateur.
  *
@@ -254,20 +262,50 @@ export default function ProduitFiche({
 
   // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
   //
-  // ⚠ LE DEFILEMENT ATTEND QUE REACT AIT RENDU L'ONGLET : avant la validation du rendu, l'ancre
-  // n'existe pas dans le document et `getElementById` rend `null`. Deux `requestAnimationFrame`
-  // imbriques garantissent qu'on passe apres.
+  // ⚠ TROUVER L'ANCRE NE SUFFIT PAS : UN SEUL DEFILEMENT NE SUFFIT PAS NON PLUS.
+  //
+  // Les deux `requestAnimationFrame` imbriques attendaient le rendu de l'onglet, et ils
+  // l'attendaient correctement : l'ancre etait bien la, `scrollIntoView` etait bien appelee sur
+  // elle. Ce qui manquait, c'est que la PAGE, elle, n'avait pas fini de grandir. Mesures du
+  // 07/09/2026 (fiche « Test » de GI-ONE FITNESS) :
+  //
+  //   au clic          l'onglet « Vitrine » fait 1223 px, on est a 323 px du haut
+  //   a la 2e trame    l'onglet « Vente » ne fait que 1025 px : 125 px de course en tout, et on y
+  //                    est deja. La section demandee est a 359 px. Le navigateur ne peut RIEN
+  //                    faire, et `scrollIntoView` rend la main sans avoir bouge d'un pixel.
+  //   333 ms plus tard le reste de l'onglet arrive, la page passe a 1243 px. Personne ne redefile.
+  //
+  // La section restait donc la ou l'ancrage du navigateur l'avait laissee — hors ecran sur une
+  // fenetre de 900 px. Le raccourci avait l'air inerte, ou pire : il avait remonte la page.
+  //
+  // ⚠ ET UN TEST DE STABILITE SUR QUELQUES TRAMES NE SUFFIT PAS : entre les deux hauteurs la page
+  // reste immobile assez longtemps pour le tromper. On ne devine donc pas la fin de la mise en
+  // page — on REDEFILE a chaque fois que la hauteur du document change, pendant une seconde.
   //
   // ⚠ Et `scroll-margin-top` (styles.css) decale l'arret sous la barre collante de 62 px — sans
   // elle, la section visee arrive DESSOUS. Trouve en cliquant, pas en lisant.
+  //
+  // ⚠ CE QUE CE CORRECTIF NE PEUT PAS FAIRE : amener la section a 78 px du haut quand la page n'a
+  // pas 78 px de course sous elle. `block: 'start'` est alors ecrete par le navigateur, la section
+  // s'arrete aussi haut que le document le permet, et c'est une limite du document — pas du code.
+  // Mesure : 141 px au lieu de 78 sur cette fiche en 1440x900, la page etant au bout de sa course.
   function allerA(ancre) {
     setVueFiche('vente')
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const fin = Date.now() + DELAI_CORRECTION_MS
+    let hauteurDefilee = -1
+    const corriger = () => {
       const cible = document.getElementById(ancre)
-      if (!cible) return
-      const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
-    }))
+      const hauteur = document.documentElement.scrollHeight
+      // Redefiler seulement quand la page a change de taille : sans ca on relancerait l'animation
+      // a chaque trame, et un defilement doux ne se terminerait jamais.
+      if (cible && hauteur !== hauteurDefilee) {
+        hauteurDefilee = hauteur
+        cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
+      }
+      if (Date.now() < fin) requestAnimationFrame(corriger)
+    }
+    requestAnimationFrame(corriger)
   }
 
   const [detail, setDetail] = useState(null)
@@ -734,7 +772,6 @@ export default function ProduitFiche({
 
           <Section titre="Description" aide="Le texte que le visiteur lit avant d'acheter.">
         <div className="field">
-          <label htmlFor="pr-desc">Description</label>
           <textarea
             id="pr-desc"
             className="input"
@@ -773,7 +810,6 @@ export default function ProduitFiche({
 
           <Section titre="Produits complémentaires" aide="Ce qu'on propose avec — le casier avec l'entrée.">
         <div className="field">
-          <label htmlFor="pr-complements">Produits complémentaires</label>
           {complements.length === 0 ? (
             <div className="empty">
               Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
@@ -937,6 +973,14 @@ export default function ProduitFiche({
       {/* VENTE, second bloc — voir le commentaire du premier. */}
       {vue === 'vente' && (
       <>
+      {/* ⚠ L'ANCRE EST ICI DESORMAIS. Elle vivait sur un recapitulatif en lecture seule, supprime :
+          la ligne compacte de l'en-tete renvoie maintenant la ou l'on CHOISIT, pas la ou l'on
+          constate. */}
+      <Section
+        titre="Diffusion"
+        ancre="prod-diffusion"
+        aide="Ou le produit est vendu, sur quels sites, dans quelles categories, et pour combien de temps."
+      >
       <div className="field">
         <label>Où ce produit est vendu</label>
         <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
@@ -1103,6 +1147,7 @@ export default function ProduitFiche({
           </div>
         )}
       </div>
+      </Section>
       {/* ⚠ N'APPARAIT QUE SI LA FORMULE EXISTE. On ne propose pas d'en creer une : donner une
           formule d'abonnement a un produit de boutique demanderait de decider ce que ca veut
           dire, et un ecran qui propose une operation sans sens defini produit des donnees que
@@ -1241,22 +1286,6 @@ export default function ProduitFiche({
         </Section>
       )}
 
-      <Section titre="Diffusion" ancre="prod-diffusion">
-        {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
-            restreint : un produit sans site coche est du socle, partage par tous les
-            etablissements. Afficher un tiret ici faisait croire a un rattachement manquant, et
-            invitait a << reparer >> ce qui n'etait pas casse. */}
-        <Ligne
-          libelle="Sites de commercialisation"
-          valeur={(p.etablissements || []).length || 'Tous — aucun site coché, donc socle partagé'}
-        />
-        <Ligne libelle="Catégories" valeur={(p.categories || []).length || '—'} />
-        <Ligne
-          libelle="Durée de validité"
-          valeur={p.dureeValidite || '—'}
-          aide="Durée pendant laquelle le droit vendu reste utilisable."
-        />
-      </Section>
 
       {/* TROIS CHAMPS ÉCRIVABLES DEPUIS LE DÉBUT, AFFICHÉS ET JAMAIS PROPOSÉS.
           `PATCH /produits/{id}/compta` existe, protégée par `offre.modifier_compta`, et accepte
@@ -1688,10 +1717,18 @@ function Section({ titre, aide, children, ancre }) {
   return (
     // `ancre` est facultative : seules les sections vers lesquelles la ligne compacte renvoie en
     // portent une. En donner une a toutes creerait des identifiants que rien n'utilise.
-    <div id={ancre} style={{ marginTop: 'var(--esp-large)' }}>
-      <div className="fiche-sec" title={aide}>{titre}</div>
-      {children}
-    </div>
+    <section id={ancre} className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
+      {/* ⚠ L'AIDE ETAIT ECRITE ET PERSONNE NE LA VOYAIT. Elle ne vivait qu'en attribut `title`,
+          c'est-a-dire une infobulle native : invisible a l'ecran, inatteignable au doigt. Elle
+          descend ici en sous-titre, la ou `.card-h` sait deja l'afficher. */}
+      <div className="card-h">
+        <div>
+          <h3>{titre}</h3>
+          {aide && <div className="sub">{aide}</div>}
+        </div>
+      </div>
+      <div className="card-b">{children}</div>
+    </section>
   )
 }
 
