@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { lireHash } from '../api/url.js'
+import { useEtatUrl } from '../api/url.js'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import RegiesRecettes from '../components/RegiesRecettes.jsx'
 import TopologieAcces from './TopologieAcces.jsx'
@@ -516,15 +516,28 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '' }
+
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
-  const [ouvertureStructure, setOuvertureStructure] = useState(false)
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
   // « Paramètres › Contrôle d'accès » devient PARTAGEABLE — il ne l'était pas —, et le panneau de
   // déménagement de l'ancien `#topologie_acces` peut y déposer qui le cherchait.
   //
-  // Lu UNE FOIS au démarrage : ensuite c'est l'écran qui commande ses onglets. Le relire à chaque
-  // rendu ferait revenir l'onglet d'arrivée sous les doigts de qui vient d'en choisir un autre.
-  const [sousOnglet, setSousOnglet] = useState(() => lireHash().params.sousOnglet || 'entites')
+  // ⚠ IL EST DÉSORMAIS LU *ET* ÉCRIT, par `useEtatUrl`. La version d'avant le lisait une seule
+  // fois au montage, en redoutant qu'un relecture à chaque rendu ramène l'onglet d'arrivée sous
+  // les doigts de qui vient d'en choisir un autre. Cette crainte tombe quand l'adresse suit le
+  // choix : c'est justement parce que l'ancienne version n'écrivait rien qu'il fallait ne lire
+  // qu'une fois.
+  //
+  // ⚠ ET `sousOnglet` DOIT ÊTRE DÉCLARÉ ICI MÊME SI CE LOT NE VISE QUE L'ÉCRAN : `ecrireHash`
+  // réécrit toute la requête à partir des seules clés déclarées. N'y mettre que `structure`
+  // aurait effacé `?sousOnglet=…` de l'adresse dès la première ouverture — on aurait cassé le
+  // lien partageable en croyant en ajouter un.
+  const [params, majParams] = useEtatUrl('parametres', DEFAUTS_URL)
+  const sousOnglet = params.sousOnglet
+  // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
+  // le formulaire dès qu'on reviendrait ici.
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -574,6 +587,30 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
     return () => { annule = true }
   }, [etabActif, versionReferentiels])
 
+  // ── L'OUVERTURE D'UNE STRUCTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // 151 lignes de formulaire, et un geste qui crée un établissement. Il prend la page : le
+  // sous-onglet reste dans l'adresse à côté, donc le retour ramène là d'où l'on vient.
+  if (params.structure === '1') {
+    return (
+      <div className="view">
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => majParams({ structure: '' }, { pousser: true })}
+          style={{ marginBottom: 'var(--esp-large)' }}
+        >
+          ← Retour aux paramètres
+        </button>
+        <OuvrirStructure
+          ouvert
+          onFermer={() => majParams({ structure: '' }, { pousser: true })}
+          onOuverte={() => window.location.reload()}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="view">
       <div className="view-head">
@@ -618,7 +655,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
                   dénomination, le SIRET, le numéro de TVA et l’adresse du siège. La structure est
                   ouverte avec son point de vente, prête à encaisser.
                 </p>
-                <button className="btn primary" type="button" onClick={() => setOuvertureStructure(true)}>
+                <button className="btn primary" type="button" onClick={() => majParams({ structure: '1' }, { pousser: true })}>
                   Ouvrir une structure
                 </button>
               </div>
@@ -751,11 +788,6 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           Posée à l'intérieur de l'un d'eux — ce qui est arrivé deux fois — elle n'existe pas quand
           on clique depuis un autre onglet : le bouton ne fait rien, sans erreur ni trace. Le bloc
           « droits » court sur quatre cents lignes, ce qui rend la faute facile et invisible. */}
-      <OuvrirStructure
-        ouvert={ouvertureStructure}
-        onFermer={() => setOuvertureStructure(false)}
-        onOuverte={() => window.location.reload()}
-      />
     </div>
   )
 }
