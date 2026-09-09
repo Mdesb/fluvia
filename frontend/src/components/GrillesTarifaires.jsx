@@ -26,11 +26,27 @@ export default function GrillesTarifaires({ etabActif, majParams }) {
   const [saisons, setSaisons] = useState(null)
   const [saison, setSaison] = useState('')
 
+  // ⚠ « PAS PU LIRE » NE DIT PAS POURQUOI, ET LA RAISON LA PLUS FRÉQUENTE N'EST PAS UNE PANNE.
+  //
+  // Ces trois lectures exigent toutes `offre.lire` — vérifié sur les trois entités. Un compte qui
+  // ne l'a pas voyait « les grilles n'ont pas pu être lues » et partait chercher un incident
+  // technique, alors qu'il lui suffisait qu'on lui accorde une permission. Le message avait
+  // d'autant plus de force qu'il avait l'air d'une information.
+  //
+  // Un seul drapeau pour les trois : c'est le même droit, donc la même phrase. En poser trois
+  // laisserait croire qu'ils peuvent diverger.
+  const [refus, setRefus] = useState(false)
+
   useEffect(() => {
     setGrilles(null)
-    api.grilleTarifaires().then((r) => setGrilles(membres(r))).catch(() => setGrilles(undefined))
-    api.produits({ itemsPerPage: 200 }).then((r) => setProduits(membres(r))).catch(() => setProduits(undefined))
-    api.saisons().then((r) => setSaisons(membres(r))).catch(() => setSaisons(undefined))
+    setRefus(false)
+    const echec = (poser) => (e) => {
+      if (e?.status === 403) setRefus(true)
+      poser(undefined)
+    }
+    api.grilleTarifaires().then((r) => setGrilles(membres(r))).catch(echec(setGrilles))
+    api.produits({ itemsPerPage: 200 }).then((r) => setProduits(membres(r))).catch(echec(setProduits))
+    api.saisons().then((r) => setSaisons(membres(r))).catch(echec(setSaisons))
   }, [etabActif])
 
   // ⚠ LE PRODUIT ARRIVE EN IDENTIFIANT NU. `Produit` n'a aucun champ dans le groupe `grille:read` —
@@ -100,6 +116,13 @@ export default function GrillesTarifaires({ etabActif, majParams }) {
             <div className="banner banner-warn">
               Les grilles n’ont pas pu être lues. Cet écran ne sait donc pas quels produits ont un
               prix — ce n’est pas la même chose que « aucun ».
+              {refus && (
+                <>
+                  {' '}<strong>Ce n’est pas une panne</strong> : ce compte n’a pas le droit de lire
+                  le catalogue de cet établissement. Demandez la permission <code>offre.lire</code> à
+                  un administrateur.
+                </>
+              )}
             </div>
           )}
 
