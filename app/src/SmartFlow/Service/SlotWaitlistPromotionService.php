@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\SmartFlow\Service;
 
+use App\Crm\Entity\Beneficiaire;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Notification\ClientNotification;
 use App\Platform\Notification\ClientNotifierInterface;
@@ -167,11 +168,38 @@ final class SlotWaitlistPromotionService
         $this->em->persist($proposal);
         $this->em->flush();
 
+        // ⚠ UN BENEFICIAIRE N'EST PAS UN CLIENT, ET LE NOTIFIEUR ATTEND UN CLIENT.
+        //
+        // Jusqu'au 06/09, on passait `beneficiaryId` tel quel à `ClientNotification::$clientId`.
+        // `ConsentGatedNotifier` cherche alors `Client::find()`, ne trouve rien, et rend `Refusee` —
+        // exactement ce qu'il rend quand un client a REFUSÉ les messages. La place était donc
+        // proposée à quelqu'un qui n'en entendait jamais parler, et la trace disait « consentement ».
+        //
+        // Tout le module est cohérent sur la nature de cet identifiant : l'émetteur écrit
+        // `$reservation->getOrganisateur()?->getId()`, et la comparaison anti-IDOR de l'acceptation
+        // en dépend. C'était donc cet appel-ci, et lui seul, qu'il fallait corriger — même saut que
+        // `RecoverySubjectCustomerResolver` fait déjà côté relance des recettes.
+        $beneficiaire = $this->em->getRepository(Beneficiaire::class)->find($entry->getBeneficiaryId());
+        $idClient = $beneficiaire?->getClient()?->getId();
+
+        if ($idClient === null) {
+            // Ne pas pouvoir joindre quelqu'un est un fait d'exploitation : le taire reproduirait le
+            // défaut qu'on vient de corriger, un cran plus loin. La promotion reste acquise — on ne
+            // la défait pas parce qu'un courriel ne part pas (D7).
+            $this->logger?->warning('smart_flow.promotion.client_introuvable', [
+                'entry' => (string) $entry->getId(),
+                'beneficiaire' => (string) $entry->getBeneficiaryId(),
+                'consequence' => 'la personne promue n\'a pas été prévenue',
+            ]);
+
+            return $proposal;
+        }
+
         try {
             // ⚠ BASE LÉGALE À CONFIRMER PAR claude-A : `Consentement` par défaut (le plus strict), même
             // question que `RescheduleRequestedListener` pour une proposition de report après no-show.
             $this->notifier->notify(new ClientNotification(
-                $entry->getBeneficiaryId(),
+                $idClient,
                 NotificationChannel::Email,
                 'smart_flow.waitlist_promoted',
                 [

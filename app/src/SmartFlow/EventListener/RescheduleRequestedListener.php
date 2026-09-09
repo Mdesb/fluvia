@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\SmartFlow\EventListener;
 
+use App\Crm\Entity\Beneficiaire;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Notification\ClientNotification;
@@ -129,8 +130,28 @@ final class RescheduleRequestedListener implements EventSubscriberInterface
             // une proposition de report après no-show est peut-être un message dû au titre du contrat
             // (`Contractuelle`, cf. `App\Subscription\EventListener\EnvoyerCourrielDeBienvenue`), à
             // trancher une fois le fondement RGPD de Smart Flow arbitré.
+            // ⚠ LE CLIENT DU BÉNÉFICIAIRE, PAS LE BÉNÉFICIAIRE — jumeau du défaut corrigé dans
+            // `SlotWaitlistPromotionService`. `customerId` porte l'identifiant rendu par
+            // `getOrganisateur()?->getId()` ; `ClientNotification` attend un `Client`, et
+            // `ConsentGatedNotifier` rend `Refusee` s'il n'en trouve pas — indiscernable d'un refus
+            // de consentement. La proposition de report n'atteignait donc personne.
+            $beneficiaire = $this->em->getRepository(Beneficiaire::class)->find($proposal->getCustomerId());
+            $idClient = $beneficiaire?->getClient()?->getId();
+
+            if ($idClient === null) {
+                // Best-effort comme le reste de ce listener, mais jamais muet : une proposition
+                // qu'on ne peut annoncer à personne est un fait d'exploitation.
+                $this->logger?->warning('smart_flow.reschedule.client_introuvable', [
+                    'proposal' => (string) $proposal->getId(),
+                    'beneficiaire' => (string) $proposal->getCustomerId(),
+                    'consequence' => 'la proposition de report n\'a été annoncée à personne',
+                ]);
+
+                return;
+            }
+
             $this->notifier->notify(new ClientNotification(
-                $proposal->getCustomerId(),
+                $idClient,
                 NotificationChannel::Email,
                 'smart_flow.reschedule_proposed',
                 [
