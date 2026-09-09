@@ -27,6 +27,7 @@ use App\Facturation\State\EmettreFactureJustificativeProcessor;
 use App\Facturation\State\EnregistrerReglementProcessor;
 use App\Facturation\State\FactureRenduProvider;
 use App\Facturation\State\GenererAvoirFactureProcessor;
+use App\Facturation\State\FacturesDuClientProvider;
 use App\Facturation\State\MesFacturesProvider;
 use App\Facturation\State\ModifierFactureDirecteProcessor;
 use App\Facturation\State\VerifierChaineFactureProvider;
@@ -87,6 +88,24 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('PERM', 'facturation.lire')",
             uriTemplate: '/factures/verifier-chaine',
             provider: VerifierChaineFactureProvider::class,
+        ),
+        // Les factures d'un client, pour sa fiche (G-8).
+        //
+        // ⚠ CHEMIN LITTÉRAL + PARAMÈTRE DE REQUÊTE, ET LES DEUX SONT DÉLIBÉRÉS.
+        //  · Pas de filtre déclaratif : `destinataire.clientRef` est un `BINARY(16)`, que le
+        //    `SearchFilter` compare à une chaîne de 36 caractères — zéro résultat, sans rien lever.
+        //  · Pas de route imbriquée `/crm/clients/{clientId}/factures` non plus : elle exigerait un
+        //    `Link(fromClass: Client::class)`, donc une référence de `Facturation` vers `Crm` dans les
+        //    métadonnées, ce que D2 proscrit. Le provider lit le paramètre et compare avec le bon type.
+        //
+        // ⚠ ET ELLE EST DÉCLARÉE AVANT `Get /factures/{id}` — voir l'avertissement de `verifier-chaine`
+        //    ci-dessus : un chemin littéral placé après serait capté par le chemin paramétré, et le 404
+        //    ne désignerait pas la cause.
+        new GetCollection(
+            uriTemplate: '/factures/du-client',
+            paginationEnabled: false,
+            security: "is_granted('PERM', 'facturation.lire')",
+            provider: FacturesDuClientProvider::class,
         ),
         new Get(security: "is_granted('PERM', 'facturation.lire') or (is_granted('PERM', 'facturation.lire_soi') and object.estLieA(user))"),
         new GetCollection(
@@ -159,6 +178,16 @@ use Symfony\Component\Validator\Constraints as Assert;
     ],
     normalizationContext: ['groups' => ['facture:read']],
 )]
+// ⚠ PAS DE FILTRE `destinataire.clientRef` ICI, ET C'EST UNE DÉCISION MESURÉE.
+//
+// Je l'avais déclaré. Il rend **zéro résultat, toujours** : `clientRef` est stocké en `BINARY(16)`
+// par le type Doctrine `uuid`, et le `SearchFilter` standard le compare à une chaîne de 36
+// caractères — ça ne trouve rien et ça ne lève rien. Le décorateur du dépôt
+// (`UuidAwareSearchFilter`) corrige ce piège sur une propriété DIRECTE, pas sur un chemin imbriqué.
+//
+// Les factures d'un client passent donc par `GET /crm/clients/{clientId}/factures`
+// (`FacturesDuClientProvider`), qui compare avec le bon type ET repose le cloisonnement à la main —
+// un provider sur mesure échappe aux extensions Doctrine.
 #[ApiFilter(SearchFilter::class, properties: [
     'statut' => 'exact',
     'nature' => 'exact',

@@ -9,6 +9,7 @@ use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\Journal;
 use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\MoyenPaiement;
+use App\Compta\Entity\PaymentMethodTreasuryAccount;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\RegieRecettes;
 use App\Compta\Entity\TauxTva;
@@ -189,6 +190,54 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
             $manager->persist((new MoyenPaiement())
                 ->setCode($code)->setLibelle($libelle)
                 ->setAutoriseRendu($rendu)->setExigeReference($reference)->setAutoriseDiffere($differe));
+        }
+        $manager->flush();
+
+        // --- Compte de trésorerie par (exploitant, moyen) ---
+        //
+        // ⚠ INDISPENSABLE, PAS DÉCORATIF. Sans ces rattachements, `PaymentLedgerPoster` refuse tout
+        //    encaissement et TOUTE la facturation tombe : le règlement d'une facture écrit désormais
+        //    son écriture au journal `ENC`, et il ne peut pas savoir quel compte débiter.
+        //
+        // ⚠ ET LES FIXTURES NE PEUVENT PAS S'APPUYER SUR LA MIGRATION QUI POSE LES MÊMES DÉFAUTS.
+        //    Le harnais de test construit le schéma depuis le MAPPING, il ne joue jamais les
+        //    migrations : ce que `Version20260908091500` insère n'existe pas ici. Les deux chemins
+        //    doivent donc poser la même chose, chacun de son côté — et c'est exactement le genre de
+        //    duplication qui diverge en silence. Si tu touches l'un, touche l'autre.
+        //
+        // La règle est la même qu'en migration : le numéro EXACT d'abord, le préfixe en repli. Le
+        // plan de comptes de démonstration ci-dessus n'a ni 531x ni 511200 — espèces et chèques
+        // retombent donc sur 511000, et c'est voulu : un semis de démo n'invente pas des comptes
+        // qu'il n'a pas.
+        $correspondances = [
+            ['exact' => '531000', 'prefixe' => '531', 'codes' => ['especes']],
+            ['exact' => '512000', 'prefixe' => '512', 'codes' => ['cb', 'virement', 'payfip']],
+            ['exact' => '511200', 'prefixe' => '511', 'codes' => ['cheque', 'cheque_vacances', 'cheque_culture', 'cheque_loisirs']],
+        ];
+        foreach ($correspondances as $correspondance) {
+            $compte = $comptesEntites[$correspondance['exact']] ?? null;
+            if (!$compte instanceof CompteComptable) {
+                foreach ($comptesEntites as $numero => $candidat) {
+                    if (str_starts_with((string) $numero, $correspondance['prefixe'])) {
+                        $compte = $candidat;
+                        break;
+                    }
+                }
+            }
+            if (!$compte instanceof CompteComptable) {
+                continue;
+            }
+
+            foreach ($correspondance['codes'] as $code) {
+                $moyen = $depot->findOneBy(['code' => $code]);
+                if (!$moyen instanceof MoyenPaiement) {
+                    continue;
+                }
+                $manager->persist((new PaymentMethodTreasuryAccount())
+                    ->setBusinessProfile($profil)
+                    ->setPaymentMethod($moyen)
+                    ->setTreasuryAccount($compte));
+            }
         }
 
         // --- Régie de recettes (US-L4-02) ---

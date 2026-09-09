@@ -8,6 +8,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Sepa\Dto\EcheanceSepaDue;
 use App\Sepa\Entity\RemiseSepa as SepaRemiseSepa;
 use App\Sepa\Port\EcheanceSepaSource;
+use App\Offre\Entity\Produit;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
 use App\Sport\Enum\StatutEcheanceSepa;
@@ -55,6 +56,8 @@ final class SportEcheanceSepaSource implements EcheanceSepaSource
             }
         }
 
+        $tauxParFormule = $this->tauxParFormule($echeances);
+
         $dues = [];
         foreach ($echeances as $echeance) {
             $abonnement = $echeance->getAbonnement();
@@ -65,6 +68,8 @@ final class SportEcheanceSepaSource implements EcheanceSepaSource
             }
             $idAbonnement = (string) $abonnement->getId();
             $derniere = $derniereDateParAbonnement[$idAbonnement] == $echeance->getDateProgrammee();
+            $formuleAbonnement = $abonnement->getFormule();
+            $idFormule = $formuleAbonnement !== null ? bin2hex($formuleAbonnement->getId()->toBinary()) : '';
 
             $dues[] = new EcheanceSepaDue(
                 referenceOrigine: (string) $echeance->getId(),
@@ -74,10 +79,69 @@ final class SportEcheanceSepaSource implements EcheanceSepaSource
                 dateEcheance: $echeance->getDateProgrammee(),
                 derniereEcheanceEngagement: $derniere,
                 paiementUnique: false,
+                tauxTvaValeur: $tauxParFormule[$idFormule] ?? null,
             );
         }
 
         return $dues;
+    }
+
+    /**
+     * Le taux de TVA de chaque formule, par identifiant de formule.
+     *
+     * ⚠ UNE REQUÊTE POUR TOUTES LES ÉCHÉANCES, PAS UNE PAR ÉCHÉANCE. Une remise mensuelle porte une
+     * ligne par abonné : résoudre le taux dans la boucle produirait un N+1 qui ne se verrait qu'en
+     * production, quand le nombre d'abonnés aura grandi.
+     *
+     * ⚠ ET LA RELATION SE PARCOURT À L'ENVERS. `Produit.formule` est le côté PROPRIÉTAIRE d'un
+     * `OneToOne` sans côté inverse : depuis une `Formule`, il n'existe aucun accesseur vers son
+     * `Produit`. On interroge donc les produits PAR leurs formules, ce qui est le seul chemin
+     * disponible — et non un choix de style.
+     *
+     * @param list<EcheanceSepa> $echeances
+     *
+     * @return array<string, string> identifiant de formule → taux décimal (« 20.00 »)
+     */
+    private function tauxParFormule(array $echeances): array
+    {
+        $formules = [];
+        foreach ($echeances as $echeance) {
+            $formule = $echeance->getAbonnement()?->getFormule();
+            if ($formule !== null) {
+                // La clé est l'hexadécimal du binaire : c'est la forme que rend `HEX(formule_id)`
+                // ci-dessous, donc la seule qui se compare sans conversion supplémentaire.
+                $formules[bin2hex($formule->getId()->toBinary())] = true;
+            }
+        }
+
+        if ($formules === []) {
+            return [];
+        }
+
+        // ⚠ SQL DIRECT AVEC `UNHEX`, ET CE N'EST PAS UN CAPRICE — le garde-fou n°? l'a attrapé sur la
+        //    première version de cette méthode, qui écrivait `->where('p.formule IN (:formules)')`.
+        //    `setParameter` NE CONVERTIT PAS les éléments d'un tableau : la requête aurait rendu une
+        //    liste VIDE, sans lever. Le taux n'aurait donc jamais été résolu, et le symptôme aurait
+        //    été « aucun produit ne porte de taux » — un défaut qui se déguise en donnée manquante.
+        $identifiants = array_keys($formules);
+        $placeholders = implode(',', array_fill(0, \count($identifiants), 'UNHEX(?)'));
+
+        /** @var list<array{formule: string, taux: string|null}> $lignes */
+        $lignes = $this->em->getConnection()->fetchAllAssociative(
+            'SELECT LOWER(HEX(formule_id)) AS formule, taux_tva AS taux
+               FROM off_produit
+              WHERE formule_id IN (' . $placeholders . ')',
+            $identifiants,
+        );
+
+        $taux = [];
+        foreach ($lignes as $ligne) {
+            if ($ligne['taux'] !== null && $ligne['taux'] !== '') {
+                $taux[(string) $ligne['formule']] = (string) $ligne['taux'];
+            }
+        }
+
+        return $taux;
     }
 
     public function marquerCollectees(SepaRemiseSepa $remise, array $referencesOrigine): void

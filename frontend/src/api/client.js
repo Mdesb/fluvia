@@ -470,6 +470,12 @@ export const api = {
   //
   // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
   factures: (params) => request('/api/factures', { query: params }),
+  // Les factures d un client, pour sa fiche. Le client n est pas porte par la facture mais par son
+  // destinataire : elle passe par une operation dediee plutot que `destinataire.clientRef`, et il est DECLARE cote serveur
+  // — un filtre non declare est accepte et ne filtre rien, ce qui montrerait les factures de tout le
+  // monde sous le nom d un seul.
+  facturesDuClient: (clientId) =>
+    request('/api/factures/du-client', { query: { clientRef: clientId } }),
   facture: (id) => request(`/api/factures/${id}`),
   // LE DOCUMENT LEGAL LUI-MEME. `FactureRenduProvider` existait depuis le debut et n'etait appele
   // par AUCUN ecran : Fluvia savait creer, numeroter, sceller, emettre, encaisser et deposer sur
@@ -2115,8 +2121,11 @@ export const api = {
     request('/api/alerte_ecart_caisses', { query: { itemsPerPage: 100 } }),
   corrigerReglement: (venteId, corps) =>
     request(`/api/ventes/${venteId}/corriger-reglement`, { method: 'POST', body: corps }),
-  resoudreImpaye: (id) =>
-    request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: {} }),
+  // Le corps porte le canal, le moyen, la date et la reference : jusqu au 08/09 l operation etait
+  // declaree `input: false` et le canal etait pose en dur cote serveur, si bien qu on ne savait ni
+  // comment ni quand l argent etait rentre.
+  resoudreImpaye: (id, corps) =>
+    request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: corps }),
   forcerReouvertureImpaye: (id, motif) =>
     request(`/api/recouvrement/incidents/${id}/forcer-reouverture`, { method: 'POST', body: { motif } }),
   // Operation STANDARD : elle deserialise.

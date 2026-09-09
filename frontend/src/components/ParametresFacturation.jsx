@@ -74,11 +74,13 @@ export default function ParametresFacturation({ peutModifier }) {
   const [info, setInfo] = useState('')
   const [enCours, setEnCours] = useState(false)
   const [nonBranche, setNonBranche] = useState(false)
+  const [tauxDisponibles, setTauxDisponibles] = useState([])
 
   const charger = useCallback(async () => {
     setChargement(true)
     try {
-      const r = await api.parametresFacturation()
+      const [r, tauxRep] = await Promise.all([api.parametresFacturation(), api.tauxTvas().catch(() => null)])
+      setTauxDisponibles(tauxRep ? membres(tauxRep).filter((t) => t.actif !== false) : [])
       const liste = membres(r)
       const p = liste[0] || null
       setParametre(p)
@@ -119,6 +121,9 @@ export default function ParametresFacturation({ peutModifier }) {
         mentionPenalitesRetard: valeurs.mentionPenalitesRetard === '' ? null : valeurs.mentionPenalitesRetard,
         mentionEscompte: valeurs.mentionEscompte === '' ? null : valeurs.mentionEscompte,
         chorusProActif: !!valeurs.chorusProActif,
+        // L'IRI, pas l'identifiant nu : API Platform attend une reference de ressource pour une
+        // relation. `null` efface le defaut, ce qui fait re-refuser l'emission — c'est voulu.
+        tauxTvaDefaut: valeurs.tauxTvaDefaut ? valeurs.tauxTvaDefaut : null,
       }
 
       const enregistre = parametre?.id
@@ -212,6 +217,34 @@ export default function ParametresFacturation({ peutModifier }) {
           />
         </div>
 
+        {/* ⚠ CE RÉGLAGE DÉBLOQUE LA FACTURATION, IL N'EST PAS DÉCORATIF. Mesuré le 08/09 : sur les
+            quatre produits d'abonnement de la préproduction, AUCUN ne porte de taux de TVA. Sans ce
+            défaut, l'émission refuse — à raison, car on n'invente pas un taux qui partirait dans une
+            facture scellée. L'aide ci-dessous dit donc ce qui se passe quand on le laisse vide, au
+            lieu de laisser l'exploitant conclure que la facturation est cassée. */}
+        <div className="field">
+          <label htmlFor="pf-taux-defaut">Taux de TVA par défaut</label>
+          <select
+            id="pf-taux-defaut"
+            className="input"
+            value={valeurs.tauxTvaDefaut ?? ''}
+            disabled={!peutModifier}
+            onChange={(e) => setValeurs((v) => ({ ...v, tauxTvaDefaut: e.target.value }))}
+          >
+            <option value="">— aucun —</option>
+            {tauxDisponibles.map((t) => (
+              <option key={t['@id']} value={t['@id']}>
+                {t.libelle} ({t.taux} %)
+              </option>
+            ))}
+          </select>
+          <span className="hint">
+            {tauxDisponibles.length === 0
+              ? 'Aucun taux de TVA n’est déclaré pour cet établissement : créez-en un dans Comptabilité avant de pouvoir en choisir un ici.'
+              : 'Appliqué à tout ce qui est facturable et ne porte pas son propre taux. Le taux du produit vendu reste prioritaire. Laissé vide, l’émission d’une facture est refusée pour les produits sans taux — jamais devinée.'}
+          </span>
+        </div>
+
         <div className="field">
           <label htmlFor="pf-penalite">Taux de pénalités de retard (%)</label>
           <input
@@ -280,5 +313,8 @@ function depuis(p) {
     mentionPenalitesRetard: p?.mentionPenalitesRetard ?? '',
     mentionEscompte: p?.mentionEscompte ?? '',
     chorusProActif: !!p?.chorusProActif,
+    // La relation est serialisee en IRI par API Platform ; le select stocke donc l'IRI telle
+    // quelle et la renvoie sans transformation. Un objet imbrique se reduit a son `@id`.
+    tauxTvaDefaut: (typeof p?.tauxTvaDefaut === 'object' ? p?.tauxTvaDefaut?.['@id'] : p?.tauxTvaDefaut) ?? '',
   }
 }
