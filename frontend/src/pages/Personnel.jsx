@@ -206,6 +206,42 @@ function GestionBadges({ etabActif, droits = [] }) {
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
 
+  // CE QU UN BADGE OUVRE REELLEMENT (G-7) — deux lectures, jamais affichees jusqu ici.
+  //
+  // `PorteeAccesEmploye` est creee en side-effet de l emission et exposee en LECTURE SEULE. Ses deux
+  // operations n etaient appelees par aucun ecran : on listait des badges sans jamais dire quelles
+  // portes ils ouvrent, ni a quelles heures.
+  //
+  // ⚠ PAS D ETAT « AUCUNE ZONE » : `EmissionBadgeStaffHandler` REFUSE d emettre sans au moins un
+  // espace (RG-PERSO-06/07). Une portee porte donc toujours une zone, et un affichage « aucune »
+  // serait du code mort qui rassure. (La spec a d abord affirme le contraire, sur une recherche qui
+  // visait `addAuthorisedSpace` — la methode d une AUTRE classe. La vraie est `addEspaceAutorise`.)
+  const [portees, setPortees] = useState(null)
+  const [espaces, setEspaces] = useState([])
+
+  useEffect(() => {
+    let vivant = true
+    api.porteesAcces()
+      .then((r) => { if (vivant) setPortees(membres(r)) })
+      // ⚠ `null` reste `null` en cas d echec : une portee illisible ne doit pas s afficher comme une
+      // portee vide. Zero et « je n ai pas pu demander » sont des affirmations opposees.
+      .catch(() => {})
+    api.espacesAcces()
+      .then((r) => { if (vivant) setEspaces(membres(r)) })
+      .catch(() => { if (vivant) setEspaces([]) })
+    return () => { vivant = false }
+  }, [etabActif, version])
+
+  const indexEspaces = new Map(espaces.map((e) => [e.id, e]))
+  const porteeDuBadge = (idBadge) => (portees || []).find((p) => idDe(p.badgeStaff) === idBadge)
+
+  const libellesEspaces = (portee) => (portee.espacesAutorises || [])
+    .map((ref) => {
+      const es = indexEspaces.get(idDe(ref))
+      return es ? (es.libelle || es.nom) : null
+    })
+    .filter(Boolean)
+
   async function agir(action) {
     setBusy(true)
     setErreur(null)
@@ -224,6 +260,27 @@ function GestionBadges({ etabActif, droits = [] }) {
     { cle: 'dateEmission', entete: 'Émis le', rendu: (r) => dateFr(r.dateEmission) },
     { cle: 'dateRevocation', entete: 'Révoqué le', rendu: (r) => dateFr(r.dateRevocation) },
     { cle: 'statut', entete: 'Statut', rendu: (r) => <span className={`badge ${STATUT_BADGE[r.statut] || 'mut'}`}>{r.statut || '—'}</span> },
+    {
+      cle: 'ouvre',
+      entete: 'Ouvre',
+      rendu: (r) => {
+        if (portees === null) return <span className="sub">lecture…</span>
+        const p = porteeDuBadge(r.id)
+        // Aucune portee trouvee pour ce badge : on ne dit pas « rien », on dit qu on ne sait pas.
+        // Une portee est posee a l emission, donc son absence est une anomalie, pas un etat normal.
+        if (!p) return <span className="sub">portee introuvable</span>
+        const noms = libellesEspaces(p)
+        const quand = p.modeHoraire === 'permanent'
+          ? 'a toute heure'
+          : `pendant ses creneaux${p.margeAvantApres != null ? ` (± ${p.margeAvantApres} min)` : ''}`
+        return (
+          <div>
+            <div>{noms.length > 0 ? noms.join(', ') : `${(p.espacesAutorises || []).length} espace(s)`}</div>
+            <div className="sub">{quand}</div>
+          </div>
+        )
+      },
+    },
   ]
 
   if (peutGerer) {
@@ -416,6 +473,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
   const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
   const [creation, setCreation] = useState(false)
   const [fiche, setFiche] = useState(null)
+  const [emission, setEmission] = useState(null)
   const [rechargement, setRechargement] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -447,6 +505,10 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
     colonnes.push({
       cle: 'badge',
       entete: '',
+      // ⚠ CE BOUTON DECLENCHAIT DIRECTEMENT L APPEL, AVEC UN CORPS VIDE, ET RENDAIT 422.
+      //
+      // Le serveur exige l etablissement, le mode horaire et au moins un espace : trois choix qui ne
+      // se devinent pas. Il ouvre donc une modale, qui les recueille avant d appeler.
       rendu: (r) => {
         if (String(r.statut || '').toLowerCase() === 'sorti') return null
         return (
@@ -456,18 +518,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
               type="button"
               disabled={busy}
               style={{ padding: '1px 8px', fontSize: 11.5 }}
-              onClick={async () => {
-                setBusy(true)
-                setErreur(null)
-                try {
-                  await api.emettreBadgeStaff(r.id)
-                  onBadgeEmis?.()
-                } catch (e) {
-                  setErreur(e.message || 'Le badge n’a pas pu être émis.')
-                } finally {
-                  setBusy(false)
-                }
-              }}
+              onClick={() => setEmission(r)}
             >
               Émettre un badge
             </button>
@@ -568,6 +619,13 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
         etabActif={etabActif}
         onClose={() => setFiche(null)}
         onChange={() => setRechargement((n) => n + 1)}
+      />
+
+      <EmissionBadgeModal
+        employe={emission}
+        etabActif={etabActif}
+        onClose={() => setEmission(null)}
+        onFait={() => { setEmission(null); onBadgeEmis?.() }}
       />
     </div>
   )
@@ -1432,6 +1490,173 @@ function FicheEmploye({ employe, droits = [], etabActif, onClose, onChange }) {
       <div className="modal-actions" style={{ marginTop: 'var(--esp-large)' }}>
         <button className="btn ghost" type="button" onClick={onClose}>Fermer</button>
       </div>
+    </Modal>
+  )
+}
+
+
+// EMETTRE UN BADGE — LE GESTE QUI N AVAIT JAMAIS PU ABOUTIR.
+//
+// `api.emettreBadgeStaff` envoyait `body: {}`. Le processeur exige TROIS champs et refuse au premier
+// manquant, donc le bouton rendait 422 depuis l origine. Constate en cliquant le 08/09 :
+// « Reference "etablissement" obligatoire (UUID ou IRI). »
+//
+// Aucun test d API ne pouvait le voir : `BadgeStaffTest` envoie le corps complet. Le serveur etait
+// prouve, l ecran ne l etait pas.
+//
+// ── UN BADGE EST UNE CLE PHYSIQUE ───────────────────────────────────────────────────────────────
+//
+// Les trois champs ne sont pas de la paperasse : ils decident QUELLES PORTES s ouvrent et QUAND.
+// C est pourquoi ils sont demandes plutot que devines — un defaut par defaut serait un acces pose
+// sans que personne ne l ait choisi.
+//
+// ⚠ L etablissement est celui qui est ACTIF, affiche et non modifiable. Le serveur accepte d en
+// cibler un autre (`EtablissementCibleVerificateur`), mais l employe doit y avoir un rattachement
+// ACTIF (RG-PERSO-09) : proposer un choix inviterait a des refus que l ecran ne sait pas expliquer.
+function EmissionBadgeModal({ employe, etabActif, onClose, onFait }) {
+  const ouvert = Boolean(employe && employe.id)
+  // ⚠ TROIS ETATS, PAS DEUX — ET LE DEFAUT ETAIT ICI AVANT CETTE LIGNE.
+  //
+  // `null` = pas encore lu · `[]` = lu, et il n'y en a aucun · `erreurEspaces` = la demande a echoue.
+  //
+  // La premiere version faisait `.catch(() => setEspaces([]))`, ce qui transformait un REFUS en
+  // « aucun espace d'acces sur ce site ». Mesure du 09/09 : `/api/espace_acces` rend **403** au role
+  // *Personnel Administrateur RH*, alors qu'il y a huit espaces en base. L'ecran affirmait donc une
+  // absence qu'il n'avait pas mesuree, et envoyait l'exploitant creer un espace qui existe deja.
+  const [espaces, setEspaces] = useState(null)
+  const [erreurEspaces, setErreurEspaces] = useState(null)
+  const [choisis, setChoisis] = useState([])
+  const [mode, setMode] = useState('shifts_uniquement')
+  const [marge, setMarge] = useState(15)
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!ouvert) return
+    setChoisis([])
+    setMode('shifts_uniquement')
+    setMarge(15)
+    setErreur(null)
+    let vivant = true
+    setEspaces(null)
+    setErreurEspaces(null)
+    api.espacesAcces()
+      .then((r) => { if (vivant) setEspaces(membres(r)) })
+      .catch((e) => { if (vivant) setErreurEspaces(e.message || 'Lecture impossible.') })
+    return () => { vivant = false }
+  }, [ouvert, employe])
+
+  if (!ouvert) return null
+
+  // Le serveur exige la marge en mode `shifts_uniquement` : on l exige ici aussi, plutot que de
+  // laisser l utilisateur decouvrir le refus apres coup.
+  const pret = etabActif && choisis.length > 0 && mode
+    && (mode !== 'shifts_uniquement' || Number.isFinite(Number(marge)))
+  const listeEspaces = espaces || []
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.emettreBadgeStaff(employe.id, {
+        etablissement: `/api/etablissements/${etabActif}`,
+        modeHoraire: mode,
+        espacesAutorises: choisis,
+        ...(mode === 'shifts_uniquement' ? { margeAvantApres: Number(marge) } : {}),
+      })
+      onFait()
+    } catch (err) {
+      // La raison du serveur, telle quelle : c est elle qui dit lequel des controles a refuse.
+      // « Aucun rattachement actif » et « badge deja actif » sont deux refus differents, et
+      // l utilisateur ne peut pas les distinguer sans le texte.
+      setErreur(err.message || "Le badge n'a pas pu etre emis.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  const nom = [employe.prenom, employe.nom].filter(Boolean).join(' ') || 'cet employe'
+
+  function basculer(iri) {
+    setChoisis((liste) => liste.includes(iri) ? liste.filter((x) => x !== iri) : [...liste, iri])
+  }
+
+  return (
+    <Modal open={ouvert} onClose={onClose} titre={`Emettre un badge — ${nom}`}>
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <p className="hint" style={{ marginTop: 0 }}>
+          Un badge est une cle physique : ces trois choix decident quelles portes il ouvre, et quand.
+          L employe doit avoir un rattachement actif sur ce site, sinon le serveur refuse
+          (RG-PERSO-09).
+        </p>
+
+        <div className="row row-champs" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="eb-mode">Mode horaire *</label>
+            <select id="eb-mode" className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="shifts_uniquement">Pendant ses creneaux seulement</option>
+              <option value="permanent">Permanent</option>
+            </select>
+            <span className="hint">
+              « Permanent » ouvre en dehors de tout planning : a reserver a qui doit entrer a toute heure.
+            </span>
+          </div>
+          {mode === 'shifts_uniquement' && (
+            <div className="field" style={{ flex: '1 1 160px' }}>
+              <label htmlFor="eb-marge">Marge avant/apres (minutes) *</label>
+              <input id="eb-marge" className="input" type="number" min="0" max="240" value={marge}
+                onChange={(e) => setMarge(e.target.value)} />
+              <span className="hint">De combien il peut arriver en avance et repartir en retard.</span>
+            </div>
+          )}
+        </div>
+
+        <div className="field">
+          <label>Espaces autorises *</label>
+          {erreurEspaces ? (
+            // ⚠ ON NE DIT PAS « AUCUN ESPACE » : on n'en sait rien. Le refus le plus frequent ici est
+            // un 403 -- le role *Personnel Administrateur RH* detient `personnel.gerer_badge` mais PAS
+            // `acces.lire`, donc il peut emettre un badge et ne peut pas lire les espaces que
+            // l'emission exige. Dire « aucun espace » enverrait creer ce qui existe deja.
+            <div className="banner banner-error">
+              Les espaces d acces n ont pas pu etre lus : {erreurEspaces}
+              <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>
+                Ce n est pas « aucun espace » : la liste n a pas pu etre demandee. Emettre un badge
+                exige de lire les espaces (droit « acces.lire »), en plus du droit d emettre.
+              </div>
+            </div>
+          ) : espaces === null ? (
+            <div className="empty">Lecture des espaces…</div>
+          ) : listeEspaces.length === 0 ? (
+            <div className="empty">
+              Aucun espace d acces sur ce site. Sans espace, le serveur refuse l emission : commence
+              par en declarer un dans « Controle d acces ».
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              {listeEspaces.map((es) => {
+                const iri = `/api/espace_acces/${es.id}`
+                return (
+                  <label key={es.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+                    <input type="checkbox" checked={choisis.includes(iri)} onChange={() => basculer(iri)} />
+                    <span>{es.libelle || es.nom || es.id}</span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-actions" style={{ marginTop: 'var(--esp-large)' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={!pret || envoi}>
+            {envoi ? 'Emission…' : 'Emettre'}
+          </button>
+        </div>
+      </form>
     </Modal>
   )
 }

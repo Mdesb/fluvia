@@ -29,7 +29,8 @@
       08/09**, vérifiée **en exécutant** (lecture ET écriture) contre une API réelle
 - [x] **Étape 4** — ⚠ fiche employé : identité modifiable, rattachements, bandeau orphelin (G-3, G-4)
       — **faite le 08/09**, l'enchaînement complet vérifié en exécutant
-- [ ] **Étape 5** — ⚠ réparer l'émission de badge + portée d'accès (G-9, G-7) — *contrôle d'accès physique*
+- [x] **Étape 5** — ⚠ réparer l'émission de badge + portée d'accès (G-9, G-7) — **faite le 09/09**,
+      corps accepté par le serveur (201) et portée affichée
 - [ ] **Étape 6** — modifier un créneau, lien roster → qualification (G-6)
 - [ ] **Étape 7a** — ⚠ `HrSettings` : entité, migration, résolveur, commande (G-2b) — *entité neuve*
 - [ ] **Étape 7b** — ⚠ `HrSettings` : exposition et écran de réglage (G-2b) — *provider sur mesure*
@@ -261,6 +262,46 @@ Vérifié après bascule : build front vert, garde-fous front verts (droits, imp
 ⚠ **Les chiffres d'écart des messages de commit se lisent sur l'ANCIENNE base** (529 → 526 → 520).
 Sur `origin/main`, la même mesure donne **514 inatteignables / 676 atteignables** : le tronc vivant
 porte davantage d'écrans. Les deux mesures sont justes, elles ne portent pas sur le même arbre.
+
+**2026-09-09 — Étape 5 : l'émission de badge, et un cul-de-sac de DROITS que personne n'avait vu.**
+
+`emettreBadgeStaff` envoyait `body: {}` ; le serveur exige `etablissement`, `modeHoraire` et au moins
+un `espacesAutorises`. Le bouton ouvre désormais une modale qui recueille les trois — ce ne sont pas
+des formalités : **elles décident quelles portes s'ouvrent et quand**. Et la colonne « Ouvre » rend
+la portée lisible (G-7), ce qu'aucun écran ne faisait.
+
+**⚠ TROISIÈME CUL-DE-SAC, ET IL EST DANS LES DROITS, PAS DANS LES ÉCRANS.**
+`/api/espace_acces` exige `acces.lire` (`EspaceAcces.php:33`). Le rôle *Personnel Administrateur RH*
+détient `personnel.gerer_badge` — le droit d'**émettre** — mais **pas `acces.lire`**
+(`PersonnelFixtures.php:105-108` : `gerer_employe`, `gerer_qualification`, `gerer_badge`, `lire`,
+`acces.ingestion`).
+
+Donc **le rôle prévu pour émettre un badge ne peut pas lire les espaces que l'émission exige** :
+403 sur la liste, alors qu'il y a 8 espaces en base. Mesuré le 09/09.
+
+Ce n'est pas corrigé ici : le jeu de droits d'un rôle est un arbitrage produit, pas une décision
+d'écran. **À remonter à Maxime** — c'est la même famille que le constat déjà consigné sur les
+documents (le rôle RH n'a aucune permission `dms.*`, ce qui bloquera le lot 2 avant d'écrire une
+ligne).
+
+**⚠ ET MON PROPRE CODE COMMETTAIT LE MENSONGE DU ZÉRO.** La première version faisait
+`.catch(() => setEspaces([]))` : le 403 s'affichait comme **« Aucun espace d'accès sur ce site »**.
+L'écran affirmait une absence qu'il n'avait pas mesurée, et envoyait l'exploitant créer un espace qui
+existe déjà. Corrigé en trois états (`null` / `[]` / erreur), et **vérifié à l'écran** : il affiche
+maintenant « Les espaces d'accès n'ont pas pu être lus : accès non autorisé… ».
+
+**Vérifié en exécutant** (même montage : Vite sur le worktree, serveur PHP jetable sur
+`app_testpersonnelrh` — rien de partagé touché) :
+
+- Le bouton ouvre la modale au lieu de rendre 422. *Avant : « Référence "etablissement" obligatoire ».*
+- **Le corps exact que la modale construit est accepté : 201**, badge créé pour Camille Renard
+  (prouvé par l'API en fournissant l'espace directement, ce qui **isole** le blocage : le corps est
+  bon, seule la lecture des espaces est refusée).
+- La colonne « Ouvre » affiche `1 espace(s) · pendant ses creneaux (± 15 min)`. Le libellé n'apparaît
+  pas faute de `acces.lire` — l'écran affiche alors le **nombre**, il n'invente pas de nom.
+
+Écart : 514 → **513** (une seule opération neuve atteignable : `GET /api/portee_acces_employes` ;
+le `Get` d'item n'est pas branché, aucun écran ne le consomme).
 
 ## Journal de Rétropropagation
 

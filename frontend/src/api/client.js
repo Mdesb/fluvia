@@ -2504,8 +2504,24 @@ export const api = {
     request(`/api/personnel/badges/${id}/suspendre`, { method: 'POST', body: { motif }, ld: true }),
   reactiverBadgeStaff: (id) =>
     request(`/api/personnel/badges/${id}/reactiver`, { method: 'POST', body: {}, ld: true }),
-  emettreBadgeStaff: (employeId) =>
-    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
+  // ⚠ CET APPEL ENVOYAIT UN CORPS VIDE, ET N A DONC JAMAIS PU ABOUTIR.
+  //
+  // `EmissionBadgeStaffProcessor` exige TROIS champs du corps, et refuse au premier manquant :
+  //
+  //     etablissement      -> 422 « Reference "etablissement" obligatoire (UUID ou IRI). »
+  //     modeHoraire        -> 422 « Champ "modeHoraire" invalide ou manquant »
+  //     espacesAutorises   -> 422 « Au moins un espace autorise est requis (RG-PERSO-06/07) »
+  //
+  // Le bouton « Emettre un badge » rendait donc 422 depuis l origine. Constate EN CLIQUANT le 08/09 :
+  // aucun test d API ne pouvait le voir, parce que `BadgeStaffTest` envoie le corps COMPLET. Le
+  // serveur etait prouve, l ecran ne l etait pas -- deux moities, une seule preuve.
+  emettreBadgeStaff: (employeId, corps) =>
+    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: corps, ld: true }),
+
+  // Ce qu un badge OUVRE reellement : espaces, mode horaire, marge. Lecture seule cote serveur --
+  // la portee est creee en side-effet de l emission, jamais directement.
+  porteesAcces: (params) =>
+    request('/api/portee_acces_employes', { query: { itemsPerPage: 200, ...(params || {}) } }),
 
   // ─── LE PLANNING, LA SORTIE, L'INCIDENT ──────────────────────────────────────────────────
   //
