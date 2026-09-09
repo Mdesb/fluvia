@@ -201,12 +201,43 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
       ? []
       : tauxTva.filter((t) => Number(t.taux) === tauxProduit)
 
-    majLignes(i, {
-      designation: libelleProduit(p),
-      // Un seul candidat : on présélectionne, et on le DIT sous la ligne. Plusieurs : on ne touche
-      // à rien — choisir pour l'utilisateur entre deux taux fiscaux serait le pire des deux mondes.
-      ...(candidats.length === 1 ? { tauxTva: idDe(candidats[0]), tauxRepris: idDe(candidats[0]) } : {}),
-      catalogue: {
+    // ── LE PRIX, ET SEULEMENT QUAND IL N'Y A RIEN A CHOISIR ─────────────────────────────────
+    //
+    // ⚠ UNE grille et UN taux : il n'existe alors aucune décision à prendre, et le bouton
+    // « Reprendre X HT » ne demandait qu'à confirmer une évidence. C'est la plainte de l'issue
+    // #15 — « le prix n'est pas repris » — et c'en est la seule part qui tienne.
+    //
+    // ⚠ DÈS QU'IL Y A PLUSIEURS GRILLES, ON NE REMPLIT RIEN. Choisir un tarif à la place de
+    // l'opérateur facturerait un plein tarif à un abonné sans que rien ne le dise — exactement
+    // le nombre faux silencieux que cet écran existe pour empêcher.
+    //
+    // ⚠ ET LA CONVERSION EST LA RAISON POUR LAQUELLE LE TAUX EST NÉCESSAIRE : le catalogue est
+    // TTC, la ligne est HT. Sans taux, il n'y a pas de prix à poser — pas un prix par défaut.
+    const tauxUnique = candidats.length === 1 ? candidats[0] : null
+    const prixSansChoix = tauxUnique !== null && grilles.length === 1
+      ? htDepuisTtc(grilles[0].prix, tauxUnique.taux)
+      : null
+
+    setLignes((precedent) => precedent.map((l, j) => {
+      if (j !== i) return l
+
+      const repris = {
+        designation: libelleProduit(p),
+        // Un seul candidat : on présélectionne, et on le DIT sous la ligne. Plusieurs : on ne
+        // touche à rien — choisir pour l'utilisateur entre deux taux fiscaux serait le pire des
+        // deux mondes.
+        ...(candidats.length === 1 ? { tauxTva: idDe(candidats[0]), tauxRepris: idDe(candidats[0]) } : {}),
+      }
+
+      // ⚠ ON NE REMPLIT QUE LE VIDE. Le bloc d'effacement en tête de cette fonction a déjà retiré
+      // ce que le catalogue avait posé ; ce qui reste ici est une saisie de l'opérateur, et
+      // l'écraser serait le défaut symétrique de celui qu'on corrige.
+      if (prixSansChoix !== null && !l.prixUnitaireHT) {
+        repris.prixUnitaireHT = prixSansChoix
+        repris.prixRepris = prixSansChoix
+      }
+
+      return { ...l, ...repris, catalogue: {
         nom: libelleProduit(p),
         tauxProduit,
         candidats: candidats.map((t) => ({ id: idDe(t), libelle: t.libelle, taux: t.taux })),
@@ -217,8 +248,8 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
           saison: (g.saison || {}).nom || null,
         })),
         compteComptable: p.compteComptable || null,
-      },
-    })
+      } }
+    }))
   }
 
   async function soumettre(e) {
