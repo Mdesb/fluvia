@@ -31,7 +31,9 @@
       — **faite le 08/09**, l'enchaînement complet vérifié en exécutant
 - [x] **Étape 5** — ⚠ réparer l'émission de badge + portée d'accès (G-9, G-7) — **faite le 09/09**,
       corps accepté par le serveur (201) et portée affichée
-- [ ] **Étape 6** — modifier un créneau, lien roster → qualification (G-6)
+- [~] **Étape 6** — modifier un créneau **fait le 09/09** (G-6, prouvé : l'affectation survit) ;
+      **le lien roster → qualification reste à faire** (il demande d'ajouter l'identité des employés
+      à la charge utile de `RosterProvider`, un provider sur mesure et partagé)
 - [ ] **Étape 7a** — ⚠ `HrSettings` : entité, migration, résolveur, commande (G-2b) — *entité neuve*
 - [ ] **Étape 7b** — ⚠ `HrSettings` : exposition et écran de réglage (G-2b) — *provider sur mesure*
 - [ ] **Étape 8** — clôture : cliquets, suite complète, exécution des critères
@@ -302,6 +304,54 @@ maintenant « Les espaces d'accès n'ont pas pu être lus : accès non autorisé
 
 Écart : 514 → **513** (une seule opération neuve atteignable : `GET /api/portee_acces_employes` ;
 le `Get` d'item n'est pas branché, aucun écran ne le consomme).
+
+**2026-09-09 — Étape 6 (première moitié) : corriger un créneau, et un décalage de deux heures.**
+
+Le `Patch` de `CreneauTravail` existait sans appelant : corriger un horaire imposait d'annuler puis
+recréer, ce qui **perd les affectations déjà posées**. Sur un planning monté pour la semaine, les
+reprendre une par une est exactement la corvée qui fait qu'on ne corrige pas.
+
+Ajouté au passage : le champ **« qualification exigée »**, qui n'était proposé **nulle part** — ni à
+la création. C'est pourtant lui qui déclenche le refus d'affectation (CA-5) et le badge rouge du
+roster : un créneau pouvait exiger un brevet sans que personne ne l'ait choisi.
+
+La liste des types est sortie dans `frontend/src/api/qualifications.js` : deux écrans la proposent
+désormais (la saisie d'une qualification, et le créneau qui en exige une), et deux copies du même
+énuméré divergent tôt ou tard — le jour où l'une gagne un type que l'autre ignore, un créneau exige
+un brevet qu'aucun écran ne sait saisir.
+
+**⚠ UN CRÉNEAU SAISI « 9H » ÉTAIT ENREGISTRÉ À 9H UTC, DONC RELU À 11H — ET CE N'EST PAS MOI.**
+
+Le formulaire envoyait `${jour}T${heure}:00`, **sans fuseau**. Mesure du 09/09 :
+`date_default_timezone_get()` rend **UTC** dans le conteneur, et aucun `Europe/Paris` n'est configuré
+(`config/packages/*.yaml` et `docker/php/conf.d/*.ini` muets). Le serveur interprétait donc « 09:00 »
+comme 9h UTC, et `dateHeureFr` réaffichait 11h l'été. **Le défaut préexistait à la création.**
+
+**⚠ Et mon édition l'aurait aggravé à chaque passage** : le champ montre l'heure locale (11h) ; la
+renvoyer sans fuseau l'aurait enregistrée comme 11h UTC, donc relue à 13h, puis 15h. **Un
+aller-retour sans modification aurait déplacé le créneau de deux heures.**
+
+Corrigé par `enInstant()` : `new Date(a, m-1, j, hh, mm).toISOString()` — ce qui part est l'**instant
+voulu**, pas les chiffres tapés. Le garde-fou `verifier-dates-locales.mjs` reste vert.
+
+⚠ **RÉSERVE : les créneaux enregistrés AVANT ce correctif gardent leur décalage.** Leur instant en
+base est faux ; seule une reprise de données le corrigerait. Ce correctif empêche d'en créer de
+nouveaux, il ne répare pas les anciens. **À vérifier sur la préproduction.**
+
+**Vérifié en exécutant** — le test qui compte est l'aller-retour :
+
+- Modale « Corriger le créneau » ouverte, valeurs reprises (11:00–19:00, effectif 3, BNSSA).
+- Enregistré **sans rien changer** → l'affichage reste **11:00–19:00**. Sans le correctif : 13:00.
+- En base : instant **inchangé** (09:00–17:00 UTC), **affectation survivante (1)**, qualification et
+  effectif conservés. G-6 porte sur ce qui **survit**, pas sur le code de retour.
+
+Écart : 513 → **512**.
+
+**Ce qui reste de l'étape 6** : le badge rouge du roster n'est pas encore cliquable. Il demande
+d'ajouter l'`id` de l'employé et de la qualification à la charge utile de `RosterProvider` — un
+provider **sur mesure**, donc hors extension Doctrine, qui filtre lui-même. Un champ ajouté à sa
+sortie est une **nouvelle voie de sortie** : `ProvidersCloisonnementTest` devra être étendu **à ce
+champ**, pas seulement relancé.
 
 ## Journal de Rétropropagation
 

@@ -7,6 +7,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
 import { idDe } from '../api/iri.js'
+import { TYPES_QUALIFICATION } from '../api/qualifications.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { confirmer } from '../components/Confirmation.jsx'
@@ -35,16 +36,12 @@ const STATUT_BADGE = { Actif: 'good', actif: 'good', Revoque: 'crit', revoque: '
 // Vérifié dans le `match` du fournisseur, pas déduit des noms.
 const COUV = { complet: 'good', sous_couvert: 'warn', conflit: 'crit' }
 
-// LES SIX TYPES QUE LE SERVEUR ACCEPTE (`TypeQualification`), et rien d'autre : un type inconnu
-// part en 422. La liste est celle de l'enum, pas une liste d'affichage tenue a cote.
-const QUALIFS = [
-  ['MNS', 'MNS — maitre-nageur sauveteur'],
-  ['BNSSA', 'BNSSA — surveillant de baignade'],
-  ['BEESAN', 'BEESAN'],
-  ['BAFA', 'BAFA'],
-  ['BPJEPS', 'BPJEPS'],
-  ['autre', 'Autre (preciser le libelle)'],
-]
+// ⚠ LA LISTE A ETE SORTIE DANS `api/qualifications.js`, ET CE N'EST PAS DU RANGEMENT.
+//
+// Le creneau de travail declare la qualification qu'il EXIGE, donc il propose la meme liste. Deux
+// copies du meme enum divergent tot ou tard, et le jour ou l'une gagne un type que l'autre ignore,
+// un creneau exige un brevet qu'aucun ecran ne sait saisir.
+const QUALIFS = TYPES_QUALIFICATION
 
 // ⚠ VALEUR PROVISOIRE, ET ELLE S'ANNONCE COMME TELLE.
 //

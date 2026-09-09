@@ -2555,6 +2555,16 @@ export const api = {
   annulerCreneauTravail: (id) =>
     request(`/api/personnel/creneaux-travail/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // MODIFIER UN CRENEAU PLUTOT QUE L ANNULER ET LE REFAIRE.
+  //
+  // Le `Patch` existait sans appelant : corriger un horaire imposait d annuler puis recreer, ce qui
+  // PERD LES AFFECTATIONS deja posees dessus. Sur un planning monte pour la semaine, refaire les
+  // affectations une par une est exactement le genre de corvee qui fait qu on ne corrige pas.
+  //
+  // ⚠ `statut` n est PAS ecrivable par ce chemin (il n est pas dans `creneau_travail:write`) :
+  // l annulation garde sa route dediee, qui porte ses propres regles.
+  majCreneauTravail: (id, corps) => request(`/api/creneau_travails/${id}`, { method: 'PATCH', body: corps }),
+
   // ⚠ SUSPENDRE UN EMPLOYE SUSPEND AUSSI SES BADGES. Le processeur le fait en cascade
   // (« Suspension de l'employe »), et la reactivation les remet. Ce n'est pas un detail : la
   // personne perd ses acces physiques a l'instant du clic. L'ecran le dit avant, pas apres.
