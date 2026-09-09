@@ -599,6 +599,7 @@ export default function SiteVitrine({ peutEcrire = true }) {
           ['metiers', 'Métiers'],
           ['accueil', 'Page d’accueil'],
           ['modules', 'Pages de modules'],
+          ['contact', 'Contact'],
         ].map(([cle, libelle]) => (
           <button
             key={cle}
@@ -647,6 +648,17 @@ export default function SiteVitrine({ peutEcrire = true }) {
             'Le texte de la page d’accueil. La mise en page reste dans le code ; ce sont les mots qui '
             + 'se modifient ici. ⚠ Les prix ne s’écrivent nulle part : la section Tarifs lit le '
             + 'catalogue réel, pour qu’un prix affiché ne puisse pas diverger du prix facturé.'
+          }
+        />
+      )}
+      {onglet === 'contact' && (
+        <EditeurDeBlocs
+          groupe="contact"
+          introduction={
+            'Ce que publie la page /contact. ⚠ Il n’y a pas de formulaire, et c’est voulu : aucun '
+            + 'courriel ne part de la plateforme aujourd’hui, donc un formulaire afficherait « message '
+            + 'envoyé » sans que rien ne parte. Une adresse, elle, fonctionne. Videz-la et la page dira '
+            + 'qu’aucune adresse n’est publiée, plutôt que d’afficher un lien qui n’aboutit nulle part.'
           }
         />
       )}
