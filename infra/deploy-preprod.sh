@@ -33,7 +33,34 @@ log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 # La question posee par allaccess-b8 -- « ou regarder pour savoir si une chose est livree ? » -- a
 # desormais une reponse unique : `origin/main`. Le deploiement refuse tout le reste.
 log "Vérification : ce qui va être servi est-il dans main ?"
-git fetch origin --quiet
+# ⚠ LE CODE DE SORTIE DU FETCH EST LA PREMIERE CHOSE A LIRE, ET IL NE L'ETAIT PAS.
+#
+# Un `git fetch` qui echoue -- reseau coupe, jeton expire, depot momentanement inaccessible -- ne
+# vide pas `origin/main` : il le LAISSE sur la valeur de la derniere reussite. Toute la comparaison
+# qui suit tourne alors contre une reference perimee, et elle peut conclure « cet arbre EST
+# origin/main » alors que main a avance depuis. Le deploiement sert du code d'hier en l'annoncant
+# a jour -- exactement ce que le reste de ce fichier existe pour empecher, retourne : ici ce n'est
+# pas l'arbre qui ment, c'est la reference a laquelle on le compare.
+#
+# ⚠ ET L'ECHEC EST SILENCIEUX PAR CONSTRUCTION : `--quiet` masque le message de git, donc sans ce
+# controle rien ne distingue « rien de neuf a recuperer » de « je n'ai pas pu demander ». Les deux
+# se ressemblent, et le second est le seul qui rende la suite fausse.
+#
+# Le cas n'est pas theorique : le 07/09, le compte GitHub du depot a ete restreint plusieurs heures.
+# L'acces authentifie a fini par revenir, mais pendant la fenetre un fetch pouvait echouer sans que
+# personne le voie passer.
+if ! git fetch origin --quiet; then
+    echo
+    echo "✗ Déploiement refusé : impossible de contacter origin."
+    echo
+    echo "  La référence origin/main n'a pas pu être rafraîchie. Elle porte encore la valeur"
+    echo "  de la dernière récupération réussie : comparer cet arbre avec elle ne prouverait"
+    echo "  rien, et pourrait servir du code périmé en l'annonçant à jour."
+    echo
+    echo "  → vérifiez l'accès au dépôt, puis relancez :   git fetch origin"
+    exit 1
+fi
+
 TETE_LOCALE="$(git rev-parse HEAD)"
 TETE_MAIN="$(git rev-parse origin/main)"
 
