@@ -147,7 +147,15 @@ class OutboundEndpoint
      * L'URL en clair, À L'ÉCRITURE SEULEMENT. Jamais persistée telle quelle, jamais relue.
      * `OutboundEndpointProcessor` la chiffre puis la laisse tomber.
      */
-    #[Assert\Url(message: 'L\'adresse du webhook doit être une URL complète, en https.')]
+    // ⚠ `requireTld: true` REFUSE UN HÔTE SANS DOMAINE PUBLIC — `https://localhost/hook`,
+    // `https://intranet/hook`. Ce n'était pas le cas avant le 07/09, et ce ne l'était pas par
+    // décision : l'option était absente, Symfony 7.1 en déprécie le silence et changera le défaut à
+    // `true`. Sans ce mot-là, la règle aurait basculé à la faveur d'une montée de version, c'est-à-dire
+    // au pire moment. `Social/Entity/SocialAccount.php` le passe déjà explicitement.
+    //
+    // L'`https` et la présence d'un hôte, eux, sont exigés par `OutboundEndpointProcessor` : cette
+    // URL vaut un mot de passe, elle ne peut pas circuler en clair.
+    #[Assert\Url(requireTld: true, message: 'L\'adresse du webhook doit être une URL complète, en https, avec un nom de domaine public.')]
     #[Groups(['endpoint:write'])]
     public ?string $url = null;
 
