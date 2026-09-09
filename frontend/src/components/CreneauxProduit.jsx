@@ -96,6 +96,10 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
   const [activites, setActivites] = useState(null)
   const [ressources, setRessources] = useState(null)
   const [creneaux, setCreneaux] = useState(null)
+  // `{}` = lu et rien à dire ; une entrée manquante = occupation INCONNUE pour ce créneau, pas
+  // zéro. La distinction porte l'affichage : on n'écrit un nombre de places restantes que si le
+  // serveur l'a donné.
+  const [occupation, setOccupation] = useState({})
   const [timedEntry, setTimedEntry] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [refus, setRefus] = useState(false)
@@ -129,6 +133,47 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
     const tout = reponses.flatMap((r) => membres(r))
     tout.sort((x, y) => String(x.debut).localeCompare(String(y.debut)))
     setCreneaux(tout)
+
+    // ── COMBIEN DE PLACES SONT PRISES — ET POURQUOI ÇA VIENT DU SERVEUR ─────────────────────
+    //
+    // Cet écran affichait la capacité seule (« 30 places ») : un exploitant ne savait pas, depuis
+    // son catalogue, si sa visite de mardi était pleine. Le chiffre manquant n'était pas calculable
+    // ici — l'occupation compte les réservations qui CONSOMMENT le créneau, pas celles qui le
+    // visent (D33), et le champ qui le dit n'est pas sérialisé. Filtrer les réservations par
+    // créneau côté écran aurait affiché zéro sur un service complet.
+    //
+    // ⚠ ET LA ROUTE QUI LE SERT N'EXISTAIT PAS : `OccupancyProvider` était écrit et câblé à rien
+    // (#34). Elle l'est depuis ce lot, et c'est `JaugeCreneauGuard` — le service qui décide si une
+    // réservation est acceptée — qui produit le nombre. Pas de seconde implémentation de la jauge.
+    //
+    // Un appel par ressource DISTINCTE, borné à la plage réellement affichée : la route rend les
+    // créneaux d'une ressource sur une période, pas d'un créneau isolé, et un appel par créneau
+    // ferait des centaines de requêtes sur un planning chargé.
+    const parRessource = new Map()
+    for (const c of tout) {
+      const id = idDe(c.ressource)
+      if (id) parRessource.set(id, true)
+    }
+    if (parRessource.size === 0) { setOccupation({}); return }
+
+    const jour = (iso) => String(iso).slice(0, 10)
+    const du = jour(tout[0].debut)
+    const au = jour(tout[tout.length - 1].debut)
+
+    // ⚠ `allSettled`, ET LE REFUS N'EST PAS UN ZÉRO. Sans le droit de lire l'occupation, on laisse
+    // la case vide plutôt que d'écrire « 0 pris » — une place libre annoncée sur un créneau complet
+    // se vend, et le client se présente devant une salle pleine.
+    const lots = await Promise.allSettled(
+      [...parRessource.keys()].map((id) => api.occupationRessource(id, du, au)),
+    )
+    const carte = {}
+    for (const lot of lots) {
+      if (lot.status !== 'fulfilled') continue
+      for (const ligne of lot.value?.creneaux || []) {
+        if (ligne?.creneau) carte[ligne.creneau] = ligne
+      }
+    }
+    setOccupation(carte)
   }, [])
 
   const charger = useCallback(async () => {
@@ -412,7 +457,15 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
             {libelleRessource(c) && <span className="sub"> · {libelleRessource(c)}</span>}
           </span>
           <span className="sub">
-            {c.capacite} place{c.capacite > 1 ? 's' : ''}
+            {/* ⚠ « 12 sur 30 » N'EST PAS UN HABILLAGE DE « 30 places ». La capacité seule dit ce
+                que le créneau POURRAIT accueillir ; l'exploitant, lui, veut savoir s'il reste de
+                la place. Et quand le serveur ne l'a pas dit — droit manquant, lecture échouée —
+                on retombe sur la capacité SANS inventer un reste : afficher « 30 restantes » sur
+                un créneau complet ferait vendre une place qui n'existe pas. */}
+            {occupation[c.id]
+              ? `${occupation[c.id].restantes} sur ${c.capacite} place${c.capacite > 1 ? 's' : ''}`
+              : `${c.capacite} place${c.capacite > 1 ? 's' : ''}`}
+            {occupation[c.id]?.restantes === 0 ? ' · complet' : ''}
             {c.statut && c.statut !== 'planifie' ? ` · ${c.statut}` : ''}
             {c.enAttenteArbitrage ? ' · en attente d’arbitrage' : ''}
           </span>
