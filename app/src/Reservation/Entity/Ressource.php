@@ -13,8 +13,10 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
+use App\Reservation\Dto\ResourceOccupancy;
 use App\Reservation\Validator\TypeRessourceValide;
 use App\Reservation\State\EstablishmentStampProcessor;
+use App\Reservation\State\OccupancyProvider;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -37,6 +39,29 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(security: "is_granted('PERM', 'reservation.lire')"),
         new Post(security: "is_granted('PERM', 'reservation.gerer_ressource')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'reservation.gerer_ressource')"),
+        // ── CE QUI SE PASSE SUR CETTE RESSOURCE PENDANT UNE PLAGE, EN UNE REQUÊTE ──────────────
+        //
+        // ⚠ `OccupancyProvider` EXISTAIT DEPUIS SA CRÉATION SANS QU'AUCUNE ROUTE N'Y MÈNE (#34).
+        // Il était écrit, documenté, injecté — et son propre docblock décrivait au présent une
+        // route « GET /reservation/ressources/{id}/occupation » qui n'était déclarée nulle part.
+        // Aucun test ne pouvait le voir : un fournisseur que rien n'appelle ne casse jamais.
+        //
+        // Ce qu'il porte n'est pas un confort d'affichage. L'occupation d'un créneau NE PEUT PAS
+        // se calculer côté client : elle compte les réservations qui le **consomment**, pas celles
+        // qui le visent — une table réservée à 20 h consomme le service du soir de la salle (D33)
+        // — et `Reservation::$consumedSlots` n'est délibérément pas sérialisé. Un écran qui
+        // filtrerait les réservations par créneau afficherait **zéro sur un service complet**.
+        //
+        // Sans cette route, la fiche produit annonçait « 30 places » sans pouvoir dire combien
+        // étaient prises : un exploitant ne savait pas, depuis son catalogue, si sa visite de mardi
+        // était pleine.
+        new Get(
+            uriTemplate: '/reservation/ressources/{id}/occupation',
+            normalizationContext: ['groups' => ['occupation:read']],
+            security: "is_granted('PERM', 'reservation.lire')",
+            provider: OccupancyProvider::class,
+            output: ResourceOccupancy::class,
+        ),
     ],
     normalizationContext: ['groups' => ['ressource:read']],
     denormalizationContext: ['groups' => ['ressource:write']],

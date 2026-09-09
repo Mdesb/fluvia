@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { useEtatUrl } from '../api/url.js'
 import Tabs from '../components/Tabs.jsx'
 
 /**
@@ -72,14 +73,24 @@ function nomUtilisateur(u) {
   return [u.prenom, u.nom].filter(Boolean).join(' ').trim() || u.email || null
 }
 
+const DEFAUTS_URL = { tab: 'demandes', plafond: '' }
+
 export default function Autorisations({ droits = [], etabActif }) {
   const peutApprouver = aLeDroit(droits, 'autorisation.approuver')
   const peutGerer = aLeDroit(droits, 'autorisation.gerer')
 
-  const [onglet, setOnglet] = useState('demandes')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. Le formulaire vit dans un
+  // composant imbriqué que seul l'onglet « Plafonds » monte : sans le paramètre `tab`, un F5
+  // sur `?plafond=…` retomberait sur « Demandes », et l'écran n'existerait pas.
+  const [params, majParams] = useEtatUrl('autorisations', DEFAUTS_URL)
+  const onglet = params.tab
+  const setOnglet = (v) => majParams({ tab: v, plafond: '' })
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.plafond)
 
   return (
     <div className="view">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Escalades &amp; plafonds</h1>
@@ -92,11 +103,12 @@ export default function Autorisations({ droits = [], etabActif }) {
         actif={onglet}
         onChange={setOnglet}
       />
+      </>)}
 
       {onglet === 'demandes' ? (
         <FileDemandes peutApprouver={peutApprouver} />
       ) : (
-        <Plafonds peutGerer={peutGerer} etabActif={etabActif} />
+        <Plafonds peutGerer={peutGerer} etabActif={etabActif} params={params} majParams={majParams} />
       )}
     </div>
   )
@@ -319,10 +331,13 @@ function resoudreRole(role, roles) {
   return roles.find((r) => r.id === id) || null
 }
 
-function Plafonds({ peutGerer, etabActif }) {
+function Plafonds({ peutGerer, etabActif, params = {}, majParams }) {
+  // `nouveau`, ou l'identifiant du plafond qu'on modifie.
+  const ouvert = params.plafond || ''
+  const ouvrir = (v) => majParams({ plafond: v }, { pousser: true })
+  const fermer = () => ouvrir('')
   const [limites, setLimites] = useState([])
   const [roles, setRoles] = useState([])
-  const [editee, setEditee] = useState(null)
   const [suppression, setSuppression] = useState(null)
   const [operations, setOperations] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -387,6 +402,61 @@ function Plafonds({ peutGerer, etabActif }) {
     recharger()
   }, [recharger])
 
+  // ── LE FORMULAIRE D'UN PLAFOND, EN ÉCRAN ────────────────────────────────────────────────
+  //
+  // ⚠ `limites` part à `[]` et non à `null` : la longueur de la liste ne dit RIEN sur la
+  // lecture. C'est `chargement` qui porte la distinction, et on le consulte AVANT de chercher
+  // l'identifiant — un formulaire vide qu'on enregistre CRÉE un plafond.
+  if (ouvert) {
+    const creation = ouvert === 'nouveau'
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux plafonds
+      </button>
+    )
+    if (!creation && chargement) {
+      return (
+        <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
+          {retour}
+          <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
+        </div>
+      )
+    }
+    const connue = creation ? {} : limites.find((l) => String(l.id) === String(ouvert))
+    if (!creation && !connue) {
+      return (
+        <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
+          {retour}
+          <div className="banner banner-warn">
+            Ce plafond n’est plus dans la liste — il a sans doute été levé ou supprimé depuis
+            que ce lien a été copié. Revenez à la liste plutôt que d’en recréer un.
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <PlafondModal
+          key={ouvert}
+          limite={connue}
+          etabActif={etabActif}
+          operations={operations}
+          roles={roles}
+          onClose={fermer}
+          onFait={() => { fermer(); recharger() }}
+          onErreur={setErreur}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div className="card">
@@ -397,7 +467,7 @@ function Plafonds({ peutGerer, etabActif }) {
               <button
                 className="btn primary sm"
                 type="button"
-                onClick={() => setEditee({})}
+                onClick={() => ouvrir('nouveau')}
               >
                 + Nouveau plafond
               </button>
@@ -476,7 +546,7 @@ function Plafonds({ peutGerer, etabActif }) {
                     {peutGerer && (
                       <td className="num">
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button className="btn ghost sm" type="button" onClick={() => setEditee(l)}>
+                          <button className="btn ghost sm" type="button" onClick={() => ouvrir(String(l.id))}>
                             Modifier
                           </button>
                           {/* SUPPRIMER UN PLAFOND N'EST PAS RANGER UNE LIGNE : c'est lever une
@@ -574,15 +644,6 @@ function Plafonds({ peutGerer, etabActif }) {
 
       </div>
 
-      <PlafondModal
-        limite={editee}
-        etabActif={etabActif}
-        operations={operations}
-        roles={roles}
-        onClose={() => setEditee(null)}
-        onFait={() => { setEditee(null); recharger() }}
-        onErreur={setErreur}
-      />
 
       <LeverPlafondModal
         limite={suppression}
@@ -659,11 +720,8 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
   }
 
   return (
-    <Modal
-      open={!!limite}
-      onClose={onClose}
-      titre={edition ? 'Modifier un plafond' : 'Nouveau plafond'}
-    >
+    <>
+      <h2>{edition ? 'Modifier un plafond' : 'Nouveau plafond'}</h2>
       <form onSubmit={envoyer}>
         {erreurModale && <div className="banner banner-error">{erreurModale}</div>}
 
@@ -770,7 +828,7 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

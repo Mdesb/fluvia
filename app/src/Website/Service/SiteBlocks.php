@@ -29,13 +29,54 @@ use App\Website\Enum\BlockType;
 final class SiteBlocks
 {
     /**
+     * Ce que la page « Nous écrire » publie.
+     *
+     * ⚠ **UNE ADRESSE, PAS UN FORMULAIRE, ET C'EST UNE DÉCISION.** Aucun courriel ne sort de la
+     * plateforme aujourd'hui (E-8). Un formulaire afficherait « message envoyé » sans que rien ne
+     * parte : le visiteur croirait avoir écrit, il ne réessaierait pas, et personne ne saurait qu'il
+     * a essayé. Une adresse marche sans serveur d'envoi.
+     *
+     * ⚠ **ELLE EST ÉDITABLE, ET SA VALEUR D'ORIGINE EST SEMÉE.** Changer l'adresse de contact ne doit
+     * pas demander une mise en production. Le semis ne réécrit jamais une valeur existante, donc une
+     * adresse corrigée à la main survit au déploiement suivant.
+     *
+     * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
+     */
+    private static function blocsDeContact(): array
+    {
+        return [
+            self::bloc('contact.lead', BlockType::Paragraph, 'Chapô — page Contact',
+                'Ce qu\'on peut vous demander, et sous quel délai vous répondez.',
+                ['text' => "Une question sur un module, une démonstration, un partenariat, ou un problème sur "
+                    ."votre plateforme : écrivez-nous. Dites-nous ce que vous accueillez — une piscine, une salle, "
+                    ."un musée — et ce que vous cherchez à régler."],
+                'contact'),
+
+            self::bloc('contact.email', BlockType::Line, 'Adresse de courriel',
+                'Publiée telle quelle sur la page. Vide, la page dit qu’aucune adresse n’est publiée plutôt que d’afficher un lien mort.',
+                ['text' => 'maxime@onefitness-services.com'],
+                'contact'),
+
+            self::bloc('contact.details', BlockType::Paragraph, 'Autres moyens — facultatif',
+                'Téléphone, adresse postale, horaires. Laissez vide si vous n’en publiez pas.',
+                ['text' => ''],
+                'contact'),
+        ];
+    }
+
+    /**
      * @param list<array{code: string, nom: string}> $metiers les metiers a declarer ; VIDE = ceux du repli
      *
      * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
      */
     public static function all(array $metiers = []): array
     {
-        return array_merge(self::blocsDaccueil(), self::blocsDeModule(), self::blocsDeMetier($metiers));
+        return array_merge(
+            self::blocsDaccueil(),
+            self::blocsDeModule(),
+            self::blocsDeMetier($metiers),
+            self::blocsDeContact(),
+        );
     }
 
     /**
@@ -233,14 +274,20 @@ final class SiteBlocks
     /**
      * @return array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}
      */
-    private static function bloc(string $key, BlockType $type, string $label, string $help, array $initialValue): array
-    {
+    private static function bloc(
+        string $key,
+        BlockType $type,
+        string $label,
+        string $help,
+        array $initialValue,
+        string $groupe = 'accueil',
+    ): array {
         return [
             'key' => $key,
             'type' => $type,
             'label' => $label,
             'help' => $help,
-            'groupe' => 'accueil',
+            'groupe' => $groupe,
             'initialValue' => $initialValue,
         ];
     }

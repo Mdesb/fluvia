@@ -1,0 +1,79 @@
+{% extends 'website/base.html.twig' %}
+{% import 'website/_blocs.html.twig' as b %}
+
+{#
+  Nous écrire.
+
+  ⚠ CETTE PAGE EXISTE PARCE QU'IL N'Y EN AVAIT AUCUNE. Mesuré le 09/09 sur le site servi : pas une
+  adresse, pas un téléphone, pas un `mailto:` — le seul chemin vers Fluvia était le tunnel
+  d'inscription. Un visiteur qui a une question, un partenaire, un journaliste, un client déjà
+  inscrit qui a un problème : personne n'avait par où passer.
+
+  ⚠ **PAS DE FORMULAIRE, ET C'EST UNE DÉCISION, PAS UN OUBLI.** Aucun courriel ne sort de la
+  plateforme aujourd'hui (E-8 : `MAILER_DSN=null://null`). Un formulaire afficherait « message
+  envoyé » sans que rien ne parte, et le visiteur croirait avoir écrit. C'est le pire des cas : il ne
+  réessaie pas, et personne ne sait qu'il a essayé. Une adresse, elle, marche sans serveur d'envoi.
+
+  Le formulaire viendra le jour où E-8 sera levé — la page sera déjà là.
+#}
+
+{% block title %}Contacter Fluvia{% endblock %}
+{% block description %}Une question sur Fluvia, une démonstration, un partenariat : écrivez-nous. Nous répondons à toutes les demandes.{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_contact') }}">{% endblock %}
+
+{% block body %}
+  <section class="bande hero">
+    <div class="mesure">
+      <p class="fil"><a href="{{ path('website_home') }}">Accueil</a> · Contact</p>
+      <h1>Nous écrire</h1>
+      {{ b.paragraphes(blocs['contact.lead']|default(null), 'chapo') }}
+    </div>
+  </section>
+
+  <section class="bande">
+    <div class="mesure">
+      {#
+        ⚠ UNE ADRESSE VIDE NE REND PAS UN LIEN VIDE. Un `mailto:` sans adresse ouvre le logiciel de
+        courrier du visiteur sur un destinataire absent : il écrit, il envoie, et le message part
+        nulle part. Le bloc non rempli le DIT — même règle que les macros de `_blocs.html.twig`, qui
+        ne rendent jamais de texte de remplacement.
+      #}
+      {% set courriel = blocs['contact.email'].text|default('')|trim %}
+
+      {% if courriel is not empty %}
+        <h2>Par courriel</h2>
+        <p class="chapo"><a href="mailto:{{ courriel }}">{{ courriel }}</a></p>
+        {#
+          ⚠ CETTE NOTE NE REPETE PAS LE CHAPO. Elle l'a fait un temps — la meme phrase aux deux
+          endroits — parce que le chapo vient d'un BLOC et la note d'une chaine du gabarit : les deux
+          textes ne se croisent nulle part dans le code, et rien ne signalait la redite. Elle n'a ete
+          vue qu'en lisant la page rendue.
+        #}
+        <p class="note">
+          Si vous êtes déjà client, indiquez le nom de votre établissement : c'est ce qui nous permet
+          de retrouver votre plateforme sans vous faire attendre un premier échange pour rien.
+        </p>
+      {% else %}
+        <h2>Par courriel</h2>
+        <p class="note">
+          Aucune adresse n'est publiée pour l'instant. Elle se remplit dans l'administration du site,
+          onglet « Contact » — tant qu'elle est vide, cette page le dit plutôt que d'afficher un lien
+          qui n'aboutirait nulle part.
+        </p>
+      {% endif %}
+
+      {{ b.paragraphes(blocs['contact.details']|default(null), 'note') }}
+    </div>
+  </section>
+
+  <section class="bande bande-claire">
+    <div class="mesure">
+      <h2>Vous voulez surtout l'essayer</h2>
+      <p>
+        L'essai de quatorze jours ne demande pas de carte bancaire, et vous n'avez pas besoin de nous
+        écrire pour le lancer.
+      </p>
+      <p class="actions"><a class="btn btn-primaire" href="/#souscrire">Essayer 14 jours</a></p>
+    </div>
+  </section>
+{% endblock %}
