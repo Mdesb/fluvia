@@ -39,6 +39,23 @@
 // on ne sait pas ce qu'il veut dire, donc on ne lui invente pas une gravité. Son LIBELLÉ suit la même
 // règle par `mot()` — humanisé, jamais remplacé par le mot connu le plus proche.
 
+// ⚠ CE QUI ATTEND LE LOT 1 DU MODULE `Membership`, ET LE PIÈGE QU'IL PORTE.
+//
+// Le lot 0 (#78) a posé `App\Membership\Enum\MembershipStatus`, miroir en anglais de l'énumération
+// Sport : `active`, `paused`, `unpaid`, `terminated`, `expired`. Quand le lot 1 branchera l'écran
+// dessus, quatre de ces cinq codes seront inconnus de `vocabulaire.js` et s'afficheront « Paused »,
+// « Unpaid », « Terminated » — visiblement non traduits, donc corrigés dans l'heure.
+//
+// `expired` est le seul dangereux : il EXISTE déjà dans `vocabulaire.js`, où il vaut « Périmé »
+// pour un devis. `mot('expired')` rendra donc un mot français plausible et faux, que personne ne
+// signalera. C'est le défaut `cancelled` à l'identique, et il se répare ici — pas dans la carte
+// globale, qui a raison pour les quatre autres énumérations qui émettent `expired`.
+//
+// La table à écrire au lot 1, et le mot déjà tranché pour chacun :
+//
+//     active -> Actif · paused -> En pause · unpaid -> Impayé · terminated -> Résilié
+//     expired -> Au terme   (surtout PAS « Périmé »)
+
 /** Les codes tels que le serveur les émet, dans l'ordre où on les propose au filtre. */
 export const STATUTS_ABONNEMENT = ['actif', 'pause', 'impaye', 'resilie', 'echu']
 

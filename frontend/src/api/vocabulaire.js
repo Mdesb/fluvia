@@ -27,6 +27,23 @@ const MOTS = {
   issued: 'Émis',
   accepted: 'Accepté',
   rejected: 'Refusé',
+  // ⚠ « Périmé » EST JUSTE ICI, ET FAUX POUR UN ABONNEMENT — PIÈGE ARMÉ POUR LE LOT 1.
+  //
+  // Cinq énumérations émettent `expired` : `Facturation\DocumentStatus` (un devis périmé),
+  // `SmartFlow\RescheduleProposalStatus`, `SmartFlow\SlotWaitlistEntryStatus`,
+  // `Dms\RetentionStatus` — et, depuis le lot 0, `Membership\MembershipStatus`.
+  //
+  // Pour les quatre premières, « Périmé » est le mot. Pour un abonnement, non : `expired` y traduit
+  // `App\Sport\Enum\StatutAbonnementFitness::Echu`, que l'écran dit « Au terme » — l'adhérent n'a
+  // rien laissé périmer, son engagement est arrivé à son terme.
+  //
+  // Le jour où le lot 1 branchera l'écran sur `Membership`, `mot('expired')` rendra donc « Périmé »
+  // en silence. C'est le pire des cas : un mot français plausible, bien accordé, que personne ne
+  // signalera — alors qu'un code non traduit (« Paused », « Unpaid ») saute aux yeux. C'est
+  // exactement ce que `cancelled` faisait deux sections plus haut avant d'être dédoublonné.
+  //
+  // NE PAS corriger ici : « Périmé » sert quatre énumérations sur cinq. C'est `api/abonnement.js`
+  // qui doit porter le mot de l'abonnement, comme il porte déjà celui de `echu`.
   expired: 'Périmé',
   converted: 'Transformé',
   // ⚠ `cancelled` EST LE SEUL CODE DE CETTE CARTE QUE LE FRANCAIS NE SAIT PAS ACCORDER SEUL.
