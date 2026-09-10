@@ -527,12 +527,25 @@ export const api = {
   // compris sur les routes qui marchent. C'est le piege qui a failli tromper b8.
   verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
   //
-  // L'AUTRE ROUTE RESTE DEBRANCHEE, ET POUR UNE RAISON QUI N'A PAS CHANGE :
+  // LA FACTURE JUSTIFICATIVE D'UN TICKET DE CAISSE. Le client paie au comptoir, puis demande une
+  // facture -- une entreprise pour son tournoi, une ecole pour sa sortie. Le serveur savait l'emettre
+  // depuis le debut ; AUCUN ecran ne l'appelait, donc personne ne pouvait la lui donner.
   //
-  // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
-  // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
-  // La brancher ici aurait demande de ressaisir la vente, c'est-a-dire exactement ce que la facture
-  // justificative existe pour eviter.
+  // ⚠ CE N'EST PAS UNE ROUTE DE PLUS DANS LA LISTE DES FACTURES, ET C'EST POURQUOI ELLE EST RESTEE
+  // DEBRANCHEE SI LONGTEMPS. Son geste appartient a l'HISTORIQUE DES VENTES : on emet la facture EN
+  // REGARDANT le ticket, jamais en repartant d'une liste de factures -- ce qui obligerait a ressaisir
+  // la vente, c'est-a-dire exactement ce que la facture justificative existe pour eviter. Elle est
+  // donc appelee depuis `HistoriqueVentesModal`, et de nulle part ailleurs.
+  //
+  // ⚠ ELLE EST IDEMPOTENTE, ET IL FAUT LE DIRE A L'ECRAN. Un ticket ne peut porter qu'UNE facture
+  // (`uniq_facture_vente_origine`) : un second appel rend le document existant, jamais un nouveau
+  // numero. Sans cette garantie enoncee, un caissier qui ne voit pas le resultat du premier clic
+  // reclique, et croit avoir troue la sequence legale des numeros.
+  //
+  // Le destinataire est derive du client rattache a la vente. Une fiche client incomplete fait
+  // refuser l'emission en NOMMANT ce qui manque : c'est ce message-la qu'on affiche, verbatim.
+  factureDepuisVente: (venteId) =>
+    request('/api/factures/depuis-vente', { method: 'POST', body: { vente: venteId } }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
