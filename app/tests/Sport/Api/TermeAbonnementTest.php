@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\TermRenewalMode;
-use App\Sport\Service\SubscriptionTermHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\TermRenewalMode;
+use App\Membership\Service\SubscriptionTermHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -106,7 +106,7 @@ final class TermeAbonnementTest extends SportApiTestCase
         $abonnement = $this->abonnementAuTerme(TermRenewalMode::Suspend);
 
         self::assertSame('suspendu', $this->handler->process($abonnement, $this->reference));
-        self::assertSame(StatutAbonnementFitness::Echu, $abonnement->getStatut());
+        self::assertSame(MembershipStatus::Echu, $abonnement->getStatut());
     }
 
     /**
@@ -123,7 +123,7 @@ final class TermeAbonnementTest extends SportApiTestCase
         $resultat = $this->handler->process($abonnement, $this->reference);
 
         self::assertStringContainsString('mensualise', $resultat);
-        self::assertSame(StatutAbonnementFitness::Actif, $abonnement->getStatut());
+        self::assertSame(MembershipStatus::Actif, $abonnement->getStatut());
     }
 
     /**
@@ -184,7 +184,7 @@ final class TermeAbonnementTest extends SportApiTestCase
 
     // ── Fabrique ────────────────────────────────────────────────────────────────────────────────
 
-    private function abonnementAuTerme(?TermRenewalMode $mode): AbonnementFitness
+    private function abonnementAuTerme(?TermRenewalMode $mode): Membership
     {
         $abonnement = $this->abonnementDemo();
 
@@ -237,13 +237,13 @@ final class TermeAbonnementTest extends SportApiTestCase
         // c'est le lendemain qui doit ne rien creer, pas le mois suivant.
         $this->reference = $terme->modify('+10 days');
 
-        $abonnement->setStatut(StatutAbonnementFitness::Actif)->setDateFinEngagement($terme);
+        $abonnement->setStatut(MembershipStatus::Actif)->setDateFinEngagement($terme);
         $this->em->flush();
 
         return $abonnement;
     }
 
-    private function compterEcheances(AbonnementFitness $abonnement): int
+    private function compterEcheances(Membership $abonnement): int
     {
         return \count($this->em->getRepository(EcheanceSepa::class)->findBy(['abonnement' => $abonnement]));
     }

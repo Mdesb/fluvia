@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\EcheanceSepa;
+use App\Membership\Entity\EcheanceSepa;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -199,7 +199,7 @@ final class FiltreEcheanceTest extends SportApiTestCase
                 ->setAbonnement($abonnement)
                 ->setDateProgrammee(new \DateTimeImmutable($jour))
                 ->setMontantCentimes(3990)
-                ->setStatut(\App\Sport\Enum\StatutEcheanceSepa::AVenir));
+                ->setStatut(\App\Membership\Enum\StatutEcheanceSepa::AVenir));
         }
 
         $em->flush();
@@ -214,11 +214,11 @@ final class FiltreEcheanceTest extends SportApiTestCase
         ));
     }
 
-    private function echeanceChezLeVoisin(\App\Sport\Entity\AbonnementFitness $demo): void
+    private function echeanceChezLeVoisin(\App\Membership\Entity\Membership $demo): void
     {
         $em = $this->em();
 
-        $voisin = (new \App\Sport\Entity\AbonnementFitness())
+        $voisin = (new \App\Membership\Entity\Membership())
             ->setAdherent($demo->getAdherent())
             ->setPayeur($demo->getPayeur())
             ->setFormule($demo->getFormule())
@@ -234,7 +234,7 @@ final class FiltreEcheanceTest extends SportApiTestCase
             ->setAbonnement($voisin)
             ->setDateProgrammee(new \DateTimeImmutable('2026-11-01'))
             ->setMontantCentimes(2990)
-            ->setStatut(\App\Sport\Enum\StatutEcheanceSepa::AVenir));
+            ->setStatut(\App\Membership\Enum\StatutEcheanceSepa::AVenir));
 
         $em->flush();
     }

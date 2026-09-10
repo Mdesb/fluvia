@@ -10,9 +10,9 @@ use App\Crm\Entity\Client;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
 use App\Sepa\Entity\MandatSepa;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\StatutAccesFitness;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -58,7 +58,7 @@ final class SouscriptionTest extends SportApiTestCase
         // ── TÉMOIN DU NOUVEAU CONTRAT : l'adhérent est un CLIENT, résolu en bénéficiaire ─────────
         // On a désigné le CLIENT de l'enfant ; le serveur doit l'avoir résolu (forPurchase) en le
         // bénéficiaire attaché à cet enfant — celui-là même que la souscription au comptoir emploie.
-        $abonnementEntite = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        $abonnementEntite = $em->getRepository(Membership::class)->find($abonnementId);
         self::assertNotNull($abonnementEntite);
         self::assertSame(
             (string) $adherent->getId(),

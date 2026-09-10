@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\Resiliation;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\Resiliation;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -59,7 +59,7 @@ final class ResiliationTest extends SportApiTestCase
         self::assertSame($dateEffetAttendue->format('Y-m-d'), $resiliationEntite->getDateEffet()->format('Y-m-d'));
 
         // Le mandat n'est PAS révoqué avant la date d'effet (RG-SPORT-06).
-        $abonnement = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        $abonnement = $em->getRepository(Membership::class)->find($abonnementId);
         self::assertSame('actif', $abonnement->getMandatSepa()->getStatut()->value);
     }
 
@@ -70,7 +70,7 @@ final class ResiliationTest extends SportApiTestCase
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        $abonnement = $em->getRepository(Membership::class)->find($abonnementId);
         // Place la demande après la fin d'engagement (période libre).
         $dateDemande = $abonnement->getDateFinEngagement()->modify('+1 day');
 

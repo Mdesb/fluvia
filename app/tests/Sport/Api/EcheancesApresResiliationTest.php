@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\Resiliation;
-use App\Sport\Enum\StatutEcheanceSepa;
-use App\Sport\Enum\StatutResiliation;
-use App\Sport\Service\DemanderResiliationHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\Resiliation;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Enum\StatutResiliation;
+use App\Membership\Service\DemanderResiliationHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -100,7 +100,7 @@ final class EcheancesApresResiliationTest extends SportApiTestCase
     }
 
     /** Une résiliation déjà en préavis, prête à recevoir son effet. */
-    private function resiliationEnPreavis(AbonnementFitness $abonnement): Resiliation
+    private function resiliationEnPreavis(Membership $abonnement): Resiliation
     {
         $em = $this->em();
         $demande = new \DateTimeImmutable('2026-09-01');
@@ -120,7 +120,7 @@ final class EcheancesApresResiliationTest extends SportApiTestCase
         return $resiliation;
     }
 
-    private function echeance(AbonnementFitness $abonnement, \DateTimeImmutable $le): EcheanceSepa
+    private function echeance(Membership $abonnement, \DateTimeImmutable $le): EcheanceSepa
     {
         $em = $this->em();
         $echeance = (new EcheanceSepa())

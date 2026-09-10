@@ -173,10 +173,10 @@ services:
     # --- Verticale Sport/Fitness : ports & adaptateurs (§2 du plan-sport) ---
     # Projection comptable des encaissements/impayés SEPA : file d'attente append-only (Risque n°1,
     # aucun fichier App\Compta\* modifié — aucune écriture NF525 scellée produite par ce lot).
-    App\Sport\Compta\Port\ProjectionEcritureSepaInterface: '@App\Sport\Compta\Adapter\MouvementComptableSepaQueueAdapter'
+    App\Membership\Compta\Port\ProjectionEcritureSepaInterface: '@App\Membership\Compta\Adapter\MouvementComptableSepaQueueAdapter'
     # Port SEPA fourni PAR Sport AU module partagé App\Sepa (plan-sepa.md §3/§5) : agrégé par
     # `App\Sepa\Service\CompositeEcheanceSepaSource` (point d'entrée générique `/sepa/remises/generer`).
-    App\Sport\Sepa\SportEcheanceSepaSource:
+    App\Membership\Sepa\SportEcheanceSepaSource:
         tags: ['sepa.echeance_source']
         # Public pour accès direct depuis les tests (même patron que `App\Musee\Service\PrioriteOtaResolver`).
         # Le taux de TVA que cette source rend ne se vérifie qu'en l'interrogeant : passer par la remise
@@ -185,7 +185,7 @@ services:
     # Port `RedevablePort` fourni PAR Sport AU moteur de recouvrement partagé App\Recouvrement (refactor
     # extraction) : agrégé par `App\Recouvrement\Service\RedevableRegistry` (même patron que
     # `SportEcheanceSepaSource`/`CompositeEcheanceSepaSource` ci-dessus).
-    App\Sport\Recouvrement\AbonnementFitnessRedevablePort:
+    App\Membership\Recouvrement\AbonnementFitnessRedevablePort:
         tags: ['recouvrement.redevable_port']
     # Public pour accès direct depuis les tests (preuve du recâblage Sport → module SEPA partagé,
     # même patron que `App\Acces\Service\RecalageFmiHandler`) — aucune route Sport dédiée ne le consomme
@@ -193,7 +193,7 @@ services:
     # `POST /sepa/remises/generer`, `App\Sepa\State\GenererRemiseSepaProcessor`, qui agrège
     # `SportEcheanceSepaSource` via `CompositeEcheanceSepaSource`) ; ce service reste utilisable
     # directement par une future commande planifiée propre à Sport.
-    App\Sport\Service\GenererRemiseSepaHandler:
+    App\Membership\Service\GenererRemiseSepaHandler:
         public: true
 
     # --- Module SEPA partagé App\Sepa (plan-sepa.md §4) : ports & adaptateurs ---
@@ -264,7 +264,7 @@ services:
         arguments:
             $strategies: !tagged_iterator reservation.strategie_facturation_no_show
     # Port SEPA fourni PAR Reservation AU module partagé App\Sepa (squelette `prelevement_differe`,
-    # Risque n°1 du plan) — même patron que `App\Sport\Sepa\SportEcheanceSepaSource`. Public pour accès
+    # Risque n°1 du plan) — même patron que `App\Membership\Sepa\SportEcheanceSepaSource`. Public pour accès
     # direct depuis les tests (même patron que `RecalageFmiHandler`/`GenererRemiseSepaHandler`).
     App\Reservation\Sepa\ReservationEcheanceSepaSource:
         tags: ['sepa.echeance_source']

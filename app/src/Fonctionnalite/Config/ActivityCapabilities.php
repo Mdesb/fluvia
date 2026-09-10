@@ -8,6 +8,7 @@ use App\Fonctionnalite\Enum\EstablishmentActivity;
 use App\Fonctionnalite\Enum\CapabilityCoverage;
 use App\Fonctionnalite\Enum\CapaciteCode;
 use App\Fonctionnalite\Service\CatalogueCapacites;
+use App\Membership\Entity\Membership;
 
 /**
  * Ce que chaque activite allume — et le classement des vingt-six capacites.

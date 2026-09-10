@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Sport\Command;
 
-use App\Sport\Entity\Resiliation;
-use App\Sport\Enum\StatutResiliation;
-use App\Sport\Service\DemanderResiliationHandler;
+use App\Membership\Entity\Resiliation;
+use App\Membership\Enum\StatutResiliation;
+use App\Membership\Service\DemanderResiliationHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

@@ -7,9 +7,9 @@ namespace App\Tests\Sport\Api;
 use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Recouvrement\Entity\RepresentationSepa;
 use App\Recouvrement\Enum\MomentRefusAcces;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\StatutAccesFitness;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -17,9 +17,9 @@ use Doctrine\ORM\EntityManagerInterface;
  * Couplage Sport ↔ moteur de recouvrement partagé (US-SPORT-05/06, RG-SPORT-01/02, décision actée,
  * CA-5/CA-6/CA-7, `critique`). Le moteur générique lui-même (rejet → incident → représentation →
  * accès bloqué) est testé indépendamment de Sport dans `App\Tests\Recouvrement` — ce test-ci vérifie
- * uniquement la conséquence propre à Sport : `AbonnementFitness.statut` et
+ * uniquement la conséquence propre à Sport : `Membership.statut` et
  * `StatutAccesFitness.actif/motifInactivite`, tenus à jour via
- * `App\Sport\EventListener\SynchroniserImpayeFitnessListener` (refactor extraction, aucune logique
+ * `App\Membership\EventListener\SynchroniserImpayeFitnessListener` (refactor extraction, aucune logique
  * anti-impayés n'est plus écrite dans `App\Sport`).
  */
 final class AntiImpayesTest extends SportApiTestCase
@@ -48,7 +48,7 @@ final class AntiImpayesTest extends SportApiTestCase
         $statutAcces = $this->statutAccesAbonnement($echeance->getAbonnement());
         self::assertTrue($statutAcces->isActif());
 
-        $abonnement = $em->getRepository(AbonnementFitness::class)->find($echeance->getAbonnement()->getId());
+        $abonnement = $em->getRepository(Membership::class)->find($echeance->getAbonnement()->getId());
         self::assertSame('impaye', $abonnement->getStatut()->value, 'Sport synchronise son propre statut via IncidentImpayeDetecteEvent.');
     }
 
@@ -119,7 +119,7 @@ final class AntiImpayesTest extends SportApiTestCase
         return $echeance;
     }
 
-    private function statutAccesAbonnement(AbonnementFitness $abonnement): StatutAccesFitness
+    private function statutAccesAbonnement(Membership $abonnement): StatutAccesFitness
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();

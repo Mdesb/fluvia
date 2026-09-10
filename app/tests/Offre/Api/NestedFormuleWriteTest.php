@@ -9,6 +9,7 @@ use App\Offre\Entity\Produit;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Offre\OffreApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Membership\Entity\Membership;
 
 /**
  * MODIFIER UNE FORMULE DEPUIS LA FICHE PRODUIT NE DOIT PAS LA REMPLACER.
@@ -21,7 +22,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * API Platform met-il à jour l'objet existant, ou en fabrique-t-il un second ?
  *
  * ⚠ ET LA RÉPONSE N'EST PAS ANODINE. `Produit::$formule` est en `orphanRemoval: true` : un
- * remplacement SUPPRIME l'ancienne. Or `Formule` est référencée ailleurs — `AbonnementFitness`
+ * remplacement SUPPRIME l'ancienne. Or `Formule` est référencée ailleurs — `Membership`
  * (chaque abonné), `PassAnnuel` du musée, et `ServiceInclus`. Si l'enregistrement remplaçait la
  * formule, corriger un jour de prélèvement depuis la fiche produit casserait le lien avec les
  * abonnés existants.
@@ -84,7 +85,7 @@ final class NestedFormuleWriteTest extends OffreApiTestCase
             $idFormuleAvant,
             (string) $formuleApres->getId(),
             'La formule doit être MISE À JOUR, pas remplacée : `orphanRemoval` supprimerait l’ancienne, '
-            .'et `AbonnementFitness` comme `PassAnnuel` la référencent.',
+            .'et `Membership` comme `PassAnnuel` la référencent.',
         );
 
         self::assertSame(

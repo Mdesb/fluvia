@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Sport\Command;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\TermRenewalMode;
-use App\Sport\Service\SubscriptionTermHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\TermRenewalMode;
+use App\Membership\Service\SubscriptionTermHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -56,11 +56,11 @@ final class ProcessSubscriptionTermsCommand extends Command
             ? new \DateTimeImmutable($le)
             : new \DateTimeImmutable();
 
-        $dus = $this->em->getRepository(AbonnementFitness::class)
+        $dus = $this->em->getRepository(Membership::class)
             ->createQueryBuilder('a')
             ->andWhere('a.statut = :actif')
             ->andWhere('a.dateFinEngagement <= :maintenant')
-            ->setParameter('actif', StatutAbonnementFitness::Actif)
+            ->setParameter('actif', MembershipStatus::Actif)
             ->setParameter('maintenant', $maintenant)
             ->getQuery()
             ->getResult();
