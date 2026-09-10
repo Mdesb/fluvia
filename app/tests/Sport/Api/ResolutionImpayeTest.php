@@ -44,12 +44,21 @@ final class ResolutionImpayeTest extends SportApiTestCase
         $statutAcces = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnement->getId()]);
         self::assertFalse($statutAcces->isActif(), 'Accès coupé après échec de représentation (pré-condition du test).');
 
-        // Résolution 1 clic (agent ici pour simplifier ; le flux self-service `_soi` est équivalent).
-        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
+        // Règlement constaté par un agent : virement reçu.
+        //
+        // ⚠ CE TEST ATTENDAIT `app_1_clic`, ET CE N'ÉTAIT PAS UNE VÉRIFICATION. L'opération refusait
+        //    tout corps (`input: false`) et le handler posait le canal en dur : `app_1_clic` était la
+        //    seule valeur qu'un incident pût jamais porter. L'assertion ne mesurait donc rien — elle
+        //    recopiait une constante. Ce que ce test doit prouver, c'est que l'accès fitness est
+        //    restauré quand l'impayé est réglé, et ça ne dépend pas du canal.
+        //
+        // ⚠ ET `app_1_clic` NE PASSERAIT PLUS ICI : l'adaptateur d'encaissement CB refuse tant
+        //    qu'aucun prestataire n'est raccordé. Le canal déclaré est donc celui du chemin réel.
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete + ['json' => ['canal' => 'virement', 'moyenPaiement' => 'virement']]);
         self::assertResponseIsSuccessful();
         $incident = $client->getResponse()->toArray();
         self::assertSame('resolu', $incident['statut']);
-        self::assertSame('app_1_clic', $incident['canalResolution']);
+        self::assertSame('virement', $incident['canalResolution'], 'Le canal enregistré est celui qui a été déclaré.');
 
         $em->clear();
         $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnement->getId());

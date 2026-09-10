@@ -213,6 +213,29 @@ final class WebsiteController extends AbstractController
         ]);
     }
 
+    /**
+     * Nous écrire.
+     *
+     * ⚠ **IL N'Y AVAIT AUCUN MOYEN DE JOINDRE FLUVIA.** Mesuré le 09/09 sur le site servi : pas une
+     * adresse, pas un `mailto:`. Le seul chemin était le tunnel d'inscription — qui suppose qu'on
+     * veuille déjà s'inscrire, et qui ne mène lui-même nulle part tant qu'E-8 tient.
+     */
+    #[Route('/contact', name: 'website_contact', methods: ['GET'])]
+    #[Cache(public: true, maxage: 900, mustRevalidate: true)]
+    public function contact(): Response
+    {
+        return $this->render('website/contact.html.twig', [
+            'blocs' => $this->blocs->valeurs(),
+            'jsonld' => [
+                $this->donnees->organisation(),
+                $this->donnees->filDariane([
+                    ['nom' => 'Accueil', 'url' => $this->absolue('website_home')],
+                    ['nom' => 'Contact', 'url' => $this->absolue('website_contact')],
+                ]),
+            ],
+        ]);
+    }
+
     #[Route('/blog', name: 'website_blog_index', methods: ['GET'])]
     #[Cache(public: true, maxage: 300, mustRevalidate: true)]
     public function blog(#[MapQueryParameter] int $page = 1): Response

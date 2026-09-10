@@ -33,7 +33,34 @@ log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 # La question posee par allaccess-b8 -- « ou regarder pour savoir si une chose est livree ? » -- a
 # desormais une reponse unique : `origin/main`. Le deploiement refuse tout le reste.
 log "Vérification : ce qui va être servi est-il dans main ?"
-git fetch origin --quiet
+# ⚠ LE CODE DE SORTIE DU FETCH EST LA PREMIERE CHOSE A LIRE, ET IL NE L'ETAIT PAS.
+#
+# Un `git fetch` qui echoue -- reseau coupe, jeton expire, depot momentanement inaccessible -- ne
+# vide pas `origin/main` : il le LAISSE sur la valeur de la derniere reussite. Toute la comparaison
+# qui suit tourne alors contre une reference perimee, et elle peut conclure « cet arbre EST
+# origin/main » alors que main a avance depuis. Le deploiement sert du code d'hier en l'annoncant
+# a jour -- exactement ce que le reste de ce fichier existe pour empecher, retourne : ici ce n'est
+# pas l'arbre qui ment, c'est la reference a laquelle on le compare.
+#
+# ⚠ ET L'ECHEC EST SILENCIEUX PAR CONSTRUCTION : `--quiet` masque le message de git, donc sans ce
+# controle rien ne distingue « rien de neuf a recuperer » de « je n'ai pas pu demander ». Les deux
+# se ressemblent, et le second est le seul qui rende la suite fausse.
+#
+# Le cas n'est pas theorique : le 07/09, le compte GitHub du depot a ete restreint plusieurs heures.
+# L'acces authentifie a fini par revenir, mais pendant la fenetre un fetch pouvait echouer sans que
+# personne le voie passer.
+if ! git fetch origin --quiet; then
+    echo
+    echo "✗ Déploiement refusé : impossible de contacter origin."
+    echo
+    echo "  La référence origin/main n'a pas pu être rafraîchie. Elle porte encore la valeur"
+    echo "  de la dernière récupération réussie : comparer cet arbre avec elle ne prouverait"
+    echo "  rien, et pourrait servir du code périmé en l'annonçant à jour."
+    echo
+    echo "  → vérifiez l'accès au dépôt, puis relancez :   git fetch origin"
+    exit 1
+fi
+
 TETE_LOCALE="$(git rev-parse HEAD)"
 TETE_MAIN="$(git rev-parse origin/main)"
 
@@ -172,6 +199,20 @@ log "Base de connaissance (doc vivante -> articles d'aide)"
 #   « tout existait deja » de « la base est vide ».
 log "Referentiel des metiers"
 "${COMPOSE[@]}" exec -T php php bin/console website:trades:seed --no-interaction
+
+# ⚠ MEME DEFAUT QUE CI-DESSUS, ET IL ETAIT DEJA ECRIT DEUX LIGNES PLUS HAUT : `website:blocks:seed`
+#   existe depuis ED-10 et ce script ne l appelait nulle part. Un bloc jamais seme n a pas de
+#   valeur, la page ne rend rien pour lui, et le deploiement annonce un succes.
+#
+#   Ca s est vu le 09/09 en posant la page de contact : elle publie une adresse qui vit dans un
+#   bloc. Sans semis, elle serait arrivee en production en disant « aucune adresse n est publiee » —
+#   200, aucune erreur, aucun moyen de joindre Fluvia.
+#
+#   La commande NE REECRIT JAMAIS un bloc rempli, et elle SAUTE ceux dont la valeur d origine est
+#   vide : un corps de page qui nait vide reste « jamais rempli » dans l ecran, ce qui est le seul
+#   signal qui dit au redacteur ou il reste quelque chose a ecrire.
+log "Contenus du site (blocs editables)"
+"${COMPOSE[@]}" exec -T php php bin/console website:blocks:seed --no-interaction
 
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug

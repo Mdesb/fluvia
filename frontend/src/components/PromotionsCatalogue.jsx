@@ -108,6 +108,9 @@ export default function PromotionsCatalogue({ etabActif, droits = [], params = {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   const [promotions, setPromotions] = useState(null)
   const [produits, setProduits] = useState(null)
+  // `true` quand une des lectures a été REFUSÉE (403), et non simplement échouée : les deux se
+  // ressemblent à l'écran, et seule la première a un remède que l'exploitant peut demander.
+  const [refus, setRefus] = useState(false)
   const [aSupprimer, setASupprimer] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
@@ -121,11 +124,20 @@ export default function PromotionsCatalogue({ etabActif, droits = [], params = {
 
   const peutGerer = aLeDroit(droits, 'offre.gerer')
 
+  // ⚠ « ILLISIBLE » NE DIT PAS POURQUOI, ET LA RAISON LA PLUS FRÉQUENTE N'EST PAS UNE PANNE.
+  //
+  // Les deux lectures exigent `offre.lire` — vérifié sur `Promotion` et `Produit`. Sans ce droit,
+  // l'écran annonçait un échec de lecture et envoyait chercher un incident technique là où il
+  // manquait une permission. Un même drapeau pour les deux : c'est le même droit.
   function charger() {
     setPromotions(null)
+    setRefus(false)
     api.promotions()
       .then((r) => setPromotions(membres(r)))
-      .catch(() => setPromotions(undefined))
+      .catch((e) => {
+        if (e?.status === 403) setRefus(true)
+        setPromotions(undefined)
+      })
   }
 
   useEffect(charger, [etabActif])
@@ -133,7 +145,10 @@ export default function PromotionsCatalogue({ etabActif, droits = [], params = {
   useEffect(() => {
     api.produits({ itemsPerPage: 200 })
       .then((r) => setProduits(membres(r)))
-      .catch(() => setProduits(undefined))
+      .catch((e) => {
+        if (e?.status === 403) setRefus(true)
+        setProduits(undefined)
+      })
   }, [etabActif])
 
   const nomProduit = useMemo(() => {
@@ -179,6 +194,13 @@ export default function PromotionsCatalogue({ etabActif, droits = [], params = {
             <div className="banner banner-warn">
               Les promotions n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même
               chose que « elle n’existe pas » : réessayez avant d’en recréer une.
+              {refus && (
+                <>
+                  {' '}<strong>Et réessayer n’y changera rien</strong> : ce compte n’a pas le droit
+                  de lire le catalogue de cet établissement. Demandez la permission{' '}
+                  <code>offre.lire</code> à un administrateur.
+                </>
+              )}
             </div>
           </div>
         </section>

@@ -14,7 +14,6 @@ use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Musee\Entity\Audioguide;
-use App\Musee\Entity\ContingentGratuite;
 use App\Musee\Entity\Exposition;
 use App\Musee\Entity\Guide;
 use App\Musee\Entity\ParametreMuseeEtablissement;
@@ -25,7 +24,6 @@ use App\Musee\Entity\QualificationLangueGuide;
 use App\Musee\Entity\Salle;
 use App\Musee\Entity\SousQuotaSalle;
 use App\Musee\Enum\ModeDelestage;
-use App\Musee\Enum\PerimetreContingent;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\GrilleTarifaire;
@@ -218,9 +216,6 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($creneauApresMidi);
 
         // --- Contingent de gratuités dédié (décision actée §4.5, RG-MUS-03) ---
-        $contingent = (new ContingentGratuite())->setPerimetre(PerimetreContingent::Creneau)
-            ->setCreneau($creneauMatin)->setQuotaGratuitesDedie(5)->setQuotaConsomme(0)->setEtablissement($etabA);
-        $manager->persist($contingent);
 
         // --- Salle avec sous-quota + politique de délestage (US-MUSEE-02, §4.2) ---
         $espaceSocle = (new Espace())->setNom(self::SALLE_LIBELLE)->setEtablissement($etabA)->setType('salle_exposition');

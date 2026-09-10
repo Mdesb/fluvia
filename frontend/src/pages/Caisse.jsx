@@ -639,7 +639,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   async function encaisserRapide() {
     // Le moyen CHOISI sur les pastilles (par defaut le premier proposable), capture AVANT
     // `demarrerPaiement` qui reinitialise la selection au defaut du point de vente.
-    const choisi = moyensDispo.find((m) => m.code === moyenSel) || moyensDispo[0] || null
+    const choisi = moyensDispo.find((m) => m.code === moyenSel) || null
     const ctx = await demarrerPaiement()
     if (!ctx) return
     // On restaure le moyen choisi : `demarrerPaiement` vient de le remettre au defaut, et si le
@@ -1045,41 +1045,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 
                   {!enPaiement ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                    {/* pastilles moyen en amont : le choix du moyen redevient visible dans le geste principal */}
-                    {moyensDispo.length > 1 && (
-                      <div className="pay-moyens">
-                        {moyensDispo.map((m) => (
-                          <button
-                            key={m.code}
-                            type="button"
-                            className={`pay-chip${moyenSel === m.code ? ' on' : ''}`}
-                            onClick={() => setMoyenSel(m.code)}
-                            disabled={busy}
-                          >
-                            {m.libelle}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {/* Le geste par défaut ouvre le pavé détaillé : moyen, montant, rendu et paiement
+                        scindé s'y choisissent, et rien ne se solde avant « Régler ». */}
                     <button
                       className="btn primary lg"
-                      onClick={encaisserRapide}
+                      onClick={demarrerPaiement}
                       disabled={busy || !peutEncaisser}
                       title={peutEncaisser
                         ? undefined
                         : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
                     >
-                      {busy
-                        ? 'Ouverture…'
-                        : `Encaisser ${euros(total)}${moyenCourant && moyensDispo.length > 1 ? ` · ${moyenCourant.libelle}` : ''}`}
+                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
                     </button>
-                    <button
-                      className="btn ghost sm"
-                      onClick={demarrerPaiement}
-                      disabled={busy || !peutEncaisser}
-                    >
-                      Paiement détaillé (rendu, paiement scindé)
-                    </button>
+                    <small className="sub">Moyen de paiement, montant, rendu ou paiement scindé à l’étape suivante.</small>
                     </div>
                   ) : (
                     <PanneauPaiement

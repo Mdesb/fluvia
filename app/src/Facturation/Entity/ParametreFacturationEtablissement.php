@@ -200,6 +200,30 @@ class ParametreFacturationEtablissement
     #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
     private ?TauxTva $tauxTvaAbonnement = null;
 
+    /**
+     * Le taux de TVA appliqué par défaut à **tout ce qui est facturable** quand la chose facturée n'en
+     * porte pas elle-même (demande de Maxime, 08/09).
+     *
+     * ⚠ NE PAS CONFONDRE AVEC `tauxTvaAbonnement` CI-DESSUS, qui sert à facturer **l'exploitant pour
+     * Fluvia** (`SubscriptionInvoicer`). Les deux portent le mot « abonnement » et ne parlent pas du
+     * même impôt : l'un est ce que l'éditeur facture à son client, l'autre ce que l'exploitant
+     * facture à ses adhérents. Les fusionner ferait bouger l'un le jour où on règle l'autre.
+     *
+     * ⚠ POURQUOI CE CHAMP EXISTE, ET LE CHIFFRE QUI L'A JUSTIFIÉ. La source de vérité reste le taux
+     * porté par la chose vendue (`Produit::$tauxTva`). Mesuré en préproduction le 08/09 : sur 20
+     * produits, **2** portent un taux — et sur les **4** qui sont des formules d'abonnement,
+     * **aucun**. Sans repli, la facturation des échéances aurait refusé 100 % des cas : du code juste
+     * et un produit inerte.
+     *
+     * L'ordre est donc : le taux de la chose facturée, puis celui-ci, puis un **refus** qui nomme ce
+     * qu'il n'a pas su résoudre. `null` signifie « non décidé », jamais « exonéré » — l'exonération se
+     * dit par un taux à zéro et se justifie par `mentionTvaSpecifique`.
+     */
+    #[ORM\ManyToOne(targetEntity: TauxTva::class)]
+    #[ORM\JoinColumn(name: 'taux_tva_defaut_id', nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?TauxTva $tauxTvaDefaut = null;
+
     /** Franchise en base (art. 293 B du CGI) — optionnel, ⚠ hypothèse §4.2 de la spec. */
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
@@ -384,6 +408,18 @@ class ParametreFacturationEtablissement
         }
 
         return $texte;
+    }
+
+    public function getTauxTvaDefaut(): ?TauxTva
+    {
+        return $this->tauxTvaDefaut;
+    }
+
+    public function setTauxTvaDefaut(?TauxTva $tauxTvaDefaut): self
+    {
+        $this->tauxTvaDefaut = $tauxTvaDefaut;
+
+        return $this;
     }
 
     public function getTauxTvaAbonnement(): ?TauxTva

@@ -65,7 +65,7 @@ final class AccesHorsLigneTest extends SportApiTestCase
         $incident = $this->creerIncidentEtEchecRepresentation($client, $entete);
 
         // Régularisation confirmée côté serveur (résolution 1 clic, moteur générique de recouvrement).
-        $client->request('POST', '/api/recouvrement/incidents/' . $incident . '/resoudre', $entete);
+        $client->request('POST', '/api/recouvrement/incidents/' . $incident . '/resoudre', $entete + ['json' => ['canal' => 'virement', 'moyenPaiement' => 'virement']]);
         self::assertResponseIsSuccessful();
 
         // « Nouveau passage de badge » (re-badge) après la synchro suivante : accepté normalement,

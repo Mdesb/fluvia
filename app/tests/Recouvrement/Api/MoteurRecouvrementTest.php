@@ -96,12 +96,54 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
+        // ⚠ CE TEST ATTENDAIT `app_1_clic` PARCE QUE C'ÉTAIT LA SEULE VALEUR POSSIBLE, PAS PARCE QUE
+        //    C'ÉTAIT LA BONNE. L'opération était déclarée `input: false` et le handler posait le canal
+        //    en dur : les trois autres valeurs de l'énumération — virement, caisse, autre — étaient
+        //    inatteignables, et l'écran affichait éternellement la même. Le canal est désormais
+        //    déclaré, et c'est cette déclaration qu'on vérifie.
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete + [
+            'json' => ['canal' => 'virement', 'moyenPaiement' => 'virement', 'reference' => 'VIR-2026-42'],
+        ]);
         self::assertResponseIsSuccessful();
         $incident = $client->getResponse()->toArray();
         self::assertSame('resolu', $incident['statut']);
-        self::assertSame('app_1_clic', $incident['canalResolution']);
+        self::assertSame('virement', $incident['canalResolution'], 'Le canal déclaré doit être celui enregistré.');
+        self::assertSame('virement', $incident['moyenResolution']);
+        self::assertSame('VIR-2026-42', $incident['referenceResolution']);
         self::assertFalse($incident['accesBloque']);
+    }
+
+    /**
+     * ⚠ LE TÉMOIN QUI MANQUAIT LE PLUS : le bouchon d'encaissement CB répondait « oui » sans condition.
+     * « Réglé » ne débitait donc personne et ne pouvait jamais échouer — l'écran annonçait un
+     * encaissement, la dette disparaissait, l'accès se rouvrait, et aucun euro n'avait bougé.
+     */
+    public function testLeCanalCarteRefuseTantQuAucunPrestataireNEstRaccorde(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $incidentId = $this->creerIncident($client, $entete);
+
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete + [
+            'json' => ['canal' => 'app_1_clic', 'moyenPaiement' => 'cb', 'reference' => 'TPE-1'],
+        ]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('prestataire de paiement', $client->getResponse()->getContent(false));
+
+        // Et le dossier n'a pas bougé : un refus qui laisserait l'incident résolu serait pire que rien.
+        $client->request('GET', '/api/incident_impayes/' . $incidentId, $entete);
+        self::assertNotSame('resolu', $client->getResponse()->toArray()['statut']);
+    }
+
+    /** Un canal absent ou inconnu est refusé — il ne retombe pas silencieusement sur une valeur. */
+    public function testUnCanalManquantEstRefuse(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $incidentId = $this->creerIncident($client, $entete);
+
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete + [
+            'json' => ['moyenPaiement' => 'virement'],
+        ]);
+        self::assertResponseStatusCodeSame(422);
     }
 
     public function testResolutionRefuseeSiIncidentDejaResolu(): void
@@ -109,10 +151,12 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
         [$client, $entete] = $this->adminSurA();
         $incidentId = $this->creerIncident($client, $entete);
 
-        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
+        $corps = $entete + ['json' => ['canal' => 'virement', 'moyenPaiement' => 'virement']];
+
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $corps);
         self::assertResponseIsSuccessful();
 
-        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $corps);
         self::assertResponseStatusCodeSame(422);
     }
 
@@ -174,7 +218,9 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
         }
 
         // On règle le PREMIER seulement.
-        $client->request('POST', '/api/recouvrement/incidents/' . $ids[0] . '/resoudre', $entete);
+        $client->request('POST', '/api/recouvrement/incidents/' . $ids[0] . '/resoudre', $entete + [
+            'json' => ['canal' => 'virement', 'moyenPaiement' => 'virement'],
+        ]);
         self::assertResponseIsSuccessful();
 
         $em->clear();

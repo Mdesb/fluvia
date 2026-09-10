@@ -117,6 +117,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
   // le bouton n'apparait donc que sur une facture emise.
   const [documentPour, setDocumentPour] = useState(null)
+  const [reglementsDe, setReglementsDe] = useState(null)
   // Le rapport d'intégrité : `null` tant qu'on n'a pas demandé, jamais un état par défaut.
   const [chaine, setChaine] = useState(null)
   const [chaineEnCours, setChaineEnCours] = useState(false)
@@ -346,6 +347,14 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                             {brouillon
                               ? <span className="sub">non émise</span>
                               : solde > 0 ? <b>{euros(solde)}</b> : <span className="sub">soldée</span>}
+                            {/* ⚠ « SOLDÉE » NE DISAIT PAS PAR QUOI. L'API sérialise `montantRegle` et
+                                la liste des règlements depuis toujours ; AUCUN chunk du frontal ne
+                                les lisait — mesuré le 08/09 : zéro occurrence dans tout le build. Une
+                                facture payée montrait un solde à zéro, et rien d'autre : ni par quel
+                                moyen, ni quand. */}
+                            {!brouillon && Number(f.montantRegle || 0) > 0 && (
+                              <div className="sub">réglé {euros(f.montantRegle)}</div>
+                            )}
                           </td>
                           <td><span className={`badge ${st.ton}`}>{st.libelle}</span></td>
                           <td className="row actions" style={{ justifyContent: 'flex-end', gap: 6 }}>
@@ -385,6 +394,16 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                             {peutLettrer && !brouillon && solde > 0 && (
                               <button className="btn sm" type="button" onClick={() => setReglementPour(f)}>
                                 Encaisser
+                              </button>
+                            )}
+                            {!brouillon && (f.reglements || []).length > 0 && (
+                              <button
+                                className="btn sm"
+                                type="button"
+                                title="Date, moyen, référence et montant de chaque règlement."
+                                onClick={() => setReglementsDe(f)}
+                              >
+                                Règlements
                               </button>
                             )}
                             {peutAvoir && !brouillon && (
@@ -515,6 +534,48 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
       {documentPour && (
         <FactureRendu facture={documentPour} onClose={() => setDocumentPour(null)} />
       )}
+
+      {/* ⚠ CE QUE L'API SERVAIT DEPUIS TOUJOURS ET QUE PERSONNE N'AFFICHAIT. `facture:read` sérialise
+          `reglements`, `montantRegle` et `soldeDu` ; mesuré le 08/09 sur le build servi :
+          `montantRegle` n'apparaissait dans AUCUN chunk. Une facture payée montrait un solde à zéro,
+          et c'est tout — impossible de savoir par quel moyen ni quand, donc impossible de rapprocher
+          un relevé bancaire sans rouvrir la base. */}
+      <Modal
+        open={!!reglementsDe}
+        onClose={() => setReglementsDe(null)}
+        titre={`Règlements — facture ${reglementsDe?.numero || ''}`}
+      >
+        {reglementsDe && (
+          <>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Moyen</th>
+                  <th>Référence</th>
+                  <th className="num">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(reglementsDe.reglements || []).map((r) => (
+                  <tr key={r['@id'] || r.id}>
+                    <td>{dateCourte(r.dateReglement)}</td>
+                    <td>{r.moyen ? mot(r.moyen) : '—'}</td>
+                    <td>{r.reference || <span className="sub">aucune</span>}</td>
+                    <td className="num">{euros(r.montant)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              Réglé <b>{euros(reglementsDe.montantRegle)}</b> sur {euros(reglementsDe.totalTTC)} —{' '}
+              {Number(reglementsDe.soldeDu || 0) > 0
+                ? <>reste <b>{euros(reglementsDe.soldeDu)}</b> à encaisser.</>
+                : 'facture soldée.'}
+            </p>
+          </>
+        )}
+      </Modal>
 
       {/* L'INTÉGRITÉ DE LA CHAÎNE — ce qu'on montre à un expert-comptable ou à un contrôle.
           La chaîne des ÉCRITURES était déjà vérifiable depuis Comptabilité ; celle des FACTURES

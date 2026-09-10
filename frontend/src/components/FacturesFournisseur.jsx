@@ -32,7 +32,7 @@ import { confirmer } from './Confirmation.jsx'
 const A_TRAITER = ['draft']
 const A_PAYER = ['to_pay', 'partially_paid']
 
-export default function FacturesFournisseur({ etabActif, droits }) {
+export default function FacturesFournisseur({ etabActif, droits, params = {}, majParams }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucune facture a approuver » sur une lecture
   // refusee laisse croire que la file est traitee.
   const [facturesLu, setFacturesLu] = useState(null)
@@ -55,7 +55,6 @@ export default function FacturesFournisseur({ etabActif, droits }) {
   const peutSaisir = aLeDroit(droits, 'finance.supplier_invoice_create')
 
   const [fournisseurs, setFournisseurs] = useState([])
-  const [saisie, setSaisie] = useState(false)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -114,6 +113,36 @@ export default function FacturesFournisseur({ etabActif, droits }) {
     )
   }
 
+  // ── LA SAISIE D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────────────
+  //
+  // 190 lignes de formulaire, dont une lecture de document qui propose des valeurs à relire. Elle
+  // n'a besoin d'aucun identifiant : `facture=1` suffit, c'est une création.
+  if (params.facture === '1') {
+    return (
+      <>
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => majParams({ facture: '' }, { pousser: true })}
+          style={{ marginBottom: 'var(--esp-large)' }}
+        >
+          ← Retour aux factures
+        </button>
+        <SaisieFactureModal
+          open
+          fournisseurs={fournisseurs}
+          etabActif={etabActif}
+          onClose={() => majParams({ facture: '' }, { pousser: true })}
+          onFait={() => {
+            majParams({ facture: '' }, { pousser: true })
+            setSucces('Facture enregistrée en brouillon. Elle attend maintenant son approbation.')
+            recharger()
+          }}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -124,7 +153,7 @@ export default function FacturesFournisseur({ etabActif, droits }) {
           tout l'interet du controle -- qui saisit une facture n'est pas qui l'approuve. */}
       {peutSaisir && (
         <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button className="btn primary" type="button" onClick={() => setSaisie(true)}>
+          <button className="btn primary" type="button" onClick={() => majParams({ facture: '1' }, { pousser: true })}>
             Enregistrer une facture
           </button>
         </div>
@@ -262,18 +291,6 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         onFait={(m) => { setResolution(null); setSucces(m); recharger() }}
         messageSucces="Litige clos."
         onErreur={setErreur}
-      />
-
-      <SaisieFactureModal
-        open={saisie}
-        fournisseurs={fournisseurs}
-        etabActif={etabActif}
-        onClose={() => setSaisie(false)}
-        onFait={() => {
-          setSaisie(false)
-          setSucces('Facture enregistrée en brouillon. Elle attend maintenant son approbation.')
-          recharger()
-        }}
       />
     </>
   )
@@ -430,7 +447,8 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
   }, [numero, dateFacture, fournisseur, fournisseursActifs])
 
   return (
-    <Modal open={open} onClose={onClose} titre="Enregistrer une facture fournisseur" taille="lg">
+    <>
+      <h2>Enregistrer une facture fournisseur</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -621,7 +639,7 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

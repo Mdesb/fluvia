@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\SmartFlow\Api;
 
 use App\DataFixtures\SocleFixtures;
+use App\Crm\Entity\Beneficiaire;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
@@ -73,7 +74,11 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
         self::assertInstanceOf(Etablissement::class, $etablissement);
 
         $resourceId = Uuid::v4();
-        $entree1 = $this->creerEntree($etablissement, $resourceId, 1);
+        // ⚠ UN BÉNÉFICIAIRE RÉEL, PAS UN `Uuid::v4()`. Ce test fabriquait un identifiant que le
+        // monde réel ne produit jamais : aucun bénéficiaire derrière, donc aucun client, donc un
+        // message qui n'aurait jamais pu être délivré. Il mesurait le code, pas le produit.
+        $idBeneficiaire = Uuid::fromString($this->idBeneficiairePayeur());
+        $entree1 = $this->creerEntree($etablissement, $resourceId, 1, $idBeneficiaire);
 
         $espion = $this->espionnerNotifier();
 
@@ -83,7 +88,23 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
 
         self::assertCount(1, $espion->recues, 'RG-SF-06 : une promotion doit notifier le bénéficiaire promu.');
         $notification = $espion->recues[0];
-        self::assertSame((string) $entree1->getBeneficiaryId(), $notification->clientId->toRfc4122());
+
+        // ⚠ LE CLIENT DU BÉNÉFICIAIRE, PAS LE BÉNÉFICIAIRE. `ClientNotification::$clientId` attend un
+        // `Client` ; `ConsentGatedNotifier` fait `Client::find()` dessus et rend `Refusee` s'il ne
+        // trouve rien — indiscernable d'un refus de consentement. Ce test affirmait l'égalité des
+        // deux jusqu'au 06/09, c'est-à-dire qu'il figeait le défaut.
+        $beneficiaire = $this->em()->getRepository(Beneficiaire::class)->find($entree1->getBeneficiaryId());
+        self::assertNotNull($beneficiaire?->getClient(), 'Le montage suppose un bénéficiaire rattaché à un client.');
+        self::assertSame(
+            (string) $beneficiaire->getClient()->getId(),
+            $notification->clientId->toRfc4122(),
+            'La notification doit porter le client, sinon personne ne la reçoit.',
+        );
+        self::assertNotSame(
+            (string) $entree1->getBeneficiaryId(),
+            $notification->clientId->toRfc4122(),
+            'Bénéficiaire et client sont deux identités : les confondre rendait le message indélivrable.',
+        );
         self::assertSame(NotificationChannel::Email, $notification->channel);
         self::assertSame('smart_flow.waitlist_promoted', $notification->templateKey);
         self::assertSame('smart_flow', $notification->source);
@@ -131,12 +152,18 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
         self::assertSame(RescheduleProposalStatus::Proposed, $proposition2->getStatus());
     }
 
-    private function creerEntree(Etablissement $etablissement, Uuid $resourceId, int $rank): SlotWaitlistEntry
-    {
+    private function creerEntree(
+        Etablissement $etablissement,
+        Uuid $resourceId,
+        int $rank,
+        ?Uuid $beneficiaryId = null,
+    ): SlotWaitlistEntry {
         $entry = (new SlotWaitlistEntry())
             ->setEstablishment($etablissement)
             ->setResourceId($resourceId)
-            ->setBeneficiaryId(Uuid::v4())
+            // Le défaut reste un identifiant fabriqué : les autres tests de ce fichier mesurent le
+            // RANG et l'ordre, pas la délivrabilité, et un bénéficiaire réel n'y ajouterait rien.
+            ->setBeneficiaryId($beneficiaryId ?? Uuid::v4())
             ->setSearchWindowStart(new \DateTimeImmutable('+1 day'))
             ->setSearchWindowEnd(new \DateTimeImmutable('+7 days'))
             ->setRank($rank)

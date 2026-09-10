@@ -154,6 +154,28 @@ final class ScheduleCatalog
                 // l'allume, le premier passage balaierait tout le passé. `--dry-run` le montre.
                 safeOnFirstRun: false,
             ),
+            // chaine-encaissement G-1 : la facture nait a l'echeance, AVANT le prelevement. Le preavis
+            // ci-dessous annonce ensuite un prelevement qui vient solder un document deja existant.
+            new ScheduledTask(
+                'sepa:echeances:facturer',
+                1440,
+                "Une echeance d'abonnement prelevee ne produit AUCUNE facture et AUCUNE ecriture, meme "
+                . "quand elle reussit : tout le chiffre d'affaires des abonnements est absent de la "
+                . "comptabilite. Mesure du 08/09 en preproduction : 0 ecriture au journal ENC, et la "
+                . "creance d'une facture reglee restait debitrice au grand livre.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — et c'est la plus grave des trois taches de ce profil.
+                // Elle produit des documents SCELLES au sens NF525 : une facture emise ne s'annule pas,
+                // elle s'avoire. Un premier passage sur l'arriere laisserait une trace comptable
+                // definitive a corriger piece par piece. La commande porte deja un plancher a
+                // AUJOURD'HUI et un `--dry-run` ; ce drapeau est la troisieme garde, et la seule que
+                // l'ordonnanceur respecte tout seul.
+                safeOnFirstRun: false,
+                // Meme fenetre nocturne que les autres taches d'argent (arbitrage de Maxime, 01/09).
+                nightlyAt: '02:00',
+                // Rang 19 : la facture existe AVANT que le preavis (rang 20) annonce son prelevement.
+                order: 19,
+            ),
             new ScheduledTask(
                 'sepa:preavis:annoncer',
                 1440,

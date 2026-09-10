@@ -28,12 +28,30 @@ export default function TarifsProduit({ produit, grilles, peutModifier, onChange
   const [edition, setEdition] = useState(null) // { id, prix }
   const [erreur, setErreur] = useState(null)
   const [enCours, setEnCours] = useState(false)
+  // `true` quand le référentiel a été REFUSÉ (403), pas seulement trouvé vide.
+  const [refus, setRefus] = useState(false)
 
+  // ⚠ UNE LECTURE REFUSÉE DEVENAIT « AUCUN TYPE DE TARIF N'EXISTE ENCORE », ET C'EST UN MENSONGE
+  // COÛTEUX.
+  //
+  // Les deux lectures exigent `offre.lire` (vérifié sur `TypeTarif` et `Saison`). Sans ce droit,
+  // elles échouaient, la liste retombait à `[]`, et l'écran invitait à « en créer un dans
+  // Paramètres » — un type qui existe déjà, et que l'exploitant n'a pas plus le droit d'y créer.
+  // Il partait donc fabriquer un doublon d'une chose qu'il ne voyait pas.
+  //
+  // Le refus est retenu à part : `[]` veut dire « lu, et vide », il ne doit pas absorber
+  // « je n'ai pas pu demander ».
   useEffect(() => {
     if (!peutModifier) return
-    Promise.all([api.typeTarifs().catch(() => null), api.saisons().catch(() => null)]).then(([t, s]) => {
+    let refuse = false
+    const lire = (p) => p.catch((e) => {
+      if (e?.status === 403) refuse = true
+      return null
+    })
+    Promise.all([lire(api.typeTarifs()), lire(api.saisons())]).then(([t, s]) => {
       setTypes(t ? membres(t).filter((x) => x.actif !== false) : [])
       setSaisons(s ? membres(s).filter((x) => x.actif !== false) : [])
+      setRefus(refuse)
     })
   }, [peutModifier])
 
@@ -185,10 +203,17 @@ export default function TarifsProduit({ produit, grilles, peutModifier, onChange
           >
             ＋ Ajouter un tarif
           </button>
-          {types.length === 0 && (
+          {types.length === 0 && !refus && (
             <span className="hint" style={{ margin: 0 }}>
               Aucun type de tarif n'existe encore. Créez-en un dans Paramètres, onglet Catalogue et
               référentiels.
+            </span>
+          )}
+          {types.length === 0 && refus && (
+            <span className="hint" style={{ margin: 0 }}>
+              Les types de tarif n'ont pas pu être lus : ce compte n'a pas le droit de lire le
+              catalogue. <strong>Il en existe peut-être</strong> — n'en créez pas un double.
+              Demandez la permission <code>offre.lire</code> à un administrateur.
             </span>
           )}
           {/* Dit une fois, calmement, plutôt que découvert au moment où l'on cherche le bouton. */}

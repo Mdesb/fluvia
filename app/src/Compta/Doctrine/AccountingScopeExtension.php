@@ -23,6 +23,7 @@ use App\Compta\Entity\LettrageEcriture;
 use App\Compta\Entity\LigneEcriture;
 use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\MouvementPca;
+use App\Compta\Entity\PaymentMethodTreasuryAccount;
 use App\Compta\Entity\PeriodeComptable;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\QualificationEquipement;
@@ -119,6 +120,10 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
         ExportComptable::class => 'profilExploitant',
         Journal::class => 'profilExploitant',
         MappingComptable::class => 'profilExploitant',
+        // Le compte de tresorerie par (exploitant, moyen). Le REFERENTIEL des moyens reste global et
+        // n est pas ici ; ce rattachement-ci, si : c est justement ce qui empeche un exploitant
+        // d ecrire ses encaissements sur le compte bancaire d un autre.
+        PaymentMethodTreasuryAccount::class => 'businessProfile',
         PeriodeComptable::class => 'profilExploitant',
         Rad::class => 'profilExploitant',
         RegieRecettes::class => 'profilExploitant',
