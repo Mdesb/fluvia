@@ -70,8 +70,11 @@ fi
 # Deux répertoires de travail : le garde-fou tourne depuis la racine (il lit app/src et bin/),
 # phpunit depuis app/ (sa configuration y vit). D'où deux lanceurs plutôt qu'un `cd` global.
 php_racine() {
+    # ⚠ `-e` N'EST PAS DECORATIF : sans lui le marqueur d'abstention ne franchit pas le conteneur.
+    # Mesure du 10/09 : les quatre controles PHP continuaient d'etre comptes OK alors que les deux
+    # JS, eux, etaient bien demotes — un `export` ne traverse pas `docker run`.
     if [ "$SANS_PHP_LOCAL" -eq 1 ]; then
-        $DOCKER_BASE -w "$RACINE" "$IMAGE" php "$@"
+        $DOCKER_BASE -e GARDE_FOU_MARQUEUR_ABSTENTION="$MARQUEUR_ABSTENTION" -w "$RACINE" "$IMAGE" php "$@"
     else
         (cd "$RACINE" && php "$@")
     fi
@@ -132,6 +135,35 @@ LIBELLES=""
 IGNORES=0
 IGNORES_NOMS=""
 
+# ⚠ UN CONTROLE PEUT S'ABSTENIR TOUT SEUL, ET IL N'AVAIT AUCUN MOYEN DE LE DIRE.
+#
+# `ignorer` ne sert qu'aux abstentions que LE LANCEUR decide (outil absent du PATH). Mais six
+# controles decident eux-memes de s'abstenir, parce qu'ils sont seuls a savoir ce qui leur manque :
+# `vendor/autoload.php` pour les quatre PHP, `@babel/parser` et `node_modules` pour les deux JS.
+# Chacun imprimait sa mention -- « ne dit donc RIEN ici, ni bien ni mal » -- puis sortait en 0,
+# c'est-a-dire exactement comme un succes. Ils entraient donc dans le total des OK.
+#
+# L'effet est celui que ce script cherche precisement a empecher : un controle saute ne fait pas
+# baisser le vert, il doit faire baisser le TOTAL. Mesure du 09/09 (ticket #58) puis du 10/09 sur
+# un arbre sans dependances : verdict « 49 OK », 43 mesures reelles. Et ce sont ceux qui exigent
+# `vendor/` ou `node_modules` -- donc precisement ceux qui tombent dans un arbre deploye.
+#
+# ⚠ POURQUOI UN MARQUEUR ET PAS UN CODE DE SORTIE DEDIE. C'etait la premiere version, et le banc
+# d'essai l'a refutee : `hooks/pre-commit` et `hooks/pre-receive` lancent ces memes six controles
+# en direct, avec `|| ECHEC=1`. Un code non nul y devient un REFUS -- 5 cas du banc sur 20, dont
+# « commit propre », alors que `main` les passe tous. Faire porter l'abstention par le code de
+# sortie obligeait a modifier les deux portes de commit et de push de toute la flotte.
+#
+# ⚠ ET POURQUOI LE JETON EST TIRE AU SORT. Une phrase reconnue dans la sortie serait large et
+# fausse : plusieurs controles CITENT des lignes du depot dans leur rapport, et l'un d'eux
+# recopierait tot ou tard le jeton depuis ce fichier meme. Tire a chaque execution, le jeton
+# n'existe dans AUCUN fichier -- aucune citation ne peut le produire.
+#
+# Il passe par l'environnement : hors du lanceur, la variable est absente et les controles
+# n'impriment rien de plus. Leur usage direct -- hooks compris -- est donc inchange.
+MARQUEUR_ABSTENTION="@@gf-abstention-$$-${RANDOM}${RANDOM}@@"
+export GARDE_FOU_MARQUEUR_ABSTENTION="$MARQUEUR_ABSTENTION"
+
 ignorer() {
     local nom="$1"; shift
     local raison="$1"; shift
@@ -165,7 +197,26 @@ executer() {
     echo "─────────────────────────────────────────────────────────────"
     echo "▶ $nom"
     echo "─────────────────────────────────────────────────────────────"
-    if "$@"; then
+
+    # La sortie est capturee pour y chercher le marqueur, puis reimprimee telle quelle, marqueur
+    # retire. Elle n'est donc plus streamee : c'est le prix a payer, et il est petit -- le plus lent
+    # de ces controles construit le frontal en ~5 s, et rien ne s'affichait avant sa fin de toute facon.
+    local sortie code
+    sortie=$("$@" 2>&1); code=$?
+    printf '%s
+' "$sortie" | grep -v -F "$MARQUEUR_ABSTENTION" || true
+
+    if [ "$code" -eq 0 ]; then
+        # Abstention declaree par le controle lui-meme : il a deja explique ce qui lui manquait, on
+        # ne redit rien. Il sort du total des mesures et entre dans les non executes -- donc
+        # `--exiger-tout` le voit, et le verdict cesse de compter une abstention comme un OK.
+        case "$sortie" in
+            *"$MARQUEUR_ABSTENTION"*)
+                TOTAL=$((TOTAL - 1))
+                IGNORES=$((IGNORES + 1))
+                IGNORES_NOMS="$IGNORES_NOMS|$nom"
+                ;;
+        esac
         return 0
     fi
     ECHECS=$((ECHECS + 1))
@@ -558,10 +609,11 @@ if [ -f "$RACINE/frontend/scripts/verifier-portee.mjs" ]; then
         # Le bundler avertit, et rien ne le lisait (n51). ⚠ Il CONSTRUIT : ~5 s.
         executer "Avertissements du bundler (n51)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-avertissements-build.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Portee des identifiants"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        # ⚠ DEUX controles tombent quand `node` manque, pas un : n40 ET n51 sont dans le `if`
+        # au-dessus. Le message qui vivait ici n'en nommait qu'un, et n'appelait pas `ignorer` :
+        # les deux disparaissaient donc des DEUX compteurs, sans laisser de trace au verdict.
+        ignorer "Portee des identifiants (n40)" "« node » indisponible ici."             "Le contrôle n'a PAS tourné : il parse le JSX avec @babel/parser."
+        ignorer "Avertissements du bundler (n51)" "« node » indisponible ici."             "Le contrôle n'a PAS tourné : il construit le frontal pour lire ses avertissements."
     fi
 fi
 
