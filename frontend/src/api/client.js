@@ -1001,6 +1001,26 @@ export const api = {
     request(`/api/sport/abonnements/${id}/pauses`, { method: 'POST', body: corps }),
   resilierAbonnement: (id, corps) =>
     request(`/api/sport/abonnements/${id}/resiliations`, { method: 'POST', body: corps }),
+  // ── LES DEMANDES DE RESILIATION, ET LEUR VALIDATION ───────────────────────────────────────────
+  //
+  // ⚠ SANS CES DEUX APPELS, LA FICHE ABONNEMENT PROMETTAIT UN GESTE QUI N'EXISTAIT NULLE PART.
+  //
+  // Pendant l'engagement, une demande de resiliation reste `refusee` ; un MOTIF LEGITIME declare
+  // (demenagement, perte d'emploi, raison medicale) la met en attente d'une validation manuelle par
+  // un responsable (§4.3). La fiche le dit mot pour mot -- « un responsable doit valider le motif
+  // legitime pour que le preavis commence. Tant qu'il ne l'a pas fait, l'abonnement reste actif et
+  // preleve. »
+  //
+  // Ce responsable n'avait AUCUN ecran. La route existait, aucun client ne l'appelait, et la demande
+  // dormait indefiniment pendant que l'adherent continuait d'etre preleve.
+  //
+  // La collection ne declare AUCUN filtre serveur : on lit large et on trie a l'ecran, en le disant.
+  // Le cloisonnement, lui, est serveur (`PerimetreSportExtension` passe par `abonnement`).
+  resiliationsSport: (params = {}) =>
+    request('/api/resiliations', { query: { itemsPerPage: 200, ...params } }),
+  // `input: false` cote serveur, aucun corps : tout est dans la route.
+  validerMotifLegitimeResiliation: (id) =>
+    request(`/api/sport/resiliations/${id}/valider-motif-legitime`, { method: 'POST', body: {} }),
   // SOUSCRIRE : le premier pas de la chaine souscription -> echeance -> prelevement -> rejet ->
   // impaye -> recouvrement. Tout l'aval avait ete construit ; l'entree, non.
   // `input: false` cote serveur, le processeur lit le corps brut : pas de `ld: true`.
