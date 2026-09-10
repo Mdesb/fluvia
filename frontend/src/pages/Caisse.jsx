@@ -116,6 +116,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const total = useMemo(
     () =>
       panier.reduce((s, l) => {
+        // ⚠ ON SOMME DES MONTANTS DE LIGNE, ON NE MULTIPLIE PLUS UN PRIX PAR UNE QUANTITÉ.
+        //
+        // Une promotion en montant fixe s'applique **une fois par ligne**, pas une fois par unité :
+        // multiplier ici un net unitaire rendrait un nombre plausible et faux dès la deuxième unité.
+        // Le montant vient donc du serveur, pour la quantité réelle de la ligne.
+        if (l.montant != null) return s + (parseFloat(l.montant) || 0)
         const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
         return s + pu * l.quantite
       }, 0),
@@ -406,6 +412,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           aOptions: (devis?.options ?? []).length > 0,
           // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
           prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
+          // Ce que la ligne coûte vraiment — promotions automatiques déduites par le serveur.
+          montant: devis?.montantLigne ?? null,
+          // ET LE NOM DE CE QUI A RETIRÉ LA DIFFÉRENCE. Un rabais anonyme sur un ticket est un
+          // rabais que le caissier ne sait pas expliquer, et que le client finit par contester.
+          promotionsLibelles: (devis?.promotions ?? []).map((p) => p.nom).filter(Boolean),
           options,
           // Les libellés servent à afficher la ligne sans redemander ; les montants viennent du devis.
           optionsLibelles: (devis?.options ?? [])
@@ -442,9 +453,50 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     return { proposables, horsPortee }
   }
 
-  function changerQte(cle, delta) {
+  /**
+   * Changer la quantité **redemande le montant au serveur** au lieu de multiplier.
+   *
+   * Une promotion en montant fixe s'applique une fois par ligne : « ×2 » ne double pas le montant
+   * de la ligne, et l'écran n'a aucun moyen de le savoir sans demander. Il l'extrapolait, donc il
+   * se trompait — en rendant un nombre plausible, ce qui est la seule façon dont un prix faux
+   * survit jusqu'au comptoir.
+   */
+  async function changerQte(cle, delta) {
+    const ligne = panier.find((l) => l.cle === cle)
+    if (!ligne) return
+    const quantite = ligne.quantite + delta
+    if (quantite <= 0) {
+      retirer(cle)
+      return
+    }
+
+    let devis = null
+    try {
+      devis = await api.tarifProduit(ligne.produit.id, {
+        typeTarif: ligne.typeTarifId,
+        options: ligne.options ?? [],
+        quantite,
+      })
+    } catch (e) {
+      // ⚠ LA QUANTITÉ NE BOUGE PAS SI LE PRIX N'A PAS PU SUIVRE. Afficher « ×2 » sous un montant
+      // resté celui d'une unité est exactement le défaut qu'on ferme : un écran qui a l'air à jour.
+      setErreur(e.message || "Le prix n'a pas pu être recalculé : la quantité n'a pas changé.")
+      return
+    }
+
+    setErreur(null)
     setPanier((p) =>
-      p.map((l) => (l.cle === cle ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
+      p.map((l) =>
+        l.cle === cle
+          ? {
+              ...l,
+              quantite,
+              prix: devis?.totalUnitaire ?? l.prix,
+              montant: devis?.montantLigne ?? null,
+              promotionsLibelles: (devis?.promotions ?? []).map((x) => x.nom).filter(Boolean),
+            }
+          : l,
+      ),
     )
   }
   function retirer(cle) {
@@ -538,7 +590,13 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
             // S'aligner sur le serveur ne veut pas dire recopier UN de ses champs : cela veut dire
             // recomposer le prix comme lui le compose.
             const pu = Number.parseFloat(ls.prixUnitaire) + Number.parseFloat(ls.impactOptionsUnitaire ?? '0')
-            return { ...enrichie, prix: Number.isFinite(pu) ? pu.toFixed(2) : ls.prixUnitaire }
+            return {
+              ...enrichie,
+              prix: Number.isFinite(pu) ? pu.toFixed(2) : ls.prixUnitaire,
+              // `montantLigne` est ce qui sera encaissé : options ajoutées, promotions retirées.
+              montant: ls.montantLigne ?? null,
+              promotionsLibelles: (ls.promotionsAppliquees ?? []).map((x) => x?.nom).filter(Boolean),
+            }
           }),
         )
       }
@@ -1006,6 +1064,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 <>
                   {panier.map((l) => {
                     const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
+                    // Le montant du serveur fait foi ; la multiplication ne sert que tant qu'aucun
+                    // devis n'a pu être obtenu — et elle ne connaît alors aucune promotion.
+                    const montant = l.montant != null ? parseFloat(l.montant) || 0 : pu * l.quantite
                     return (
                       <div className="cline" key={l.cle}>
                         <div className="cn">
@@ -1023,6 +1084,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                           {l.optionsLibelles?.length > 0 && (
                             <div className="cp" style={{ opacity: 0.8 }}>
                               {l.optionsLibelles.join(' · ')}
+                            </div>
+                          )}
+                          {/* UN RABAIS SANS SON NOM EST UN ÉCART SANS CAUSE.
+                              La ligne montrait 8,44 € au-dessus d'un total de 7,60 € : une promotion
+                              automatique de −10 % retirait la différence, et rien ne la nommait. Le
+                              caissier voyait deux nombres qui ne s'additionnent pas, et le client
+                              qui demandait pourquoi n'obtenait pas de réponse. */}
+                          {l.promotionsLibelles?.length > 0 && (
+                            <div className="cp" style={{ opacity: 0.8, color: 'var(--good)' }}>
+                              {l.promotionsLibelles.join(' · ')}
+                              {l.montant != null && pu * l.quantite > montant
+                                ? ` −${euros(pu * l.quantite - montant)}`
+                                : ''}
                             </div>
                           )}
                           {!enPaiement && l.aOptions && (
@@ -1048,7 +1122,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                         ) : (
                           <span style={{ color: 'var(--ink-soft)' }}>× {l.quantite}</span>
                         )}
-                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(pu * l.quantite)}</span>
+                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(montant)}</span>
                         {!enPaiement && (
                           <button className="rm" onClick={() => retirer(l.cle)} title="Retirer">×</button>
                         )}

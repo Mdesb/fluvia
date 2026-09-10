@@ -30,7 +30,7 @@ final class PanierCalculateur
                 : $this->centimes($ligne->getRemiseLigne());
         }
 
-        $promo = $this->reductionPromotions($ligne, $brut - $remise);
+        $promo = $this->reductionPromotions($ligne->getPromotionsAppliquees() ?? [], $brut - $remise);
 
         $montant = max(0, $brut - $remise - $promo);
         $ligne->setMontantLigne($this->decimal($montant));
@@ -80,13 +80,24 @@ final class PanierCalculateur
     }
 
     /**
-     * Réduction issue des promotions déjà appliquées à la ligne (montant/pourcentage), en centimes.
-     * Les données de promotion sont figées sur la ligne au moment de l'ajout (US-L2-03).
+     * Réduction issue des promotions retenues (montant/pourcentage), en centimes. Les données de
+     * promotion sont figées sur la ligne au moment de l'ajout (US-L2-03).
+     *
+     * ⚠ **PUBLIQUE, ET C'EST TOUT L'INTÉRÊT.** Elle vivait ici en privé — donc hors de portée de
+     * l'estimation que la caisse demande AVANT qu'une vente existe. L'estimation ignorait donc les
+     * promotions automatiques : l'écran annonçait 8,44 €, le paiement réclamait 7,60 €, et **rien ne
+     * nommait l'écart**. Le caissier voyait le prix bouger au moment précis où il l'annonce à voix
+     * haute, sans pouvoir dire pourquoi.
+     *
+     * Réécrire la formule côté estimation aurait produit deux implémentations d'une même règle
+     * tarifaire — exactement ce que `PriceQuoter` existe pour empêcher.
+     *
+     * @param list<mixed> $promotions figées sur la ligne, ou rendues par `PriceQuoter::promotionsAuto()`
      */
-    private function reductionPromotions(LigneVente $ligne, int $base): int
+    public function reductionPromotions(array $promotions, int $base): int
     {
         $reduction = 0;
-        foreach ($ligne->getPromotionsAppliquees() ?? [] as $promo) {
+        foreach ($promotions as $promo) {
             if (!\is_array($promo)) {
                 continue;
             }

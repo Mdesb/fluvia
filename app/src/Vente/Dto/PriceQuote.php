@@ -73,6 +73,20 @@ final class PriceQuote
         /** `totalUnitaire` × `quantite`. Ferme l'ambiguïté de « unitaire par rapport à quoi ». */
         #[Groups(['tarif:read'])]
         public readonly ?string $totalLigne = null,
+        /**
+         * **Ce qui sera réellement facturé pour la ligne** : `totalLigne` moins les promotions
+         * automatiques ci-dessus.
+         *
+         * C'est le seul nombre que le caissier peut annoncer à voix haute. `totalLigne` reste le
+         * brut, parce que la ligne doit pouvoir MONTRER d'où vient l'écart — un montant net sans son
+         * détail est un rabais que personne ne sait justifier au client qui le remarque.
+         *
+         * ⚠ Rendu par le serveur pour la `quantite` demandée, et non extrapolé d'une unité : une
+         * promotion en montant fixe s'applique **une fois par ligne**, pas une fois par unité.
+         * Multiplier un net unitaire par la quantité rendrait un nombre plausible et faux.
+         */
+        #[Groups(['tarif:read'])]
+        public readonly ?string $montantLigne = null,
     ) {
     }
 }
