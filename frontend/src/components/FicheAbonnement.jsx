@@ -5,6 +5,8 @@ import Tabs from './Tabs.jsx'
 import { jourLocal } from './Liste.jsx'
 import { libelleProduit } from '../api/produit.js'
 import { euros } from '../api/produit.js'
+import { mot } from '../api/vocabulaire.js'
+import { tonStatutAbonnement } from '../api/abonnement.js'
 
 // LA FICHE D'UN ABONNEMENT — l'écran qui manquait, et que la liste avouait ne pas avoir.
 //
@@ -30,7 +32,10 @@ import { euros } from '../api/produit.js'
 // c'est un formulaire de souscription, pas un bouton. L'afficher désactivé ferait chercher ce qui
 // le débloque ; on ne l'affiche pas, et la fiche dit où il se trouve.
 
-const TONS = { actif: 'good', pause: 'warn', impaye: 'crit', resilie: 'mut' }
+// La table `TONS` qui vivait ici ignorait `echu` — un abonnement arrive a son terme prenait donc
+// le gris du repli, la couleur de « rien a signaler », alors que c'est l'etat qui laisse entrer
+// gratuitement. Les cinq statuts, leur couleur et leurs mots vivent desormais dans un seul
+// endroit : `api/abonnement.js` et `mot()`.
 
 // ⚠ CE NOM MENTAIT : la fonction prend des CENTIMES, et tous ses appelants lui en passent.
 // Elle reimplementait aussi `euros()` a la main — virgule oui, mais ni separateur de milliers ni
@@ -212,7 +217,7 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           </div>
         </div>
         <div className="r">
-          <span className={`badge ${TONS[a.statut] || 'mut'}`}>{a.statut || '—'}</span>
+          <span className={`badge ${tonStatutAbonnement(a.statut)}`}>{mot(a.statut)}</span>
           <button className="btn sm" type="button" onClick={onFerme}>Fermer</button>
         </div>
       </div>

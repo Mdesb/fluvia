@@ -6,6 +6,8 @@ import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../comp
 import Modal from '../components/Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
 import { useEtatUrl } from '../api/url.js'
+import { mot } from '../api/vocabulaire.js'
+import { tonStatutAbonnement } from '../api/abonnement.js'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -48,23 +50,16 @@ function etatDuTerme(iso) {
   return { classe: 'mut', texte: `dans ${Math.round(jours / 30)} mois`, urgent: false }
 }
 
-// Le statut ne se lit pas pareil selon ce qu'il implique : « echu » veut dire que l'acces est
-// coupe, et un badge gris comme les autres le noierait dans la liste.
-// ⚠ CETTE FONCTION RENDAIT `ok` ET `err`, QUI NE SONT PAS DES CLASSES.
+// LE STATUT D'UN ABONNEMENT SE LIT DANS `api/abonnement.js`, ET LE MOT DANS `mot()`.
 //
-// `styles.css` ne declare que `.badge.good`, `.warn`, `.crit`, `.info` et `.mut` (ligne 371,
-// enumeration complete). `badge ok` et `badge err` ne peignaient donc RIEN : un abonnement `actif`
-// et un abonnement `echu` s'affichaient a l'identique, sans couleur, pendant que seul
-// « resilie/impaye » etait colore. La distinction la plus importante du tableau ne portait rien.
+// La `tonStatut` locale qui vivait ici avait deja ete corrigee une fois — elle rendait `ok` et `err`,
+// qui ne sont pas des classes de `styles.css` (`.good`, `.warn`, `.crit`, `.info`, `.mut`), et ne
+// peignaient donc RIEN. Le garde-fou des classes CSS ne peut pas l'attraper puisque le nom est
+// calcule ; cette garde-la est reprise en tete de `api/abonnement.js`.
 //
-// Le garde-fou des classes CSS ne pouvait pas l'attraper : il lit les litteraux, et ici le nom est
-// calcule (`badge ${tonStatut(...)}`).
-function tonStatut(statut) {
-  if (statut === 'echu') return 'crit'
-  if (statut === 'resilie' || statut === 'impaye') return 'warn'
-  if (statut === 'actif') return 'good'
-  return 'mut'
-}
+// Elle est partie parce qu'elle n'etait pas seule : trois autres ecrans peignaient les memes cinq
+// statuts, et pas de la meme couleur — `impaye` valait `warn` ici et `crit` sur la fiche. Et le mot
+// lui-meme n'etait pas traduit : la colonne affichait « impaye » et « echu » en code brut.
 
 // ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER.
 //
@@ -514,7 +509,7 @@ export default function Sport({ etabActif, droits = [] }) {
                           {nomAdherent(a, beneficiaires)}
                         </button>
                       </td>
-                      <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
+                      <td><span className={`badge ${tonStatutAbonnement(a.statut)}`}>{mot(a.statut)}</span></td>
                       <td className="num">
                         {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
                       </td>

@@ -4,6 +4,8 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros, libelleProduit, prixIndicatif } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
+import { mot } from '../api/vocabulaire.js'
+import { STATUTS_ABONNEMENT, tonStatutAbonnement } from '../api/abonnement.js'
 
 // Onglet Exploitation « Abonnements » — gestion transverse des abonnements clients.
 //
@@ -20,24 +22,16 @@ import { idDe } from '../api/iri.js'
 // ⚠ Discipline des états : `null` = on lit ; `undefined` = on n'a PAS PU lire (refus) ; un tableau =
 // lu. Jamais « — » là où rien n'a été mesuré, jamais de `.find`/accès sur `null`.
 
-const LABEL_STATUT = {
-  actif: 'Actif',
-  suspendu: 'Suspendu',
-  en_pause: 'En pause',
-  resilie: 'Résilié',
-  expire: 'Expiré',
-}
+// LES STATUTS NE SONT PLUS NOMMÉS ICI : `../api/abonnement.js` porte la liste, `mot()` porte les
+// mots. La table locale qui vivait à cette place nommait `suspendu`, `en_pause` et `expire` — trois
+// clés qu'aucun producteur serveur n'émet — et ignorait `pause`, `impaye` et `echu`, que la colonne
+// Statut affichait donc en code brut. Le filtre ci-dessous étant construit depuis cette même table,
+// il proposait trois choix qui ne ramenaient jamais rien.
 
 const LABEL_PERIODICITE = {
   mensuel: 'Mensuel',
   annuel: 'Annuel',
   personnalise: 'Personnalisé',
-}
-
-function classeStatut(s) {
-  if (s === 'actif') return 'good'
-  if (s === 'resilie' || s === 'expire') return 'crit'
-  return 'warn'
 }
 
 function labelPeriodicite(v) {
@@ -233,7 +227,7 @@ export default function Abonnements({ droits }) {
                   <td>{nomClient(a.payeur) || <span className="sub">—</span>}</td>
                   <td>{nomAdherent || <span className="sub">—</span>}</td>
                   <td>
-                    <span className={`badge ${classeStatut(s)}`}>{LABEL_STATUT[s] || a.statut || '—'}</span>
+                    <span className={`badge ${tonStatutAbonnement(s)}`}>{mot(s)}</span>
                   </td>
                   <td>{labelPeriodicite((a.periodicite || '').toLowerCase())}</td>
                   <td className="num">
@@ -293,9 +287,9 @@ export default function Abonnements({ droits }) {
             <span className="sub">Statut</span>
             <select className="select" value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
               <option value="">Tous</option>
-              {Object.entries(LABEL_STATUT).map(([v, l]) => (
+              {STATUTS_ABONNEMENT.map((v) => (
                 <option key={v} value={v}>
-                  {l}
+                  {mot(v)}
                 </option>
               ))}
             </select>

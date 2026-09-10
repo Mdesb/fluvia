@@ -90,6 +90,26 @@ const MOTS = {
   suspendu: 'Suspendu',
   invite: 'Invité',
 
+  // --- Abonnement (sport/fitness) ---
+  //
+  // Les cinq statuts de `App\Sport\Enum\StatutAbonnementFitness`. Quatre manquaient, et le repli
+  // les rendait sans accent : « Impaye », « Resilie », « Echu ». C'est le défaut que la ligne
+  // `reussie`/`echouee` plus bas nomme déjà — le repli désoulignise un code, il ne parle pas français.
+  //
+  // `actif` est déjà dans « Statuts courants » ci-dessus : le redéclarer ici serait une clé en
+  // double, que la dernière écrase silencieusement.
+  //
+  // « Au terme » plutôt qu'« Échu », et le mot compte : `MotifInactiviteAccesFitness::Terme` a déjà
+  // tranché la même question côté serveur — l'adhérent n'a rien résilié, son engagement est arrivé à
+  // son terme. La colonne « Fin d'engagement » du même écran dit déjà « au terme depuis 12 j ».
+  //
+  // `pause` et `impaye` valent aussi pour `MotifInactiviteAccesFitness`, et `impaye` pour
+  // `TypeMouvementComptableSepa` : même mot, même sens, pas de collision.
+  pause: 'En pause',
+  impaye: 'Impayé',
+  resilie: 'Résilié',
+  echu: 'Au terme',
+
   // --- Patinoire ---
   // « non_rendu » et « non_rendue » diffèrent d'un caractère et ne disent pas la même chose : le
   // premier qualifie l'état des patins au retour, le second l'état de la location. Traduire les deux
