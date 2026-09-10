@@ -524,7 +524,21 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
             if (!ls) return l
             // L'id de ligne SERVEUR : c'est par lui que `valider` indexe les supports.
             const enrichie = { ...l, ligneServeurId: ls.id ?? null }
-            return ls.prixUnitaire != null ? { ...enrichie, prix: ls.prixUnitaire } : enrichie
+            if (ls.prixUnitaire == null) return enrichie
+            // ⚠ `prixUnitaire` EST LE PRIX DE BASE : LES OPTIONS SONT DANS UNE AUTRE COLONNE.
+            //
+            // `LigneVente` porte le supplément à part, dans `impactOptionsUnitaire`, et c'est
+            // `PanierCalculateur` qui additionne les deux pour le montant facturé. Recopier le seul
+            // `prixUnitaire` faisait donc **retomber la ligne au tarif nu au passage en paiement** :
+            // « 1 × Entrée unitaire 10,00 € » sous un total de 12,00 €, l'écart étant exactement
+            // l'option obligatoire que le caissier venait de choisir. Le prix cessait de suivre les
+            // options au moment précis où le client le regarde — et le panier, lui, l'affichait bien
+            // jusqu'au clic sur « Encaisser », donc rien ne signalait le changement.
+            //
+            // S'aligner sur le serveur ne veut pas dire recopier UN de ses champs : cela veut dire
+            // recomposer le prix comme lui le compose.
+            const pu = Number.parseFloat(ls.prixUnitaire) + Number.parseFloat(ls.impactOptionsUnitaire ?? '0')
+            return { ...enrichie, prix: Number.isFinite(pu) ? pu.toFixed(2) : ls.prixUnitaire }
           }),
         )
       }
