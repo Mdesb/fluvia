@@ -35,7 +35,7 @@ const ETATS = [
 
 const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
 
-export default function HistoriqueVentesModal({ open, onClose, droits = [], onDuplicata }) {
+export default function HistoriqueVentesModal({ open, onClose, droits = [], onDuplicata, onFacture }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [du, setDu] = useState('')
@@ -122,6 +122,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
             charger()
           }}
           onDuplicata={onDuplicata}
+          onFacture={onFacture}
         />
       ) : (
         <>
@@ -218,8 +219,9 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
   )
 }
 
-function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplicata }) {
+function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplicata, onFacture }) {
   const [remboursement, setRemboursement] = useState(null)
+  const [facture, setFacture] = useState(null) // null | 'en_cours' | message d'erreur
   const lignes = detail.lignes || []
   const paiements = detail.paiements || []
 
@@ -238,12 +240,52 @@ function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplic
             Réimprimer le ticket
           </button>
         )}
+        {/* ── LA FACTURE JUSTIFICATIVE DU TICKET ───────────────────────────────────────────────
+            Le client paie au comptoir puis demande une facture. Le serveur savait l'emettre depuis
+            le debut ; aucun ecran ne l'appelait, donc personne ne pouvait la lui donner.
+
+            ⚠ TROIS CONDITIONS, ET AUCUNE N'EST DECORATIVE. Le serveur exige une vente SCELLEE et
+            INTEGRALEMENT PAYEE (RG-FACT-03.1) : une facture justificative atteste d'un encaissement,
+            elle ne le remplace pas. On reprend donc ses deux conditions ici pour ne pas proposer un
+            geste qui sera refuse devant le client, plus le droit qui le porte. Comme le
+            remboursement au-dessus : une action qui n'a pas de sens est absente, jamais grisee. */}
+        {detail.statut === 'validee'
+          && Number(detail.resteAPayer) <= 0
+          && aLeDroit(droits, 'facturation.emettre_justificative')
+          && onFacture
+          && !remboursement && (
+          <button
+            className="btn ghost sm"
+            type="button"
+            disabled={facture === 'en_cours'}
+            onClick={async () => {
+              setFacture('en_cours')
+              try {
+                onFacture(await api.factureDepuisVente(detail.id))
+              } catch (e) {
+                // ⚠ CE MESSAGE SE LIT VERBATIM, ET C'EST TOUT SON INTERET. Le refus le plus frequent
+                // est une fiche client incomplete, et le serveur NOMME les mentions manquantes
+                // (RG-FACT-08). Le remplacer par « emission impossible » retirerait la seule
+                // information qui dit ou aller corriger.
+                setFacture(e?.message || "La facture n'a pas pu être émise.")
+              }
+            }}
+          >
+            {facture === 'en_cours' ? 'Émission…' : 'Établir la facture'}
+          </button>
+        )}
         {detail.statut === 'validee' && aLeDroit(droits, 'vente.rembourser') && !remboursement && (
           <button className="btn ghost sm" type="button" onClick={() => setRemboursement({ etape: 'saisie' })}>
             Rembourser
           </button>
         )}
       </div>
+
+      {typeof facture === 'string' && facture !== 'en_cours' && (
+        <div className="banner banner-error" style={{ marginBottom: 12 }}>
+          {facture}
+        </div>
+      )}
 
       {remboursement && (
         <FormulaireRemboursement

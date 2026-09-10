@@ -5,6 +5,7 @@ import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
+import FactureRendu from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
 import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
@@ -75,6 +76,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [appairageEnAttente, setAppairageEnAttente] = useState(null)
   const [paiements, setPaiements] = useState([]) // règlements acceptés
   const [moyenSel, setMoyenSel] = useState('especes')
+  // La facture justificative qu'on vient d'émettre depuis l'historique, le temps de la montrer
+  // et de la télécharger. `null` tant qu'aucune n'a été demandée.
+  const [facturePour, setFacturePour] = useState(null)
   const [montant, setMontant] = useState('')
   const [tpeSimule, setTpeSimule] = useState('accepte')
   const [busy, setBusy] = useState(false)
@@ -1294,7 +1298,22 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
             setErreur(e.message || "Le duplicata n'a pas pu être édité.")
           }
         }}
+        onFacture={(f) => {
+          // ⚠ ON FERME L'HISTORIQUE AVANT D'OUVRIR LE DOCUMENT. `FactureRendu` monte sa PROPRE
+          // modale : la laisser s'ouvrir par-dessus celle de l'historique empilerait deux pièges à
+          // focus, et le caissier refermerait la mauvaise. Le geste se lit donc en une ligne — je
+          // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
+          setErreur(null)
+          setHistorique(false)
+          setFacturePour(f)
+        }}
       />
+
+      {/* Montée seulement quand une facture existe : le composant LIT le document à l'ouverture, et
+          le monter en permanence déclencherait une lecture par rendu (même raison qu'en Facturation). */}
+      {facturePour && (
+        <FactureRendu facture={facturePour} onClose={() => setFacturePour(null)} />
+      )}
       {modaleSession}
       {modaleClient}
     </div>
