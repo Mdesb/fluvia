@@ -29,6 +29,22 @@ const MOTS = {
   rejected: 'Refusé',
   expired: 'Périmé',
   converted: 'Transformé',
+  // ⚠ `cancelled` EST LE SEUL CODE DE CETTE CARTE QUE LE FRANCAIS NE SAIT PAS ACCORDER SEUL.
+  //
+  // Huit enumerations serveur le portent — `Facturation\DocumentStatus` (devis, bon de commande,
+  // bon de livraison), `Finance\SupplierInvoice\SupplierInvoiceStatus` (facture),
+  // `Subscription`, `Project`, `Group\GroupBookingStatus`, `SmartFlow\SlotWaitlistEntryStatus`,
+  // `Crm\LossReason`, `RevenueRecovery\RecoveryAttemptStatus` — et le sujet accorde tantot au
+  // masculin (un devis, un projet, un abonnement), tantot au feminin (une facture, une
+  // reservation). Un code anglais ne porte pas de genre ; une carte globale ne peut pas le deviner.
+  //
+  // Il etait donc declare DEUX FOIS, ici « Annulé » et plus bas « Annulée ». JavaScript garde la
+  // derniere : « Annulée » gagnait partout, et l'ecran des pieces commerciales affichait
+  // « Devis — Annulée ». Une seule declaration desormais, au MASCULIN NON MARQUE — la forme d'usage
+  // pour une etiquette de statut, juste pour les pieces commerciales et acceptable ailleurs.
+  //
+  // Consequence assumee et visible : `FacturesFournisseur.jsx` lit « Annulé » et non plus
+  // « Annulée ». C'est une ligne a changer ici si l'on prefere l'inverse — mais pas les deux.
   cancelled: 'Annulé',
 
   // --- Espaces (types physiques) ---
@@ -154,11 +170,13 @@ const MOTS = {
 
   // --- Achats & tresorerie ---
   // Ce module est nomme en anglais cote serveur ; les mots restent francais a l'ecran.
-  draft: 'Brouillon',
+  //
+  // `draft` et `cancelled` ne sont PAS redeclares ici : ce sont des etats de document, deja portes
+  // par les pieces commerciales plus haut. Les redeclarer etait sans effet pour `draft` (meme mot)
+  // et changeait le mot de tout le monde pour `cancelled` — voir la note qui l'accompagne.
   to_pay: 'À payer',
   partially_paid: 'Partiellement payée',
   disputed: 'En litige',
-  cancelled: 'Annulée',
 
   // --- Padel ---
   indoor: 'Couvert',
@@ -254,12 +272,12 @@ const MOTS = {
 
   // --- Achats ---
   // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
-  // etats propres au stock.
+  // etats propres au stock. `cloturee` est dans ce cas et vit deja dans « Comptabilite » ci-dessus,
+  // au meme mot : le redeclarer ici n'ajoutait rien qu'une clé en double.
   brouillon: 'Brouillon',
   envoyee: 'Envoyée',
   confirmee: 'Confirmée',
   partiellement_recue: 'Partiellement reçue',
-  cloturee: 'Clôturée',
   annulee: 'Annulée',
   validee: 'Validée',
 
