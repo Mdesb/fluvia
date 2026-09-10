@@ -7,6 +7,7 @@ import { libelleProduit } from '../api/produit.js'
 import { euros } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
 import { tonStatutAbonnement } from '../api/abonnement.js'
+import { tonEcheance, tonStatutMandat } from '../api/sepa.js'
 
 // LA FICHE D'UN ABONNEMENT — l'écran qui manquait, et que la liste avouait ne pas avoir.
 //
@@ -300,8 +301,8 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
               </Champ>
               <Champ libelle="Signé le">{jour(mandat.dateSignature)}</Champ>
               <Champ libelle="Statut du mandat">
-                <span className={`badge ${mandat.statut === 'actif' ? 'good' : 'mut'}`}>
-                  {mandat.statut || '—'}
+                <span className={`badge ${tonStatutMandat(mandat.statut)}`}>
+                  {mot(mandat.statut)}
                 </span>
               </Champ>
             </>
@@ -352,7 +353,11 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
                           </div>
                         )}
                       </td>
-                      <td><span className="badge mut">{e.statut || '—'}</span></td>
+                      {/* ⚠ TOUTES LES ECHEANCES PORTAIENT `badge mut`, LA COULEUR DE « RIEN A
+                          SIGNALER ». Un prelevement REJETE se lisait donc exactement comme un
+                          prelevement encaisse, sur la fiche meme de l'abonnement concerne. La
+                          couleur vient maintenant de `api/sepa.js`, comme dans le module Sport. */}
+                      <td><span className={`badge ${tonEcheance(e.statut)}`}>{mot(e.statut)}</span></td>
                       <td>
                         {e.statut === 'a_venir' && e.montantInitialCentimes == null && (
                           <button className="btn sm" type="button" onClick={() => setReduction(e)}>

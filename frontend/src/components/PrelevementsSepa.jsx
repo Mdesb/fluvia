@@ -6,6 +6,7 @@ import { dateFr, dateHeureFr, euroCentimes, jourLocal } from './Liste.jsx'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { tonStatutMandat } from '../api/sepa.js'
 import { idDe } from '../api/iri'
 import { confirmer } from './Confirmation.jsx'
 
@@ -365,7 +366,7 @@ function Mandats({ mandats, peutGerer, onCreer, onRevoquer }) {
                   </td>
                   <td className="num">{m.nbCollectesReussies ?? 0}</td>
                   <td>
-                    <span className={`badge ${m.statut === 'actif' ? 'good' : 'mut'}`}>{mot(m.statut)}</span>
+                    <span className={`badge ${tonStatutMandat(m.statut)}`}>{mot(m.statut)}</span>
                   </td>
                   {/* ⚠ TON `danger` : LE CRITÈRE DU DÉPÔT EST « LES GESTES DONT ON NE REVIENT PAS ».
                       Une révocation n'a pas de chemin inverse — reprélever ce client exigera un

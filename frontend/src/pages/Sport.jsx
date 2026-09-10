@@ -8,6 +8,7 @@ import { libelleProduit } from '../api/produit.js'
 import { useEtatUrl } from '../api/url.js'
 import { mot } from '../api/vocabulaire.js'
 import { tonStatutAbonnement } from '../api/abonnement.js'
+import { tonEcheance } from '../api/sepa.js'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -61,24 +62,14 @@ function etatDuTerme(iso) {
 // statuts, et pas de la meme couleur — `impaye` valait `warn` ici et `crit` sur la fiche. Et le mot
 // lui-meme n'etait pas traduit : la colonne affichait « impaye » et « echu » en code brut.
 
-// ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER.
+// ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER — et c'est toujours vrai, mais
+// l'arbitrage a demenage. `Gelee` veut dire que l'adherent a demande une suspension : l'echeance
+// REVIENDRA a la reprise. `Annulee` veut dire qu'elle ne sera jamais collectee. Le mot (« En pause »,
+// jamais « Gelée ») est dans `api/vocabulaire.js`, la couleur dans `api/sepa.js`.
 //
-// `Gelee` veut dire que l'adherent a demande une suspension : l'echeance REVIENDRA a la reprise.
-// `Annulee` veut dire qu'elle ne sera jamais collectee. Les afficher pareil ferait croire qu'un
-// abonne en pause a perdu son echeancier. Elles different donc par la couleur ET par le mot — on
-// ecrit « en pause », jamais « gelee », parce que le mot du modele ne dit pas au lecteur ce qui
-// va se passer.
-const ETAT_ECHEANCE = {
-  a_venir: { mot: 'à venir', classe: 'info' },
-  prelevee: { mot: 'prélevée', classe: 'good' },
-  rejetee: { mot: 'rejetée', classe: 'crit' },
-  gelee: { mot: 'en pause', classe: 'warn' },
-  annulee: { mot: 'annulée', classe: 'mut' },
-}
-
-function etatEcheance(statut) {
-  return ETAT_ECHEANCE[statut] || { mot: statut || '—', classe: 'mut' }
-}
+// La table `ETAT_ECHEANCE` qui vivait ici etait la SEULE correcte des deux qui existaient : la fiche
+// d'un abonnement peignait toutes ses echeances du meme gris, rejets compris. Elle est partie la-bas
+// pour que les deux ecrans montrent la meme chose.
 
 // ⚠ `adherent` ET `payeur` — PAS `beneficiaire` NI `client`.
 //
@@ -710,13 +701,12 @@ function Echeancier({
               </thead>
               <tbody>
                 {rangees.map((e) => {
-                  const etat = etatEcheance(e.statut)
                   return (
                     <tr key={e.id}>
                       <td>{adherent(e)}</td>
                       <td>{dateFr(e.dateProgrammee)}</td>
                       <td className="num">{euroCentimes(e.montantCentimes)}</td>
-                      <td><span className={`badge ${etat.classe}`}>{etat.mot}</span></td>
+                      <td><span className={`badge ${tonEcheance(e.statut)}`}>{mot(e.statut)}</span></td>
                       <td>
                         {/* ⚠ C'EST ICI QUE « EN PAUSE » ET « ANNULEE » SE SEPARENT POUR DE BON.
                             Le badge donne la couleur ; cette colonne donne la suite. Une pause

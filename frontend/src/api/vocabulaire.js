@@ -218,6 +218,20 @@ const MOTS = {
   // Le cycle d'une remise : composée en brouillon, figée en XML, puis remise à la banque.
   generee: 'Générée',
   transmise: 'Transmise à la banque',
+
+  // Le cycle d'une ÉCHÉANCE (`App\Sport\Enum\StatutEcheanceSepa`). Quatre manquaient, et la fiche
+  // d'un abonnement les affichait en code brut : « prelevee », « rejetee », « gelee ».
+  //
+  // ⚠ `gelee` SE DIT « EN PAUSE ». Le mot du modèle ne dit pas au lecteur ce qui va se passer :
+  // l'adhérent a demandé une suspension, et l'échéance REVIENDRA à la reprise. « Gelée » se lit
+  // comme un blocage, c'est-à-dire comme `annulee` — qui, elle, ne reviendra jamais. C'est
+  // l'arbitrage déjà posé dans `Sport.jsx`, et il vit désormais ici.
+  //
+  // `annulee` est déjà dans « Achats » plus bas, au même mot : ne pas le redéclarer.
+  a_venir: 'À venir',
+  prelevee: 'Prélevée',
+  rejetee: 'Rejetée',
+  gelee: 'En pause',
   // `actif` / `revoque` (statut d'un mandat) sont déjà dans « Statuts courants » plus haut : les
   // redéclarer ici serait une clé en double, que la dernière écrase silencieusement.
 
