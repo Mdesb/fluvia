@@ -11,6 +11,7 @@ import NoShowSection from '../components/NoShowSection.jsx'
 import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
 import { confirmer } from '../components/Confirmation.jsx'
+import Modal from '../components/Modal.jsx'
 import { useEtatUrl } from '../api/url.js'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
@@ -155,6 +156,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
   const setVue = (v) => majParams({ vue: v, activite: '' })
   const [jour, setJour] = useState('')
   const [reserverPour, setReserverPour] = useState(null) // id du créneau en cours de réservation
+  // Le créneau cliqué dans le planning, ouvert en réservation rapide (voir `onCreneau`).
+  const [creneauRapide, setCreneauRapide] = useState(null)
   const [inscritsPour, setInscritsPour] = useState(null) // id du créneau dont on déplie les inscrits
   const [gesteEnCours, setGesteEnCours] = useState(null) // id de la réservation en cours de geste
 
@@ -750,12 +753,19 @@ export default function Reservation({ etabActif, droits = [], session }) {
           aConfirmer={aConfirmer}
           ressources={ressources || []}
           onCreneau={(cr) => {
-            // Cliquer un bloc bascule sur la liste du jour concerne : la grille sert a TROUVER,
-            // la liste a AGIR. Ouvrir un formulaire de reservation dans une case de 40 px produirait
-            // un ecran qu'on ne peut ni lire ni remplir.
-            setJour(jourCle(cr.debut))
-            setVue('liste')
-            setReserverPour(cr.id)
+            // ⚠ CLIQUER UN BLOC NE CHANGE PLUS DE VUE. Le clic basculait sur << Liste par jour >>
+            // et y depliait le formulaire : on quittait la grille qu'on lisait, on perdait la
+            // semaine de vue, et le retour se faisait a la main. Or ce qu'on veut apres avoir
+            // repere un creneau libre, c'est le PRENDRE — pas changer d'ecran pour le prendre.
+            //
+            // La modale tient parce que le formulaire tient : un organisateur a choisir, deux
+            // boutons. Ce qui etait trop gros pour une case de 40 px ne l'est pas pour une boite.
+            // La liste reste joignable DEPUIS la modale pour tout le reste (inscrits, emargement,
+            // annulation) : on n'a rien retire, on a arrete d'y forcer.
+            setCreneauRapide(cr)
+            setOrganisateur('')
+            setErreur(null)
+            setSucces(null)
           }}
         />
       ) : (
@@ -1374,6 +1384,144 @@ export default function Reservation({ etabActif, droits = [], session }) {
           activite distincte — et parce qu'un ecran de plus pour deux boutons serait une exception a
           D13 que rien ne justifie. */}
       <NoShowSection etabActif={etabActif} droits={droits} session={session} />
+
+      {/* RESERVATION RAPIDE — le geste que le planning appelle, la ou le planning le pose.
+          Ce qu'elle NE fait PAS est aussi delibere : ni inscrits, ni emargement, ni annulation.
+          Ce sont des gestes qu'on pose sur une reservation EXISTANTE, et les empiler ici referait
+          l'ecran entier dans une boite. Le bouton de bas de modale y emmene en un clic. */}
+      <ReserverRapide
+        creneau={creneauRapide}
+        occupation={occupation}
+        beneficiaires={beneficiaires}
+        organisateur={organisateur}
+        setOrganisateur={setOrganisateur}
+        enCours={enCours}
+        erreur={erreur}
+        onFermer={() => { setCreneauRapide(null); setOrganisateur(''); setErreur(null) }}
+        onReserver={async (cr) => {
+          await reserver(cr)
+          setCreneauRapide(null)
+        }}
+        onVoirListe={(cr) => {
+          setJour(jourCle(cr.debut))
+          setVue('liste')
+          setReserverPour(cr.id)
+          setCreneauRapide(null)
+        }}
+      />
     </div>
+  )
+}
+
+/**
+ * La boite de reservation rapide d'un creneau du planning.
+ *
+ * ⚠ ELLE DIT POURQUOI ELLE REFUSE, ELLE NE SE CONTENTE PAS DE GRISER. Trois raisons empechent
+ * de reserver — complet, creneau annule, chevauchement en attente d'arbitrage — et un bouton grise
+ * les rend indistinctes. Depuis le planning c'est pire qu'ailleurs : on vient de cliquer un bloc
+ * qu'on avait lu comme disponible, et sans phrase on conclut que l'ecran est casse.
+ */
+function ReserverRapide({
+  creneau,
+  occupation,
+  beneficiaires,
+  organisateur,
+  setOrganisateur,
+  enCours,
+  erreur,
+  onFermer,
+  onReserver,
+  onVoirListe,
+}) {
+  const ouvert = creneau !== null
+  const cap = creneau?.capacite ?? 0
+  const pris = ouvert ? (occupation[creneau.id] || 0) : 0
+  const reste = Math.max(0, cap - pris)
+  const complet = cap > 0 && reste <= 0
+  const tarif = creneau?.activite?.tarifReferenceMontant
+
+  const refus = complet
+    ? 'Ce créneau est complet : toutes les places sont prises.'
+    : creneau?.statut === 'annule'
+      ? 'Ce créneau est annulé : il ne prend plus de réservation.'
+      : creneau?.enAttenteArbitrage
+        ? 'Ce créneau chevauche une autre occupation de la même ressource : il attend un arbitrage avant d’être réservable.'
+        : null
+
+  if (!ouvert) return null
+
+  return (
+    <Modal
+      open
+      onClose={onFermer}
+      taille="sm"
+      titre={`Réserver — ${creneau.ressource?.libelle || 'créneau'}`}
+    >
+      <div className="grid" style={{ gap: 'var(--esp-bloc)' }}>
+        <div>
+          <div className="nm">
+            {jourLabel(jourCle(creneau.debut))} · {heure(creneau.debut)} – {heure(creneau.fin)}
+          </div>
+          <div className="creneau-sub">
+            {creneau.ressource?.codeType || '—'}
+            {creneau.activite?.libelle ? ` · ${creneau.activite.libelle}` : ''}
+            {tarif != null ? ` · ${euros(tarif)}` : ''}
+          </div>
+        </div>
+
+        <div className="creneau-places">
+          <div className="bar">
+            <i
+              style={{
+                width: `${cap > 0 ? Math.min(100, Math.round((pris / cap) * 100)) : 0}%`,
+                background: complet ? 'var(--crit)' : 'var(--accent)',
+              }}
+            />
+          </div>
+          <span className={`places ${complet ? 'full' : ''}`}>
+            {pris}/{cap} · {reste} place(s)
+          </span>
+        </div>
+
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        {refus ? (
+          <div className="banner banner-warn">{refus}</div>
+        ) : (
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="resa-rapide-organisateur">Organisateur</label>
+            <select
+              id="resa-rapide-organisateur"
+              className="select"
+              value={organisateur}
+              onChange={(e) => setOrganisateur(e.target.value)}
+            >
+              <option value="">Choisir…</option>
+              {beneficiaires.map((b) => (
+                <option key={b.id} value={b.id}>{labelBeneficiaire(b)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          {/* Tout ce que la boite ne fait pas se fait la-bas, sur le meme creneau, en un clic. */}
+          <button className="btn ghost" type="button" onClick={() => onVoirListe(creneau)}>
+            Ouvrir dans la liste du jour
+          </button>
+          <button className="btn" type="button" onClick={onFermer} disabled={enCours}>Annuler</button>
+          {!refus && (
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => onReserver(creneau)}
+              disabled={enCours || !organisateur}
+            >
+              {enCours ? 'Envoi…' : 'Réserver'}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
