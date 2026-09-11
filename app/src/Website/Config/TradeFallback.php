@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Website\Config;
 
 use App\Fonctionnalite\Enum\EstablishmentActivity;
+use App\Membership\Entity\Membership;
 
 /**
  * Les cinq metiers servis TANT QU'AUCUNE LIGNE N'EXISTE en base.

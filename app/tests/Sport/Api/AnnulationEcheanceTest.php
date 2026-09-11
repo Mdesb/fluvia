@@ -6,8 +6,8 @@ namespace App\Tests\Sport\Api;
 
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Service\CompositeEcheanceSepaSource;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutEcheanceSepa;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\StatutEcheanceSepa;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -194,7 +194,7 @@ final class AnnulationEcheanceTest extends SportApiTestCase
         $demo = $this->abonnementDemo();
         $etabB = $this->entite(Etablissement::class, ['nom' => \App\DataFixtures\SocleFixtures::ETAB_B_NOM]);
 
-        $abonnement = (new \App\Sport\Entity\AbonnementFitness())
+        $abonnement = (new \App\Membership\Entity\Membership())
             ->setAdherent($demo->getAdherent())
             ->setPayeur($demo->getPayeur())
             ->setFormule($demo->getFormule())

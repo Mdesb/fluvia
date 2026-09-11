@@ -18,8 +18,8 @@ use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
 use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -89,7 +89,7 @@ abstract class RecouvrementApiTestCase extends ApiTestCase
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->findOneBy([], ['dateSouscription' => 'ASC']);
+        $abonnement = $em->getRepository(Membership::class)->findOneBy([], ['dateSouscription' => 'ASC']);
         self::assertNotNull($abonnement, 'Contrat de démonstration introuvable.');
         $echeance = $em->getRepository(EcheanceSepa::class)->findOneBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
         self::assertNotNull($echeance, 'Échéance de démonstration introuvable.');

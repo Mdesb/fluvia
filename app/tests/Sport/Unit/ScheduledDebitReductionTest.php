@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Unit;
 
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutEcheanceSepa;
-use App\Sport\Service\ScheduledDebitReductionHandler;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Service\ScheduledDebitReductionHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;

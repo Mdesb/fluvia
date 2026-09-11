@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Membership\Service;
+
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\PauseAbonnement;
+use App\Membership\Enum\MotifInactiviteAccesFitness;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Enum\StatutPauseAbonnement;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+
+/**
+ * Pause d'abonnement (US-SPORT-02, RG-SPORT-05, CA-2). Bloquée si un impayé est en cours (décision
+ * actée). Gèle les échéances de la période, reporte la fin d'engagement, suspend l'accès (hypothèse
+ * retenue §4.2 de la spec : une pause suspend l'accès, comme un impayé).
+ */
+final class DemanderPauseHandler
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly PropagationAccesFitnessHandler $propagation,
+    ) {
+    }
+
+    public function demander(Membership $abonnement, \DateTimeImmutable $debut, \DateTimeImmutable $fin, ?string $motif): PauseAbonnement
+    {
+        $pause = new PauseAbonnement();
+        $pause->setAbonnement($abonnement)->setDateDebut($debut)->setDateFin($fin)->setMotif($motif);
+
+        if ($abonnement->getStatut() === MembershipStatus::Impaye) {
+            $pause->setStatut(StatutPauseAbonnement::Refusee);
+            $this->em->persist($pause);
+            $this->em->flush();
+
+            throw new UnprocessableEntityHttpException('Pause refusée : impayé en cours non régularisé (décision actée, RG-SPORT).');
+        }
+
+        $pause->setStatut(StatutPauseAbonnement::Active);
+        $this->em->persist($pause);
+
+        /** @var list<EcheanceSepa> $echeances */
+        $echeances = $this->em->getRepository(EcheanceSepa::class)->createQueryBuilder('e')
+            ->andWhere('IDENTITY(e.abonnement) = :a')
+            ->andWhere('e.dateProgrammee >= :debut')
+            ->andWhere('e.dateProgrammee < :fin')
+            ->andWhere('e.statut = :av')
+            ->setParameter('a', $abonnement->getId(), 'uuid')
+            ->setParameter('debut', $debut, 'date_immutable')
+            ->setParameter('fin', $fin, 'date_immutable')
+            ->setParameter('av', StatutEcheanceSepa::AVenir->value)
+            ->getQuery()->getResult();
+        foreach ($echeances as $echeance) {
+            $echeance->setStatut(StatutEcheanceSepa::Gelee);
+        }
+
+        $jours = (int) $debut->diff($fin)->days;
+        $abonnement->setDateFinEngagement($abonnement->getDateFinEngagement()->modify(sprintf('+%d days', $jours)));
+        $abonnement->setStatut(MembershipStatus::Pause);
+
+        $this->em->flush();
+
+        $this->propagation->desactiver($abonnement, MotifInactiviteAccesFitness::Pause);
+
+        return $pause;
+    }
+}

@@ -83,7 +83,7 @@ class IncidentImpaye
     #[Groups(['incident:read', 'representation:read'])]
     private string $typeRedevable = '';
 
-    /** Identifiant opaque du contrat côté verticale (ex. l'UUID d'un `AbonnementFitness`). */
+    /** Identifiant opaque du contrat côté verticale (ex. l'UUID d'un `Membership`). */
     #[ORM\Column(length: 64)]
     #[Groups(['incident:read', 'representation:read'])]
     private string $referenceRedevable = '';

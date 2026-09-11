@@ -325,7 +325,7 @@ final readonly class MetierCatalog
              'texte' => "MNS, BNSSA : la qualification est portée par la personne, et l'affectation à un créneau la vérifie. "
                  ."Un planning ne propose pas quelqu'un qui n'a pas le titre."],
         ],
-        // Sport\Entity : AbonnementFitness, PauseAbonnement, Resiliation, Reengagement, EcheanceSepa,
+        // Sport\Entity : Membership, PauseAbonnement, Resiliation, Reengagement, EcheanceSepa,
         //                MouvementComptableSepa, ConfigAccesNocturne, StatutAccesFitness,
         //                AlertePresenceIsolee, EvenementSOS.
         'sport' => [

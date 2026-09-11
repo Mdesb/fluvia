@@ -8,7 +8,7 @@ use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Port\EcheanceSepaSource;
-use App\Sport\Sepa\SportEcheanceSepaSource;
+use App\Membership\Sepa\SportEcheanceSepaSource;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 

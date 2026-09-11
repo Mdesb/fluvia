@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\StatutEcheanceSepa;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\StatutEcheanceSepa;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -48,7 +48,7 @@ final class PauseTest extends SportApiTestCase
 
         $em->clear();
 
-        $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnementId);
+        $abonnementRafraichi = $em->getRepository(Membership::class)->find($abonnementId);
         self::assertSame('pause', $abonnementRafraichi->getStatut()->value);
 
         // Report = durée exacte de la pause (dateFin - dateDebut).
@@ -68,7 +68,7 @@ final class PauseTest extends SportApiTestCase
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement->setStatut(StatutAbonnementFitness::Impaye);
+        $abonnement->setStatut(MembershipStatus::Impaye);
         $em->flush();
 
         $debut = new \DateTimeImmutable('+15 days');

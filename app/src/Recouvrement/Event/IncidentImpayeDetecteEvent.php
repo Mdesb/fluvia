@@ -9,7 +9,7 @@ use App\Recouvrement\Entity\IncidentImpaye;
 /**
  * Dispatché à la création d'un `IncidentImpaye` (rejet détecté). Permet à la verticale propriétaire du
  * contrat (`$incident->getTypeRedevable()`) de synchroniser son propre statut métier (ex. `App\Sport`
- * bascule `AbonnementFitness.statut = Impaye`) sans que le moteur générique connaisse cette entité.
+ * bascule `Membership.statut = Impaye`) sans que le moteur générique connaisse cette entité.
  */
 final class IncidentImpayeDetecteEvent
 {
