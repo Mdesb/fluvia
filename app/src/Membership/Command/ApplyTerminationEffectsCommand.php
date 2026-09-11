@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Sport\Command;
+namespace App\Membership\Command;
 
 use App\Membership\Entity\Resiliation;
 use App\Membership\Enum\StatutResiliation;

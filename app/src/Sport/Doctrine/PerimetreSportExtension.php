@@ -12,13 +12,7 @@ use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sport\Entity\AlertePresenceIsolee;
 use App\Sport\Entity\ConfigAccesNocturne;
-use App\Membership\Entity\EcheanceSepa;
 use App\Sport\Entity\EvenementSOS;
-use App\Membership\Entity\MouvementComptableSepa;
-use App\Membership\Entity\PauseAbonnement;
-use App\Membership\Entity\Reengagement;
-use App\Membership\Entity\Resiliation;
-use App\Membership\Entity\StatutAccesFitness;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -32,12 +26,6 @@ final class PerimetreSportExtension implements QueryCollectionExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « etablissement ». */
     private const CHAINES = [
-        MouvementComptableSepa::class => [],
-        EcheanceSepa::class => ['abonnement'],
-        StatutAccesFitness::class => ['abonnement'],
-        PauseAbonnement::class => ['abonnement'],
-        Resiliation::class => ['abonnement'],
-        Reengagement::class => ['ancienAbonnement'],
         ConfigAccesNocturne::class => ['espaceAcces'],
         EvenementSOS::class => ['espaceAcces'],
         AlertePresenceIsolee::class => ['espaceAcces'],
