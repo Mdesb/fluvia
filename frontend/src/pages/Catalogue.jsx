@@ -123,6 +123,9 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
+  // Le droit de creer se lit ICI et plus dans `OngletProduits` : le bouton qu'il commande vit
+  // desormais sur la ligne des onglets, qui appartient a cet ecran-ci.
+  const peutCreerProduit = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   // ⚠ ET IL EFFACE LES ECRANS DE NIVEAU 2. Un `promo` ou un `fiche` laisse dans l'adresse
   // rouvrirait un formulaire d'un AUTRE onglet des qu'on y revient — un ecran surgi de nulle
   // part, sur des donnees qu'on ne regardait plus.
@@ -181,6 +184,15 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
             ]}
             actif={tab}
             onChange={setTab}
+            actions={tab === 'produits' && peutCreerProduit ? (
+              <button
+                className="btn primary"
+                type="button"
+                onClick={() => majParams({ nouveau: '1' }, { pousser: true })}
+              >
+                ＋ Nouveau produit
+              </button>
+            ) : null}
           />
         </>
       )}
@@ -209,10 +221,6 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
 /* ------------------------------------------------------------------ Produits */
 
 function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], params, majParams }) {
-  // ⚠ DECLARE ICI, ET PAS DANS `Catalogue`. La liste, le formulaire et la fiche vivent dans CE
-  // composant ; une declaration dans le parent est invisible d'ici, et le build ne le dit pas —
-  // seul le rendu le dit, en cassant l'ecran.
-  const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, ce tableau affichait
   // « Aucun produit. » — un exploitant lit alors que son catalogue est vide. Le message du serveur
   // etait bien la, mais dans un bandeau separe que rien ne relie a la ligne du tableau.
@@ -421,20 +429,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           )}
         </div>
       </section>
-
-      {/* ⚠ LE FORMULAIRE EST DEVENU UN BOUTON. Pose entre les filtres et la liste qu'ils
-          filtrent, il separait les deux et cessait d'etre utile des la deuxieme visite. En bouton,
-          la liste remonte et le catalogue redevient ce qu'on vient y chercher. */}
-      {peutCreer && (
-        <button
-          className="btn primary"
-          type="button"
-          style={{ marginBottom: 'var(--esp-bloc)' }}
-          onClick={() => majParams({ nouveau: '1' }, { pousser: true })}
-        >
-          ＋ Nouveau produit
-        </button>
-      )}
 
       <div className="card">
         {chargement ? (
