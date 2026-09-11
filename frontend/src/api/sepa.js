@@ -1,7 +1,7 @@
 // LES DEUX ÉTATS DU PRÉLÈVEMENT : LE MANDAT, ET CHAQUE ÉCHÉANCE.
 //
 // ⚠ SOURCES DE VÉRITÉ : `App\Sepa\Enum\StatutMandatSepa` (deux cas) et
-// `App\Sport\Enum\StatutEcheanceSepa` (cinq cas). Les deux enums sont entièrement atteignables :
+// `App\Membership\Enum\StatutEcheanceSepa` (cinq cas). Les deux enums sont entièrement atteignables :
 //
 //   mandat    `actif`    — souscription au guichet et en ligne, réengagement, entonnoir Subscription
 //             `revoque`  — `RevoquerMandatSepaProcessor`, et la résiliation d'un abonnement

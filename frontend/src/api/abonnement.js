@@ -1,6 +1,6 @@
 // LES CINQ STATUTS D'UN ABONNEMENT, DANS LE SEUL ENDROIT QUI LES CONNAISSE TOUS.
 //
-// ⚠ SOURCE DE VÉRITÉ : `App\Sport\Enum\StatutAbonnementFitness` — cinq cas, pas un de plus, et tous
+// ⚠ SOURCE DE VÉRITÉ : `App\Membership\Enum\MembershipStatus` — cinq cas, pas un de plus, et tous
 // les cinq sont réellement posés par le serveur :
 //
 //   `actif`   — souscription (`SouscriptionAbonnementHandler`), réengagement (`ReengagementHandler`),
@@ -39,19 +39,24 @@
 // on ne sait pas ce qu'il veut dire, donc on ne lui invente pas une gravité. Son LIBELLÉ suit la même
 // règle par `mot()` — humanisé, jamais remplacé par le mot connu le plus proche.
 
-// ⚠ CE QUI ATTEND LE LOT 1 DU MODULE `Membership`, ET LE PIÈGE QU'IL PORTE.
+// ⚠ CE QUE LE LOT 1 A FAIT DU SOCLE `Membership`, ET LE PIÈGE QU'IL A DÉSARMÉ SANS LE VOULOIR.
 //
-// Le lot 0 (#78) a posé `App\Membership\Enum\MembershipStatus`, miroir en anglais de l'énumération
-// Sport : `active`, `paused`, `unpaid`, `terminated`, `expired`. Quand le lot 1 branchera l'écran
-// dessus, quatre de ces cinq codes seront inconnus de `vocabulaire.js` et s'afficheront « Paused »,
-// « Unpaid », « Terminated » — visiblement non traduits, donc corrigés dans l'heure.
+// Le lot 0 (#78) avait posé `MembershipStatus` en ANGLAIS — `active`, `paused`, `unpaid`,
+// `terminated`, `expired` — et sa décision D-4 argumentait le choix : la table était neuve, c'était
+// la seule occasion de ne pas hériter du mélange.
 //
-// `expired` est le seul dangereux : il EXISTE déjà dans `vocabulaire.js`, où il vaut « Périmé »
-// pour un devis. `mot('expired')` rendra donc un mot français plausible et faux, que personne ne
-// signalera. C'est le défaut `cancelled` à l'identique, et il se répare ici — pas dans la carte
-// globale, qui a raison pour les quatre autres énumérations qui émettent `expired`.
+// Le lot 1 (#85, fusionné le 11/09) a déplacé le bloc de `App\Sport` vers `App\Membership`, et ce
+// déplacement a RECOUVERT le fichier neuf : `MembershipStatus` porte aujourd'hui les cinq valeurs
+// françaises de l'ancienne énumération Sport, et aucune décision n'acte ce renversement de D-4
+// (signalé sur #85, resté sans réponse).
 //
-// La table à écrire au lot 1, et le mot déjà tranché pour chacun :
+// CONSÉQUENCE POUR CE FICHIER : aucune. Les codes que le serveur émet n'ont pas bougé, la table
+// ci-dessus reste juste, et le piège que cette note annonçait — `mot('expired')` rendant « Périmé »
+// en silence — ne s'est jamais armé, faute d'`expired`.
+//
+// ⚠ IL SE RÉARMERAIT LE JOUR OÙ QUELQU'UN RESTAURERAIT D-4. Si les valeurs anglaises reviennent, le
+// mot se pose ICI — surtout pas dans `vocabulaire.js`, qui a raison pour les quatre autres
+// énumérations qui émettent `expired` :
 //
 //     active -> Actif · paused -> En pause · unpaid -> Impayé · terminated -> Résilié
 //     expired -> Au terme   (surtout PAS « Périmé »)

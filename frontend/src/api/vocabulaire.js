@@ -27,23 +27,21 @@ const MOTS = {
   issued: 'Émis',
   accepted: 'Accepté',
   rejected: 'Refusé',
-  // ⚠ « Périmé » EST JUSTE ICI, ET FAUX POUR UN ABONNEMENT — PIÈGE ARMÉ POUR LE LOT 1.
+  // ⚠ « Périmé » EST JUSTE ICI, ET LE DEVIENDRAIT FAUX SI `MembershipStatus` REPASSAIT EN ANGLAIS.
   //
-  // Cinq énumérations émettent `expired` : `Facturation\DocumentStatus` (un devis périmé),
-  // `SmartFlow\RescheduleProposalStatus`, `SmartFlow\SlotWaitlistEntryStatus`,
-  // `Dms\RetentionStatus` — et, depuis le lot 0, `Membership\MembershipStatus`.
+  // Quatre énumérations émettent `expired` : `Facturation\DocumentStatus` (un devis périmé),
+  // `SmartFlow\RescheduleProposalStatus`, `SmartFlow\SlotWaitlistEntryStatus` et
+  // `Dms\RetentionStatus`. « Périmé » est le mot pour les quatre.
   //
-  // Pour les quatre premières, « Périmé » est le mot. Pour un abonnement, non : `expired` y traduit
-  // `App\Sport\Enum\StatutAbonnementFitness::Echu`, que l'écran dit « Au terme » — l'adhérent n'a
-  // rien laissé périmer, son engagement est arrivé à son terme.
+  // Une cinquième a failli s'y ajouter. Le lot 0 du module `Membership` avait posé un cas
+  // `Expired = 'expired'` pour un abonnement arrivé au terme de son engagement — ce que l'écran dit
+  // « Au terme », parce que l'adhérent n'a rien laissé périmer. `mot('expired')` aurait rendu
+  // « Périmé » en silence : un mot français plausible et faux, que personne n'aurait signalé.
   //
-  // Le jour où le lot 1 branchera l'écran sur `Membership`, `mot('expired')` rendra donc « Périmé »
-  // en silence. C'est le pire des cas : un mot français plausible, bien accordé, que personne ne
-  // signalera — alors qu'un code non traduit (« Paused », « Unpaid ») saute aux yeux. C'est
-  // exactement ce que `cancelled` faisait deux sections plus haut avant d'être dédoublonné.
-  //
-  // NE PAS corriger ici : « Périmé » sert quatre énumérations sur cinq. C'est `api/abonnement.js`
-  // qui doit porter le mot de l'abonnement, comme il porte déjà celui de `echu`.
+  // Le lot 1 a ramené ces valeurs en français (`echu`), donc le piège ne s'est pas armé. NE PAS
+  // corriger ici pour autant : si l'anglais revient, c'est `api/abonnement.js` qui doit porter le
+  // mot de l'abonnement, comme il porte déjà celui de `echu`.
+
   expired: 'Périmé',
   converted: 'Transformé',
   // ⚠ `cancelled` EST LE SEUL CODE DE CETTE CARTE QUE LE FRANCAIS NE SAIT PAS ACCORDER SEUL.
@@ -125,7 +123,7 @@ const MOTS = {
 
   // --- Abonnement (sport/fitness) ---
   //
-  // Les cinq statuts de `App\Sport\Enum\StatutAbonnementFitness`. Quatre manquaient, et le repli
+  // Les cinq statuts de `App\Membership\Enum\MembershipStatus`. Quatre manquaient, et le repli
   // les rendait sans accent : « Impaye », « Resilie », « Echu ». C'est le défaut que la ligne
   // `reussie`/`echouee` plus bas nomme déjà — le repli désoulignise un code, il ne parle pas français.
   //
@@ -236,7 +234,7 @@ const MOTS = {
   generee: 'Générée',
   transmise: 'Transmise à la banque',
 
-  // Le cycle d'une ÉCHÉANCE (`App\Sport\Enum\StatutEcheanceSepa`). Quatre manquaient, et la fiche
+  // Le cycle d'une ÉCHÉANCE (`App\Membership\Enum\StatutEcheanceSepa`). Quatre manquaient, et la fiche
   // d'un abonnement les affichait en code brut : « prelevee », « rejetee », « gelee ».
   //
   // ⚠ `gelee` SE DIT « EN PAUSE ». Le mot du modèle ne dit pas au lecteur ce qui va se passer :
