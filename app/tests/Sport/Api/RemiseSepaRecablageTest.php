@@ -9,9 +9,9 @@ use App\Sepa\Entity\ConfigCreancierSepa;
 use App\Sepa\Entity\DebitPreNotification;
 use App\Sepa\Enum\PreNotificationReason;
 use App\Sepa\Enum\StatutRemiseSepa;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutEcheanceSepa;
-use App\Sport\Service\GenererRemiseSepaHandler;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Service\GenererRemiseSepaHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 

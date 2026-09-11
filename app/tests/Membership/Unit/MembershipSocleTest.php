@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Membership\Unit;
 
+use ApiPlatform\Metadata\ApiResource;
 use App\Membership\Doctrine\MembershipScopeExtension;
 use App\Membership\Entity\Membership;
 use App\Membership\Enum\MembershipPeriodicity;
@@ -81,12 +82,36 @@ final class MembershipSocleTest extends TestCase
         self::assertSame([], $manifeste->eventsConsumed());
     }
 
-    public function testLEntiteEstMappeeSurLaTableMembership(): void
+    /**
+     * ⚠ LA TABLE N'EST PAS `membership`, ET CE TEST EXISTE POUR QUE PERSONNE NE LA « CORRIGE ».
+     *
+     * L'entité a été déplacée de `App\Sport` sans que sa table bouge (arbitrage du 10/09,
+     * « déplace sans renommer »). **Sept clés étrangères** pointent dessus : un renommage les
+     * emmène toutes et impose un déploiement où le code et le schéma basculent au même instant.
+     *
+     * Ce test fige donc un nom qui a l'air incohérent avec sa classe. Il l'est, et c'est assumé :
+     * le jour où l'on renommera vraiment, il faudra le changer ICI en même temps que la migration —
+     * ce qui est précisément le rappel voulu.
+     */
+    public function testLaTableNaPasSuiviLeDeplacementDeLaClasse(): void
     {
         $table = (new \ReflectionClass(Membership::class))->getAttributes(ORM\Table::class);
 
         self::assertCount(1, $table, 'L\'entité doit déclarer sa table explicitement.');
-        self::assertSame('membership', $table[0]->newInstance()->name);
+        self::assertSame('sport_abonnement_fitness', $table[0]->newInstance()->name);
+    }
+
+    /**
+     * ⚠ MÊME RAISON POUR LA RESSOURCE D'API. `shortName` décide de la route : la renommer ferait
+     * répondre 404 à `/api/abonnement_fitnesses`, que le frontal appelle. Le déplacement de classe
+     * ne doit RIEN changer de ce que voit un client.
+     */
+    public function testLaRouteDApiNaPasBouge(): void
+    {
+        $ressource = (new \ReflectionClass(Membership::class))->getAttributes(ApiResource::class);
+
+        self::assertCount(1, $ressource);
+        self::assertSame('AbonnementFitness', $ressource[0]->newInstance()->getShortName());
     }
 
     /**
@@ -131,18 +156,26 @@ final class MembershipSocleTest extends TestCase
     }
 
     /**
-     * Les valeurs persistées sont en anglais (D5), à la différence de celles de Sport. La table de
-     * correspondance vit dans les docblocks des deux énumérations ; elle sera appliquée par la
-     * migration de données du lot 1. Ce test fige les valeurs pour qu'elles ne dérivent pas d'ici là.
+     * ⚠ LES VALEURS RESTENT EN FRANÇAIS, ET C'EST LA CONSÉQUENCE DIRECTE DE NE PAS AVOIR BOUGÉ LA
+     * TABLE.
+     *
+     * Le lot 0 avait posé des valeurs anglaises sur une table neuve et vide. La table retenue est
+     * l'ancienne, qui contient des codes français **déjà écrits**. Les traduire demanderait une
+     * migration de données et ouvrirait une fenêtre où l'ancien code lirait des valeurs qu'il ne
+     * connaît pas.
+     *
+     * Ce n'est pas une entorse inventée pour l'occasion : `MembershipStatus::Echu` porte déjà ce
+     * raisonnement dans son propre docblock, écrit avant ce lot. D5 vise le vocabulaire réellement
+     * neuf, pas les codes persistés.
      */
-    public function testLesValeursPersisteesSontEnAnglais(): void
+    public function testLesValeursPersisteesRestentCellesDeLaTable(): void
     {
         self::assertSame(
-            ['monthly', 'weekly', 'yearly'],
+            ['mensuel', 'hebdomadaire', 'annuel'],
             array_column(MembershipPeriodicity::cases(), 'value'),
         );
         self::assertSame(
-            ['active', 'paused', 'unpaid', 'terminated', 'expired'],
+            ['actif', 'pause', 'impaye', 'resilie', 'echu'],
             array_column(MembershipStatus::cases(), 'value'),
         );
     }

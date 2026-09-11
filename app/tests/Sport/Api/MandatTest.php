@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Service\DemanderResiliationHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Service\DemanderResiliationHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -45,7 +45,7 @@ final class MandatTest extends SportApiTestCase
     /**
      * ⚠ CE TEST NAIT AVEC LE PARTAGE DU MANDAT, ET IL EST LA MOITIE QUI MANQUAIT.
      *
-     * `AbonnementFitness.mandatSepa` est passe de `OneToOne` a `ManyToOne` pour qu'un payeur ne
+     * `Membership.mandatSepa` est passe de `OneToOne` a `ManyToOne` pour qu'un payeur ne
      * donne son IBAN qu'une fois. Ce changement SEUL rendait faux
      * `DemanderResiliationHandler::executerEffet()`, qui revoquait le mandat sans condition :
      * resilier le premier abonnement aurait arrete les prelevements du second SANS ERREUR ET SANS
@@ -71,7 +71,7 @@ final class MandatTest extends SportApiTestCase
         // Un SECOND abonnement sur LE MEME mandat : le cas du parent qui inscrit son enfant.
         // ⚠ Date de souscription POSTERIEURE, delibere : `abonnementDemo()` trie par
         //    `dateSouscription ASC`, donc une date egale rendrait le choix -- et le test -- instable.
-        $second = (new AbonnementFitness())
+        $second = (new Membership())
             ->setAdherent($premier->getAdherent())
             ->setPayeur($premier->getPayeur())
             ->setFormule($premier->getFormule())
@@ -100,7 +100,7 @@ final class MandatTest extends SportApiTestCase
         );
 
         // ── Resiliation du SECOND : plus personne, le mandat doit alors etre revoque.
-        $secondRelu = $em->getRepository(AbonnementFitness::class)->find($second->getId());
+        $secondRelu = $em->getRepository(Membership::class)->find($second->getId());
         $r2 = $handler->demander($secondRelu, $secondRelu->getDateFinEngagement()->modify('+1 day'), 'Test', false, null);
         $handler->executerEffet($r2);
         $em->clear();
@@ -137,7 +137,7 @@ final class MandatTest extends SportApiTestCase
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->find($this->idAbonnementDemo());
+        $abonnement = $em->getRepository(Membership::class)->find($this->idAbonnementDemo());
         $mandat = $abonnement->getMandatSepa();
 
         self::assertStringNotContainsString('FR76', $mandat->getIbanToken());

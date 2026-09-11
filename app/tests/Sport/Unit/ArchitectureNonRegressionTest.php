@@ -45,6 +45,9 @@ final class ArchitectureNonRegressionTest extends TestCase
         $fichier = \dirname(__DIR__, 3) . '/src/Audit/Doctrine/AuditWriteSubscriber.php';
         self::assertFileExists($fichier);
         $contenu = file_get_contents($fichier);
-        self::assertStringContainsString('App\\Sport\\Entity\\AbonnementFitness', (string) $contenu);
+        // ⚠ LE CHEMIN A CHANGÉ AU LOT 1, PAS L'INTENTION. L'entité a quitté `App\Sport` ; ce que ce
+        // test garde reste le même — l'abonnement doit être surveillé par l'audit, et il l'est par
+        // une liste blanche où un nom absent ne produit AUCUNE erreur, juste un silence.
+        self::assertStringContainsString('App\Membership\Entity\Membership', (string) $contenu);
     }
 }

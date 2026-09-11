@@ -16,7 +16,7 @@ use App\Sepa\Port\EcheanceSepaSource;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Implémentation du port `EcheanceSepaSource` (plan §3/§5, comme `App\Sport\Sepa\SportEcheanceSepaSource`)
+ * Implémentation du port `EcheanceSepaSource` (plan §3/§5, comme `App\Membership\Sepa\SportEcheanceSepaSource`)
  * pour le mode `prelevement_differe` (squelette documenté, Risque n°1 du plan) : fournit au module SEPA
  * partagé les `FacturationNoShow` en attente (`referenceEcheanceSepa` renseignée, statut `à_facturer`)
  * dont le bénéficiaire dispose d'un mandat SEPA actif. Taguée `sepa.echeance_source` (services.yaml).

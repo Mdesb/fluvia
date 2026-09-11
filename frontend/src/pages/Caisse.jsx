@@ -356,7 +356,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       }
     }
 
-    ajouterLigne(produit, g, options, devis)
+    await ajouterLigne(produit, g, options, devis)
   }
 
   /**
@@ -385,18 +385,62 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
-  function ajouterLigne(produit, g, options, devis, remplace = null) {
+  /**
+   * Ajoute une ligne au panier — ou rhabille celle qui est déjà là.
+   *
+   * ⚠ **LE MONTANT D'UNE LIGNE NE SE DÉDUIT PAS DE CELUI D'UNE UNITÉ.** Le devis reçu ici a été
+   * demandé pour une unité. Dès que la ligne en porte plusieurs — deuxième clic sur le même produit,
+   * ou ajustement d'une ligne déjà à deux — il faut le redemander pour la quantité réelle : une
+   * promotion en montant fixe s'applique **une fois par ligne**, pas une fois par unité.
+   *
+   * Sans ce second appel, le panier gardait le montant calculé pour UNE unité sous une quantité de
+   * deux. C'est le même défaut que celui qu'on vient de fermer, réintroduit par le remède : un
+   * nombre juste, devenu faux parce que ce qu'il décrit a changé sous lui.
+   */
+  async function ajouterLigne(produit, g, options, devis, remplace = null) {
     const cle = cleLigne(produit.id, g.typeTarif.id) + (options.length ? `|${[...options].sort().join(',')}` : '')
+    // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans le retrait plus
+    // bas, le panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
+    const existante = panier.find((l) => l.cle === cle)
+    const quantiteReprise = remplace !== null ? panier.find((l) => l.cle === remplace)?.quantite : null
+    // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
+    const quantite = existante ? existante.quantite + (remplace !== null ? 0 : 1) : (quantiteReprise ?? 1)
+
+    let devisLigne = devis
+    if (quantite > 1) {
+      try {
+        devisLigne = await api.tarifProduit(produit.id, {
+          typeTarif: g.typeTarif.id,
+          canal: devis?.canal,
+          options,
+          quantite,
+        })
+      } catch (e) {
+        // Le montant devient INCONNU plutôt que faux : on ne garde pas celui d'une autre quantité.
+        // Le panier retombe alors sur prix × quantité, et cesse de nommer des promotions qu'il ne
+        // sait plus chiffrer — l'écran dit donc ce qu'il sait, pas ce qu'il savait avant.
+        setErreur(e.message || "Le prix de la ligne n'a pas pu être recalculé.")
+        devisLigne = null
+      }
+    }
+
+    const dv = devisLigne ?? devis
+    const champsPrix = {
+      // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
+      prix: dv?.totalUnitaire ?? dv?.prixUnitaire ?? g.prix,
+      // Ce que la ligne coûte vraiment — promotions automatiques déduites par le serveur.
+      montant: devisLigne?.montantLigne ?? null,
+      // ET LE NOM DE CE QUI A RETIRÉ LA DIFFÉRENCE. Un rabais anonyme sur un ticket est un
+      // rabais que le caissier ne sait pas expliquer, et que le client finit par contester.
+      promotionsLibelles: (devisLigne?.promotions ?? []).map((x) => x.nom).filter(Boolean),
+    }
+
     setPanier((p) => {
-      // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans ce retrait, le
-      // panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
-      const quantiteReprise = remplace !== null ? p.find((l) => l.cle === remplace)?.quantite : null
       if (remplace !== null && remplace !== cle) p = p.filter((l) => l.cle !== remplace)
       const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
         const copie = [...p]
-        // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
-        copie[i] = { ...copie[i], quantite: copie[i].quantite + (remplace !== null ? 0 : 1) }
+        copie[i] = { ...copie[i], quantite, ...champsPrix }
         return copie
       }
       return [
@@ -404,22 +448,16 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         {
           cle,
           produit,
-          quantite: quantiteReprise ?? 1,
+          quantite,
           typeTarifId: g.typeTarif.id,
           tarifLibelle: libelleTarif(g),
           // Conservées pour rouvrir les options sans redemander au catalogue ce qu'on a déjà.
           grille: g,
-          aOptions: (devis?.options ?? []).length > 0,
-          // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
-          prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
-          // Ce que la ligne coûte vraiment — promotions automatiques déduites par le serveur.
-          montant: devis?.montantLigne ?? null,
-          // ET LE NOM DE CE QUI A RETIRÉ LA DIFFÉRENCE. Un rabais anonyme sur un ticket est un
-          // rabais que le caissier ne sait pas expliquer, et que le client finit par contester.
-          promotionsLibelles: (devis?.promotions ?? []).map((p) => p.nom).filter(Boolean),
+          aOptions: (dv?.options ?? []).length > 0,
+          ...champsPrix,
           options,
           // Les libellés servent à afficher la ligne sans redemander ; les montants viennent du devis.
-          optionsLibelles: (devis?.options ?? [])
+          optionsLibelles: (dv?.options ?? [])
             .flatMap((groupe) => groupe.valeurs)
             .filter((valeur) => options.includes(valeur.valeurOption))
             .map((valeur) => valeur.libelle),

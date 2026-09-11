@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\PeriodiciteAbonnementFitness;
-use App\Sport\Service\SouscriptionAbonnementHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -137,7 +136,7 @@ final class TarifAbonnementTest extends SportApiTestCase
         return (string) $client->getResponse()->getContent(false);
     }
 
-    private function souscrire(?int $prorata): AbonnementFitness
+    private function souscrire(?int $prorata): Membership
     {
         $modele = $this->abonnementDemo();
 
@@ -158,7 +157,7 @@ final class TarifAbonnementTest extends SportApiTestCase
     }
 
     /** @return list<int> les montants des echeances, dans l'ordre des dates */
-    private function montantsDesEcheances(AbonnementFitness $abonnement): array
+    private function montantsDesEcheances(Membership $abonnement): array
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();

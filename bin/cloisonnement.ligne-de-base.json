@@ -37,7 +37,7 @@
             ],
             "ecrit": true
         },
-        "Sport/State/RattacherDroitAccesProcessor.php": {
+        "Membership/State/RattacherDroitAccesProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
             "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",

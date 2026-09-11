@@ -10,16 +10,9 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
-use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\AlertePresenceIsolee;
 use App\Sport\Entity\ConfigAccesNocturne;
-use App\Sport\Entity\EcheanceSepa;
 use App\Sport\Entity\EvenementSOS;
-use App\Sport\Entity\MouvementComptableSepa;
-use App\Sport\Entity\PauseAbonnement;
-use App\Sport\Entity\Reengagement;
-use App\Sport\Entity\Resiliation;
-use App\Sport\Entity\StatutAccesFitness;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -33,13 +26,6 @@ final class PerimetreSportExtension implements QueryCollectionExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « etablissement ». */
     private const CHAINES = [
-        AbonnementFitness::class => [],
-        MouvementComptableSepa::class => [],
-        EcheanceSepa::class => ['abonnement'],
-        StatutAccesFitness::class => ['abonnement'],
-        PauseAbonnement::class => ['abonnement'],
-        Resiliation::class => ['abonnement'],
-        Reengagement::class => ['ancienAbonnement'],
         ConfigAccesNocturne::class => ['espaceAcces'],
         EvenementSOS::class => ['espaceAcces'],
         AlertePresenceIsolee::class => ['espaceAcces'],

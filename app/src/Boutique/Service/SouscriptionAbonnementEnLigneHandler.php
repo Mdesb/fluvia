@@ -15,7 +15,7 @@ use App\Offre\Enum\Canal;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sepa\Entity\MandatSepa;
-use App\Sport\Service\SouscriptionAbonnementHandler;
+use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
@@ -175,7 +175,7 @@ final class SouscriptionAbonnementEnLigneHandler
          * ── ET MAINTENANT LE CONTRAT, QUI MANQUAIT ─────────────────────────────────────────────
          *
          * ⚠ TOUT CE QUI PRÉCÈDE NE FAISAIT PAS UN ABONNÉ. Mandat signé, vente validée, QR posé — et
-         *   ni `AbonnementFitness`, ni échéancier, ni statut d'accès. Le client lisait « Abonnement
+         *   ni `Membership`, ni échéancier, ni statut d'accès. Le client lisait « Abonnement
          *   souscrit » et n'était ni abonné ni jamais prélevé : aucune source SEPA ne lit une
          *   `Vente`, et le drapeau `differe` n'a qu'un lecteur, qui sert à autoriser un reste dû.
          *
