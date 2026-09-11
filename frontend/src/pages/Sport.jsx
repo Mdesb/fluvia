@@ -230,6 +230,10 @@ export default function Sport({ etabActif, droits = [] }) {
   // sans lui, « rien trouve » et « rien cherche » se lisent pareil.
   const [compteRendu, setCompteRendu] = useState(null)
   const [abonnements, setAbonnements] = useState(null)
+  // Même discipline que partout ici : `null` = pas lu, `[]` = lu et vide. Sur une liste de
+  // demandes en attente, confondre les deux dirait « personne n'attend » à un responsable qui
+  // n'a simplement pas pu regarder.
+  const [resiliations, setResiliations] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -248,7 +252,7 @@ export default function Sport({ etabActif, droits = [] }) {
       // `sos:read`, vérifié dans l'entité. La carte affichait donc « Espace inconnu » sur CHAQUE
       // alerte, y compris celles dont l'espace est parfaitement enregistré. Sur un écran où l'on
       // court, ce n'est pas une colonne vide : c'est l'information qui dit où courir.
-      const [s, a, ab, es, ec, bf] = await Promise.all([
+      const [s, a, ab, es, ec, bf, rs] = await Promise.all([
         api.evenementsSOS(),
         api.alertesPresenceIsolee().catch(() => null),
         api.abonnementsFitness().catch(() => null),
@@ -257,6 +261,7 @@ export default function Sport({ etabActif, droits = [] }) {
         // Le nom de l'adhérent n'est nulle part ailleurs : `abonnement.adherent` est une IRI nue.
         // `crm.lire` peut manquer — d'où le `.catch` et le `null` conservé.
         api.beneficiaires().catch(() => null),
+        api.resiliationsSport().catch(() => null),
       ])
       setSos(membres(s))
       // ⚠ `a ? … : []` TRANSFORMAIT UN ECHEC EN LISTE VIDE. Les trois lectures tolerees rendent
@@ -269,6 +274,7 @@ export default function Sport({ etabActif, droits = [] }) {
       // s'afficherait « aucune echeance » dirait a l'exploitant que personne n'est prelevable.
       setEcheances(ec ? membres(ec) : null)
       setBeneficiaires(bf ? membres(bf) : null)
+      setResiliations(rs ? membres(rs) : null)
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
       // On ne garde rien de partiel : un decompte a moitie lu a l'air normal.
@@ -277,6 +283,7 @@ export default function Sport({ etabActif, droits = [] }) {
       setAbonnements(null)
       setEcheances(null)
       setBeneficiaires(null)
+      setResiliations(null)
     } finally {
       setChargement(false)
     }
@@ -290,6 +297,29 @@ export default function Sport({ etabActif, droits = [] }) {
     const t = setInterval(() => setTic((n) => n + 1), 60000)
     return () => clearInterval(t)
   }, [])
+
+  /**
+   * VALIDER LE MOTIF LEGITIME D'UNE DEMANDE DE RESILIATION.
+   *
+   * ⚠ CE N'EST PAS UN ACCORD DE PRINCIPE : LE PREAVIS COMMENCE. La demande passe `en_preavis`, et a
+   * sa date d'effet l'acces est coupe, le mandat revoque, les echeances restantes annulees. On le
+   * DIT avant, dans la ligne, plutot que de le decouvrir apres.
+   *
+   * ⚠ ET ON NE LE PROPOSE PAS A QUI NE L'A PAS. Le serveur exige `sport.gerer_abonnement` : montrer
+   * le bouton sans le droit produirait un 403 sur une demande qu'un adherent attend.
+   */
+  async function validerMotif(resiliation) {
+    setBusy(true)
+    setErreur(null)
+    try {
+      await api.validerMotifLegitimeResiliation(resiliation.id)
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'La validation du motif légitime n’a pas abouti.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function traiter(evenement) {
     setBusy(true)
@@ -463,6 +493,26 @@ export default function Sport({ etabActif, droits = [] }) {
         )}
       </section>
 
+      {/* ── LES DEMANDES DE RESILIATION QUI ATTENDENT UN RESPONSABLE ───────────────────────────
+          ⚠ CETTE LISTE N'EXISTAIT PAS, ET LA FICHE ABONNEMENT PROMETTAIT POURTANT LE GESTE.
+
+          Pendant l'engagement, une demande motivee (demenagement, perte d'emploi, raison medicale)
+          reste `refusee` en attendant qu'un responsable valide le motif. La fiche l'annonce mot pour
+          mot. Or la route de validation n'etait appelee par AUCUN ecran : la demande dormait, et
+          pendant ce temps l'adherent restait actif ET PRELEVE. C'est ce dernier point qui fait de ce
+          bloc une liste de travail et pas une consultation.
+
+          ⚠ ELLE S'AFFICHE MEME VIDE. Un bloc absent ne se distingue pas d'un bloc qu'on a oublie de
+          charger — le principe est deja pose plus haut sur cet ecran, il vaut ici aussi. */}
+      <SectionMotifsLegitimes
+        resiliations={resiliations}
+        abonnements={abonnements}
+        beneficiaires={beneficiaires}
+        peutGerer={peutGererAbonnement}
+        busy={busy}
+        onValider={validerMotif}
+      />
+
       <section className="card">
         <div className="card-h">
           <span>Abonnements</span>
@@ -615,6 +665,120 @@ export default function Sport({ etabActif, droits = [] }) {
         </section>
       )}
     </div>
+  )
+}
+
+// LES MOTIFS LEGITIMES EN ATTENTE — CE QUI SEPARE UNE DEMANDE D'UN CONTRAT ROMPU.
+//
+// Une demande en attente n'est pas un dossier a classer : tant qu'elle attend, l'abonnement reste
+// actif et le prelevement continue. Le bandeau porte donc le NOMBRE et l'ANCIENNETE de la plus
+// vieille — le fait qu'on ne peut pas voir en lisant ligne a ligne, exactement comme sur
+// l'echeancier juste en dessous.
+function SectionMotifsLegitimes({ resiliations, abonnements, beneficiaires, peutGerer, busy, onValider }) {
+  // ⚠ LE TRI EST FAIT ICI PARCE QUE LE SERVEUR N'OFFRE AUCUN FILTRE SUR CETTE COLLECTION, ET ON LE
+  // DIT PLUS BAS. Le cloisonnement, lui, reste serveur : on ne trie pas ce qu'on n'a pas le droit
+  // de voir, on trie ce que le serveur a deja restreint a l'etablissement actif.
+  //
+  // « en attente » = motif legitime declare + statut encore `refusee`. Une demande sans motif
+  // legitime est refusee DEFINITIVEMENT : elle n'attend personne, et l'inclure ici ferait chercher
+  // une decision a prendre la ou il n'y en a pas.
+  const enAttente = Array.isArray(resiliations)
+    ? resiliations.filter((r) => r?.motifLegitime === true && r?.statut === 'refusee')
+    : resiliations
+
+  const plusAncienne = Array.isArray(enAttente) && enAttente.length > 0
+    ? enAttente.reduce((a, b) => (String(a.dateDemande || '') <= String(b.dateDemande || '') ? a : b))
+    : null
+
+  return (
+    <section className="card" style={{ marginBottom: 'var(--esp-bloc)' }}>
+      <div className="card-h">
+        <span>Résiliations en attente de validation</span>
+        <span className="sub" style={{ marginLeft: 'var(--esp-normal)' }}>
+          {Array.isArray(enAttente) ? enAttente.length : '—'}
+        </span>
+      </div>
+
+      {enAttente === null ? (
+        <div className="empty">
+          <b>Les demandes de résiliation n’ont pas pu être lues.</b> Cette liste est vide parce
+          qu’on n’a pas pu regarder, pas parce que personne n’attend.
+        </div>
+      ) : enAttente.length === 0 ? (
+        <div className="empty">Aucune demande n’attend de validation.</div>
+      ) : (
+        <>
+          <div className="card-b">
+            <div className="banner banner-warn" style={{ margin: 0 }}>
+              <b>
+                {enAttente.length} demande{enAttente.length > 1 ? 's' : ''} attend
+                {enAttente.length > 1 ? 'ent' : ''} un responsable
+              </b>
+              {plusAncienne ? `, la plus ancienne depuis le ${dateFr(plusAncienne.dateDemande)}` : ''}.
+              {' '}Tant qu’elles attendent, ces abonnements <b>restent actifs et prélevés</b>.
+            </div>
+          </div>
+          <div className="card-b" style={{ overflowX: 'auto', paddingTop: 0 }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Adhérent</th>
+                  <th>Demandé le</th>
+                  <th>Motif</th>
+                  <th>Justificatif</th>
+                  <th>Effet si validé</th>
+                  {peutGerer && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {enAttente.map((r) => {
+                  const abo = resoudre(r.abonnement, abonnements)
+                  return (
+                    <tr key={r.id}>
+                      <td>{nomAdherent(abo, beneficiaires)}</td>
+                      <td>{dateFr(r.dateDemande)}</td>
+                      <td>{r.motif || <span className="sub">—</span>}</td>
+                      {/* Le serveur ne rend qu'un CHEMIN, et aucune route ne le sert : dire « fourni »
+                          est tout ce qu'on peut honnêtement affirmer. Afficher le chemin laisserait
+                          croire qu'on peut l'ouvrir. */}
+                      <td>
+                        {r.justificatifChemin
+                          ? <span className="badge good">fourni</span>
+                          : <span className="badge mut">aucun</span>}
+                      </td>
+                      <td>
+                        {dateFr(r.dateEffet)}
+                        <span className="sub"> · préavis {r.preavisAppliqueJours ?? '—'} j</span>
+                      </td>
+                      {peutGerer && (
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button
+                            className="btn sm"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => onValider(r)}
+                          >
+                            Valider le motif
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="card-b" style={{ paddingTop: 0 }}>
+            <p className="hint" style={{ margin: 0 }}>
+              Valider ne fait pas qu’accepter&nbsp;: <b>le préavis commence</b>. À la date d’effet,
+              l’accès est coupé, le mandat SEPA est révoqué — sauf si un autre abonnement s’en sert —
+              et les échéances postérieures sont annulées. Les deux cents demandes les plus récentes
+              sont examinées&nbsp;: cette collection n’offre aucun filtre côté serveur.
+            </p>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 
