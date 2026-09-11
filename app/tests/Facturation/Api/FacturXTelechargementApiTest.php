@@ -69,6 +69,43 @@ final class FacturXTelechargementApiTest extends FacturationApiTestCase
     }
 
     /**
+     * Une facture INCOMPLÈTE est refusée — et le refus NOMME le terme manquant **jusqu'à l'écran**.
+     *
+     * ⚠ LE TÉMOIN PORTE SUR LA PHRASE, PAS SUR LE STATUT. Le contrôleur levait
+     * `UnprocessableEntityHttpException` : le 422 arrivait, la phrase non — en production, Symfony ne
+     * relaie pas le message d'une exception, et l'exploitant lisait « Unprocessable Content ». Tout le
+     * soin mis par `InvoiceNotEmittableException` à nommer chaque terme et son emplacement se perdait
+     * exactement là où il servait : devant la personne qui doit corriger la fiche.
+     *
+     * Un test sur le seul code de statut serait resté vert pendant tout ce temps. C'est pourquoi
+     * celui-ci lit `detail`.
+     */
+    public function testTelechargementRefuseUneFactureIncompleteEtNommeCeQuiManque(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        // ⚠ ON NE POSE PAS `VatCategory` : BT-151 reste nulle, et c'est le terme qui manquera.
+        // Le test nominal ci-dessus la pose explicitement — la différence entre les deux EST le cas.
+        $vente = $this->creerVenteValidee($client, $entete);
+        $facture = $client->request('POST', '/api/factures/depuis-vente', $entete + [
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => [
+                'type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011',
+                'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR'],
+            ]],
+        ])->toArray();
+
+        $reponse = $client->request('GET', '/factures/' . $facture['id'] . '/facturx', $entete);
+
+        self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+        $corps = $reponse->toArray(false);
+        self::assertStringContainsString(
+            'terme(s) obligatoire(s) manquent',
+            (string) ($corps['detail'] ?? ''),
+            'le refus doit porter la phrase qui nomme ce qui manque, pas le libellé générique du statut.',
+        );
+    }
+
+    /**
      * TÉMOIN DE CLOISONNEMENT (RG-SOCLE-05) : un lecteur `facturation.lire` affecté à B passe la
      * sécurité de route mais n'a aucun droit sur une facture de A. On répond 404 — jamais 200, jamais
      * 403 (un 403 confirmerait l'existence de la facture d'un voisin, montants et PII compris), comme

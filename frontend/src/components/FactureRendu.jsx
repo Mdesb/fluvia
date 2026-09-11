@@ -140,6 +140,14 @@ export default function FactureRendu({ facture, onClose }) {
     setTele('en_cours')
     try {
       const reponse = await fetch(api.urlFacturX(facture.id), {
+        // ⚠ `no-store` : SANS LUI, UNE ANCIENNE REPONSE PEUT ETRE ENREGISTREE COMME PDF.
+        //
+        // Tant que `/factures` manquait a la liste proxifiee de nginx, cette URL rendait
+        // `index.html` en 200 — sans en-tete de cache, donc le navigateur l'a gardee par
+        // heuristique. Une fois le routage corrige, le telechargement rendait TOUJOURS le vieux
+        // HTML : le serveur etait repare et l'ecran continuait de servir la panne, sans qu'aucune
+        // requete ne parte. Un correctif qu'on ne peut pas constater passe pour un correctif faux.
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${tokenStore.get()}`,
           'X-Etablissement': etablissementStore.get() || '',
