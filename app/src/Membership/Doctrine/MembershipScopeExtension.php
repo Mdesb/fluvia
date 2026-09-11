@@ -9,6 +9,12 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\MouvementComptableSepa;
+use App\Membership\Entity\PauseAbonnement;
+use App\Membership\Entity\Reengagement;
+use App\Membership\Entity\Resiliation;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
@@ -48,6 +54,22 @@ final class MembershipScopeExtension implements QueryCollectionExtensionInterfac
      */
     private const CHAINES = [
         Membership::class => [],
+        // ── ⚠ RAPATRIÉES DE `PerimetreSportExtension` (lot 1b) ─────────────────────────────
+        //
+        // Ces six entités ont déménagé au lot 1 ; leur CLOISONNEMENT, lui, était resté déclaré
+        // dans Sport. Ça fonctionnait — une extension peut nommer une classe d'ailleurs — et
+        // c'est exactement ce qui rend l'oubli dangereux : Sport décidait du périmètre d'un
+        // module qu'il ne possède plus, sans qu'aucun garde-fou ne le signale. Le jour où l'une
+        // des deux règles change, personne ne sait laquelle s'applique.
+        //
+        // La chaîne dit le chemin à parcourir jusqu'à `etablissement` : vide quand l'entité le
+        // porte elle-même, sinon la relation à traverser.
+        MouvementComptableSepa::class => [],
+        EcheanceSepa::class => ['abonnement'],
+        StatutAccesFitness::class => ['abonnement'],
+        PauseAbonnement::class => ['abonnement'],
+        Resiliation::class => ['abonnement'],
+        Reengagement::class => ['ancienAbonnement'],
     ];
 
     public function __construct(
