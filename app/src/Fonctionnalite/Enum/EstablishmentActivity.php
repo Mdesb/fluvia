@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace App\Fonctionnalite\Enum;
+use App\Membership\Entity\Membership;
 
 /**
  * Les neuf types d'activite de D15.

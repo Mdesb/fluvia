@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\Resiliation;
-use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Service\DemanderResiliationHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\Resiliation;
+use App\Membership\Service\DemanderResiliationHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -36,7 +35,7 @@ final class ReengagementTest extends SportApiTestCase
         $handler->executerEffet($resiliation);
         $em->clear();
 
-        $abonnementResilie = $em->getRepository(AbonnementFitness::class)->find($ancienId);
+        $abonnementResilie = $em->getRepository(Membership::class)->find($ancienId);
         self::assertSame('resilie', $abonnementResilie->getStatut()->value);
         // L'ancien mandat n'a PAS été révoqué avant la date d'effet mais l'EST maintenant (effective).
         self::assertSame('revoque', $abonnementResilie->getMandatSepa()->getStatut()->value);
@@ -58,7 +57,7 @@ final class ReengagementTest extends SportApiTestCase
         self::assertNotSame($ancienMandatId, $nouveauMandatId, '**Toujours** un nouveau mandat SEPA (décision actée).');
 
         $em->clear();
-        $nouvel = $em->getRepository(AbonnementFitness::class)->find($nouvelAbonnementId);
+        $nouvel = $em->getRepository(Membership::class)->find($nouvelAbonnementId);
         self::assertSame('actif', $nouvel->getStatut()->value);
         self::assertSame('actif', $nouvel->getMandatSepa()->getStatut()->value);
         self::assertNotSame($ancienMandatId, (string) $nouvel->getMandatSepa()->getId());

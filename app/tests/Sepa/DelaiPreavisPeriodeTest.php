@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Tests\Sepa;
 
 use App\Sepa\Entity\ConfigCreancierSepa;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Enum\PeriodiciteAbonnementFitness;
+use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipPeriodicity;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -78,7 +78,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
         $config->setPreNotificationDelayDays(14);
         $em->flush();
 
-        $abonnement->setPeriodicite(PeriodiciteAbonnementFitness::Hebdomadaire);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Hebdomadaire);
 
         self::assertCount(
             1,
@@ -95,7 +95,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
     {
         $em = $this->em();
         $abonnement = $this->unAbonnement($em);
-        $abonnement->setPeriodicite(PeriodiciteAbonnementFitness::Mensuel);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Mensuel);
         $em->flush();
 
         $config = $this->configDuSite($em, $abonnement);
@@ -146,9 +146,9 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
      * ⚠ Chaque pièce empruntée aux fixtures porte son propre témoin : sans elles, ce test ne
      * mesurerait rien et passerait en croyant le contrôle silencieux.
      */
-    private function unAbonnement(EntityManagerInterface $em): AbonnementFitness
+    private function unAbonnement(EntityManagerInterface $em): Membership
     {
-        $existants = $em->getRepository(AbonnementFitness::class)->findAll();
+        $existants = $em->getRepository(Membership::class)->findAll();
         if ($existants !== []) {
             return $existants[0];
         }
@@ -171,12 +171,12 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
         self::assertNotNull($mandat, 'témoin : un mandat SEPA existe en fixtures');
 
         $maintenant = new \DateTimeImmutable();
-        $abonnement = (new AbonnementFitness())
+        $abonnement = (new Membership())
             ->setAdherent($adherent)
             ->setPayeur($payeur)
             ->setFormule($formule)
             ->setEtablissement($etablissement)
-            ->setPeriodicite(PeriodiciteAbonnementFitness::Mensuel)
+            ->setPeriodicite(MembershipPeriodicity::Mensuel)
             ->setDateSouscription($maintenant)
             ->setDateDebutEngagement($maintenant)
             ->setDateFinEngagement($maintenant->modify('+1 year'))
@@ -189,16 +189,16 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
         return $abonnement;
     }
 
-    private function passerEnHebdomadaire(EntityManagerInterface $em): AbonnementFitness
+    private function passerEnHebdomadaire(EntityManagerInterface $em): Membership
     {
         $abonnement = $this->unAbonnement($em);
-        $abonnement->setPeriodicite(PeriodiciteAbonnementFitness::Hebdomadaire);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Hebdomadaire);
         $em->flush();
 
         return $abonnement;
     }
 
-    private function configDuSite(EntityManagerInterface $em, AbonnementFitness $abonnement): ConfigCreancierSepa
+    private function configDuSite(EntityManagerInterface $em, Membership $abonnement): ConfigCreancierSepa
     {
         $config = $em->getRepository(ConfigCreancierSepa::class)
             ->findOneBy(['etablissement' => $abonnement->getEtablissement()?->getId()]);

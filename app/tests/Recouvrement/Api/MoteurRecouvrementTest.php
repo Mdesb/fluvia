@@ -7,8 +7,8 @@ namespace App\Tests\Recouvrement\Api;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Recouvrement\Entity\IncidentImpaye;
 use App\Recouvrement\Service\RedevableRegistry;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
 use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Recouvrement\Entity\RepresentationSepa;
 use App\Recouvrement\Enum\MomentRefusAcces;
@@ -194,7 +194,7 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->findOneBy([], ['dateSouscription' => 'ASC']);
+        $abonnement = $em->getRepository(Membership::class)->findOneBy([], ['dateSouscription' => 'ASC']);
         self::assertNotNull($abonnement);
         $echeances = $em->getRepository(EcheanceSepa::class)
             ->findBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC'], 2);
@@ -274,7 +274,7 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->findOneBy([], ['dateSouscription' => 'ASC']);
+        $abonnement = $em->getRepository(Membership::class)->findOneBy([], ['dateSouscription' => 'ASC']);
         self::assertNotNull($abonnement);
         $echeances = $em->getRepository(EcheanceSepa::class)
             ->findBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC'], 2);

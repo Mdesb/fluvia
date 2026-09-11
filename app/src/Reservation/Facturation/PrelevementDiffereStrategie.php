@@ -16,7 +16,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * encaissement effectif. Se contente de vérifier qu'un mandat SEPA actif existe pour le bénéficiaire
  * et de marquer la `FacturationNoShow` comme « échéance générée » (`referenceEcheanceSepa`) — la
  * collecte réelle passe par `ReservationEcheanceSepaSource` + le point d'entrée générique
- * `POST /sepa/remises/generer` (module `App\Sepa` partagé, comme `App\Sport\Sepa\SportEcheanceSepaSource`).
+ * `POST /sepa/remises/generer` (module `App\Sepa` partagé, comme `App\Membership\Sepa\SportEcheanceSepaSource`).
  * `FacturationNoShow.statut` reste `à_facturer` tant que la remise SEPA n'a pas été générée et honorée
  * (⚠ point ouvert majeur, spec §8).
  */

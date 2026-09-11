@@ -13,12 +13,11 @@ use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\PreNotificationReason;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Platform\Notification\NotificationOutcome;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\PeriodiciteAbonnementFitness;
-use App\Sport\Enum\StatutEcheanceSepa;
-use App\Sport\Service\DemanderResiliationHandler;
-use App\Sport\Service\GenererRemiseSepaHandler;
-use App\Sport\Service\SouscriptionAbonnementHandler;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Service\DemanderResiliationHandler;
+use App\Membership\Service\GenererRemiseSepaHandler;
+use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -139,7 +138,7 @@ final class ParcoursSouscriptionCollecteTest extends SportApiTestCase
         $etablissement = $em->getRepository(Etablissement::class)->find($idA);
         self::assertInstanceOf(Etablissement::class, $etablissement);
 
-        $abonnement = $em->getRepository(\App\Sport\Entity\AbonnementFitness::class)->find($abonnementId);
+        $abonnement = $em->getRepository(\App\Membership\Entity\Membership::class)->find($abonnementId);
         self::assertNotNull($abonnement);
 
         /** @var DemanderResiliationHandler $resiliations */

@@ -96,8 +96,8 @@ final class AuditWriteSubscriber
         // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, événements SOS) —
         // plan-sport.md §5, T15. La politique/les incidents anti-impayés ont été extraits vers le
         // moteur de recouvrement partagé (§ ci-dessous, refactor extraction).
-        \App\Sport\Entity\AbonnementFitness::class,
-        \App\Sport\Entity\Resiliation::class,
+        \App\Membership\Entity\Membership::class,
+        \App\Membership\Entity\Resiliation::class,
         \App\Sport\Entity\EvenementSOS::class,
         // Module SEPA partagé (plan-sepa.md §2) : mandat, configuration créancier, remise — IBAN
         // (jetons) exclus de l'instantané (CHAMPS_SENSIBLES ci-dessous, §4 spec).

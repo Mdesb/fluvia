@@ -80,7 +80,9 @@ export default function ChoixOptions({
         //
         // Le montant devient donc inconnu, et l'ajout au panier est refusé : on ne vend pas un prix
         // qu'on n'a pas.
-        setCourant((avant) => (avant ? { ...avant, totalUnitaire: null, prixUnitaire: null } : avant))
+        setCourant((avant) =>
+          avant ? { ...avant, totalUnitaire: null, prixUnitaire: null, montantLigne: null } : avant,
+        )
         setErreur(e.message || "Le prix n'a pas pu être recalculé.")
       } finally {
         setChargement(false)
@@ -108,6 +110,22 @@ export default function ChoixOptions({
   const obligatoiresManquants = groupes.filter(
     (g) => g.obligatoire && !g.valeurs.some((v) => retenues.includes(v.valeurOption)),
   )
+
+  // CE QUE LE CAISSIER VA ANNONCER, ET RIEN D'AUTRE.
+  //
+  // Cette fenêtre affichait le brut — options comprises, promotions ignorées. L'étiquette ne mentait
+  // pas, mais le nombre changeait en la fermant : 5,94 € ici, 5,35 € dans le panier une seconde plus
+  // tard. **Un montant qui bouge entre deux écrans est un montant que le caissier n'annonce plus.**
+  //
+  // `montantLigne` vient du serveur pour une unité : il est ce qui sera facturé. `totalUnitaire`
+  // reste le brut, et l'écart entre les deux est exactement ce que les promotions ci-dessous ont
+  // retiré — on le montre, parce qu'un rabais sans son nom est un écart sans cause.
+  const brut = courant?.totalUnitaire ?? courant?.prixUnitaire ?? null
+  const net = courant?.montantLigne ?? brut
+  const promotions = (courant?.promotions ?? []).map((p) => p?.nom).filter(Boolean)
+  const reduction = brut != null && courant?.montantLigne != null
+    ? Number.parseFloat(brut) - Number.parseFloat(courant.montantLigne)
+    : 0
 
   return (
     <Modal
@@ -180,12 +198,18 @@ export default function ChoixOptions({
             }}
           >
             <div>
+              {promotions.length > 0 && net !== null && !chargement && (
+                <div className="hint" style={{ margin: 0, color: 'var(--good)' }}>
+                  {promotions.join(' · ')}
+                  {reduction > 0 ? ` −${euros(reduction)}` : ''}
+                </div>
+              )}
               <div style={{ fontSize: 20, fontWeight: 640 }}>
-                {chargement ? '…' : (courant.totalUnitaire ?? courant.prixUnitaire) === null
-                  ? '— €'
-                  : euros(courant.totalUnitaire ?? courant.prixUnitaire)}
+                {chargement ? '…' : net === null ? '— €' : euros(net)}
               </div>
-              <div className="hint" style={{ margin: 0 }}>par unité, options comprises</div>
+              <div className="hint" style={{ margin: 0 }}>
+                par unité, options {promotions.length > 0 ? 'et promotions ' : ''}comprises
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -197,7 +221,7 @@ export default function ChoixOptions({
                   chargement
                   || obligatoiresManquants.length > 0
                   // Un prix inconnu ne s'ajoute pas au panier : le caissier l'annoncerait.
-                  || (courant.totalUnitaire ?? courant.prixUnitaire) === null
+                  || net === null
                 }
                 onClick={() => onValider(retenues, courant)}
               >

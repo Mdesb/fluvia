@@ -75,7 +75,7 @@ final class MoteurRecouvrementHandler
         $this->em->flush();
 
         // Notifie la verticale AVANT toute décision de blocage d'accès (elle bascule son propre statut
-        // métier, ex. `AbonnementFitness.statut = Impaye`, quel que soit le moment du refus d'accès).
+        // métier, ex. `Membership.statut = Impaye`, quel que soit le moment du refus d'accès).
         $this->dispatcher->dispatch(new IncidentImpayeDetecteEvent($incident, $montantCentimes, $dateRejet));
 
         // Refus d'accès éventuel AVANT tout résultat de représentation (`apres_1er_echec`), ou si 0

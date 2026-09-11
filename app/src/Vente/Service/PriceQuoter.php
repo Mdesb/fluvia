@@ -74,8 +74,12 @@ final class PriceQuoter
         $baseCentimes = $prix !== null ? $this->calculateur->centimes($prix) : 0;
         $groupes = $this->optionsDuProduit($produit, $etablissement, $baseCentimes, $optionsRetenues);
 
+        // Calculées une fois : elles sont rendues à l'écran ET déduites du montant annoncé.
+        $promotions = $prix === null ? [] : $this->promotionsAuto($produit, $date);
+
         $totalUnitaire = null;
         $totalLigne = null;
+        $montantLigne = null;
         if ($prix !== null) {
             $cumul = $baseCentimes;
             foreach ($groupes as $groupe) {
@@ -88,7 +92,17 @@ final class PriceQuoter
                 }
             }
             $totalUnitaire = $this->calculateur->decimal($cumul);
-            $totalLigne = $this->calculateur->decimal($cumul * max(1, $quantite));
+            $brutLigne = $cumul * max(1, $quantite);
+            $totalLigne = $this->calculateur->decimal($brutLigne);
+            // ⚠ LE MÊME CALCUL QUE CELUI QUI FACTURERA, PAS UN SECOND.
+            //
+            // `PanierCalculateur::recalculerLigne()` retire cette réduction du montant de la ligne.
+            // Tant que l'estimation ne la retirait pas, l'écran annonçait le brut : la caisse disait
+            // « Encaisser 8,44 € » puis réclamait 7,60 € au paiement, sans que rien ne nomme la
+            // promotion responsable. Le prix bougeait à l'instant où le caissier venait de l'annoncer.
+            $montantLigne = $this->calculateur->decimal(
+                max(0, $brutLigne - $this->calculateur->reductionPromotions($promotions, $brutLigne)),
+            );
         }
 
         return new PriceQuote(
@@ -98,12 +112,13 @@ final class PriceQuoter
             saison: $saison !== null ? (string) $saison : null,
             canal: $canal->value,
             date: $date->format(\DATE_ATOM),
-            promotions: $prix === null ? [] : $this->promotionsAuto($produit, $date),
+            promotions: $promotions,
             motif: $this->motif($produit, $typeTarif, $date, $canal, $prix, $saison, $qf),
             options: $groupes,
             quantite: max(1, $quantite),
             totalUnitaire: $totalUnitaire,
             totalLigne: $totalLigne,
+            montantLigne: $montantLigne,
         );
     }
 

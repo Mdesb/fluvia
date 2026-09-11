@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\StatutAccesFitness;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -14,7 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * Résolution 1 clic & restauration de l'accès (US-SPORT-07, RG-SPORT-03, CA-8) : le moteur générique
  * (`App\Recouvrement`) restaure `DroitAcces` automatiquement dès l'encaissement confirmé, **sans
  * intervention d'un agent** ; ce test vérifie la conséquence propre à Sport
- * (`AbonnementFitness.statut` + `StatutAccesFitness`), tenue à jour via
+ * (`Membership.statut` + `StatutAccesFitness`), tenue à jour via
  * `SynchroniserImpayeFitnessListener` (refactor extraction).
  */
 final class ResolutionImpayeTest extends SportApiTestCase
@@ -61,7 +61,7 @@ final class ResolutionImpayeTest extends SportApiTestCase
         self::assertSame('virement', $incident['canalResolution'], 'Le canal enregistré est celui qui a été déclaré.');
 
         $em->clear();
-        $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnement->getId());
+        $abonnementRafraichi = $em->getRepository(Membership::class)->find($abonnement->getId());
         self::assertSame('actif', $abonnementRafraichi->getStatut()->value);
 
         $statutAccesRestaure = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnement->getId()]);
@@ -88,7 +88,7 @@ final class ResolutionImpayeTest extends SportApiTestCase
         self::assertResponseIsSuccessful();
 
         $em->clear();
-        $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnement->getId());
+        $abonnementRafraichi = $em->getRepository(Membership::class)->find($abonnement->getId());
         self::assertSame('actif', $abonnementRafraichi->getStatut()->value, 'Réouverture forcée : abonnement réactivé sans que le dossier impayé soit résolu.');
 
         $incidentEncore = $em->getRepository(\App\Recouvrement\Entity\IncidentImpaye::class)->find($incidentId);

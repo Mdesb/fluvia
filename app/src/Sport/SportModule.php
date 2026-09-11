@@ -59,7 +59,17 @@ final class SportModule implements ModuleManifest
     /** @return list<string> */
     public function dependencies(): array
     {
-        return [];
+        // ⚠ LA DÉPENDANCE EST DÉCLARÉE MAINTENANT QU'ELLE EST VRAIE, ET DANS CE SENS-LÀ SEULEMENT.
+        //
+        // Sport garde `Resiliation`, `PauseAbonnement`, `Reengagement`, `EcheanceSepa`,
+        // `StatutAccesFitness` et `MouvementComptableSepa` ; toutes pointent vers
+        // `App\Membership\Entity\Membership`. C'est le sens voulu par la spec — Sport dépend de
+        // l'abonnement. `membership` ne doit RIEN emprunter en retour, sinon on remplace un
+        // couplage par un cycle, et `ModuleRegistry` refuse de démarrer sur un cycle (RG-PLAT-07).
+        //
+        // `membership` a bien un manifeste (`App\Membership\MembershipModule`) : la déclarer est
+        // donc licite. Nommer un module sans manifeste ferait échouer le démarrage.
+        return ['membership'];
     }
 
     /** @return list<string> */

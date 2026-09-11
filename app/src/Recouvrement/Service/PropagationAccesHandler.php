@@ -14,7 +14,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Seul point d'écriture du moteur de recouvrement sur `DroitAcces.statutProjection` (extrait de
- * `App\Sport\Service\PropagationAccesFitnessHandler`, généralisé). **Aucun fichier `App\Acces\*` n'est
+ * `App\Membership\Service\PropagationAccesFitnessHandler`, généralisé). **Aucun fichier `App\Acces\*` n'est
  * modifié** : le moteur de recouvrement devient un producteur légitime de cette transition, exactement
  * comme M2/Sport. Le hors-ligne/synchro est hérité intégralement du mécanisme générique L3 — aucun
  * développement supplémentaire ici. Résout le `DroitAcces` via `RedevableRegistry` (port fourni par la
