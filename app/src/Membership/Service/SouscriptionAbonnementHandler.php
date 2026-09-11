@@ -142,7 +142,7 @@ final class SouscriptionAbonnementHandler
             ->setFormule($formule)
             ->setEtablissement($etablissement)
             ->setPeriodicite($periodicite)
-            ->setStatut(MembershipStatus::Actif)
+            ->setStatut(MembershipStatus::Active)
             ->setDateSouscription($dateSouscription)
             ->setDateDebutEngagement($dateSouscription)
             ->setDateFinEngagement($dateSouscription->modify(sprintf('+%d months', $duree)));

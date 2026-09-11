@@ -45,7 +45,7 @@ final class SynchroniserImpayeFitnessListener
             return;
         }
 
-        $abonnement->setStatut(MembershipStatus::Impaye);
+        $abonnement->setStatut(MembershipStatus::Unpaid);
         $this->em->flush();
 
         $this->projectionCompta->enregistrerImpaye($abonnement->getEtablissement()->getId(), $abonnement->getId(), $event->montantCentimes, $event->date);
@@ -62,7 +62,7 @@ final class SynchroniserImpayeFitnessListener
             return;
         }
 
-        $abonnement->setStatut(MembershipStatus::Actif);
+        $abonnement->setStatut(MembershipStatus::Active);
         $this->em->flush();
 
         $this->projectionCompta->enregistrerEncaissement($abonnement->getEtablissement()->getId(), $abonnement->getId(), $event->montantCentimes, $event->date, $event->origine);
@@ -80,7 +80,7 @@ final class SynchroniserImpayeFitnessListener
             return;
         }
 
-        $abonnement->setStatut(MembershipStatus::Actif);
+        $abonnement->setStatut(MembershipStatus::Active);
         $this->em->flush();
     }
 

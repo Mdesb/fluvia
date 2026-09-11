@@ -23,7 +23,7 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * continuait d'entrer gratuitement** jusqu'a ce qu'un humain s'en apercoive et resilie a la main.
  *
  * ⚠ ET LE CHEMIN DE RENOUVELLEMENT EXISTAIT DEJA, INATTEIGNABLE. `ReengagementHandler` exige
- * `MembershipStatus::Resilie` et leve sinon. Rien ne faisait sortir un abonnement de
+ * `MembershipStatus::Terminated` et leve sinon. Rien ne faisait sortir un abonnement de
  * « actif » a son terme : ce n'etait pas un mecanisme manquant, c'etait une TRANSITION manquante.
  *
  * ── L'IDEMPOTENCE EST LE POINT DUR, ET C'EST DE L'ARGENT ────────────────────────────────────────
@@ -47,7 +47,7 @@ final class SubscriptionTermHandler
      */
     public function process(Membership $abonnement, \DateTimeImmutable $maintenant): string
     {
-        if ($abonnement->getStatut() !== MembershipStatus::Actif) {
+        if ($abonnement->getStatut() !== MembershipStatus::Active) {
             return 'ignore';
         }
 
@@ -58,7 +58,7 @@ final class SubscriptionTermHandler
         $mode = TermRenewalMode::forFormule($abonnement->getFormule());
 
         if ($mode === TermRenewalMode::Suspend) {
-            $abonnement->setStatut(MembershipStatus::Echu);
+            $abonnement->setStatut(MembershipStatus::Expired);
             $this->propagation->desactiver($abonnement, MotifInactiviteAccesFitness::Terme);
             $this->em->flush();
 

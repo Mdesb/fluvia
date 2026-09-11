@@ -164,7 +164,7 @@ final class MembershipSocleTest extends TestCase
      * migration de données et ouvrirait une fenêtre où l'ancien code lirait des valeurs qu'il ne
      * connaît pas.
      *
-     * Ce n'est pas une entorse inventée pour l'occasion : `MembershipStatus::Echu` porte déjà ce
+     * Ce n'est pas une entorse inventée pour l'occasion : `MembershipStatus::Expired` porte déjà ce
      * raisonnement dans son propre docblock, écrit avant ce lot. D5 vise le vocabulaire réellement
      * neuf, pas les codes persistés.
      */

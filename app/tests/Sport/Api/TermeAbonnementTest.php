@@ -106,7 +106,7 @@ final class TermeAbonnementTest extends SportApiTestCase
         $abonnement = $this->abonnementAuTerme(TermRenewalMode::Suspend);
 
         self::assertSame('suspendu', $this->handler->process($abonnement, $this->reference));
-        self::assertSame(MembershipStatus::Echu, $abonnement->getStatut());
+        self::assertSame(MembershipStatus::Expired, $abonnement->getStatut());
     }
 
     /**
@@ -123,7 +123,7 @@ final class TermeAbonnementTest extends SportApiTestCase
         $resultat = $this->handler->process($abonnement, $this->reference);
 
         self::assertStringContainsString('mensualise', $resultat);
-        self::assertSame(MembershipStatus::Actif, $abonnement->getStatut());
+        self::assertSame(MembershipStatus::Active, $abonnement->getStatut());
     }
 
     /**
@@ -237,7 +237,7 @@ final class TermeAbonnementTest extends SportApiTestCase
         // c'est le lendemain qui doit ne rien creer, pas le mois suivant.
         $this->reference = $terme->modify('+10 days');
 
-        $abonnement->setStatut(MembershipStatus::Actif)->setDateFinEngagement($terme);
+        $abonnement->setStatut(MembershipStatus::Active)->setDateFinEngagement($terme);
         $this->em->flush();
 
         return $abonnement;

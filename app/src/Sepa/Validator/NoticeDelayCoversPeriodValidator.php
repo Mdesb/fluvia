@@ -124,11 +124,11 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
     private static function enJours(MembershipPeriodicity $periodicite): int
     {
         return match ($periodicite) {
-            MembershipPeriodicity::Hebdomadaire => 7,
-            MembershipPeriodicity::Mensuel => 28,
+            MembershipPeriodicity::Weekly => 7,
+            MembershipPeriodicity::Monthly => 28,
             // 365, pas 366 : même raison que le 28 ci-dessus. On prend l'année la plus courte, pour
             // que ce qui passe ici passe aussi une année bissextile.
-            MembershipPeriodicity::Annuel => 365,
+            MembershipPeriodicity::Yearly => 365,
         };
     }
 }

@@ -68,7 +68,7 @@ final class PauseTest extends SportApiTestCase
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement->setStatut(MembershipStatus::Impaye);
+        $abonnement->setStatut(MembershipStatus::Unpaid);
         $em->flush();
 
         $debut = new \DateTimeImmutable('+15 days');

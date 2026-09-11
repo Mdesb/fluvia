@@ -49,7 +49,7 @@ use Symfony\Component\Uid\Uuid;
  * trois sans les deux autres casse soit les clés étrangères, soit l'écran.
  *
  * **Les valeurs d'énumération restent en français** — `actif`, `mensuel`… Ce sont des codes
- * PERSISTÉS, et la table ne bouge pas. `MembershipStatus::Echu` documente déjà ce choix à
+ * PERSISTÉS, et la table ne bouge pas. `MembershipStatus::Expired` documente déjà ce choix à
  * contre-courant de D5 ; il vaut pour toute la famille.
  *
  * ── CE QUE L'ENTITÉ EST ────────────────────────────────────────────────────────────────────────
@@ -156,11 +156,11 @@ class Membership
 
     #[ORM\Column(length: 12, enumType: MembershipPeriodicity::class)]
     #[Groups(['abonnement:read'])]
-    private MembershipPeriodicity $periodicite = MembershipPeriodicity::Mensuel;
+    private MembershipPeriodicity $periodicite = MembershipPeriodicity::Monthly;
 
-    #[ORM\Column(length: 12, enumType: MembershipStatus::class, options: ['default' => 'actif'])]
+    #[ORM\Column(length: 12, enumType: MembershipStatus::class, options: ['default' => 'active'])]
     #[Groups(['abonnement:read'])]
-    private MembershipStatus $statut = MembershipStatus::Actif;
+    private MembershipStatus $statut = MembershipStatus::Active;
 
     #[ORM\Column(type: 'date_immutable')]
     #[Groups(['abonnement:read'])]

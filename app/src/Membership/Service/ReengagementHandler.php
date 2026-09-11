@@ -41,7 +41,7 @@ final class ReengagementHandler
         string $titulaireMandat,
         ?int $montantPremiereCentimes = null,
     ): Reengagement {
-        if ($ancien->getStatut() !== MembershipStatus::Resilie) {
+        if ($ancien->getStatut() !== MembershipStatus::Terminated) {
             throw new UnprocessableEntityHttpException('Seul un abonnement résilié peut être réengagé.');
         }
 
@@ -51,7 +51,7 @@ final class ReengagementHandler
             ->setFormule($ancien->getFormule())
             ->setEtablissement($ancien->getEtablissement())
             ->setPeriodicite($ancien->getPeriodicite())
-            ->setStatut(MembershipStatus::Actif)
+            ->setStatut(MembershipStatus::Active)
             ->setDateSouscription($dateReengagement)
             ->setDateDebutEngagement($dateReengagement)
             ->setDateFinEngagement($dateReengagement->modify(sprintf('+%d months', $dureeEngagementMois)))

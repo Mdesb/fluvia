@@ -80,7 +80,7 @@ final class DemanderResiliationHandler
         $resiliation->setStatut(StatutResiliation::Effective);
 
         $abonnement = $resiliation->getAbonnement();
-        $abonnement->setStatut(MembershipStatus::Resilie);
+        $abonnement->setStatut(MembershipStatus::Terminated);
 
         // ⚠ ON NE RÉVOQUE QUE SI PLUS AUCUN AUTRE ABONNEMENT N'EN A BESOIN.
         //
@@ -172,7 +172,7 @@ final class DemanderResiliationHandler
             ->andWhere('a.statut != :resilie')
             ->setParameter('mandat', $mandat->getId(), 'uuid')
             ->setParameter('exclu', $exclu->getId(), 'uuid')
-            ->setParameter('resilie', MembershipStatus::Resilie->value)
+            ->setParameter('resilie', MembershipStatus::Terminated->value)
             ->getQuery()
             ->getSingleScalarResult();
 

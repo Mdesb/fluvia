@@ -64,7 +64,7 @@ final class JourPrelevementTest extends TestCase
     /** SANS JOUR DÉCLARÉ, RIEN NE CHANGE — le comportement d'avant, à l'identique. */
     public function testSansJourDeclareLesEcheancesRestentSurLaDateAnniversaire(): void
     {
-        $dates = $this->jours($this->generer(null, MembershipPeriodicity::Mensuel, '2026-01-17', '2026-05-17'));
+        $dates = $this->jours($this->generer(null, MembershipPeriodicity::Monthly, '2026-01-17', '2026-05-17'));
 
         self::assertSame(['2026-01-17', '2026-02-17', '2026-03-17', '2026-04-17'], $dates);
     }
@@ -72,7 +72,7 @@ final class JourPrelevementTest extends TestCase
     /** AVEC UN JOUR DÉCLARÉ : la première ne bouge pas, les suivantes se posent dessus. */
     public function testLesEcheancesSuivantesSePosentSurLeJourDeclare(): void
     {
-        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Mensuel, '2026-01-17', '2026-05-17'));
+        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Monthly, '2026-01-17', '2026-05-17'));
 
         // ⚠ LA PREMIÈRE RESTE AU 17. C'est l'échéance que l'appelant dimensionne avec le prorata
         //    d'une souscription en cours de période ; la déplacer changerait en silence ce que ce
@@ -89,7 +89,7 @@ final class JourPrelevementTest extends TestCase
      */
     public function testLeJourEstBorneALaLongueurDuMois(): void
     {
-        $dates = $this->jours($this->generer(31, MembershipPeriodicity::Mensuel, '2026-01-15', '2026-05-15'));
+        $dates = $this->jours($this->generer(31, MembershipPeriodicity::Monthly, '2026-01-15', '2026-05-15'));
 
         self::assertSame(['2026-01-15', '2026-02-28', '2026-03-31', '2026-04-30'], $dates);
     }
@@ -104,7 +104,7 @@ final class JourPrelevementTest extends TestCase
      */
     public function testLaCadenceAnnuelleAvanceDUnAnEtPorteLeJourDeclare(): void
     {
-        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Annuel, '2026-01-17', '2029-06-17'));
+        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Yearly, '2026-01-17', '2029-06-17'));
 
         self::assertSame(['2026-01-17', '2027-01-05', '2028-01-05', '2029-01-05'], $dates);
     }
@@ -112,7 +112,7 @@ final class JourPrelevementTest extends TestCase
     /** Sans jour déclaré, l'annuel avance simplement d'un an. */
     public function testLaCadenceAnnuelleSansJourDeclare(): void
     {
-        $dates = $this->jours($this->generer(null, MembershipPeriodicity::Annuel, '2026-03-09', '2029-01-01'));
+        $dates = $this->jours($this->generer(null, MembershipPeriodicity::Yearly, '2026-03-09', '2029-01-01'));
 
         self::assertSame(['2026-03-09', '2027-03-09', '2028-03-09'], $dates);
     }
@@ -125,7 +125,7 @@ final class JourPrelevementTest extends TestCase
      */
     public function testLHebdomadaireIgnoreLeJourDeclare(): void
     {
-        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Hebdomadaire, '2026-01-05', '2026-02-02'));
+        $dates = $this->jours($this->generer(5, MembershipPeriodicity::Weekly, '2026-01-05', '2026-02-02'));
 
         self::assertSame(['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26'], $dates);
     }
@@ -138,7 +138,7 @@ final class JourPrelevementTest extends TestCase
      */
     public function testUnJourHorsBornesEstIgnoreEtNonCorrige(): void
     {
-        $dates = $this->jours($this->generer(99, MembershipPeriodicity::Mensuel, '2026-01-17', '2026-04-17'));
+        $dates = $this->jours($this->generer(99, MembershipPeriodicity::Monthly, '2026-01-17', '2026-04-17'));
 
         self::assertSame(['2026-01-17', '2026-02-17', '2026-03-17'], $dates);
     }
@@ -152,7 +152,7 @@ final class JourPrelevementTest extends TestCase
      */
     public function testLesDatesNeReculentJamais(): void
     {
-        $dates = $this->jours($this->generer(1, MembershipPeriodicity::Mensuel, '2026-01-31', '2026-05-01'));
+        $dates = $this->jours($this->generer(1, MembershipPeriodicity::Monthly, '2026-01-31', '2026-05-01'));
 
         $triees = $dates;
         sort($triees);

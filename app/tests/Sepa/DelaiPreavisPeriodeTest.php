@@ -78,7 +78,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
         $config->setPreNotificationDelayDays(14);
         $em->flush();
 
-        $abonnement->setPeriodicite(MembershipPeriodicity::Hebdomadaire);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Weekly);
 
         self::assertCount(
             1,
@@ -95,7 +95,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
     {
         $em = $this->em();
         $abonnement = $this->unAbonnement($em);
-        $abonnement->setPeriodicite(MembershipPeriodicity::Mensuel);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Monthly);
         $em->flush();
 
         $config = $this->configDuSite($em, $abonnement);
@@ -176,7 +176,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
             ->setPayeur($payeur)
             ->setFormule($formule)
             ->setEtablissement($etablissement)
-            ->setPeriodicite(MembershipPeriodicity::Mensuel)
+            ->setPeriodicite(MembershipPeriodicity::Monthly)
             ->setDateSouscription($maintenant)
             ->setDateDebutEngagement($maintenant)
             ->setDateFinEngagement($maintenant->modify('+1 year'))
@@ -192,7 +192,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
     private function passerEnHebdomadaire(EntityManagerInterface $em): Membership
     {
         $abonnement = $this->unAbonnement($em);
-        $abonnement->setPeriodicite(MembershipPeriodicity::Hebdomadaire);
+        $abonnement->setPeriodicite(MembershipPeriodicity::Weekly);
         $em->flush();
 
         return $abonnement;

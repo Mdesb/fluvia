@@ -60,7 +60,7 @@ final class ProcessSubscriptionTermsCommand extends Command
             ->createQueryBuilder('a')
             ->andWhere('a.statut = :actif')
             ->andWhere('a.dateFinEngagement <= :maintenant')
-            ->setParameter('actif', MembershipStatus::Actif)
+            ->setParameter('actif', MembershipStatus::Active)
             ->setParameter('maintenant', $maintenant)
             ->getQuery()
             ->getResult();

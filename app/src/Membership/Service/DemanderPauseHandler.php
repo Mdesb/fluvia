@@ -32,7 +32,7 @@ final class DemanderPauseHandler
         $pause = new PauseAbonnement();
         $pause->setAbonnement($abonnement)->setDateDebut($debut)->setDateFin($fin)->setMotif($motif);
 
-        if ($abonnement->getStatut() === MembershipStatus::Impaye) {
+        if ($abonnement->getStatut() === MembershipStatus::Unpaid) {
             $pause->setStatut(StatutPauseAbonnement::Refusee);
             $this->em->persist($pause);
             $this->em->flush();
@@ -60,7 +60,7 @@ final class DemanderPauseHandler
 
         $jours = (int) $debut->diff($fin)->days;
         $abonnement->setDateFinEngagement($abonnement->getDateFinEngagement()->modify(sprintf('+%d days', $jours)));
-        $abonnement->setStatut(MembershipStatus::Pause);
+        $abonnement->setStatut(MembershipStatus::Paused);
 
         $this->em->flush();
 
