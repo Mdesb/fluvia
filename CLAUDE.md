@@ -120,9 +120,28 @@ panne : la raison affichée dit quoi faire.
 - À l'arrêt : une relance si une pile de test à ton nom est encore montée, et le relevé des tokens.
 - Un journal d'audit (`~/.kit-sdd/journal/fluvia/`) : `/garde-fous-sdd:journal` le lit.
 
-**Commandes du plugin** : `/garde-fous-sdd:revue-sensible` · `/garde-fous-sdd:decision` (ADR dans
-`COORDINATION/DECISIONS.md`) · `/garde-fous-sdd:tests-manquants` · `/garde-fous-sdd:audit-deps` ·
-`/garde-fous-sdd:journal` · `/garde-fous-sdd:couts` · `/garde-fous-sdd:doctor-kit`.
+**Contradiction avant validation.** Maxime écrit, il n'invoque aucune commande : c'est la session qui suit le
+protocole que le harnais lui donne à chaque demande de dev. Sur tout objet en cycle complet (spec, plan,
+décision) et sur toute entrée dans `COORDINATION/DECISIONS.md`, la session lance l'agent `contradicteur`
+(une passe, ≤ 350 mots, `RAS` si rien de solide) et, quand le domaine le demande, **au plus deux
+perspectives** parmi : `perspective-juridique` (RGPD, NF525, CGV, marchés publics : signale, ne tranche pas,
+à valider par un professionnel), `perspective-finance` (coût, marge, trésorerie, hypothèse chiffrée
+manquante), `perspective-marketing` (pour qui, quel mot, produit ou sur-mesure), `perspective-direction`
+(bon moment ou hors tour, coût d'opportunité), `simplificateur` (parcours en trois étapes, zéro jargon, pour
+un régisseur qui n'aime pas l'informatique), `perspective-signature` (rien du look générique des logiciels
+faits par IA ; charte `docs/identite.md` à écrire d'abord si elle manque). L'auteur **répond par écrit** à
+chaque objection dans la spec ou l'entrée, et la spec arrive à Maxime **avec** les objections : c'est ça,
+CP-1. Le harnais plafonne à 6 lancements par session et 2 perspectives par objet (`contradicteur` dans
+`kit-sdd.json`) ; au-delà, on tranche avec ce qu'on a.
+
+**Taille du code.** Le code le plus court qui passe les tests. Pas d'abstraction pour un seul usage, pas
+d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le plan annonce une
+taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes supprimables.
+
+**Commandes du plugin** (utiles à une session, jamais requises de Maxime) : `/garde-fous-sdd:contradire` ·
+`/garde-fous-sdd:revue-sensible` · `/garde-fous-sdd:decision` (ADR dans `COORDINATION/DECISIONS.md`) ·
+`/garde-fous-sdd:tests-manquants` · `/garde-fous-sdd:audit-deps` · `/garde-fous-sdd:journal` ·
+`/garde-fous-sdd:couts` · `/garde-fous-sdd:doctor-kit`.
 
 La configuration est dans `kit-sdd.json` à la racine (suivi par git : le changer, c'est une PR comme une autre).
 Le plugin vit dans `/home/debian/kit-sdd` (dépôt séparé) ; `bin/installer-flotte.sh` le pose dans les profils.

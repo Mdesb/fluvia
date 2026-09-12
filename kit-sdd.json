@@ -92,5 +92,21 @@
   "couts": { "actif": true, "dossier": "~/.kit-sdd/couts" },
   "decisions": { "fichier": "COORDINATION/DECISIONS.md", "prefixe": "D" },
   "aiguillage": { "rappel": true, "commandes": ["/aiguiller", "/correctif-rapide", "/nouvelle-fonctionnalite"] },
-  "demarrage": { "prs_ouvertes": true, "piles_test": true }
+  "demarrage": { "prs_ouvertes": true, "piles_test": true },
+
+  "_contradicteur": "Avocat du diable + perspectives métier, une passe chacun, plafonnés par le harnais. Les perspectives sont convoquées par mots clés (demande ou spec), deux au plus par objet.",
+  "contradicteur": {
+    "actif": true,
+    "max_par_session": 6,
+    "max_perspectives_par_objet": 2,
+    "fichiers": ["COORDINATION/DECISIONS.md", "features/*/specs/*.md", "features/*/plans/*.md", "specs/**/spec-*.md", "specs/**/plan-*.md"],
+    "perspectives": {
+      "perspective-juridique": ["rgpd", "donnée perso", "données perso", "cgv", "cgu", "contrat", "résiliation", "resiliation", "rétractation", "consentement", "facture", "tva", "nf525", "factur-x", "marché public", "marche public", "régie", "regie", "dsp", "mention légale", "archivage"],
+      "perspective-finance": ["prix", "tarif", "marge", "coût", "cout", "trésorerie", "tresorerie", "abonnement", "remboursement", "caution", "impayé", "impaye", "sepa", "prélèvement", "prelevement", "remise", "facturation", "clôture", "cloture", "z", "encaissement", "payfip", "psp"],
+      "perspective-marketing": ["vitrine", "offre", "client", "prospect", "positionnement", "verticale", "module", "option", "boutique", "site", "landing", "inscription", "onboarding", "piscine", "padel", "musée", "musee", "patinoire", "camping"],
+      "perspective-direction": ["priorité", "priorite", "roadmap", "nouveau module", "refonte", "architecture", "partenaire", "intégrateur", "integrateur", "itbox", "stratég", "strateg", "abandon", "remplace", "bloquant", "commercialis"],
+      "simplificateur": ["écran", "ecran", "formulaire", "parcours", "bouton", "page", "modale", "guichet", "caisse", "utilisateur", "régisseur", "regisseur", "saisie", "clic", "étape", "etape", "menu", "hors-ligne", "hors ligne"],
+      "perspective-signature": ["écran", "ecran", "vitrine", "page", "design", "maquette", "landing", "site", "composant", "style", "couleur", "typo", "identité", "identite", "charte", "marque blanche"]
+    }
+  }
 }

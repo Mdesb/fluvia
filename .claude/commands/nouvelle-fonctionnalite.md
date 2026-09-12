@@ -27,11 +27,13 @@ Démarre une nouvelle fonctionnalité en Specification-Driven Development.
 
 5. **Rédige la spec** dans `features/<nom>/specs/spec-<nom>.md` à partir du template `features/_template/specs/spec-exemple.md`. Chaque exigence numérotée G-N. Sépare clairement le "dans le périmètre" du "hors périmètre".
 
-6. **Présente la spec à l'utilisateur pour validation — c'est le CP-1.** N'avance pas vers le plan sans un accord explicite ("oui", "valide", "go").
+6. **Contradiction avant CP-1.** Lance l'agent `contradicteur` sur la spec (une passe, ≤ 350 mots), plus au plus deux perspectives si le domaine le demande (`perspective-juridique`, `perspective-finance`, `perspective-marketing`, `perspective-direction` ; `simplificateur` et `perspective-signature` dès qu'un écran est touché). Réponds à chaque objection **dans la spec** (« Contradiction : … — Réponse : … »). Le harnais plafonne le nombre de lancements par session.
 
-7. **Une fois CP-1 validé**, lance l'agent `architecte` pour produire le plan (`features/<nom>/plans/plan-<nom>.md`), puis présente-le pour validation — **CP-2**.
+7. **Présente la spec à l'utilisateur AVEC les objections et tes réponses — c'est le CP-1.** Le seul jugement humain du cycle reçoit le contre-argument, pas la spec seule. N'avance pas vers le plan sans un accord explicite ("oui", "valide", "go").
 
-8. **Une fois CP-2 validé**, passe en phase Construire avec les agents `developpeur` et `relecteur`, étape par étape, en mettant à jour `impl-all.md` après chaque étape.
+8. **Une fois CP-1 validé**, lance l'agent `architecte` pour produire le plan (`features/<nom>/plans/plan-<nom>.md`). Le plan annonce une **taille attendue** (fichiers, lignes) et une section « ce qu'on ne construit pas ». Repasse le plan au `contradicteur` si la taille dépasse ce que la spec justifie, puis présente-le — **CP-2**.
+
+9. **Une fois CP-2 validé**, passe en phase Construire avec les agents `developpeur` et `relecteur`, étape par étape, en mettant à jour `impl-all.md` après chaque étape.
 
 ## Rappels
 
