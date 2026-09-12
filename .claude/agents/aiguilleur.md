@@ -2,7 +2,7 @@
 name: aiguilleur
 description: Trie toute demande entrante AVANT tout travail — décide si c'est un petit changement pour la voie légère, ou une vraie fonctionnalité pour le cycle SDD complet (Spec→Plan→Construire). C'est le gardien qui empêche la méthode d'être contournée pour les petits cas, comme d'être alourdie pour rien. À invoquer en tout premier, sur chaque demande de dev ou de correctif.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: haiku
 ---
 
 # Agent Aiguilleur

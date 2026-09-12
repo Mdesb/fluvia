@@ -1,0 +1,96 @@
+{
+  "_commentaire": "Garde-fous du kit SDD pour Fluvia (VPS préprod). Suivi par git à la racine du dépôt. Voir kit-sdd/README.md.",
+
+  "projet": "fluvia",
+  "branche_principale": "main",
+  "racine_worktrees": "/home/debian/wt",
+  "clone_deploiement": "/home/debian/billetterie",
+
+  "identite": {
+    "env": ["KIT_IDENTITE", "GIT_AUTHOR_NAME", "USER"],
+    "defaut": null
+  },
+
+  "git": {
+    "interdire_add_global": true,
+    "interdire_commit_sur_principale": true,
+    "interdire_push_force": true,
+    "interdire_push_principale": true,
+    "identites_autorisees_sur_principale": []
+  },
+
+  "piles_test": {
+    "script": "infra/test-stack.sh",
+    "jetons_interdits": ["test", "tests", "claude", "default", "demo", "dev", "local", "tmp", "monjeton", "jeton"],
+    "jeton_doit_contenir_identite": true,
+    "suffixe_reseau_docker": "-net",
+    "suite_complete_interdite_dans_clone_deploiement": true
+  },
+
+  "commandes_interdites": [
+    { "motif": "doctrine:migrations:diff", "raison": "CLAUDE.md : les migrations s'écrivent à la main d'après `doctrine:schema:update --dump-sql` ; un diff brut ratisse la dérive des autres." },
+    { "motif": "git\\s+worktree\\s+add[^\\n;&|]*billetterie\\.git", "raison": "un worktree créé depuis le dépôt nu n'a pas d'origin et contourne pre-receive. Crée-le depuis /home/debian/billetterie (test-stack.sh, en-tête)." },
+    { "motif": "composer\\s+install\\s+--no-dev[^\\n;&|]*\\s*$", "raison": "`composer install --no-dev` dans un arbre où une suite tourne la rend muette (mesure du 01/09). Réservé à deploy-preprod.sh." }
+  ],
+
+  "zones_sensibles": [
+    "app/src/Securite/**",
+    "app/src/Autorisation/**",
+    "app/src/Organisation/**",
+    "app/src/Platform/**",
+    "app/src/Caisse/**",
+    "app/src/Compta/**",
+    "app/src/Facturation/**",
+    "app/src/Recouvrement/**",
+    "app/src/Finance/**",
+    "app/src/RevenueRecovery/**",
+    "app/src/Caution/**",
+    "app/src/Membership/**",
+    "app/src/Integrations/**",
+    "app/src/PublicApi/**",
+    "app/migrations/**",
+    "app/config/packages/security.yaml",
+    "app/config/packages/api_platform.yaml",
+    "app/config/packages/lexik_jwt_authentication.yaml",
+    "infra/**",
+    "hooks/**",
+    "bin/garde-fou*",
+    "bin/*.ligne-de-base.json",
+    ".github/workflows/**"
+  ],
+  "revue_sensible": { "mode": "refuser", "dossier": ".kit-sdd/revues" },
+
+  "secrets": {
+    "mode": "refuser",
+    "liste_blanche": ".kit-sdd/secrets-autorises.txt",
+    "chemins_ignores": ["**/*.lock", "**/vendor/**", "**/node_modules/**", "**/*.min.js", "**/*.map", "**/*.ligne-de-base.json", "analyse-existant/**"]
+  },
+
+  "ecriture": {
+    "confiner_au_projet": true,
+    "racines_autorisees": ["/tmp", "~/.kit-sdd", "~/.claude", "${CLAUDE_CONFIG_DIR}", "${TMPDIR}"]
+  },
+
+  "tests": {
+    "dossier_src": "app/src",
+    "dossier_tests": "app/tests",
+    "commande_module": "./infra/test-stack.sh run {jeton} app/tests/{module}",
+    "auto": false,
+    "delai_max_s": 900,
+    "indice_module": true
+  },
+
+  "dependances": {
+    "manifestes": ["app/composer.json", "frontend/package.json"],
+    "audit": [
+      "docker compose -f app/compose.yaml exec -T php composer audit --no-interaction --format=plain",
+      "cd frontend && npm audit --audit-level=high"
+    ]
+  },
+
+  "journal": { "actif": true, "dossier": "~/.kit-sdd/journal" },
+  "couts": { "actif": true, "dossier": "~/.kit-sdd/couts" },
+  "decisions": { "fichier": "COORDINATION/DECISIONS.md", "prefixe": "D" },
+  "aiguillage": { "rappel": true, "commandes": ["/aiguiller", "/correctif-rapide", "/nouvelle-fonctionnalite"] },
+  "demarrage": { "prs_ouvertes": true, "piles_test": true }
+}

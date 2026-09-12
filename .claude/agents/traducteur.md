@@ -2,7 +2,7 @@
 name: traducteur
 description: Génère les traductions (langues cibles) des chaînes/libellés dans la langue source posés à chaque passage du chantier i18n, ou tout nouveau champ traduisible. À invoquer après qu'une étape a ajouté des clés source, avant l'import. Ne touche jamais le texte source.
 tools: Read, Edit, Write, Grep, Glob, Bash
-model: sonnet
+model: haiku
 ---
 
 # Agent Traducteur

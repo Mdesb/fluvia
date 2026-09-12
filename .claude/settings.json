@@ -1,0 +1,40 @@
+{
+  "extraKnownMarketplaces": {
+    "kit-sdd": { "source": { "source": "directory", "path": "/home/debian/kit-sdd" } }
+  },
+  "enabledPlugins": { "garde-fous-sdd@kit-sdd": true },
+
+  "permissions": {
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git add -A:*)",
+      "Bash(git add .:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Read(./app/.env.local)",
+      "Read(./infra/.env.preprod)",
+      "Read(./infra/ACCES-VPS.md)"
+    ],
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git worktree list:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(./bin/garde-fous.sh:*)",
+      "Bash(./infra/test-stack.sh:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

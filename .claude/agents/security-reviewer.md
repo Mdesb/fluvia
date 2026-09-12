@@ -2,7 +2,7 @@
 name: security-reviewer
 description: Audit de sécurité ciblé (injections, XSS/CSRF, authentification, isolation multi-tenant, conformité données personnelles). À invoquer quand une étape touche à l'authentification, aux paiements, aux données personnelles, à l'upload de fichiers ou à des requêtes SQL.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Agent Security Reviewer

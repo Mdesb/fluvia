@@ -94,3 +94,35 @@ Un petit nombre de surfaces, chacune un rôle unique — n'en crée pas d'autres
 ## Ce qui a été retiré (migration vers GitHub)
 
 L'ancienne coordination artisanale — `COORDINATION/ORDRES/`, `RAPPORTS/`, le battement de 15 min, « un fichier = un auteur », `TASKS.md` comme tableau, `MESSAGES.md` comme canal — **est remplacée par branches + PR + Issues**. On garde les décisions et les périmètres. Ne re-densifie pas : si quelque chose coince, le réflexe est de *retirer de la friction*, pas d'ajouter une cérémonie.
+
+## Garde-fous du harnais (plugin `garde-fous-sdd`)
+
+Depuis le 12/09/2026, une partie des règles de ce fichier n'est plus seulement **demandée** : elle est
+**appliquée** par des hooks Claude Code, avant que la commande ne s'exécute. Un refus n'est pas une
+panne : la raison affichée dit quoi faire.
+
+**Ce que le harnais refuse**
+- `git commit` ou `git merge` sur `main` · `git push --force` · tout push vers `main` · `git add -A` / `git add .`.
+- Écrire dans le worktree d'une autre session (`/home/debian/wt/<autre>`) ou hors du projet.
+- Un secret présumé dans un fichier écrit ou dans l'index au moment du commit (faux positif avéré :
+  un extrait de la ligne dans `.kit-sdd/secrets-autorises.txt`, avec la raison).
+- Une pile de test au jeton générique (`test`, `claude`, `monjeton`…) ou qui ne porte pas ton identité ;
+  la suite de tests dans le clone de déploiement `/home/debian/billetterie`.
+- `doctrine:migrations:diff`, un `git worktree add` depuis le dépôt nu, `composer install --no-dev` hors deploy.
+- Un commit qui touche une **zone sensible** (Securite, Caisse, Compta, Facturation, Recouvrement, Finance,
+  migrations, infra, garde-fous, workflows…) sans revue adversariale consignée : lance
+  `/garde-fous-sdd:revue-sensible`, elle fait la revue (`security-reviewer` + `relecteur`) et écrit le verdict
+  dans `.kit-sdd/revues/<branche>.md`.
+
+**Ce que le harnais ajoute**
+- Au démarrage : identité, branche, PR ouvertes, piles de test oubliées.
+- À chaque demande de dev sans aiguillage : un rappel de `/aiguiller` (une fois par session).
+- À l'arrêt : une relance si une pile de test à ton nom est encore montée, et le relevé des tokens.
+- Un journal d'audit (`~/.kit-sdd/journal/fluvia/`) : `/garde-fous-sdd:journal` le lit.
+
+**Commandes du plugin** : `/garde-fous-sdd:revue-sensible` · `/garde-fous-sdd:decision` (ADR dans
+`COORDINATION/DECISIONS.md`) · `/garde-fous-sdd:tests-manquants` · `/garde-fous-sdd:audit-deps` ·
+`/garde-fous-sdd:journal` · `/garde-fous-sdd:couts` · `/garde-fous-sdd:doctor-kit`.
+
+La configuration est dans `kit-sdd.json` à la racine (suivi par git : le changer, c'est une PR comme une autre).
+Le plugin vit dans `/home/debian/kit-sdd` (dépôt séparé) ; `bin/installer-flotte.sh` le pose dans les profils.

@@ -2,7 +2,7 @@
 name: redacteur-technique
 description: Écrit et met à jour la documentation du projet en langage clair — README, docs d'API, changelog, guides utilisateur, commentaires de haut niveau. Complète `coherence-reviewer` (qui vérifie la cohérence) en produisant réellement la doc. À invoquer après qu'une fonctionnalité est livrée, ou à la demande.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: haiku
 ---
 
 # Agent Rédacteur Technique

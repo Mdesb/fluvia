@@ -30,3 +30,7 @@ node_modules/
 
 # Doc d acces au VPS : sur le serveur, jamais dans le depot (public depuis le 06/09).
 /infra/ACCES-VPS.md
+
+# kit SDD : etat local des garde-fous (revues, liste blanche des secrets) et reglages personnels
+.kit-sdd/
+.claude/settings.local.json

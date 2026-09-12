@@ -2,7 +2,7 @@
 name: relecteur
 description: Relit le code produit, soit pour vérifier sa conformité à la spec, soit pour sa qualité générale. À utiliser en phase "Construire", avant le CP-3 (revue humaine avant merge).
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Agent Relecteur

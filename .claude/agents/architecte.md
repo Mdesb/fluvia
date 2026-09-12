@@ -2,7 +2,7 @@
 name: architecte
 description: Traduit une spec validée (CP-1) en plan d'implémentation détaillé et exécutable. À utiliser en phase "Plan", après validation humaine de la spec, avant tout code.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Agent Architecte

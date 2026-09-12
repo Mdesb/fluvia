@@ -2,7 +2,7 @@
 name: architecte-donnees
 description: Spécialiste base de données — conçoit le schéma, relit les migrations, et traque les problèmes de performance (index manquants, requêtes N+1, requêtes lentes). À invoquer quand une étape crée/modifie des tables, écrit une migration, ou quand une requête est lente. Complète `developpeur` (qui écrit le SQL) et `security-reviewer` (qui vérifie l'injection/l'isolation).
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Agent Architecte de Données
