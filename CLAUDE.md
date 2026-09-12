@@ -134,6 +134,16 @@ chaque objection dans la spec ou l'entrée, et la spec arrive à Maxime **avec**
 CP-1. Le harnais plafonne à 6 lancements par session et 2 perspectives par objet (`contradicteur` dans
 `kit-sdd.json`) ; au-delà, on tranche avec ce qu'on a.
 
+**Liberté des perspectives, conditionnée au challenge.** Chaque perspective a un niveau dans `kit-sdd.json`
+(`contradicteur.liberte`) : **0 observer** · **1 proposer** (livrable dans `features/<nom>/perspectives/`) ·
+**2 décider** (entrée « DÉLÉGUÉE (agent) » dans `COORDINATION/DECISIONS.md`, contestable par Maxime pendant
+7 jours, puis actée) · **3 saisir** (Issue prête à aiguiller). Jamais coder. Sur Fluvia : juridique 1, finance 1,
+marketing 2, direction 2 (hors P0), signature 2 (hors couleur et typo), simplificateur 3. Le harnais refuse à
+l'écriture une délégation sans passage du contradicteur dans la session, sans **Perspective croisée** citée,
+sans **Contradiction / Réponse**, sans date de contestation, ou signée par un agent sous le niveau 2. Au
+démarrage de chaque session, les délégations encore contestables sont listées : Maxime pose son veto d'une
+ligne dans le journal, rien d'autre à faire.
+
 **Taille du code.** Le code le plus court qui passe les tests. Pas d'abstraction pour un seul usage, pas
 d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le plan annonce une
 taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes supprimables.

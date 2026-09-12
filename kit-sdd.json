@@ -99,6 +99,18 @@
     "actif": true,
     "max_par_session": 6,
     "max_perspectives_par_objet": 2,
+    "_liberte": "0 observer · 1 proposer (livrable) · 2 décider (décision DÉLÉGUÉE, contestable 7 jours par Maxime) · 3 saisir (Issue). Jamais coder. Le harnais refuse une délégation sans contradicteur, sans perspective croisée ou sous le niveau 2.",
+    "liberte": {
+      "perspective-juridique": 1,
+      "perspective-finance": 1,
+      "perspective-marketing": 2,
+      "perspective-direction": 2,
+      "simplificateur": 3,
+      "perspective-signature": 2
+    },
+    "delai_contestation_jours": 7,
+    "marqueur_delegation": "DÉLÉGUÉE",
+    "dossier_livrables": "features/{nom}/perspectives",
     "fichiers": ["COORDINATION/DECISIONS.md", "features/*/specs/*.md", "features/*/plans/*.md", "specs/**/spec-*.md", "specs/**/plan-*.md"],
     "perspectives": {
       "perspective-juridique": ["rgpd", "donnée perso", "données perso", "cgv", "cgu", "contrat", "résiliation", "resiliation", "rétractation", "consentement", "facture", "tva", "nf525", "factur-x", "marché public", "marche public", "régie", "regie", "dsp", "mention légale", "archivage"],
