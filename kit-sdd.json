@@ -94,6 +94,30 @@
   "aiguillage": { "rappel": true, "commandes": ["/aiguiller", "/correctif-rapide", "/nouvelle-fonctionnalite"] },
   "demarrage": { "prs_ouvertes": true, "piles_test": true },
 
+  "_facon_de_faire": "Mémoire partagée de la façon de travailler de Maxime, injectée à chaque démarrage, tenue par l'agent greffier après chaque arbitrage.",
+  "facon_de_faire": {
+    "actif": true,
+    "fichier": "COORDINATION/MAXIME.md",
+    "injecter_au_demarrage": true,
+    "max_caracteres_injectes": 7000,
+    "max_greffier_par_session": 3,
+    "rappel_greffier": true
+  },
+  "_qcm": "Maxime veut des QCM, pas des questions ouvertes : le hook Stop renvoie reformuler.",
+  "qcm": { "actif": true, "min_caracteres": 200, "max_rappels_par_session": 5 },
+  "_documentation": "Toujours à jour : du code changé dans la session sans doc ni fiche support touchée, et le tour ne se clôt pas.",
+  "documentation": {
+    "actif": true,
+    "surfaces_code": ["app/src/**", "frontend/src/**", "app/config/**", "app/migrations/**"],
+    "surfaces_doc": ["docs/**", "features/*/impl/**", "features/*/specs/**", "README.md", "CLAUDE.md", "COORDINATION/**", "app/docs/**"],
+    "support": {
+      "actif": true,
+      "dossier": "docs/support",
+      "surfaces_visibles": ["frontend/src/**", "app/templates/**", "app/translations/**", "app/src/**/Controller/**", "app/src/**/State/**", "app/src/**/Api/**"]
+    },
+    "max_rappels_par_session": 2
+  },
+
   "_contradicteur": "Avocat du diable + perspectives métier, une passe chacun, plafonnés par le harnais. Les perspectives sont convoquées par mots clés (demande ou spec), deux au plus par objet.",
   "contradicteur": {
     "actif": true,

@@ -144,6 +144,25 @@ sans **Contradiction / Réponse**, sans date de contestation, ou signée par un 
 démarrage de chaque session, les délégations encore contestables sont listées : Maxime pose son veto d'une
 ligne dans le journal, rien d'autre à faire.
 
+**La façon de faire de Maxime est écrite, pas redécouverte.** `COORDINATION/MAXIME.md` est injecté à chaque
+démarrage : comment lui parler, ses préférences, sa manière d'arbitrer, ce qu'il refuse. Après chaque
+arbitrage (réponse à un QCM, correction, règle), la session lance l'agent `greffier`, qui y consigne une
+préférence **durable** (une décision ponctuelle va dans `DECISIONS.md`), dédoublonnée et sourcée. Trois
+passages par session au plus. Pas de « je » dans ce fichier : il est lu par neuf sessions.
+
+**Les questions à Maxime se posent en QCM.** Une question fermée, 2 à 4 options lettrées, chacune avec ce
+qu'elle implique et ce qu'on perd, la recommandation de la session marquée et justifiée d'après sa façon de
+faire, une option « Autre ». Il répond par une lettre. Le harnais renvoie reformuler toute question ouverte
+posée après une analyse : c'est ce qui force l'analyse jusqu'au bout.
+
+**Documentation toujours à jour, deux rédacteurs.** Du code changé dans la session sans documentation
+touchée, et le tour ne se clôt pas : `redacteur-technique` (docs, `features/<nom>/impl/`, ce qui a changé et
+pourquoi) pour les développeurs ; `redacteur-support` (`docs/support/` : fiches « comment faire » en cinq
+étapes au plus, erreurs expliquées, dépannage pour le support, notes de version en langage client, INDEX)
+dès qu'un écran, un libellé, un message ou un comportement visible change. Une fiche qui décrit un parcours
+qui n'existe plus est pire qu'aucune fiche. La seule sortie sans doc : dire explicitement que rien de
+documentable n'a changé.
+
 **Taille du code.** Le code le plus court qui passe les tests. Pas d'abstraction pour un seul usage, pas
 d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le plan annonce une
 taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes supprimables.
