@@ -15,6 +15,11 @@
 - **Les questions ne sont pas des instructions.** Une question appelle une réponse, pas une modification.
 - **Répondre en français**, sans jargon inutile, chiffres à l'appui quand il y en a.
 
+## Compétences déclarées — il tranche lui-même
+
+- 2026-09-13 · **Maxime a un master en droit et un MSc en finance : les points juridiques, fiscaux et financiers lui sont soumis en QCM avec une recommandation, et il valide. Ne jamais lui dire de « consulter un professionnel » ni de « faire valider par un avocat ou un expert-comptable ».** — source : « j'ai un master en droit et un msc en finance donc fais tes recommandations avec des qcm et je valide, pas besoin de me dire de passer par un expert » — portée : générale. (Les certifications formelles, type LNE/Infocert pour NF525, restent des procédures, pas des avis : on les mentionne comme étapes, pas comme validations à demander.)
+- 2026-09-13 · **Plusieurs QCM dans un même message sont acceptés quand ils portent sur le même objet ; chacun avec sa recommandation.** — source : « fais tes recommandations avec des qcm et je valide » — portée : générale.
+
 ## Préférences
 
 - 2026-09-12 · **Rien d'externe ne tourne chez nous : construire maison avec les briques natives, copier sélectivement ce qui vaut le coup (licence permettant), refuser tout runtime tiers.** — parce que « ça éviterait qu'un truc externe tourne chez nous » — source : « On peut pas copier et faire nous-mêmes un bundle » — portée : générale
