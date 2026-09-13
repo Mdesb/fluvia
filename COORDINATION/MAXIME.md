@@ -9,7 +9,8 @@
 - **Questions en QCM, jamais ouvertes.** Une question fermée, 2 à 4 options lettrées, chacune avec ce qu'elle
   implique (coût, risque, ce qu'on perd), la recommandation de la session marquée et justifiée, une option
   « Autre ». Il répond par une lettre. Raison donnée : « ça force les agents à pousser l'analyse jusqu'au bout ».
-- **Une question à la fois.** Ordonner les points ouverts, poser le premier.
+- **Le QCM se pose avec le sélecteur interactif de la discussion** (outil de question à choix, type `AskUserQuestion`) quand la session en dispose ; le format texte lettré n'est que le repli des sessions sans interface. Raison donnée : « fais-les avec une sélection de réponse dans la discussion, pas comme ça » (13/09/2026). Jusqu'à quatre questions groupées sur un même objet.
+- **Une question à la fois** quand les objets sont différents. Ordonner les points ouverts, poser le premier.
 - **Il écrit, il n'invoque aucune commande ni skill.** C'est la session qui suit le protocole que le harnais lui
   donne ; ne jamais lui demander de taper une commande slash.
 - **Les questions ne sont pas des instructions.** Une question appelle une réponse, pas une modification.

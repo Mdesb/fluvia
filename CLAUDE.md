@@ -150,9 +150,11 @@ arbitrage (réponse à un QCM, correction, règle), la session lance l'agent `gr
 préférence **durable** (une décision ponctuelle va dans `DECISIONS.md`), dédoublonnée et sourcée. Trois
 passages par session au plus. Pas de « je » dans ce fichier : il est lu par neuf sessions.
 
-**Les questions à Maxime se posent en QCM.** Une question fermée, 2 à 4 options lettrées, chacune avec ce
-qu'elle implique et ce qu'on perd, la recommandation de la session marquée et justifiée d'après sa façon de
-faire, une option « Autre ». Il répond par une lettre. Le harnais renvoie reformuler toute question ouverte
+**Les questions à Maxime se posent en QCM, avec le sélecteur interactif de la discussion** (outil
+`AskUserQuestion`) quand la session en dispose : jusqu'à quatre questions sur un même objet, 2 à 4 options
+chacune avec ce qu'elle implique et ce qu'on perd, l'option recommandée marquée et justifiée d'après sa façon
+de faire. Le texte lettré n'est que le repli des sessions sans interface. Maxime porte les compétences
+juridique et financière : ces points lui sont soumis de la même façon, jamais renvoyés à un professionnel. Le harnais renvoie reformuler toute question ouverte
 posée après une analyse : c'est ce qui force l'analyse jusqu'au bout.
 
 **Documentation toujours à jour, deux rédacteurs.** Du code changé dans la session sans documentation
