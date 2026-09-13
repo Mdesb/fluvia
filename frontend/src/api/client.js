@@ -591,8 +591,8 @@ export const api = {
   // spinner infini si le TPE ne répond pas, sans couper une transaction encore en cours.
   payer: (venteId, corps, headers) =>
     request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
-  annulerVente: (venteId) =>
-    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
+  annulerVente: (venteId, motif) =>
+    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: { motif }, timeoutMs: 20000 }),
   // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
   //
   // `ValiderVenteProcessor` lit `supports` depuis toujours, et `ValiderVenteService` en tire deux

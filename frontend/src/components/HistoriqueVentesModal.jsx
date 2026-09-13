@@ -35,7 +35,7 @@ const ETATS = [
 
 const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
 
-export default function HistoriqueVentesModal({ open, onClose, droits = [], onDuplicata, onFacture }) {
+export default function HistoriqueVentesModal({ open, onClose, droits = [], sessionId, onDuplicata, onFacture }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [du, setDu] = useState('')
@@ -116,6 +116,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
           detail={detail}
           produits={produits}
           droits={droits}
+          sessionId={sessionId}
           onRetour={() => setDetail(null)}
           onRembourse={async () => {
             setDetail(await api.vente(detail.id).catch(() => detail))
@@ -219,11 +220,13 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
   )
 }
 
-function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplicata, onFacture }) {
+function DetailVente({ detail, produits, droits, sessionId, onRetour, onRembourse, onDuplicata, onFacture }) {
   const [remboursement, setRemboursement] = useState(null)
+  const [annulation, setAnnulation] = useState(null) // null | 'formulaire' | { numero }
   const [facture, setFacture] = useState(null) // null | 'en_cours' | message d'erreur
   const lignes = detail.lignes || []
   const paiements = detail.paiements || []
+  const annulable = !!sessionId && detail.statut === 'validee' && aLeDroit(droits, 'vente.annuler') && detail.session?.id === sessionId
 
   return (
     <>
@@ -274,12 +277,30 @@ function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplic
             {facture === 'en_cours' ? 'Émission…' : 'Établir la facture'}
           </button>
         )}
-        {detail.statut === 'validee' && aLeDroit(droits, 'vente.rembourser') && !remboursement && (
+        {detail.statut === 'validee' && aLeDroit(droits, 'vente.rembourser') && !remboursement && !annulable && (
           <button className="btn ghost sm" type="button" onClick={() => setRemboursement({ etape: 'saisie' })}>
             Rembourser
           </button>
         )}
+        {annulable && !annulation && (
+          <button className="btn ghost sm" type="button" onClick={() => setAnnulation('formulaire')}>
+            Annuler cette vente
+          </button>
+        )}
       </div>
+
+      {annulation?.numero && (
+        <div className="banner banner-ok" style={{ marginBottom: 'var(--esp-large)' }}>
+          Vente annulée. Avoir n° {annulation.numero} émis.
+        </div>
+      )}
+      {annulation === 'formulaire' && (
+        <FormulaireAnnulation
+          vente={detail}
+          onFermer={() => setAnnulation(null)}
+          onAnnulee={(r) => { setAnnulation(r); onRembourse() }}
+        />
+      )}
 
       {typeof facture === 'string' && facture !== 'en_cours' && (
         <div className="banner banner-error" style={{ marginBottom: 12 }}>
@@ -485,6 +506,53 @@ function FormulaireRemboursement({ detail, etat, setEtat, onRembourse }) {
           <button className="btn" type="button" onClick={() => setEtat(null)}>Annuler</button>
           <button className="btn primary" type="submit" disabled={enCours}>
             {enCours ? 'En cours…' : 'Confirmer le remboursement'}
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+export function FormulaireAnnulation({ vente, onAnnulee, onFermer }) {
+  const [motif, setMotif] = useState('Erreur de saisie')
+  const [erreur, setErreur] = useState(null)
+  const [enCours, setEnCours] = useState(false)
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    setErreur(null)
+    try {
+      onAnnulee({ numero: (await api.annulerVente(vente.id, motif)).numero })
+    } catch (err) {
+      setErreur(err.payload?.decision === 'escalade_requise'
+        ? "Demandez au régisseur de valider. Rien n'est annulé pour l'instant."
+        : err.message || "L'annulation n'a pas abouti.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <form onSubmit={envoyer} className="card" style={{ marginBottom: 'var(--esp-large)' }}>
+      <div className="card-b">
+        <div className="nm">Annuler la vente n° {vente.numero}</div>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <ul className="hint">
+          {(vente.lignes || []).map((l) => (
+            <li key={l.id}>{l.quantite} × {texte(l.libelleProduit, 'Produit')} — {euros(l.montantLigne)}</li>
+          ))}
+        </ul>
+        <div className="nm">Total : {euros(vente.total)}</div>
+        {['Erreur de saisie', 'Client parti', 'Doublon'].map((m) => (
+          <label key={m} style={{ display: 'block', marginTop: 'var(--esp-serre)' }}>
+            <input type="radio" name="motif-annulation" checked={motif === m} onChange={() => setMotif(m)} /> {m}
+          </label>
+        ))}
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
+          <button className="btn" type="button" onClick={onFermer}>Non</button>
+          <button className="btn primary" type="submit" disabled={enCours}>
+            {enCours ? 'En cours…' : 'Oui, annuler'}
           </button>
         </div>
       </div>

@@ -39,6 +39,8 @@
     "app/src/Organisation/**",
     "app/src/Platform/**",
     "app/src/Caisse/**",
+    "app/src/Vente/**",
+    "app/src/Acces/**",
     "app/src/Compta/**",
     "app/src/Facturation/**",
     "app/src/Recouvrement/**",
