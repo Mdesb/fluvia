@@ -39,6 +39,8 @@
     "app/src/Organisation/**",
     "app/src/Platform/**",
     "app/src/Caisse/**",
+    "app/src/Vente/**",
+    "app/src/Acces/**",
     "app/src/Compta/**",
     "app/src/Facturation/**",
     "app/src/Recouvrement/**",
@@ -116,6 +118,18 @@
       "surfaces_visibles": ["frontend/src/**", "app/templates/**", "app/translations/**", "app/src/**/Controller/**", "app/src/**/State/**", "app/src/**/Api/**"]
     },
     "max_rappels_par_session": 2
+  },
+
+  "_i18n": "Traduction vers les 24 langues officielles de l'UE (traducteur-ue). ÉTAT AU 14/09/2026 : Fluvia n'a AUCUNE infrastructure i18n (pas de app/translations, aucun t() dans le front, libellés français en dur). Premier passage de l'agent = inventaire des chaînes en dur + spec du chantier i18n ; seules les fiches docs/support se traduisent dès maintenant. Les chemins ci-dessous sont ceux à créer.",
+  "i18n": {
+    "actif": true,
+    "source": "fr",
+    "cibles": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "sk", "sl", "sv"],
+    "fichiers_source": ["app/translations/*.fr.yaml", "frontend/src/i18n/fr.json", "docs/support/**/*.md"],
+    "fichier_cible": "frontend/src/i18n/{lang}.json",
+    "glossaire": "docs/i18n/glossaire.md",
+    "max_cles_par_passage": 300,
+    "commande_verification": null
   },
 
   "_contradicteur": "Avocat du diable + perspectives métier, une passe chacun, plafonnés par le harnais. Les perspectives sont convoquées par mots clés (demande ou spec), deux au plus par objet.",

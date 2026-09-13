@@ -165,6 +165,16 @@ dès qu'un écran, un libellé, un message ou un comportement visible change. Un
 qui n'existe plus est pire qu'aucune fiche. La seule sortie sans doc : dire explicitement que rien de
 documentable n'a changé.
 
+**Traduction, 24 langues officielles de l'UE.** Le produit est en français ; l'agent `traducteur-ue` traduit
+les clés d'interface, les messages et les fiches support vers les 23 autres langues officielles (pas les
+langues régionales), par lots, avec glossaire métier (`docs/i18n/glossaire.md`), variables et pluriels
+intacts, boutons pas plus longs que la source de 30 %, marque `@traduit-auto` pour relecture native. Il ne
+touche jamais la source, ne traduit pas les documents juridiques, et le harnais le rappelle dès qu'un fichier
+source de langue change (`i18n` dans `kit-sdd.json`). **État au 14/09/2026 : Fluvia n'a aucune infrastructure
+i18n** (pas de `app/translations`, aucun `t()` dans le front, libellés français en dur). Le premier passage de
+l'agent est un inventaire des chaînes en dur et la spec du chantier i18n, à aiguiller comme une fonctionnalité ;
+seules les fiches `docs/support/` se traduisent dès maintenant.
+
 **Taille du code.** Le code le plus court qui passe les tests. Pas d'abstraction pour un seul usage, pas
 d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le plan annonce une
 taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes supprimables.
