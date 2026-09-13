@@ -120,6 +120,17 @@
     "max_rappels_par_session": 2
   },
 
+  "_garde_fous_projet": "Rétrospective du 14/09 : le pre-commit a refusé trois fois un commit relu et testé. Le développeur lance les 54 garde-fous avant de rendre ; le harnais ne clôt pas un tour où du code a changé sans ça.",
+  "garde_fous_projet": { "commande": "./bin/garde-fous.sh", "obligatoire": true },
+  "_budget_diff": "Lignes de code ajoutées au commit, hors doc, tests, verrous, lignes de base, migrations : avertissement puis refus sauf justification dans .kit-sdd/budget/<branche>.md.",
+  "budget_diff": {
+    "actif": true,
+    "avertir": 150,
+    "refuser": 400,
+    "exclure": ["**/*.lock", "**/*.ligne-de-base.json", "docs/**", "features/**", "specs/**", "**/*.md", "**/tests/**", "**/*Test.php", "**/*.test.*", "app/translations/**", "frontend/src/i18n/**", "app/migrations/**", "COORDINATION/**", "analyse-existant/**"],
+    "dossier_justification": ".kit-sdd/budget"
+  },
+
   "_i18n": "Traduction vers les 24 langues officielles de l'UE (traducteur-ue). ÉTAT AU 14/09/2026 : Fluvia n'a AUCUNE infrastructure i18n (pas de app/translations, aucun t() dans le front, libellés français en dur). Premier passage de l'agent = inventaire des chaînes en dur + spec du chantier i18n ; seules les fiches docs/support se traduisent dès maintenant. Les chemins ci-dessous sont ceux à créer.",
   "i18n": {
     "actif": true,
@@ -136,7 +147,7 @@
   "contradicteur": {
     "actif": true,
     "max_par_session": 6,
-    "max_perspectives_par_objet": 2,
+    "max_perspectives_par_objet": 4,
     "_liberte": "0 observer · 1 proposer (livrable) · 2 décider (décision DÉLÉGUÉE, contestable 7 jours par Maxime) · 3 saisir (Issue). Jamais coder. Le harnais refuse une délégation sans contradicteur, sans perspective croisée ou sous le niveau 2.",
     "liberte": {
       "perspective-juridique": 1,

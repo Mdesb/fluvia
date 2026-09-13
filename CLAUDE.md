@@ -175,9 +175,20 @@ i18n** (pas de `app/translations`, aucun `t()` dans le front, libellés françai
 l'agent est un inventaire des chaînes en dur et la spec du chantier i18n, à aiguiller comme une fonctionnalité ;
 seules les fiches `docs/support/` se traduisent dès maintenant.
 
-**Taille du code.** Le code le plus court qui passe les tests. Pas d'abstraction pour un seul usage, pas
-d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le plan annonce une
-taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes supprimables.
+**Taille du code, tenue par le harnais.** Le code le plus court qui passe les tests. Pas d'abstraction pour
+un seul usage, pas d'interface sans second implémenteur, pas de fichier nouveau si une fonction suffit. Le
+plan annonce une taille attendue et une section « ce qu'on ne construit pas » ; le relecteur compte les lignes
+supprimables. Au commit, le **budget de diff** compte les lignes de code ajoutées hors doc, tests, verrous et
+migrations : avertissement à 150, refus à 400 sauf justification écrite dans `.kit-sdd/budget/<branche>.md`.
+
+**Les garde-fous du projet avant de rendre.** Le développeur lance `./bin/garde-fous.sh` et corrige ce qu'ils
+refusent avant de rendre son rapport ; le harnais ne clôt pas un tour où du code a changé sans ça. Leçon du
+14/09 : un commit relu et testé a été refusé trois fois au pre-commit pour des défauts que cette commande
+montre en une minute.
+
+**Les suites deviennent des Issues.** À la clôture d'un lot, `/garde-fous-sdd:suites` transforme les lots
+suivants, bugs latents et correctifs rapides du suivi en Issues étiquetées `suite` ; le fichier de suivi pointe
+vers elles. Une perspective par domaine détecté (plus de plafond fixe à deux), dans le budget de session.
 
 **Commandes du plugin** (utiles à une session, jamais requises de Maxime) : `/garde-fous-sdd:contradire` ·
 `/garde-fous-sdd:revue-sensible` · `/garde-fous-sdd:decision` (ADR dans `COORDINATION/DECISIONS.md`) ·
