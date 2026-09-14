@@ -213,8 +213,9 @@ final class InvoiceDueInstallmentsCommand extends Command
         if ($simulation && $emises > 0) {
             $io->note(
                 'Mode à blanc : la configuration de ces échéances est résolvable (taux, client, '
-                . 'montant, pas de doublon). Il reste l\'émission elle-même — numérotation, période '
-                . 'comptable ouverte, scellement NF525 — qui ne se vérifie qu\'en écrivant.',
+                . 'destinataire complet, montant, pas de doublon). Il reste l\'émission elle-même — '
+                . 'numérotation, compte de produit, période comptable ouverte, scellement NF525 — '
+                . 'qui ne se vérifie qu\'en écrivant.',
             );
         }
 
