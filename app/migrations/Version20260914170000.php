@@ -119,6 +119,39 @@ final class Version20260914170000 extends AbstractMigration
      */
     public function down(Schema $schema): void
     {
+        // ⚠ LE CONTROLE PASSE AVANT TOUT, ET IL INTERROGE L'ETAT ACTUEL — PAS CELUI D'APRES.
+        //
+        // Ma premiere version ajoutait `periode_id`, la remplissait, puis comptait les lignes
+        // restees nulles. Elle echouait a tous les coups :
+        //
+        //     SQLSTATE[42S22]: Unknown column 'periode_id' in 'WHERE'
+        //
+        // `addSql()` EMPILE ; les instructions ne partent qu'apres le retour de la methode. Un
+        // `$this->connection->fetchOne()` ecrit au milieu, lui, part IMMEDIATEMENT — donc avant
+        // l'ALTER qui cree la colonne qu'il interroge. Les deux mecanismes se lisent dans le meme
+        // sens de haut en bas et ne s'executent pas dans cet ordre.
+        //
+        // Le controle porte donc sur ce qui existe DEJA : chaque serie a-t-elle au moins une periode
+        // dans son annee ? S'il manque quoi que ce soit, on refuse avant d'avoir touche au schema,
+        // ce qui vaut mieux que d'echouer a mi-chemin.
+        $orphelines = (int) $this->connection->fetchOne(<<<'SQL'
+            SELECT COUNT(*) FROM facturation_serie_numerotation s
+            WHERE NOT EXISTS (
+                SELECT 1 FROM compta_periode_comptable p
+                WHERE p.profil_exploitant_id = s.profil_exploitant_id
+                  AND YEAR(p.date_debut) = s.exercice
+            )
+            SQL);
+
+        $this->abortIf(
+            $orphelines > 0,
+            sprintf(
+                'Retour en arriere impossible : %d serie(s) n ont aucune periode comptable sur leur annee. '
+                . 'Creez-la, ou rattachez-les a la main, avant de redescendre cette migration.',
+                $orphelines,
+            )
+        );
+
         $this->addSql('ALTER TABLE facturation_serie_numerotation ADD periode_id BINARY(16) DEFAULT NULL');
 
         $this->addSql(<<<'SQL'
@@ -131,12 +164,6 @@ final class Version20260914170000 extends AbstractMigration
                 LIMIT 1
             )
             SQL);
-
-        $this->abortIf(
-            (int) $this->connection->fetchOne('SELECT COUNT(*) FROM facturation_serie_numerotation WHERE periode_id IS NULL') > 0,
-            'Retour en arriere impossible : au moins une serie n a aucune periode comptable sur son annee. '
-            . 'Rattachez-la a la main avant de redescendre cette migration.'
-        );
 
         $this->addSql('ALTER TABLE facturation_serie_numerotation MODIFY periode_id BINARY(16) NOT NULL');
         $this->addSql('DROP INDEX uniq_facturation_serie ON facturation_serie_numerotation');
