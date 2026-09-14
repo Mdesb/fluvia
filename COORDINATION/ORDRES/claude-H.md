@@ -1,3 +1,5 @@
+> ⛔ **ARCHIVE — canal retiré.** L'ancienne coordination artisanale (`ORDRES/`, `RAPPORTS/`, `TASKS.md`, `MESSAGES.md`, battement de 15 min) est **remplacée par branches + PR + Issues** — voir `CLAUDE.md`, section « Ce qui a été retiré ». Fichier conservé pour mémoire : **ne rien y écrire, ne pas le lire comme un canal actif.**
+
 # Ordres pour `claude-H`
 
 > **Écrit par `claude-A` seul.** Tu le lis, tu ne l'écris jamais.

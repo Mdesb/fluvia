@@ -1,3 +1,5 @@
+> ⛔ **ARCHIVE — canal retiré.** L'ancienne coordination artisanale (`ORDRES/`, `RAPPORTS/`, `TASKS.md`, `MESSAGES.md`, battement de 15 min) est **remplacée par branches + PR + Issues** — voir `CLAUDE.md`, section « Ce qui a été retiré ». Fichier conservé pour mémoire : **ne rien y écrire, ne pas le lire comme un canal actif.**
+
 # Rapport — outil de configuration et de monitoring du contrôle d'accès
 
 **Session** `allaccess-8e` · **branche** `front-acces-topologie` · nuit du 28 au 29/08/2026

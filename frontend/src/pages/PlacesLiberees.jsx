@@ -6,6 +6,7 @@ import { confirmer } from '../components/Confirmation.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 
 // PLACES LIBÉRÉES — sept routes servies, aucun écran, et un mécanisme qui a tourné dans le vide.
 //
@@ -510,6 +511,7 @@ function AccepterProposition({ proposition, libelleCreneau, libelleClient, onFer
 /* ------------------------------------------------------------------ Liste d'attente (la porte d'entrée) */
 
 function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, onInscrire }) {
+  const { t } = useVocabulaireVerticales()
   return (
     <div className="card">
       <div className="card-h">
@@ -538,7 +540,7 @@ function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, o
               <thead>
                 <tr>
                   <th className="num">Rang</th>
-                  <th>Ressource</th>
+                  <th>{t('resource', null, 'Ressource')}</th>
                   <th>Personne</th>
                   <th>Fenêtre demandée</th>
                   <th>Statut</th>
@@ -577,6 +579,7 @@ function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, o
 }
 
 function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
+  const { t } = useVocabulaireVerticales()
   // Quatorze jours : c'est ce que le module lui-même appelle une fenêtre de recherche
   // (`compatibleSlotSearchWindowDays` dans son manifeste). Un défaut arbitraire aurait fait
   // saisir deux dates à chaque inscription pour une valeur qui, aujourd'hui, ne sert à rien.
@@ -621,7 +624,7 @@ function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
       </div>
 
       <div className="field">
-        <label htmlFor="sf-res">Ressource</label>
+        <label htmlFor="sf-res">{t('resource', null, 'Ressource')}</label>
         <select id="sf-res" className="select" value={ressource} onChange={(e) => setRessource(e.target.value)}>
           <option value="">Choisir…</option>
           {ressources.map((r) => (

@@ -7,6 +7,7 @@ import PriseRendezVous from '../components/PriseRendezVous.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
@@ -142,6 +143,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // reservable >>, ce qui fait refuser une reservation au telephone.
   const [ressources, setRessources] = useState(null)
   const [creneaux, setCreneaux] = useState(null)
+  // Vocabulaire par verticale (#100) : `t('resource', verticale, repli)` rend « Bassin »/« Terrain »…
+  const { t } = useVocabulaireVerticales()
   const [reservations, setReservations] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -800,7 +803,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
                       <div key={c.id} className="creneau">
                         <div className="creneau-h">
                           <div>
-                            <div className="nm">{c.ressource?.libelle || 'Ressource'}</div>
+                            <div className="nm">{c.ressource?.libelle || t('resource', c.ressource?.verticale, 'Ressource')}</div>
                             <div className="creneau-sub">
                               {c.ressource?.codeType || '—'}
                               {c.activite?.libelle ? ` · ${c.activite.libelle}` : ''}
@@ -873,7 +876,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                 className="select"
                                 value={arbitragePour === c.id ? (arbitrageRessource || '') : ''}
                                 onChange={(e) => { setArbitragePour(c.id); setArbitrageRessource(e.target.value) }}
-                                aria-label="Ressource de remplacement"
+                                aria-label={`${t('resource', c.ressource?.verticale, 'Ressource')} de remplacement`}
                               >
                                 <option value="">Déplacer sur…</option>
                                 {(ressourcesEquivalentes[c.ressource?.id] ?? []).map((r) => (
@@ -1342,11 +1345,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
           {/* Catalogue des ressources */}
           <section className="card">
-            <div className="card-h"><h3>Ressources</h3></div>
+            <div className="card-h"><h3>{t('resource', null, 'Ressource')}s</h3></div>
             <div className="card-b" style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Ressource</th><th>Type</th><th className="num">Capacité</th><th>Occ.</th><th>Accès</th></tr>
+                  <tr><th>{t('resource', null, 'Ressource')}</th><th>Type</th><th className="num">Capacité</th><th>Occ.</th><th>Accès</th></tr>
                 </thead>
                 <tbody>
                   {(ressources || []).map((r) => (

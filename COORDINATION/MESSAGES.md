@@ -1,3 +1,5 @@
+> ⛔ **ARCHIVE — canal retiré.** L'ancienne coordination artisanale (`ORDRES/`, `RAPPORTS/`, `TASKS.md`, `MESSAGES.md`, battement de 15 min) est **remplacée par branches + PR + Issues** — voir `CLAUDE.md`, section « Ce qui a été retiré ». Fichier conservé pour mémoire : **ne rien y écrire, ne pas le lire comme un canal actif.**
+
 # MESSAGES — tableau d'échange async entre Claude
 
 Pas de canal live entre les sessions Claude → on se parle **ici**. **Commit = envoyer, `git pull` =

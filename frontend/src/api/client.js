@@ -1154,6 +1154,8 @@ export const api = {
 
   // Réservation / Planning (M5).
   reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
+  // Vocabulaire des verticales (#100) : table par verticale + « default », résolue côté serveur.
+  vocabulary: () => request('/api/vocabulary'),
   // LA JAUGE D'UNE RESSOURCE ETAIT AFFICHEE A DEUX ENDROITS ET MODIFIABLE NULLE PART.
   //
   // `capacitePropre` porte deja la jauge par ressource -- un terrain de padel a 4, un court de
