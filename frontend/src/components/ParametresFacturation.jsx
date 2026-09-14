@@ -75,12 +75,21 @@ export default function ParametresFacturation({ peutModifier }) {
   const [enCours, setEnCours] = useState(false)
   const [nonBranche, setNonBranche] = useState(false)
   const [tauxDisponibles, setTauxDisponibles] = useState([])
+  const [comptesProduit, setComptesProduit] = useState([])
 
   const charger = useCallback(async () => {
     setChargement(true)
     try {
-      const [r, tauxRep] = await Promise.all([api.parametresFacturation(), api.tauxTvas().catch(() => null)])
+      const [r, tauxRep, comptesRep] = await Promise.all([
+        api.parametresFacturation(),
+        api.tauxTvas().catch(() => null),
+        api.comptesComptables().catch(() => null),
+      ])
       setTauxDisponibles(tauxRep ? membres(tauxRep).filter((t) => t.actif !== false) : [])
+      // ⚠ ON NE PROPOSE QUE LES COMPTES DE PRODUIT (classe 7). Offrir les 4xx et 5xx laisserait
+      //    imputer une recette sur un compte de tiers ou de trésorerie — l'écriture resterait
+      //    équilibrée, et le résultat de l'exercice serait faux sans que rien ne le signale.
+      setComptesProduit(comptesRep ? membres(comptesRep).filter((c) => String(c.numero || '').startsWith('7')) : [])
       const liste = membres(r)
       const p = liste[0] || null
       setParametre(p)
@@ -124,6 +133,7 @@ export default function ParametresFacturation({ peutModifier }) {
         // L'IRI, pas l'identifiant nu : API Platform attend une reference de ressource pour une
         // relation. `null` efface le defaut, ce qui fait re-refuser l'emission — c'est voulu.
         tauxTvaDefaut: valeurs.tauxTvaDefaut ? valeurs.tauxTvaDefaut : null,
+        compteProduitDefaut: valeurs.compteProduitDefaut ? valeurs.compteProduitDefaut : null,
       }
 
       const enregistre = parametre?.id
@@ -245,6 +255,36 @@ export default function ParametresFacturation({ peutModifier }) {
           </span>
         </div>
 
+        {/* ⚠ L'AUTRE MOITIÉ DU MÊME VERROU, ET ELLE N'ÉTAIT RÉGLABLE NULLE PART.
+            `EmettreFactureDirecteHandler` exige DEUX choses pour émettre : un taux de TVA (ci-dessus)
+            et un compte de produit. Le second se résout par la catégorie comptable de la ligne, puis
+            par ce défaut — et à défaut des deux, l'émission refuse. Le champ existait en base et
+            aucun écran ne le posait : un établissement neuf ne pouvait donc RIEN facturer, sans
+            aucun recours. La préproduction s'en sortait parce que sa valeur avait été posée à la
+            main. Mesuré le 08/09, toujours vrai le 14/09. */}
+        <div className="field">
+          <label htmlFor="pf-compte-produit">Compte de produit par défaut</label>
+          <select
+            id="pf-compte-produit"
+            className="input"
+            value={valeurs.compteProduitDefaut ?? ''}
+            disabled={!peutModifier}
+            onChange={(e) => setValeurs((v) => ({ ...v, compteProduitDefaut: e.target.value }))}
+          >
+            <option value="">— aucun —</option>
+            {comptesProduit.map((c) => (
+              <option key={c['@id']} value={c['@id']}>
+                {c.numero} — {c.libelle}
+              </option>
+            ))}
+          </select>
+          <span className="hint">
+            {comptesProduit.length === 0
+              ? 'Aucun compte de produit (classe 7) n’est déclaré pour cet établissement : créez-en un dans Comptabilité avant de pouvoir en choisir un ici.'
+              : 'Le compte sur lequel imputer une recette quand la ligne facturée ne désigne pas de catégorie comptable. Laissé vide, l’émission d’une facture est refusée pour ces lignes-là — jamais imputée au hasard.'}
+          </span>
+        </div>
+
         <div className="field">
           <label htmlFor="pf-penalite">Taux de pénalités de retard (%)</label>
           <input
@@ -316,5 +356,6 @@ function depuis(p) {
     // La relation est serialisee en IRI par API Platform ; le select stocke donc l'IRI telle
     // quelle et la renvoie sans transformation. Un objet imbrique se reduit a son `@id`.
     tauxTvaDefaut: (typeof p?.tauxTvaDefaut === 'object' ? p?.tauxTvaDefaut?.['@id'] : p?.tauxTvaDefaut) ?? '',
+    compteProduitDefaut: (typeof p?.compteProduitDefaut === 'object' ? p?.compteProduitDefaut?.['@id'] : p?.compteProduitDefaut) ?? '',
   }
 }
