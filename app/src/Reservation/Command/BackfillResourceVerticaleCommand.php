@@ -28,11 +28,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * ── CE QU'ELLE FAIT, ET CE QU'ELLE NE FAIT PAS ─────────────────────────────────────────────────
  *
- * Elle ne pose une verticale QUE lorsque l'établissement n'a qu'UNE verticale active — la même règle
- * que le `courant` de l'API `/vocabulary`, via `VocabularyProvider::verticaleUnique`. Un établissement
- * MIXTE (padel + piscine) reste ambigu au niveau établissement : ses ressources gardent `verticale`
- * nulle, à régler une par une (saisie explicite sur la fiche ressource, écran Disponibilités). Elle ne
- * peut donc pas poser une valeur FAUSSE — au pire, elle s'abstient.
+ * Deux sources, la plus SPÉCIFIQUE d'abord : (1) le `codeType` de la ressource quand il désigne sans
+ * ambiguïté une verticale (`terrain_padel`/`coach_padel` → padel, `bassin`/`ligne_eau` → piscine,
+ * `exposition`/`visite_guidee` → musée) — exact même sur un site MIXTE ; (2) sinon le métier unique de
+ * l'établissement (même règle que le `courant` de l'API, `VocabularyProvider::verticaleUnique`), qui ne
+ * tranche que pour un site mono. Un codeType générique (`terrain`, `salle`, `personnel`) sur un site
+ * mixte reste `null`, à régler à la main (sélecteur sur la fiche ressource, écran Disponibilités). Elle
+ * ne pose jamais une valeur FAUSSE — au pire, elle s'abstient.
  *
  * Idempotente : ne touche que les ressources à `verticale` nulle. `--dry-run` liste sans écrire.
  */
@@ -42,12 +44,39 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 final class BackfillResourceVerticaleCommand extends Command
 {
+    /**
+     * Les codeType sans ambiguïté minés par les processeurs de création et les fixtures, et leur
+     * verticale (valeurs = `Metier::*->value`). Best-effort : un codeType absent d'ici retombe sur le
+     * métier de l'établissement. Les codeType GÉNÉRIQUES (« terrain », « salle », « personnel ») en
+     * sont volontairement exclus — ils ne désignent pas une verticale à eux seuls.
+     *
+     * @var array<string, string>
+     */
+    private const VERTICALE_PAR_CODE_TYPE = [
+        'terrain_padel' => 'padel',
+        'coach_padel' => 'padel',
+        'bassin' => 'piscine',
+        'ligne_eau' => 'piscine',
+        'exposition' => 'musee',
+        'visite_guidee' => 'musee',
+    ];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Fonctionnalites $fonctionnalites,
         private readonly ModuleRegistry $registry,
     ) {
         parent::__construct();
+    }
+
+    /**
+     * La verticale d'une ressource : d'abord son codeType (signal EXACT, valable même sur un site
+     * mixte — un bassin est piscine quel que soit l'établissement), sinon le métier unique de
+     * l'établissement (ne tranche que pour un site mono). `null` si aucun des deux ne décide.
+     */
+    public static function verticalePour(string $codeType, ?string $verticaleEtablissement): ?string
+    {
+        return self::VERTICALE_PAR_CODE_TYPE[$codeType] ?? $verticaleEtablissement;
     }
 
     protected function configure(): void
@@ -91,18 +120,19 @@ final class BackfillResourceVerticaleCommand extends Command
                     $verticales,
                 );
             }
-            $verticale = $verticaleParEtablissement[$cle];
+            $verticale = self::verticalePour($ressource->getCodeType(), $verticaleParEtablissement[$cle]);
 
             if ($verticale === null) {
                 ++$abstenus;
                 continue;
             }
 
+            $source = isset(self::VERTICALE_PAR_CODE_TYPE[$ressource->getCodeType()]) ? 'codeType' : 'établissement';
             if (!$dryRun) {
                 $ressource->setVerticale($verticale);
             }
             ++$poses;
-            $io->writeln(sprintf('  %s « %s » → %s', $dryRun ? '[à poser]' : '[posé]', $ressource->getLibelle(), $verticale));
+            $io->writeln(sprintf('  %s « %s » → %s (par %s)', $dryRun ? '[à poser]' : '[posé]', $ressource->getLibelle(), $verticale, $source));
         }
 
         if (!$dryRun) {
