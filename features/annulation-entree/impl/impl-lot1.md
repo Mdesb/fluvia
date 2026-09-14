@@ -1,7 +1,7 @@
 # Suivi d'implémentation — annulation-entree · lot 1
 
 - **Spec :** specs/spec-annulation-entree.md (validée CP-1 le 13/09/2026, amendée le 14/09)
-- **Plan :** plans/plan-lot1.md · **Décisions :** D115 à D118
+- **Plan :** plans/plan-lot1.md · **Décisions :** D116 à D119
 - **État :** construit, relu (relecteur + security-reviewer, mode adversarial), corrigé, testé — en attente de commit
 
 ## Étapes du plan
@@ -35,7 +35,7 @@
 
 ## Reste à faire (hors lot 1)
 - Lot 1 bis : limite d'office en régie (D118), motif lié au jeton d'escalade, périmètre `PropreSession`.
-- Lot 2 : annuler une ligne. Lot 3 : rembourser une carte multi-entrées (D118 prorata).
+- Lot 2 : annuler une ligne. Lot 3 : rembourser une carte multi-entrées (D119 prorata).
 - Issue : les dix `\assert` du module Vente (500 au lieu de 404).
 - Correctif rapide : message d'`abandonner()`.
 

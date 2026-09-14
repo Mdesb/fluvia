@@ -3438,7 +3438,7 @@ et prouvé **avant** le redémarrage, et non l'inverse.
 
 ---
 
-## D111 — Annuler au guichet : trois gestes, un seul mécanisme, trois lots
+## D116 — Annuler au guichet : trois gestes, un seul mécanisme, trois lots
 
 **Contexte.** La demande « un régisseur doit pouvoir annuler une entrée vendue par erreur dans les cinq
 minutes » arrive alors que l'annulation d'une vente entière existe déjà (`POST /ventes/{id}/annuler`, avoir
@@ -3468,7 +3468,7 @@ vraie sur un point, l'état d'une vente à moitié annulée, tranché ci-dessous
 
 ---
 
-## D112 — Le motif d'annulation est fermé : rien de nominatif n'entre dans la chaîne scellée
+## D117 — Le motif d'annulation est fermé : rien de nominatif n'entre dans la chaîne scellée
 
 **Contexte.** `Avoir.motif` est une chaîne libre dans un enregistrement scellé, conservé six ans, que
 `InalterabiliteListener` interdit de modifier. Un opérateur qui tape « M. Dupont, carte refusée » crée une
@@ -3491,7 +3491,7 @@ par Maxime (droit). **Perspective croisée.** Simplificateur : trois boutons rad
 
 ---
 
-## D113 — Par défaut, une annulation en régie passe par le régisseur ; l'établissement peut desserrer
+## D118 — Par défaut, une annulation en régie passe par le régisseur ; l'établissement peut desserrer
 
 **Contexte.** Le régisseur de recettes est personnellement et pécuniairement responsable des fonds. Le code
 autorise aujourd'hui l'opérateur seul dès qu'aucune `LimiteAutorisation` n'existe pour `vente.annuler`
@@ -3518,115 +3518,7 @@ rien ; un test de création d'établissement en régie vérifie la présence de 
 
 ---
 
-## D114 — Rembourser une carte multi-entrées : prorata du prix payé, carte close
-
-**Contexte.** Le remboursement partiel existe par montant libre ; rien ne le lie au crédit restant de la
-carte (`DroitAcces.creditRestant`). Rembourser 6 entrées sur 10 laisserait aujourd'hui la carte à 10.
-
-**Décision.** Le remboursement d'une carte multi-entrées se calcule au **prorata du prix payé** (entrées
-non consommées sur entrées totales, appliqué au prix effectivement payé, remise comprise) et **remet le
-crédit restant à zéro dans le même geste scellé**. L'avoir de ligne (lot 2) suit le même modèle que l'avoir
-de vente : référence à la vente d'origine, date du geste, grand total non diminué.
-
-**Alternatives écartées.** Six fois le prix unitaire : sur une carte vendue avec remise, on rembourse plus
-que payé. Prorata en laissant quatre entrées : le client garde des entrées et récupère de l'argent pour
-une carte payée dix.
-
-**Contrepartie acceptée.** Un client qui voudrait garder quelques entrées et se faire rembourser le reste
-n'a pas ce geste : il rachète une carte plus petite.
-
-**Contradiction.** Perspective juridique : « le cumul perpétuel NF525 avec des avoirs de ligne est-il
-conforme ? » — Réponse : validé par Maxime (finance, droit) : le grand total reste la somme des ventes,
-les avoirs se cumulent à part, comme l'avoir de vente entière déjà en production.
-**Perspective croisée.** Perspective finance non convoquée sur cet objet (mécanisme d'argent existant) ;
-le calcul du prorata a été tranché en CP-1.
-
-**Comment on le voit tenir.** Un test : carte de 10 à 40 € (remise), 4 consommées, remboursement → avoir de
-24,00 €, `creditRestant` = 0, support invalidé.
-
----
-
-## D115 — Annuler au guichet : trois gestes, un seul mécanisme, trois lots
-
-**Contexte.** La demande « un régisseur doit pouvoir annuler une entrée vendue par erreur dans les cinq
-minutes » arrive alors que l'annulation d'une vente entière existe déjà (`POST /ventes/{id}/annuler`, avoir
-scellé, motif obligatoire) mais qu'aucun bouton ne l'offre après une vente, qu'aucune annulation par ligne
-n'existe, et que le remboursement partiel par montant ne touche pas le crédit restant d'une carte
-multi-entrées (`DroitAcces.creditRestant`).
-
-**Décision.** Une seule spec (`features/annulation-entree`), trois gestes livrés en trois lots séparés, dans
-cet ordre : (1) annuler la vente en trois étapes depuis l'écran de fin de vente ; (2) annuler une seule ligne
-d'une vente multiple ; (3) rembourser partiellement une carte multi-entrées. Les trois passent par le même
-mécanisme : un avoir par contre-passation, référencé à la vente d'origine, daté du geste (D45), grand total
-perpétuel non diminué, avoirs cumulés à part.
-
-**Alternatives écartées.** Le geste 1 seul puis deux specs : trois avoirs conçus séparément, deux cycles
-de contradiction de plus. Tout en un lot : un diff de 400 lignes que personne ne relit.
-
-**Contrepartie acceptée.** Une spec plus longue à relire ; les lots 2 et 3 se codent sans attendre mais
-chacun passe sa propre relecture adversariale avant fusion.
-
-**Contradiction.** Le contradicteur avait sorti l'annulation par ligne (« pas dans la demande, écriture scellée
-nouvelle, état non défini ») — Réponse : écartée par Maxime, qui la demande explicitement (« quand il y a
-plusieurs produits dans une vente, on devrait pouvoir annuler une seule ligne ») ; l'objection reste
-vraie sur un point, l'état d'une vente à moitié annulée, tranché ci-dessous.
-
-**Comment on le voit tenir.** `ContrePassationTest` s'étend d'un test par geste ; le garde-fou n°29
-(création qu'on ne peut pas défaire) porte les trois routes.
-
----
-
-## D116 — Le motif d'annulation est fermé : rien de nominatif n'entre dans la chaîne scellée
-
-**Contexte.** `Avoir.motif` est une chaîne libre dans un enregistrement scellé, conservé six ans, que
-`InalterabiliteListener` interdit de modifier. Un opérateur qui tape « M. Dupont, carte refusée » crée une
-donnée personnelle irrectifiable (RGPD art. 16 et 17 contre obligation de conservation).
-
-**Décision.** Trois motifs fermés au guichet : *Erreur de saisie* (présélectionné), *Client parti*,
-*Doublon*. Aucun texte libre dans l'avoir. Le serveur refuse tout motif hors liste (422).
-
-**Alternatives écartées.** Libre optionnel avec consigne « rien de nominatif » : la consigne ne protège pas.
-Libre stocké hors chaîne, effaçable, lié par référence : une table et du code pour une nuance rare.
-
-**Contrepartie acceptée.** On perd la nuance ; le simplificateur y voyait de toute façon un choix de moins
-pour l'opérateur.
-
-**Contradiction.** Perspective juridique : « donnée personnelle ineffaçable » — Réponse : retenue, tranchée
-par Maxime (droit). **Perspective croisée.** Simplificateur : trois boutons radio, un présélectionné.
-
-**Comment on le voit tenir.** Le test CA-5 envoie un motif hors liste et attend 422 ; le garde-fou
-« secrets / données » peut ajouter `Avoir.motif` à la liste des champs sans saisie libre.
-
----
-
-## D117 — Par défaut, une annulation en régie passe par le régisseur ; l'établissement peut desserrer
-
-**Contexte.** Le régisseur de recettes est personnellement et pécuniairement responsable des fonds. Le code
-autorise aujourd'hui l'opérateur seul dès qu'aucune `LimiteAutorisation` n'existe pour `vente.annuler`
-(« aucune limite ⇒ AUTORISE »). Une « fenêtre de cinq minutes » n'a aucune base réglementaire : c'est un
-réglage d'exploitation.
-
-**Décision.** À la création d'un établissement en régie, une `LimiteAutorisation` est posée d'office sur
-`vente.annuler` : toute annulation passe par la validation du régisseur (`DemandeEscalade`). L'établissement
-peut desserrer par configuration (montant plafond, délai) ; le privé part sans limite. Aucune constante de
-temps dans le code, aucune migration : tout passe par l'autorisation graduée existante (D39).
-
-**Alternatives écartées.** Opérateur seul dans les cinq minutes puis régisseur : fenêtre codée, migration,
-et un mandataire qui engage le régisseur sans sa trace. Opérateur seul toujours : régisseur non couvert.
-
-**Contrepartie acceptée.** Dix secondes par annulation là où le régisseur n'a rien assoupli.
-
-**Contradiction.** Perspective juridique : « une annulation par un mandataire seul engage le régisseur » —
-Réponse : retenue, tranchée par Maxime (droit). **Perspective croisée.** Contradicteur : « la fenêtre n'existe
-pas par défaut sans limite configurée » — c'est précisément ce que la décision inverse en posant la limite
-d'office.
-
-**Comment on le voit tenir.** CA-2 : sans desserrage, une annulation crée une `DemandeEscalade` et n'annule
-rien ; un test de création d'établissement en régie vérifie la présence de la limite.
-
----
-
-## D118 — Rembourser une carte multi-entrées : prorata du prix payé, carte close
+## D119 — Rembourser une carte multi-entrées : prorata du prix payé, carte close
 
 **Contexte.** Le remboursement partiel existe par montant libre ; rien ne le lie au crédit restant de la
 carte (`DroitAcces.creditRestant`). Rembourser 6 entrées sur 10 laisserait aujourd'hui la carte à 10.
