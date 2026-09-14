@@ -127,6 +127,22 @@ class ConfigCreancierSepa
     #[ORM\Column(name: 'prenotification_delay_days', options: ['default' => 14])]
     private int $preNotificationDelayDays = 14;
 
+    /**
+     * ⚠ CLAUSE CONTRACTUELLE DE PRÉAVIS RÉDUIT (D115, audit du 14/09).
+     *
+     * La règle SEPA Core fixe 14 jours de préavis par défaut, réductibles UNIQUEMENT si le contrat le
+     * prévoit avec le débiteur. Ce drapeau déclare que le contrat du créancier porte cette clause : sans
+     * lui, `preNotificationDelayDays` ne peut pas descendre sous 14 (NoticeDelayCoversPeriodValidator).
+     *
+     * Porté par le créancier, comme le délai lui-même — le champ ci-dessus note déjà « c'est le créancier
+     * qui s'engage sur un délai, pas chaque débiteur séparément ». ⚠ D115 disait « sur le mandat » ; le
+     * modèle de données et ce raisonnement déjà écrit placent l'engagement de délai sur le créancier. À
+     * confirmer si le besoin est réellement par débiteur.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['config_creancier:read', 'config_creancier:write'])]
+    private bool $preavisReduitContractuel = false;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['config_creancier:read'])]
     private \DateTimeImmutable $modifieLe;
@@ -306,6 +322,18 @@ class ConfigCreancierSepa
     public function setPreNotificationDelayDays(int $preNotificationDelayDays): self
     {
         $this->preNotificationDelayDays = $preNotificationDelayDays;
+
+        return $this;
+    }
+
+    public function isPreavisReduitContractuel(): bool
+    {
+        return $this->preavisReduitContractuel;
+    }
+
+    public function setPreavisReduitContractuel(bool $preavisReduitContractuel): self
+    {
+        $this->preavisReduitContractuel = $preavisReduitContractuel;
 
         return $this;
     }
