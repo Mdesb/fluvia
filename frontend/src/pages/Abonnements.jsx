@@ -501,6 +501,10 @@ function CreationAbonnement({ produits, onAnnuler, onCree }) {
               <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
             </label>
           </div>
+          <small className="sub" style={{ display: 'block' }}>
+            Le « mandat SEPA » est l'autorisation de prélèvement signée par le titulaire du compte : on
+            prélèvera ensuite automatiquement le montant, à la cadence du produit.
+          </small>
 
           <label className="field" style={{ margin: 0, maxWidth: 240 }}>
             <span className="sub">Durée d'engagement (mois)</span>
