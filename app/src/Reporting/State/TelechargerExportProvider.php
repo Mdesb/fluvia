@@ -85,13 +85,29 @@ final class TelechargerExportProvider implements ProviderInterface
 
         $this->verifierPerimetreLecture($export, $utilisateur);
 
-        if ($export->getStatut() !== StatutExport::Genere || $export->getCheminStockage() === null) {
+        // TROIS CAS, ET ILS NE SE DISENT PAS PAREIL.
+        //
+        // ⚠ `Envoye` EST UN SUCCÈS. `ExecuterRapportsCommand` stocke le fichier, passe à `Genere`,
+        // envoie le courriel, puis passe à `Envoye` sans toucher au chemin de stockage : le fichier
+        // est toujours là. L'exclure ici rendait « la génération n'a pas abouti » à un destinataire
+        // qui a le fichier dans sa boîte.
+        if ($export->getStatut() === StatutExport::Echec) {
             // On ne rend pas 404 : l'export existe, il a échoué. Confondre les deux ferait chercher
             // un identifiant faux là où il y a un message d'erreur à lire.
             throw new UnprocessableEntityHttpException(sprintf(
                 'Cet export n\'a pas de fichier : %s',
                 $export->getMessageErreur() ?? 'la génération n\'a pas abouti.',
             ));
+        }
+
+        // ⚠ UN FICHIER ABSENT N'EST PAS UNE GÉNÉRATION RATÉE. Ce cas arrivera avec la rétention :
+        // dire « la génération n'a pas abouti » d'un fichier purgé enverrait chercher un défaut qui
+        // n'a jamais eu lieu.
+        if ($export->getCheminStockage() === null) {
+            throw new UnprocessableEntityHttpException(
+                'Le fichier de cet export n\'est plus disponible. La génération avait abouti ; '
+                . 'seul le fichier a été retiré du stockage.',
+            );
         }
 
         $export->setContenuBase64(base64_encode($this->stockage->recuperer($export->getCheminStockage())));
