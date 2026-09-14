@@ -47,5 +47,14 @@ export function useVocabulaireVerticales() {
     return table[cle] ?? tables.default?.[cle] ?? repli ?? cle
   }
 
-  return { t }
+  // La liste des verticales connues (hors « default »), pour offrir un choix à la saisie : { id, mot }
+  // où `mot` est le libellé « resource » de la verticale (padel → « Terrain », piscine → « Bassin ») —
+  // un repère lisible de ce que le choix produira. Vide tant que `/vocabulary` n'a pas répondu.
+  const verticales = tables
+    ? Object.keys(tables)
+        .filter((id) => id !== 'default')
+        .map((id) => ({ id, mot: tables[id]?.resource || id }))
+    : []
+
+  return { t, verticales }
 }

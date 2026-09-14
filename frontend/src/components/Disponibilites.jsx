@@ -70,8 +70,9 @@ function jourEtHeure(v) {
 
 export default function Disponibilites({ droits = [] }) {
   const peutGerer = aLeDroit(droits, 'reservation.gerer_ressource')
-  // Vocabulaire par verticale (#100) : t('resource', r?.verticale, …) rend « Terrain »/« Bassin ».
-  const { t } = useVocabulaireVerticales()
+  // Vocabulaire par verticale (#100) : t('resource', r?.verticale, …) rend « Terrain »/« Bassin » ;
+  // `verticales` alimente le sélecteur qui pose la verticale d'une ressource (saisie explicite).
+  const { t, verticales } = useVocabulaireVerticales()
 
   const [ressources, setRessources] = useState([])
   const [dispos, setDispos] = useState([])
@@ -161,6 +162,26 @@ export default function Disponibilites({ droits = [] }) {
             <section className="card" key={r.id}>
               <div className="card-h">
                 <span>{r.libelle || r.codeType || t('resource', r?.verticale, 'Ressource')}</span>
+                {/* SAISIE EXPLICITE DE LA VERTICALE (#100). Ce qui fixe le mot d'une ressource
+                    (« Terrain », « Bassin »…), c'est sa `verticale`. Dérivée du métier unique de
+                    l'établissement par la commande de backfill, elle reste à choisir ici sur un site
+                    MIXTE (padel + piscine), où l'établissement ne tranche pas. « Défaut établissement »
+                    = suit la verticale de l'établissement (ou le défaut FR si elle n'est pas unique). */}
+                {peutGerer && verticales.length > 0 && (
+                  <select
+                    className="select"
+                    value={r.verticale || ''}
+                    disabled={busy}
+                    onChange={(e) => agir(() => api.majRessourceReservation(r.id, { verticale: e.target.value || null }))}
+                    aria-label={`Verticale de ${r.libelle || 'la ressource'}`}
+                    title="La verticale fixe le vocabulaire affiché de cette ressource (Terrain, Bassin…)."
+                  >
+                    <option value="">— défaut établissement</option>
+                    {verticales.map((v) => (
+                      <option key={v.id} value={v.id}>{v.mot} ({v.id})</option>
+                    ))}
+                  </select>
+                )}
                 {/* LA JAUGE SE REGLE ICI, ET ELLE N'ETAIT REGLABLE NULLE PART.
                     `capacitePropre` distingue deja un terrain de padel (4) d'un court de tennis en
                     simple (2) et d'un bassin (cinquante). Le modele savait ; l'ecran ne montrait que
