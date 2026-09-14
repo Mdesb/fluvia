@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 import { euroCentimes, dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
@@ -30,7 +29,9 @@ import { idDe } from '../api/iri'
 //
 // Le barème, lui, est bien un paramétrage central : la même casquette perdue vaut le même prix
 // partout dans l'établissement, sinon ce n'est pas un barème.
-export default function CautionsGestion({ etabActif, droits }) {
+export default function CautionsGestion({ etabActif, droits, params = {}, majParams }) {
+  const ouvert = params.bareme || ''
+  const fermer = () => majParams({ bareme: '' }, { pousser: true })
   const [onglet, setOnglet] = useState('cautions')
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucune caution en cours » sur une lecture refusee
   // dit a l'exploitant qu'il ne detient l'argent de personne.
@@ -46,7 +47,6 @@ export default function CautionsGestion({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [grilleEditee, setGrilleEditee] = useState(null)
   const [cautionOuverte, setCautionOuverte] = useState(null)
 
   const peutParametrer = aLeDroit(droits, 'caution.parametrer')
@@ -124,6 +124,53 @@ export default function CautionsGestion({ etabActif, droits }) {
     return { consigne, retenu, nbOuvertes }
   }, [cautions])
 
+  // ── LA LIGNE DE BARÈME, EN ÉCRAN ────────────────────────────────────────────────────────
+  //
+  // ⚠ DEUX FORMES DANS UN SEUL PARAMÈTRE, comme le rejet SEPA : `nouvelle` pour ajouter, ou
+  // l'identifiant d'une ligne à corriger. Les confondre ne serait pas un détail — un formulaire
+  // d'ajout ouvert par un lien de modification CRÉERAIT une ligne au lieu d'en corriger une.
+  //
+  // `grilles` part à [] et non à null : c'est `chargement` qui dit si on a lu.
+  if (ouvert) {
+    const creation = ouvert === 'nouvelle'
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux cautions
+      </button>
+    )
+    if (!creation && chargement) {
+      return (
+        <>{retour}<div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div></>
+      )
+    }
+    const grille = creation ? {} : grilles.find((g) => String(g.id) === String(ouvert))
+    if (!creation && !grille) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            Cette ligne de barème n’est plus dans la grille — elle a sans doute été retirée depuis
+            que ce lien a été copié. Revenez au barème plutôt que d’en recréer une.
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <GrilleModal
+          key={ouvert}
+          grille={grille}
+          etabActif={etabActif}
+          onClose={fermer}
+          onFait={(m) => { fermer(); setSucces(m); setErreur(null); recharger() }}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -173,23 +220,14 @@ export default function CautionsGestion({ etabActif, droits }) {
             <Bareme
               grilles={grilles}
               peutParametrer={peutParametrer}
-              onEditer={setGrilleEditee}
+              onEditer={(g) => majParams(
+                { bareme: g && g.id ? String(g.id) : 'nouvelle' },
+                { pousser: true },
+              )}
             />
           )}
         </>
       )}
-
-      <GrilleModal
-        grille={grilleEditee}
-        etabActif={etabActif}
-        onClose={() => setGrilleEditee(null)}
-        onFait={(m) => {
-          setGrilleEditee(null)
-          setSucces(m)
-          setErreur(null)
-          recharger()
-        }}
-      />
     </>
   )
 }
@@ -637,11 +675,8 @@ function GrilleModal({ grille, etabActif, onClose, onFait }) {
   }
 
   return (
-    <Modal
-      open={!!grille}
-      onClose={onClose}
-      titre={edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}
-    >
+    <>
+      <h2>{edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}</h2>
       <form onSubmit={envoyer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -733,7 +768,7 @@ function GrilleModal({ grille, etabActif, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
