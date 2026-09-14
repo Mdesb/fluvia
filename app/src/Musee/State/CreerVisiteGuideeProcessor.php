@@ -6,6 +6,7 @@ namespace App\Musee\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Fonctionnalite\Enum\Metier;
 use App\Musee\Entity\Guide;
 use App\Musee\Entity\VisiteGuidee;
 use App\Securite\Service\ContexteEtablissement;
@@ -62,6 +63,7 @@ final class CreerVisiteGuideeProcessor implements ProcessorInterface
         $ressource = new Ressource();
         $ressource->setEtablissement($etablissement)
             ->setCodeType('visite_guidee')
+            ->setVerticale(Metier::Musee->value)
             ->setLibelle($theme)
             ->setCapacitePropre($capacite);
         $this->em->persist($ressource);
