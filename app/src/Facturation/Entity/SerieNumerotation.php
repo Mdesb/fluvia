@@ -7,7 +7,6 @@ namespace App\Facturation\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
-use App\Compta\Entity\PeriodeComptable;
 use App\Compta\Entity\ProfilExploitant;
 use App\Facturation\Enum\PrefixeSerie;
 use Doctrine\ORM\Mapping as ORM;
@@ -27,7 +26,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'facturation_serie_numerotation')]
-#[ORM\UniqueConstraint(name: 'uniq_facturation_serie', columns: ['profil_exploitant_id', 'periode_id', 'prefixe'])]
+#[ORM\UniqueConstraint(name: 'uniq_facturation_serie', columns: ['profil_exploitant_id', 'exercice', 'prefixe'])]
 #[ApiResource(
     shortName: 'SerieNumerotationFacturation',
     operations: [
@@ -54,10 +53,28 @@ class SerieNumerotation
     #[Groups(['serie:read'])]
     private ?ProfilExploitant $profilExploitant = null;
 
-    #[ORM\ManyToOne(targetEntity: PeriodeComptable::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    /**
+     * L'ANNEE DE LA SEQUENCE — PAS LA PERIODE COMPTABLE.
+     *
+     * ⚠ CETTE COLONNE REMPLACE `periode`, ET LE DEFAUT QU'ELLE CORRIGE ETAIT BLOQUANT.
+     * `PeriodeComptableResolver` cree une periode par MOIS. Le compteur etait donc mensuel, alors
+     * que `GenerateurNumeroFacture` compose un numero qui ne porte que l'ANNEE — `FA-2026-00001` —
+     * et que `uniq_facture_numero` est unique sur ce numero seul. Resultat : la premiere facture de
+     * chaque nouveau mois reprenait le numero de la premiere du mois precedent, et la contrainte la
+     * rejetait. Mesure du 14/09/2026 sur la preproduction : aucune facture de septembre ne pouvait
+     * etre emise, celle d'aout portant deja `FA-2026-00001`.
+     *
+     * Le contrat etait pourtant deja ecrit ailleurs : le docbloc de `ScellementFactureHandler`
+     * decrit la serie comme portee par « (profilExploitant, exercice, prefixe) ». C'est
+     * l'implementation qui s'en ecartait, pas la specification.
+     *
+     * ⚠ A NE PAS CONFONDRE AVEC LA CHAINE NF525. `Facture::numeroSequence` est une SECONDE sequence,
+     * continue par exploitant et sans remise a zero annuelle, calculee par `ScellementFactureHandler`
+     * a partir du dernier maillon. Elle ne passe pas par cette table et n'est pas touchee ici.
+     */
+    #[ORM\Column(type: 'smallint', options: ['unsigned' => true])]
     #[Groups(['serie:read'])]
-    private ?PeriodeComptable $periode = null;
+    private int $exercice = 0;
 
     #[ORM\Column(length: 4, enumType: PrefixeSerie::class)]
     #[Groups(['serie:read'])]
@@ -89,14 +106,14 @@ class SerieNumerotation
         return $this;
     }
 
-    public function getPeriode(): ?PeriodeComptable
+    public function getExercice(): int
     {
-        return $this->periode;
+        return $this->exercice;
     }
 
-    public function setPeriode(?PeriodeComptable $periode): self
+    public function setExercice(int $exercice): self
     {
-        $this->periode = $periode;
+        $this->exercice = $exercice;
 
         return $this;
     }
