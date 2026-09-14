@@ -8,6 +8,7 @@ import Tabs from './Tabs.jsx'
 // s'affichera devant un client, et pour ne pas inventer un second format.
 import Markdown from '../public/components/Markdown.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
 import CreneauxProduit from './CreneauxProduit.jsx'
@@ -195,6 +196,8 @@ export default function ProduitFiche({
   // ⚠ L'INSTANTANE DES VALEURS CHARGEES. Sans lui, la barre ne pourrait annoncer que « des
   // modifications » — et on enregistrerait six onglets sans savoir ce qu'on emporte.
   const [reference, setReference] = useState(() => valeursModifiables(produit))
+  // Vocabulaire par verticale (#100) : t('multi_entry_card', null, …) rend « Carte d'entrées » (piscine).
+  const { t } = useVocabulaireVerticales()
   // Le referentiel des taux, charge ici plutot que dans une modale : les trois champs comptables
   // vivent desormais dans l'onglet, et l'onglet est monte avec la fiche.
   //
@@ -1258,7 +1261,7 @@ export default function ProduitFiche({
       )}
 
       {edition.carte && (
-        <Section titre="Carte multi-entrées" aide="Combien d'entrées la carte donne, et pour combien on la paie.">
+        <Section titre={t('multi_entry_card', null, 'Carte multi-entrées')} aide="Combien d'entrées la carte donne, et pour combien on la paie.">
           <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
             <div className="field" style={{ flex: '1 1 10rem' }}>
               <label htmlFor="ca-paye">Entrées payées</label>

@@ -876,7 +876,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                 className="select"
                                 value={arbitragePour === c.id ? (arbitrageRessource || '') : ''}
                                 onChange={(e) => { setArbitragePour(c.id); setArbitrageRessource(e.target.value) }}
-                                aria-label="Ressource de remplacement"
+                                aria-label={`${t('resource', c.ressource?.verticale, 'Ressource')} de remplacement`}
                               >
                                 <option value="">Déplacer sur…</option>
                                 {(ressourcesEquivalentes[c.ressource?.id] ?? []).map((r) => (
