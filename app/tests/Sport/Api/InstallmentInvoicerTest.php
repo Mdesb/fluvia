@@ -94,6 +94,68 @@ final class InstallmentInvoicerTest extends SportApiTestCase
         );
     }
 
+    /**
+     * LE MODE À BLANC REFUSE EXACTEMENT CE QUE L'ÉMISSION REFUSE, MOT POUR MOT.
+     *
+     * ⚠ CE TEST EXISTE PARCE QUE LE CONTRAIRE EST ARRIVÉ. Le 14/09, `sepa:echeances:facturer
+     * --dry-run --depuis=2026-09-01` a annoncé « 5 à facturer, 0 refus » ; le passage réel, lancé
+     * dans la foulée, a refusé les cinq — aucune n'avait de taux de TVA. Le mode à blanc sortait
+     * après le seul plancher de date, sans rien résoudre.
+     *
+     * ⚠ ET L'ASSERTION PORTE SUR L'ÉGALITÉ DES DEUX MESSAGES, PAS SUR « ÇA REFUSE ». Vérifier
+     * seulement qu'une exception part laisserait passer une vérification qui refuse pour une AUTRE
+     * raison que l'émission — un mode à blanc pessimiste, qui ferait renoncer à des facturations
+     * légitimes. Ce qu'on veut n'est pas qu'il refuse, c'est qu'il dise la même chose.
+     */
+    public function testLaVerificationRefuseMotPourMotCeQueLEmissionRefuse(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        // Aucun taux nulle part, ni sur l'échéance ni en défaut : les deux modes doivent refuser.
+        $this->poserTauxDefaut($em, $etab, null);
+        $echeance = $this->echeance($em, 2990);
+
+        $refusAblanc = null;
+        try {
+            $invoicer->verifier($echeance, $etab);
+        } catch (\Throwable $echec) {
+            $refusAblanc = $echec->getMessage();
+        }
+
+        $refusReel = null;
+        try {
+            $invoicer->facturer($echeance, $etab, $auteur);
+        } catch (\Throwable $echec) {
+            $refusReel = $echec->getMessage();
+        }
+
+        self::assertNotNull($refusAblanc, 'le mode à blanc doit refuser, pas annoncer une émission qui n\'aura pas lieu');
+        self::assertNotNull($refusReel, 'précondition du test : l\'émission doit bien refuser ici');
+        self::assertSame($refusReel, $refusAblanc, 'le même refus, mot pour mot — c\'est la seule garantie qui tienne');
+    }
+
+    /**
+     * LA VÉRIFICATION N'ÉCRIT RIEN — Y COMPRIS PAS DE RÉSERVATION.
+     *
+     * Un mode à blanc qui laisserait une réservation derrière lui rendrait l'échéance « déjà connue »
+     * au passage suivant, et le vrai passage la sauterait. Le mode à blanc aurait alors empêché la
+     * facturation qu'il servait à préparer.
+     */
+    public function testLaVerificationNecritRien(): void
+    {
+        [$em, $invoicer, $etab] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 2990);
+
+        $invoicer->verifier($echeance, $etab);
+
+        self::assertSame(
+            0,
+            (int) $em->getRepository(InstallmentInvoice::class)->createQueryBuilder('r')
+                ->select('COUNT(r.id)')->getQuery()->getSingleScalarResult(),
+            'une vérification à blanc ne doit laisser aucune réservation',
+        );
+    }
+
     /** Le taux porté par l'échéance prime sur le défaut de l'établissement. */
     public function testLeTauxDeLEcheancePrimeSurLeDefaut(): void
     {
