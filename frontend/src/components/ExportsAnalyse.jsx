@@ -403,15 +403,21 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
                       </td>
                       <td>{(x.format || '').toUpperCase()}</td>
                       <td>
-                        <span className={x.statut === 'genere' ? 'badge good' : 'badge crit'}>
-                          {x.statut === 'genere' ? 'disponible' : 'échec'}
+                        {/* ⚠ TROIS ÉTATS, PAS DEUX. `envoye` est un SUCCÈS — le rapport
+                            planifié a produit le fichier PUIS l'a expédié. Le ranger avec
+                            `echec` affichait en rouge un rapport que le destinataire a reçu. */}
+                        <span className={x.statut === 'echec' ? 'badge crit' : 'badge good'}>
+                          {{ genere: 'disponible', envoye: 'envoyé' }[x.statut] || 'échec'}
                         </span>
-                        {x.statut !== 'genere' && x.messageErreur && (
+                        {x.statut === 'envoye' && x.destinataireEmail && (
+                          <div className="hint">à {x.destinataireEmail}</div>
+                        )}
+                        {x.statut === 'echec' && x.messageErreur && (
                           <div className="hint">{x.messageErreur}</div>
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        {x.statut === 'genere' && (
+                        {x.statut !== 'echec' && (
                           <button className="btn ghost sm" type="button" onClick={() => telecharger(x.id)}>
                             Télécharger
                           </button>
