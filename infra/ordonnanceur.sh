@@ -125,7 +125,39 @@ set -eu
 #                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme les deux ci-dessus,
 #                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send"
+# sepa:echeances:facturer            LA FACTURE D'UNE ECHEANCE D'ABONNEMENT, EMISE A SA DATE.
+#                                     Autorisee par Maxime le 14/09, apres l'avoir vue MORDRE et
+#                                     EPARGNER sur un passage a blanc lu (regle en tete de ce
+#                                     fichier). Sur une base chargee des fixtures completes :
+#                                       a blanc, plancher du jour   1 a facturer, 1 anterieure epargnee
+#                                       a blanc, --depuis=2020      2 a facturer, 0 epargnee
+#                                       apres les deux passages     0 facture, 0 reservation ecrites
+#                                       reel, 1er passage           1 emise, 1 epargnee, 0 refus
+#                                       reel, 2e passage            0 emise, 1 DEJA facturee
+#
+#                                     ⚠ C'EST LA TACHE LA PLUS DANGEREUSE DE CETTE LISTE : elle emet
+#                                     des documents SCELLES au sens NF525. Une facture ne s'annule
+#                                     pas, elle s'avoire. Trois gardes, et aucune ne remplace les
+#                                     deux autres :
+#                                       1. un PLANCHER de date a aujourd'hui — l'arriere ne se
+#                                          rattrape que par `--depuis`, donc par une decision ;
+#                                       2. `--dry-run`, qui sort APRES les memes gardes que le mode
+#                                          reel — un mode a blanc qui court-circuite ce qu'il simule
+#                                          annonce ce que le mode reel ne produira pas ;
+#                                       3. `safeOnFirstRun: false` au catalogue.
+#
+#                                     ⚠ CE QUE L'INSCRIPTION NE FAIT PAS, ET IL FAUT LE DIRE. Elle ne
+#                                     declenche RIEN : `RunScheduledTasksCommand:192` retient une
+#                                     tache jamais executee tant que `--supervise` n'est pas passe, et
+#                                     cette boucle appelle `--only` sans `--supervise`. Le premier
+#                                     passage reste donc un geste humain, explicite. Verifie en lisant
+#                                     le code, pas le commentaire : celui-ci a deja dit le contraire
+#                                     du vrai (`--only` valait supervision jusqu'au 01/09, D109).
+#
+#                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme ses voisines d'argent,
+#                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
+#
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
