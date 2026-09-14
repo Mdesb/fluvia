@@ -437,6 +437,17 @@ else
     executer "Migrations immuables (n°50)" "$RACINE/bin/garde-fou-migrations-immuables.sh"
 fi
 
+# 13 ter. app/config/reference.php NE SE COMMITE PAS (n°56, audit du 14/09, geste 12). Regenere par
+#     la suite de tests, il ne doit jamais entrer dans un commit — un oubli embarque 1820 lignes
+#     generees et ratisse la derive des autres sessions. Comme le n°50 : verification git, donc en
+#     shell. On compare le COMMITE (HEAD) a la reference, pas l'arbre : le fichier etant sans cesse
+#     regenere, comparer l'arbre serait rouge en permanence et le controle s'apprendrait a sauter.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "reference.php non commite (n°56)" "$RACINE/bin/garde-fou-reference-php.sh" "--contre=$REFERENCE"
+else
+    executer "reference.php non commite (n°56)" "$RACINE/bin/garde-fou-reference-php.sh"
+fi
+
 # 16. Lier un OBJET à un paramètre de requête sans dire son type (D58).
 #     Doctrine passe l'identifiant SANS son type `uuid` : la requête reste valide et compte zéro,
 #     sans exception ni avertissement. Deux modules en sont morts en silence le 28/08 — le solde
