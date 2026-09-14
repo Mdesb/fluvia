@@ -98,6 +98,16 @@ class Ressource
     #[Groups(['ressource:read', 'ressource:write', 'creneau:read'])]
     private string $codeType = '';
 
+    /**
+     * La verticale métier de cette ressource (id de module : « padel », « piscine »…) — pour que le
+     * vocabulaire affiche « Terrain » sur un court et « Bassin » sur un bassin dans un même établissement
+     * mixte (#100, option B). Nullable : non renseignée, le front retombe sur la verticale de
+     * l'établissement (s'il n'en a qu'une), puis sur le défaut FR.
+     */
+    #[ORM\Column(length: 40, nullable: true)]
+    #[Groups(['ressource:read', 'ressource:write', 'creneau:read'])]
+    private ?string $verticale = null;
+
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
     #[Groups(['ressource:read', 'ressource:write', 'creneau:read'])]
@@ -194,6 +204,18 @@ class Ressource
     public function setCodeType(string $codeType): self
     {
         $this->codeType = $codeType;
+
+        return $this;
+    }
+
+    public function getVerticale(): ?string
+    {
+        return $this->verticale;
+    }
+
+    public function setVerticale(?string $verticale): self
+    {
+        $this->verticale = $verticale;
 
         return $this;
     }
