@@ -115,6 +115,53 @@ final class ExportTest extends ReportingApiTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
+    /**
+     * LA MEME REGLE, LES DEUX PORTES — et on regarde ce que chacune repond.
+     *
+     * Deux routes servent le fichier d'un export :
+     *
+     *   /reporting/exports/{id}/telecharger       un controleur
+     *   /api/reporting/exports/{id}/telecharger   un provider API Platform (celui de l'ecran)
+     *
+     * Le test voisin etablit la regle sur la premiere : un utilisateur qui n'est pas le demandeur
+     * est refuse, meme si le perimetre le couvre, sauf `reporting.configurer`.
+     *
+     * Ce test pose la MEME demande sur les deux portes dans la meme passe et compare. Il n'anticipe
+     * pas le verdict : il l'affiche. Un test ecrit pour attendre 403 passerait aussi si le refus
+     * venait d'un 404 de routage.
+     */
+    public function testMemeRegleSurLesDeuxPortes(): void
+    {
+        $this->agreger();
+        [$clientSite, $enteteSite] = $this->authSite();
+        $idA1 = $this->idEtablissement(L11Fixtures::SITE_A1_NOM);
+        $export = $clientSite->request('POST', '/api/reporting/exports', $enteteSite + [
+            'json' => ['format' => 'csv', 'niveau' => 'etablissement', 'entiteId' => $idA1],
+        ])->toArray();
+
+        // Le directeur regional couvre A1, et n'est pas le demandeur : le cas que la regle refuse.
+        [$clientRegion, $enteteRegion] = $this->authRegion();
+
+        $clientRegion->request('GET', '/reporting/exports/' . $export['id'] . '/telecharger', $enteteRegion);
+        $codeControleur = $clientRegion->getResponse()->getStatusCode();
+
+        $clientRegion->request('GET', '/api/reporting/exports/' . $export['id'] . '/telecharger', $enteteRegion);
+        $codeProvider = $clientRegion->getResponse()->getStatusCode();
+
+        self::assertSame(
+            $codeControleur,
+            $codeProvider,
+            sprintf(
+                'Les deux portes doivent appliquer la meme regle. Controleur : %d, provider : %d. '
+                . 'Un export reserve a son demandeur cesse de l etre si une seconde route le sert '
+                . 'sans la meme verification.',
+                $codeControleur,
+                $codeProvider,
+            ),
+        );
+        self::assertSame(403, $codeControleur, 'la regle du §3 : ni demandeur, ni configurer');
+    }
+
     public function testTelechargementRefusePourUnAutreUtilisateurSansReportingConfigurer(): void
     {
         $this->agreger();
