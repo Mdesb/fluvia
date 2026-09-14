@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 
 /**
  * LES HORAIRES D'UNE RESSOURCE, ET SES ABSENCES.
@@ -69,6 +70,8 @@ function jourEtHeure(v) {
 
 export default function Disponibilites({ droits = [] }) {
   const peutGerer = aLeDroit(droits, 'reservation.gerer_ressource')
+  // Vocabulaire par verticale (#100) : t('resource', r?.verticale, …) rend « Terrain »/« Bassin ».
+  const { t } = useVocabulaireVerticales()
 
   const [ressources, setRessources] = useState([])
   const [dispos, setDispos] = useState([])
@@ -157,7 +160,7 @@ export default function Disponibilites({ droits = [] }) {
           return (
             <section className="card" key={r.id}>
               <div className="card-h">
-                <span>{r.libelle || r.codeType || 'Ressource'}</span>
+                <span>{r.libelle || r.codeType || t('resource', r?.verticale, 'Ressource')}</span>
                 {/* LA JAUGE SE REGLE ICI, ET ELLE N'ETAIT REGLABLE NULLE PART.
                     `capacitePropre` distingue deja un terrain de padel (4) d'un court de tennis en
                     simple (2) et d'un bassin (cinquante). Le modele savait ; l'ecran ne montrait que
