@@ -146,7 +146,7 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '' }
+const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '' }
 
 // Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
 const INCLUABLES = [
@@ -331,7 +331,74 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const peutFacturer = aLeDroit(droits, 'facturation.gerer')
   // Le droit de l'API, et lui seul : `crm.fusionner` garde les trois operations.
   const peutFusionner = aLeDroit(droits, 'crm.fusionner')
-  const [fusionPour, setFusionPour] = useState(null)
+  // ⚠ LA FICHE MAÎTRE SE LIT PAR SON IDENTIFIANT. `resultats` est filtré et paginé : un lien
+  // vers un client absent de la page courante ne s'y résoudrait pas. `erreurFusion` sépare
+  // « on n'a pas pu lire » de « il n'y est pas » — la distinction compte double ici, parce que
+  // l'écran d'après propose un geste irréversible.
+  const fusionSur = params.fusion || ''
+  const fermerFusion = () => majParams({ fusion: '' }, { pousser: true })
+  const [clientFusion, setClientFusion] = useState(null)
+  const [chargementFusion, setChargementFusion] = useState(false)
+  const [erreurFusion, setErreurFusion] = useState(false)
+
+  useEffect(() => {
+    if (!fusionSur) { setClientFusion(null); setErreurFusion(false); return undefined }
+    let vivant = true
+    setChargementFusion(true)
+    setErreurFusion(false)
+    setClientFusion(null)
+    api.client(fusionSur)
+      .then((c) => { if (vivant) setClientFusion(c) })
+      // Seul un 404 dit « cet identifiant ne désigne personne ». Tout le reste est une lecture
+      // qui a échoué, et l'écran ne doit pas les confondre.
+      .catch((e) => { if (vivant) setErreurFusion(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementFusion(false) })
+    return () => { vivant = false }
+  }, [fusionSur])
+
+  // ── LA FUSION DE DEUX FICHES, EN ÉCRAN ──────────────────────────────────────────────────
+  //
+  // ⚠ LE GESTE EST IRRÉVERSIBLE, et c'est précisément pourquoi il ne doit pas se jouer dans
+  // une boîte : on le relit mieux en pleine page, et l'adresse permet de le faire relire par
+  // quelqu'un d'autre avant de le faire.
+  //
+  // ⚠ TROIS ÉTATS. « pas encore lu » n'est pas « illisible », et ni l'un ni l'autre n'est
+  // « cet identifiant ne désigne personne ». Montés sur une fiche vide, les trois donneraient
+  // le même écran — et celui-là propose de fusionner.
+  if (fusionSur) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermerFusion}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour à la liste
+      </button>
+    )
+    return (
+      <div className="view large">
+        {retour}
+        {chargementFusion ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : !clientFusion ? (
+          <div className="banner banner-warn">
+            {erreurFusion
+              ? 'Cette fiche n’a pas pu être lue. Ce n’est pas la même chose que « ce client n’existe pas » : réessayez avant d’en conclure quoi que ce soit — et surtout avant de fusionner autre chose.'
+              : 'Ce client n’est plus dans la base — il a peut-être déjà été fusionné depuis que ce lien a été copié.'}
+          </div>
+        ) : (
+          <FusionClients
+            key={fusionSur}
+            open
+            client={clientFusion}
+            onClose={fermerFusion}
+            onFusionnee={() => { fermerFusion(); rechercher() }}
+          />
+        )}
+      </div>
+    )
+  }
 
   // ── LE FORMULAIRE D'UNE FICHE, EN ÉCRAN ─────────────────────────────────────────────────────
   //
@@ -592,7 +659,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                             cartes, deux soldes, deux historiques. Tout deploiement reel en accumule,
                             et rien ne les resorbe sans ce bouton. */}
                         {peutFusionner && (
-                          <button className="btn sm" type="button" aria-label={`Fusionner la fiche de ${nomClient(c)}`} onClick={() => setFusionPour(c)}>Fusionner</button>
+                          <button className="btn sm" type="button" aria-label={`Fusionner la fiche de ${nomClient(c)}`} onClick={() => majParams({ fusion: String(c.id) }, { pousser: true })}>Fusionner</button>
                         )}
                       </td>
                     </tr>
@@ -658,13 +725,6 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         client={devisPour}
         onClose={() => setDevisPour(null)}
         onCree={() => setDevisPour(null)}
-      />
-
-      <FusionClients
-        open={!!fusionPour}
-        client={fusionPour}
-        onClose={() => setFusionPour(null)}
-        onFusionnee={() => { setFusionPour(null); rechercher() }}
       />
 
       <Modal open={!!echange} onClose={() => setEchange(null)} titre={`Noter un échange — ${nomClient(echange)}`}>

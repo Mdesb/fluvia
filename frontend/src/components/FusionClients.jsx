@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { api } from '../api/client.js'
-import Modal from './Modal.jsx'
 import ClientPicker from './ClientPicker.jsx'
 
 // FUSIONNER DEUX FICHES CLIENTS — un mécanisme complet auquel il manquait une porte.
@@ -29,6 +28,8 @@ import ClientPicker from './ClientPicker.jsx'
 // `défusionner` restaure les fiches sources à l'identique. C'est ce qui autorise à fusionner du
 // tout : personne de sensé ne fusionnerait irréversiblement les deux fiches d'un client qui
 // réclame. Le journal des fusions, plus bas dans l'écran, est le chemin vers ce retour.
+// ⚠ CE N'EST PLUS UNE MODALE — le nom du fichier reste celui du composant, qui n'a jamais
+// porté « Modal ». La garde `if (!open) return null` remplace celle que `Modal` portait.
 export default function FusionClients({ open, onClose, client, onFusionnee }) {
   const [autre, setAutre] = useState(null)
   const [choixOuvert, setChoixOuvert] = useState(false)
@@ -89,8 +90,11 @@ export default function FusionClients({ open, onClose, client, onFusionnee }) {
 
   const divergents = Object.entries(apercu?.champsDivergents ?? {})
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Fusionner deux fiches" taille="lg">
+    <>
+      <h2>Fusionner deux fiches</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       <div className="field">
@@ -231,7 +235,7 @@ export default function FusionClients({ open, onClose, client, onFusionnee }) {
         avecCreation={false}
         onSelect={(c) => { setAutre(c); setChoixOuvert(false); setApercu(null) }}
       />
-    </Modal>
+    </>
   )
 }
 
