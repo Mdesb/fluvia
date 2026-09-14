@@ -38,7 +38,7 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
   // ⚠ L'ONGLET VIENT DE L'ADRESSE, POSÉE PAR LA PAGE HÔTE. Il n'y a plus qu'un seul hôte
   // (`Sepa.jsx`) : l'onglet de comptabilité qui rendait aussi cet écran a été retiré.
   const onglet = params.tab || 'mandats'
-  const setOnglet = (v) => majParams({ tab: v, mandat: '', creancier: '' })
+  const setOnglet = (v) => majParams({ tab: v, mandat: '', creancier: '', rejet: '' })
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
@@ -57,7 +57,6 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
   const [tronquees, setTronquees] = useState([])
 
   const [generation, setGeneration] = useState(false)
-  const [rejetSur, setRejetSur] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'sepa.gerer') || aLeDroit(droits, 'compta.gerer')
 
@@ -157,6 +156,64 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
     setSucces(message)
     setErreur(null)
     recharger()
+  }
+
+  // ── L'ÉCRAN DU REJET ────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ DEUX FORMES DANS UN SEUL PARAMÈTRE, et elles ne se résolvent pas pareil. `choisir` n'a
+  // rien à résoudre : le formulaire propose lui-même la liste des lignes. Un identifiant, lui,
+  // doit être retrouvé dans `lignes` — qui part à `[]` et non à `null`, donc la longueur de la
+  // liste ne dit RIEN sur la lecture. C'est `chargement` qui porte la distinction, et on le
+  // consulte AVANT de conclure « cette ligne n'existe pas ».
+  if (params.rejet) {
+    const fermerRejet = () => majParams({ rejet: '' }, { pousser: true })
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermerRejet}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux prélèvements
+      </button>
+    )
+    const libre = params.rejet === 'choisir'
+    if (!libre && chargement) {
+      return (
+        <>
+          {retour}
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        </>
+      )
+    }
+    const ligne = libre ? null : lignes.find((l) => String(l.id) === String(params.rejet))
+    if (!libre && !ligne) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            Cette ligne de prélèvement n’est plus dans les remises chargées — la remise a sans
+            doute été archivée depuis que ce lien a été copié. Le rejet se déclare aussi depuis
+            l’onglet « Rejets », en choisissant la ligne.
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <DeclarationRejetModal
+          key={params.rejet}
+          cible={libre ? 'choisir' : ligne}
+          lignes={lignes}
+          mandatsParId={mandatsParId}
+          lignesRejetees={lignesRejetees}
+          onClose={fermerRejet}
+          onFait={(m) => { fermerRejet(); apresEcriture(m) }}
+        />
+      </>
+    )
   }
 
   // ── LES DEUX ÉCRANS DE NIVEAU 2 ─────────────────────────────────────────────────────────
@@ -280,7 +337,10 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
               lignesRejetees={lignesRejetees}
               peutGerer={peutGerer}
               onGenerer={() => setGeneration(true)}
-              onRejeter={setRejetSur}
+              onRejeter={(c) => majParams(
+                { rejet: c === 'choisir' ? 'choisir' : String(c.id) },
+                { pousser: true },
+              )}
               onErreur={setErreur}
             />
           )}
@@ -291,7 +351,10 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
               lignes={lignes}
               lignesRejetees={lignesRejetees}
               peutGerer={peutGerer}
-              onRejeter={setRejetSur}
+              onRejeter={(c) => majParams(
+                { rejet: c === 'choisir' ? 'choisir' : String(c.id) },
+                { pousser: true },
+              )}
             />
           )}
 
@@ -305,15 +368,6 @@ export default function PrelevementsSepa({ etabActif, droits, params = {}, majPa
         open={generation}
         onClose={() => setGeneration(false)}
         onFait={(m) => { setGeneration(false); apresEcriture(m) }}
-      />
-
-      <DeclarationRejetModal
-        cible={rejetSur}
-        lignes={lignes}
-        mandatsParId={mandatsParId}
-        lignesRejetees={lignesRejetees}
-        onClose={() => setRejetSur(null)}
-        onFait={(m) => { setRejetSur(null); apresEcriture(m) }}
       />
     </>
   )
@@ -1142,7 +1196,8 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
   }
 
   return (
-    <Modal open={!!cible} onClose={onClose} titre="Enregistrer un rejet de la banque">
+    <>
+      <h2>Enregistrer un rejet de la banque</h2>
       <form onSubmit={envoyer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -1271,7 +1326,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
