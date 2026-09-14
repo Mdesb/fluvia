@@ -14,12 +14,12 @@ import { useEtatUrl } from '../api/url.js'
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE LES ÉCRANS. Il vit dans le composant, pas
 // ici : sans le paramètre `tab`, revenir d'un écran retomberait sur « Mandats » quel que soit
 // l'onglet d'où l'on venait.
-const DEFAUTS_URL = { tab: 'mandats', mandat: '', creancier: '' }
+const DEFAUTS_URL = { tab: 'mandats', mandat: '', creancier: '', rejet: '' }
 
 export default function Sepa({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('sepa', DEFAUTS_URL)
   // Un écran de niveau 2 prend la page : ni titre ni sous-titre au-dessus de lui.
-  const ecranOuvert = Boolean(params.mandat || params.creancier)
+  const ecranOuvert = Boolean(params.mandat || params.creancier || params.rejet)
 
   return (
     <div className="view">
