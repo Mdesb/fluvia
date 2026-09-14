@@ -26,6 +26,7 @@ use ApiPlatform\Metadata\Post;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
+use App\Membership\Validator\ConsumerNoticeCap;
 use App\Sepa\Validator\NoticeDelayCoversPeriod;
 use Symfony\Component\Uid\Uuid;
 
@@ -119,6 +120,7 @@ use Symfony\Component\Uid\Uuid;
     denormalizationContext: ['groups' => ['abonnement:write']],
 )]
 #[NoticeDelayCoversPeriod]
+#[ConsumerNoticeCap]
 /*
  * ⚠ UN FILTRE NON DECLARE EST IGNORE EN SILENCE, ET L'ENDPOINT REND TOUT.
  *
