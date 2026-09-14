@@ -155,10 +155,18 @@ const NAV = [
       // onglets de `Comptabilite` ; leur ouvrir une entree propre creerait DEUX CHEMINS vers la
       // meme liste, deux endroits a corriger, et personne pour savoir lequel fait foi.
       //
-      // Ce qui a change : les trois ecrans sont desormais des composants partages
-      // (`PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`) rendus AUX DEUX ENDROITS.
-      // Il y a bien deux portes, mais une seule piece derriere -- une seule implementation, qui ne
-      // peut pas diverger d'elle-meme. L'objection portait sur la duplication, pas sur les portes.
+      // Ce qui a change : les trois ecrans sont devenus des composants a part
+      // (`PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`), et les onglets de
+      // `Comptabilite` qui les rendaient ont ete RETIRES depuis.
+      //
+      // ⚠ CE BLOC A DIT << rendus AUX DEUX ENDROITS >> et << deux portes, une seule piece >>
+      // jusqu'au 14/09. Mesure ce jour-la : chacun des trois n'a plus qu'UN SEUL hote
+      // (`Sepa.jsx`, `Recouvrement.jsx`, `Cautions.jsx`), et `Comptabilite.jsx` porte la
+      // mention << SEPA EST PARTI AUSSI >>. La justification s'appuyait donc sur un fait
+      // disparu -- elle survivait au deplacement qu'elle decrivait.
+      //
+      // Ce qui reste vrai se dit plus simplement : une porte, une piece. L'objection portait
+      // sur la duplication, et il n'y en a plus du tout.
       //
       // Et elles ont chacune une raison d'exister a part :
       //  - SEPA porte quatre ecritures (mandat, remise, rejet, creancier) : c'est un poste de
