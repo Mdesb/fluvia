@@ -12,6 +12,7 @@ use App\Facturation\Entity\InstallmentInvoice;
 use App\Facturation\Enum\NatureFacture;
 use App\Facturation\Enum\OrigineFacture;
 use App\Facturation\Enum\TypeDestinataire;
+use App\Facturation\Service\RecipientCompletenessGuard;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Dto\EcheanceSepaDue;
 use App\Sepa\Entity\MandatSepa;
@@ -54,6 +55,7 @@ final class InstallmentInvoicer
         private readonly ResolveurComptesFacturation $comptes,
         private readonly FactureDirecteBuilder $builder,
         private readonly EmettreFactureDirecteHandler $emetteur,
+        private readonly RecipientCompletenessGuard $destinataireComplet,
     ) {
     }
 
@@ -193,10 +195,30 @@ final class InstallmentInvoicer
 
         $profil = $this->comptes->profilPour($etablissement);
 
+        $client = $this->client($echeance);
+
+        // ── LA COMPLÉTUDE DU DESTINATAIRE SE CONTRÔLE ICI, SANS ÉCRIRE ──────────────────────────
+        //
+        // ⚠ AJOUTÉ APRÈS UN SECOND PASSAGE RATÉ, LE 14/09. Le mode à blanc annonçait « 5 à
+        // facturer, 0 refus » ; l'émission a refusé les cinq pour « l'adresse du destinataire est
+        // requise » (RG-FACT-08) — les vingt clients de la préproduction sont sans adresse. Le
+        // premier correctif avait bien rendu le mode à blanc honnête sur le TAUX, mais ce
+        // contrôle-là restait de l'autre côté du mur, alors qu'il ne demande AUCUNE écriture.
+        //
+        // ⚠ ET IL COÛTAIT CINQ BROUILLONS. `emettre()` persiste la facture avant de la confier au
+        // scelleur : refusée là, elle restait en base. Le contrôler ici refuse AVANT toute écriture.
+        //
+        // La sonde est une `Facture` jamais persistée : `appliquerDestinataire()` a besoin d'un
+        // porteur, pas d'une ligne en base. Rien n'est écrit, et on interroge le VRAI garde plutôt
+        // que de réimplémenter sa règle — qui liste toutes les anomalies d'un coup, et changera.
+        $sonde = new Facture();
+        $this->builder->appliquerDestinataire($sonde, $this->destinataire($client));
+        $this->destinataireComplet->assertComplete($sonde->getDestinataire());
+
         return [
             'profil' => $profil,
             'taux' => $this->tauxApplicable($echeance, $profil),
-            'client' => $this->client($echeance),
+            'client' => $client,
         ];
     }
 
@@ -212,16 +234,7 @@ final class InstallmentInvoicer
         $facture->setProfilExploitant($profil);
         $facture->setCreePar($auteur);
 
-        $raisonSociale = trim((string) $client->getRaisonSociale());
-        $this->builder->appliquerDestinataire($facture, [
-            'type' => '' !== $raisonSociale ? TypeDestinataire::PersonneMorale->value : TypeDestinataire::Particulier->value,
-            'raisonSociale' => '' !== $raisonSociale ? $raisonSociale : null,
-            'nom' => $client->getNom(),
-            'prenom' => $client->getPrenom(),
-            'siret' => $client->getSiret(),
-            'adresse' => $client->getAdresse() ?? [],
-            'clientRef' => $client->getId()->toRfc4122(),
-        ]);
+        $this->builder->appliquerDestinataire($facture, $this->destinataire($client));
 
         $this->builder->appliquerLignes($facture, ['lignes' => [[
             'designation' => $echeance->libelle,
@@ -245,7 +258,49 @@ final class InstallmentInvoicer
         $this->em->persist($facture);
         $this->em->flush();
 
-        return $this->emetteur->emettre($facture);
+        // ⚠ UN REFUS DU SCELLEUR NE DOIT PAS LAISSER SA FACTURE DERRIÈRE LUI.
+        //
+        // Mesuré le 14/09 : cinq échéances refusées pour destinataire incomplet ont laissé cinq
+        // `facturation_facture` à l'état brouillon, avec leurs lignes et leurs destinataires. Ni
+        // numéro, ni écriture comptable — donc rien de scellé — mais elles apparaissent sur la
+        // fiche du client, et un second passage en aurait créé cinq de plus.
+        //
+        // `retirerReservation()` ne les emportait pas : elle ne connaît que la réservation.
+        try {
+            return $this->emetteur->emettre($facture);
+        } catch (\Throwable $echec) {
+            $this->retirerBrouillon($facture);
+
+            throw $echec;
+        }
+    }
+
+    /**
+     * Retire le brouillon d'une facture que le scelleur a refusée — **sans masquer la cause**.
+     *
+     * ⚠ EN DBAL, PAS EN ORM, et pour la raison écrite dans `retirerReservation()` : une exception
+     * pendant l'émission FERME l'EntityManager, et y appeler `remove()` lèverait « The EntityManager
+     * is closed » à la place du refus qui, lui, explique quelque chose.
+     *
+     * ⚠ L'ORDRE SUIT LES CLÉS ÉTRANGÈRES : les lignes, puis la facture, puis le destinataire — qui
+     * n'est référencé que par elle. L'inverse échouerait sur une contrainte.
+     */
+    private function retirerBrouillon(Facture $facture): void
+    {
+        try {
+            $connexion = $this->em->getConnection();
+            $id = $facture->getId()->toBinary();
+            $destinataire = $facture->getDestinataire()?->getId()?->toBinary();
+
+            $connexion->delete('facturation_ligne', ['facture_id' => $id]);
+            $connexion->delete('facturation_facture', ['id' => $id]);
+
+            if ($destinataire !== null) {
+                $connexion->delete('facturation_destinataire', ['id' => $destinataire]);
+            }
+        } catch (\Throwable) {
+            // Volontairement muet : perdre la cause du refus coûterait plus cher que le brouillon.
+        }
     }
 
     /**
@@ -294,6 +349,30 @@ final class InstallmentInvoicer
             . 'défaut n\'est réglé dans Paramètres › Facturation.',
             $echeance->referenceOrigine,
         ));
+    }
+
+    /**
+     * La charge utile du destinataire, telle que la facture la portera.
+     *
+     * ⚠ UNE SEULE MÉTHODE POUR LES DEUX CHEMINS. La vérification à blanc et l'émission doivent
+     * juger EXACTEMENT le même destinataire : deux compositions qui se ressemblent finissent par
+     * diverger sur un champ, et le mode à blanc redeviendrait optimiste sans que rien ne le dise.
+     *
+     * @return array<string, mixed>
+     */
+    private function destinataire(Client $client): array
+    {
+        $raisonSociale = trim((string) $client->getRaisonSociale());
+
+        return [
+            'type' => '' !== $raisonSociale ? TypeDestinataire::PersonneMorale->value : TypeDestinataire::Particulier->value,
+            'raisonSociale' => '' !== $raisonSociale ? $raisonSociale : null,
+            'nom' => $client->getNom(),
+            'prenom' => $client->getPrenom(),
+            'siret' => $client->getSiret(),
+            'adresse' => $client->getAdresse() ?? [],
+            'clientRef' => $client->getId()->toRfc4122(),
+        ];
     }
 
     private function client(EcheanceSepaDue $echeance): Client

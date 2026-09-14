@@ -156,6 +156,99 @@ final class InstallmentInvoicerTest extends SportApiTestCase
         );
     }
 
+    /**
+     * UN DESTINATAIRE SANS ADRESSE EST REFUSÉ **AVANT** TOUTE ÉCRITURE.
+     *
+     * ⚠ CE TEST VIENT D'UN SECOND PASSAGE RATÉ, LE 14/09, APRÈS LE PREMIER CORRECTIF. Le mode à
+     * blanc — rendu honnête sur le taux la veille — annonçait « 5 à facturer, 0 refus » ; l'émission
+     * a refusé les cinq pour « l'adresse du destinataire est requise » (RG-FACT-08). Les vingt
+     * clients de la préproduction sont sans adresse. Le contrôle existait, il était simplement de
+     * l'autre côté du mur — alors qu'il ne demande aucune écriture.
+     *
+     * La leçon n'est pas « il manquait ce contrôle-ci » : c'est qu'un mode à blanc se juge sur ce
+     * qu'il NE traverse pas, et que cette liste doit être mesurée, pas supposée.
+     */
+    public function testUnDestinataireSansAdresseEstRefuseAvantToutEcriture(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 2990);
+
+        $mandat = $em->getRepository(MandatSepa::class)->find($echeance->mandatId);
+        self::assertInstanceOf(MandatSepa::class, $mandat);
+        $client = $mandat->getClient();
+        self::assertNotNull($client);
+        $client->setAdresse(null);
+        $em->flush();
+
+        $avant = (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture');
+
+        $refusAblanc = null;
+        try {
+            $invoicer->verifier($echeance, $etab);
+        } catch (\Throwable $echec) {
+            $refusAblanc = $echec->getMessage();
+        }
+
+        $refusReel = null;
+        try {
+            $invoicer->facturer($echeance, $etab, $auteur);
+        } catch (\Throwable $echec) {
+            $refusReel = $echec->getMessage();
+        }
+
+        self::assertNotNull($refusAblanc, 'le mode à blanc doit voir l\'adresse manquante : elle se lit sans rien écrire');
+        self::assertSame($refusReel, $refusAblanc, 'le même refus, mot pour mot');
+        self::assertStringContainsString('adresse', (string) $refusAblanc);
+
+        self::assertSame(
+            $avant,
+            (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture'),
+            'refusée sur le destinataire, la facture ne doit même pas avoir été ébauchée',
+        );
+    }
+
+    /**
+     * UNE ÉMISSION REFUSÉE PAR LE SCELLEUR NE LAISSE PAS SON BROUILLON.
+     *
+     * ⚠ MESURÉ SUR LA PRÉPRODUCTION LE 14/09 : cinq refus ont laissé cinq `facturation_facture` à
+     * l'état brouillon, avec leurs lignes et leurs destinataires. Ni numéro ni écriture comptable —
+     * donc rien de scellé — mais elles apparaissent sur la fiche du client, et chaque nouveau
+     * passage en aurait ajouté cinq. `retirerReservation()` ne les emportait pas : elle ne connaît
+     * que la réservation.
+     *
+     * Le refus employé ici vient du SCELLEUR, pas de la résolution : sans compte de produit,
+     * `EmettreFactureDirecteHandler` refuse — donc après que le brouillon a été écrit. C'est la
+     * seule façon d'éprouver le retrait.
+     */
+    public function testUneEmissionRefuseeParLeScelleurNeLaissePasDeBrouillon(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+
+        $profil = $this->profil($em);
+        $parametre = $em->getRepository(\App\Facturation\Entity\ParametreFacturationEtablissement::class)
+            ->findOneBy(['profilExploitant' => $profil->getId()]);
+        self::assertNotNull($parametre);
+        $parametre->setCompteProduitDefaut(null);
+        $em->flush();
+
+        $avant = (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture');
+
+        try {
+            $invoicer->facturer($this->echeance($em, 2990), $etab, $auteur);
+            self::fail('Sans compte de produit, le scelleur devait refuser.');
+        } catch (\Throwable $echec) {
+            self::assertStringContainsString('produit', $echec->getMessage());
+        }
+
+        self::assertSame(
+            $avant,
+            (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture'),
+            'le brouillon de la facture refusée doit avoir été retiré',
+        );
+    }
+
     /** Le taux porté par l'échéance prime sur le défaut de l'établissement. */
     public function testLeTauxDeLEcheancePrimeSurLeDefaut(): void
     {
