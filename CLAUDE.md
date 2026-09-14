@@ -38,7 +38,7 @@ Ne charge jamais toute la doc d'un coup ; pointe la section utile :
 
 **Toute demande passe d'abord par `/aiguiller`**, avant de toucher un fichier :
 
-- **Voie légère** (`/correctif-rapide`) — petit changement localisé, réversible, ne touchant **aucune** zone sensible (base, auth, paiements, **cloisonnement multi-tenant**, NF525/argent, données personnelles) et n'ajoutant pas de capacité nouvelle. Intention en une ligne dans l'index, changement chirurgical, tests verts (+ non-régression si bug), revue `relecteur`, puis **auto-merge dès que la CI est verte** (le gate est la CI, plus de feu vert manuel).
+- **Voie légère** (`/correctif-rapide`) — petit changement localisé, réversible, ne touchant **aucune** zone sensible (base, auth, paiements, **cloisonnement multi-tenant**, NF525/argent, données personnelles) et n'ajoutant pas de capacité nouvelle. Intention en une ligne dans l'index, changement chirurgical, tests verts (+ non-régression si bug), revue `relecteur`, puis fusion (voir **⚠ Il n'y a pas de CI** ci-dessous).
 - **Cycle SDD complet** (`/nouvelle-fonctionnalite`) — vraie fonctionnalité ou zone sensible.
 
 **Défaut : voie légère** (personne ne code au quotidien). **En cas de doute : SDD complet.** Si un correctif rapide grossit ou touche une zone sensible, on **rebascule en SDD complet**. La voie légère allège le *process*, jamais les *garde-fous de sécurité*.
@@ -66,7 +66,21 @@ Rien ne merge tant que ce n'est pas vert.
 ## Git — GitHub est la référence
 
 - **Dépôt de référence : `github.com/Mdesb/fluvia`.** On y travaille en **branches + PR + Issues** ; la préprod déploie depuis GitHub ; la CI gate les PR.
-- **Une branche par changement** : `feature/<nom>` (SDD complet) ou `fix/<nom>` (voie légère). **Jamais de push direct sur `main`.** Merge = **automatique dès que la CI est verte** (auto-merge GitHub en squash, workflow `auto-merge.yml`) : le gate est la CI, plus de feu vert manuel. Pour un travail en cours, ouvre ta PR en **brouillon** — l'auto-merge ne s'arme qu'au passage « ready ».
+- **Une branche par changement** : `feature/<nom>` (SDD complet) ou `fix/<nom>` (voie légère). **Jamais de push direct sur `main`.** Pour un travail en cours, ouvre ta PR en **brouillon**.
+
+  > ### ⚠ IL N'Y A PAS DE CI. RIEN NE RELIT TA PR — NI HUMAIN, NI MACHINE.
+  >
+  > Cette ligne disait « merge = automatique dès que la CI est verte, le gate est la CI, plus de feu vert manuel ». **C'est faux, et ça l'a toujours été.** Mesuré le 15/09/2026 : **0 run** GitHub Actions depuis la création du dépôt, tous workflows et tous événements confondus, et **0 suite de contrôles** créée sur `main`. Les workflows sont pourtant bien déclarés et actifs.
+  >
+  > La cause est hors du dépôt : le compte `Mdesb` est **écarté par GitHub** — `github.com/Mdesb` rend 404 à un visiteur anonyme, et `api/users/Mdesb` rend 404 **même à Mdesb authentifié**. Voir `COORDINATION/BLOQUEURS-EXTERNES.md` (E-10) ; seul le support GitHub peut le lever.
+  >
+  > **Conséquence sur ton travail :** la protection de `main` exige deux checks qui ne peuvent pas exister, donc **aucune PR ne fusionne seule**. Chacune est forcée à la main :
+  >
+  > ```bash
+  > gh pr merge <N> --squash --admin --repo Mdesb/fluvia
+  > ```
+  >
+  > **Le seul gate réel est le hook de pré-commit**, qui lance `bin/garde-fous.sh` sur ta machine avant que le commit existe. Ce qu'il laisse passer entre dans `main` tel quel. Ne te repose sur aucune vérification en aval : il n'y en a pas.
 - **Commits en français, conventional commits** (`feat:`, `fix:`, `docs:`, `securite:` avec portée `fix(ci):`) ; le corps dit le *pourquoi* et les conséquences.
 - **Jamais de `push --force` ni de réécriture d'historique sur `main`.** (La seule exception passée : purger un secret du miroir public, opération d'intégration explicitement demandée par Maxime.)
 - **Réserver un chantier avant de le toucher** : assigne-toi l'**Issue** correspondante (atomique, horodaté — pas de course). **Priorité haute d'abord.** Reste dans ton périmètre (`CODEOWNERS`).
