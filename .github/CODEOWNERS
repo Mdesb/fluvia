@@ -1,0 +1,77 @@
+# CODEOWNERS — Fluvia
+#
+# ⚠ UNE SEULE IDENTITE GITHUB sur ce depot (@Mdesb) : la flotte la partage. CODEOWNERS ne peut donc
+# pas router nominativement vers claude-A..I. Ce fichier fait deux choses :
+#   1. donne a chaque perimetre un proprietaire GitHub (@Mdesb) — plus aucun chemin orphelin
+#      (c'etait le geste 6 de l'audit du 14/09 : « frontend/ sans proprietaire ») ;
+#   2. documente, en commentaire, le proprietaire REEL par session (COORDINATION/FLOTTE.md, D48).
+# Le jour ou un second compte existe (issue #3), remplacer @Mdesb par le handle de la session.
+#
+# Rappel : la derniere regle qui matche l'emporte. Le defaut est en tete, les perimetres ensuite.
+
+# Defaut
+*                          @Mdesb
+
+# ── claude-A · noyau, integration, securite ─────────────────────────────────────────────────────
+/app/src/Platform/         @Mdesb
+/app/src/Securite/         @Mdesb
+/app/src/Organisation/     @Mdesb
+/app/src/Fonctionnalite/   @Mdesb
+/app/src/Audit/            @Mdesb
+/app/src/Personnel/        @Mdesb
+/app/src/Reporting/        @Mdesb
+/app/src/Ocr/              @Mdesb
+/COORDINATION/             @Mdesb
+
+# ── claude-B · acces & GED ──────────────────────────────────────────────────────────────────────
+/app/src/Acces/            @Mdesb
+/app/src/Dms/              @Mdesb
+/app/src/Autorisation/     @Mdesb
+/app/src/Support/          @Mdesb
+
+# ── claude-C · outillage & garde-fous ───────────────────────────────────────────────────────────
+/bin/                      @Mdesb
+/hooks/                    @Mdesb
+/.github/                  @Mdesb
+
+# ── claude-D · administration editeur, facturation, SEPA ────────────────────────────────────────
+/app/src/Editeur/          @Mdesb
+/app/src/Subscription/     @Mdesb
+/app/src/Facturation/      @Mdesb
+/app/src/Compta/           @Mdesb
+/app/src/Sepa/             @Mdesb
+/app/src/Finance/          @Mdesb
+/vitrine/                  @Mdesb
+
+# ── claude-E · revenue recovery, smart flow, CRM ────────────────────────────────────────────────
+/app/src/RevenueRecovery/  @Mdesb
+/app/src/SmartFlow/        @Mdesb
+/app/src/Crm/              @Mdesb
+/app/src/Recouvrement/     @Mdesb
+
+# ── claude-F · hebergement, restauration, sejour, boutique ──────────────────────────────────────
+/app/src/Lodging/          @Mdesb
+/app/src/Dining/           @Mdesb
+/app/src/Stay/             @Mdesb
+/app/src/Boutique/         @Mdesb
+/app/src/Stock/            @Mdesb
+/app/src/Caution/          @Mdesb
+
+# ── claude-G · reservation, offre, vente, caisse ────────────────────────────────────────────────
+/app/src/Reservation/      @Mdesb
+/app/src/Offre/            @Mdesb
+/app/src/Vente/            @Mdesb
+/app/src/Caisse/           @Mdesb
+/app/src/OptionProduit/    @Mdesb
+
+# ── claude-H · publication sociale ET interface ─────────────────────────────────────────────────
+/app/src/Social/           @Mdesb
+/frontend/                 @Mdesb
+
+# ── claude-I · verticales metier & vocabulaire ──────────────────────────────────────────────────
+/app/src/Piscine/          @Mdesb
+/app/src/Padel/            @Mdesb
+/app/src/Patinoire/        @Mdesb
+/app/src/Sport/            @Mdesb
+/app/src/Musee/            @Mdesb
+/specs/verticales/         @Mdesb
