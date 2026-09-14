@@ -7,6 +7,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
 import { idDe } from '../api/iri.js'
+import { useEtatUrl } from '../api/url.js'
 import { TYPES_QUALIFICATION } from '../api/qualifications.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -84,11 +85,21 @@ function etatQualification(r) {
 }
 
 // Module Personnel : employés, roster (planning), badges staff.
+// ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. La fiche vit dans un composant
+// que seul l'onglet « Employés » monte : sans le paramètre `tab`, un F5 sur `?employe=…`
+// retomberait sur un onglet qui ne la rend pas.
+const DEFAUTS_URL = { tab: 'employes', employe: '' }
+
 export default function Personnel({ etabActif, droits = [] }) {
-  const [sousOnglet, setSousOnglet] = useState('employes')
+  const [params, majParams] = useEtatUrl('personnel', DEFAUTS_URL)
+  const sousOnglet = params.tab
+  const setSousOnglet = (v) => majParams({ tab: v, employe: '' })
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.employe)
 
   return (
     <div className="view">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Personnel</h1>
@@ -110,9 +121,16 @@ export default function Personnel({ etabActif, droits = [] }) {
         actif={sousOnglet}
         onChange={setSousOnglet}
       />
+      </>)}
 
       {sousOnglet === 'employes' && (
-        <ListeEmployes etabActif={etabActif} droits={droits} onBadgeEmis={() => setSousOnglet('badges')} />
+        <ListeEmployes
+          etabActif={etabActif}
+          droits={droits}
+          onBadgeEmis={() => setSousOnglet('badges')}
+          params={params}
+          majParams={majParams}
+        />
       )}
 
       {/* LE PLANNING AVANT LE ROSTER, ET C'EST L'ORDRE DU RAISONNEMENT : le créneau dit ce qu'il
@@ -462,18 +480,41 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
  * Après l'émission, on bascule sur l'onglet des badges — parce que c'est là que se trouve ce qu'on
  * vient de créer, et qu'un geste dont on ne voit pas le résultat se refait.
  */
-function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
+function ListeEmployes({ etabActif, droits = [], onBadgeEmis, params = {}, majParams }) {
+  const ouvert = params.employe || ''
+  const fermer = () => majParams({ employe: '' }, { pousser: true })
   const peutGerer = aLeDroit(droits, 'personnel.gerer_badge')
   // DEUX DROITS DISTINCTS, ET C'EST VOULU : emettre un badge n'est pas embaucher. Le serveur exige
   // `personnel.gerer_employe` sur la creation, et `personnel.gerer_badge` sur les badges. Utiliser
   // le second pour afficher le bouton de creation produirait un 403 au clic, decouvert trop tard.
   const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
   const [creation, setCreation] = useState(false)
-  const [fiche, setFiche] = useState(null)
+  // ⚠ L'EMPLOYÉ SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE. Les lignes appartiennent à
+  // `Liste`, qui les charge et les pagine lui-même : il n'y a aucun tableau ici où chercher.
+  // `erreurFiche` sépare « on n'a pas pu lire » de « il n'y est pas ».
+  const [employeOuvert, setEmployeOuvert] = useState(null)
+  const [chargementFiche, setChargementFiche] = useState(false)
+  const [erreurFiche, setErreurFiche] = useState(false)
   const [emission, setEmission] = useState(null)
   const [rechargement, setRechargement] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!ouvert) { setEmployeOuvert(null); setErreurFiche(false); return undefined }
+    let vivant = true
+    setChargementFiche(true)
+    setErreurFiche(false)
+    setEmployeOuvert(null)
+    api.employe(ouvert)
+      .then((e) => { if (vivant) setEmployeOuvert(e) })
+      // ⚠ UN 404 N'EST PAS UNE PANNE : il dit que l'identifiant ne désigne personne (ou personne
+      // de visible d'ici). Tout le reste est une lecture qui a échoué, et l'écran ne doit pas
+      // les confondre — l'un invite à revenir à la liste, l'autre à réessayer.
+      .catch((e) => { if (vivant) setErreurFiche(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementFiche(false) })
+    return () => { vivant = false }
+  }, [ouvert, rechargement])
 
   const colonnes = [
     { cle: 'nom', entete: 'Employé', rendu: (r) => <span className="nm">{[r.prenom, r.nom].filter(Boolean).join(' ') || '—'}</span> },
@@ -490,7 +531,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
       rendu: (r) => (
         <div style={{ textAlign: 'right' }}>
           <button className="btn ghost sm" type="button" style={{ padding: '1px 8px', fontSize: 11.5 }}
-            onClick={() => setFiche(r)}>
+            onClick={() => majParams({ employe: String(r.id) }, { pousser: true })}>
             Fiche
           </button>
         </div>
@@ -583,6 +624,58 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
     })
   }
 
+  // ── LA FICHE D'UN EMPLOYÉ, EN ÉCRAN ─────────────────────────────────────────────────────
+  //
+  // ⚠ TROIS ÉTATS, ET AUCUN NE DOIT SE FAIRE PASSER POUR UN AUTRE. « pas encore lu » n'est pas
+  // « illisible », et ni l'un ni l'autre n'est « cet identifiant ne désigne personne ». Montés
+  // sur une fiche vide, les trois donneraient le même écran — et « Enregistrer » y écrirait des
+  // champs vides sur un employé réel.
+  if (ouvert) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux employés
+      </button>
+    )
+    if (chargementFiche) {
+      return (
+        <div>
+          {retour}
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        </div>
+      )
+    }
+    if (!employeOuvert) {
+      return (
+        <div>
+          {retour}
+          <div className="banner banner-warn">
+            {erreurFiche
+              ? 'Cette fiche n’a pas pu être lue. Ce n’est pas la même chose que « cet employé n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+              : 'Cet employé n’est plus dans l’effectif — il a sans doute quitté l’établissement depuis que ce lien a été copié.'}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div>
+        {retour}
+        <FicheEmploye
+          key={ouvert}
+          employe={employeOuvert}
+          droits={droits}
+          etabActif={etabActif}
+          onClose={fermer}
+          onChange={() => setRechargement((n) => n + 1)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -608,14 +701,6 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
         open={creation}
         onClose={() => setCreation(false)}
         onFait={() => { setCreation(false); setRechargement((n) => n + 1) }}
-      />
-
-      <FicheEmploye
-        employe={fiche}
-        droits={droits}
-        etabActif={etabActif}
-        onClose={() => setFiche(null)}
-        onChange={() => setRechargement((n) => n + 1)}
       />
 
       <EmissionBadgeModal
@@ -1281,7 +1366,8 @@ function FicheEmploye({ employe, droits = [], etabActif, onClose, onChange }) {
   const titre = [prenom, nom].filter(Boolean).join(' ') || 'Fiche employe'
 
   return (
-    <Modal open={ouvert} onClose={onClose} titre={titre} taille="lg">
+    <>
+      <h2>{titre}</h2>
       {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
       {/* LE BANDEAU DIT LES DEUX CONSEQUENCES MESUREES, PAS UNE INQUIETUDE VAGUE. */}
@@ -1487,7 +1573,7 @@ function FicheEmploye({ employe, droits = [], etabActif, onClose, onChange }) {
       <div className="modal-actions" style={{ marginTop: 'var(--esp-large)' }}>
         <button className="btn ghost" type="button" onClick={onClose}>Fermer</button>
       </div>
-    </Modal>
+    </>
   )
 }
 
