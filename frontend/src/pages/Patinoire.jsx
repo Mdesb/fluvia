@@ -6,6 +6,7 @@ import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 import { confirmer } from '../components/Confirmation.jsx'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 
 // Patinoire — l'écran de guichet, et non plus la vitrine en lecture seule.
 //
@@ -348,6 +349,8 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
 // Sortir une paire. La caution est pré-remplie au montant que le serveur applique par défaut : un
 // champ vide ferait croire qu'aucune caution n'est prise, alors qu'il en prend une.
 function SortieModal({ etat, beneficiaires, nommer, onClose, onFait, onErreur, onIndisponible }) {
+  // Vocabulaire patinoire (#100, lot 3) : t('deposit', 'patinoire', …) rend « Caution patins ».
+  const { t } = useVocabulaireVerticales()
   const [beneficiaire, setBeneficiaire] = useState('')
   const [caution, setCaution] = useState('15.00')
   const [moyen, setMoyen] = useState('')
@@ -398,7 +401,7 @@ function SortieModal({ etat, beneficiaires, nommer, onClose, onFait, onErreur, o
           </div>
 
           <div className="field">
-            <label htmlFor="pat-caution">Caution encaissée</label>
+            <label htmlFor="pat-caution">{t('deposit', 'patinoire', 'Caution')} encaissée</label>
             <input id="pat-caution" className="input" type="number" step="0.01" min="0" value={caution} onChange={(e) => setCaution(e.target.value)} />
             <div className="hint">15,00 € par défaut. Consignée à la sortie, rendue au retour sauf retenue.</div>
           </div>
