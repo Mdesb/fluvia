@@ -98,7 +98,11 @@ final readonly class VatRateSeeder
                 $this->em->persist($rate);
             }
 
-            if (VatRateCategory::Standard === $legal->getCategory()) {
+            // ⚠ UN TAUX DESACTIVE NE FAIT PAS UN DEFAUT DE FACTURATION. `existing()` rend aussi les
+            // taux inactifs, volontairement — pour ne pas en reposer un second a la meme valeur.
+            // Mais en designer un comme defaut ferait facturer avec un taux que l'exploitant a
+            // explicitement retire : mieux vaut aucun defaut, qui refuse en nommant ce qui manque.
+            if (VatRateCategory::Standard === $legal->getCategory() && $rate->isActif()) {
                 $standard = $rate;
             }
         }
@@ -159,20 +163,54 @@ final readonly class VatRateSeeder
     }
 
     /**
-     * Le taux de cet exploitant issu de ce taux legal, s'il existe deja.
+     * Le taux de cet exploitant correspondant a ce taux legal, s'il existe deja.
      *
-     * ⚠ LA COMPARAISON PORTE SUR L'ORIGINE, PAS SUR LA VALEUR. La reprise comparait sur la valeur,
-     * avec un bon argument — « un exploitant a pu renommer Taux normal 20 % en TVA 20 » — mais la
-     * valeur ne distingue pas deux 20 % de deux pays, et elle confond un taux zero avec un
-     * hors-champ. L'origine legale repond aux deux.
+     * ── DEUX CLES, ET IL FAUT LES DEUX ──────────────────────────────────────────────────────────
+     *
+     * L'ORIGINE d'abord : c'est la cle juste. Deux taux a 20 % peuvent etre deux choses
+     * differentes — un normal francais, un normal autrichien — et la valeur ne les distingue pas.
+     *
+     * ⚠ MAIS LA VALEUR ENSUITE, ET C'EST UN GARDE-FOU CONTRE MOI-MEME. Ma premiere version ne
+     * comparait QUE l'origine. Mesure sur la preproduction le 14/09 : sur les 31 taux du parc,
+     * **aucun ne porte d'origine legale** — ils viennent tous de l'ancienne constante, anterieure au
+     * referentiel. La reprise aurait donc juge « manquants » les quatre taux de CHAQUE profil et
+     * en aurait cree des doublons : six exploitants, deux « Taux normal 20 % » chacun. Or, comme
+     * l'ecrit le docbloc de la commande de reprise, « le doublon d'un taux de TVA ne se voit pas
+     * dans une liste et se voit tres bien sur une facture ».
+     *
+     * L'argument qui m'avait fait abandonner la valeur reste vrai — elle ne distingue pas deux pays
+     * — mais il ne s'applique pas ici : un profil exploitant a UN etablissement principal, donc UN
+     * pays. Les deux cles ne se concurrencent pas, elles se cumulent, et le resultat est strictement
+     * plus prudent que chacune seule.
+     *
+     * ⚠ ON NE TOUCHE PAS AU TAUX TROUVE PAR SA VALEUR. Ni son libelle — l'exploitant a pu le
+     * renommer — ni sa categorie, ni son origine. Le semeur ajoute ce qui manque ; il ne reecrit
+     * pas ce qui est la. Un taux herite garde donc son origine vide, et c'est sans consequence :
+     * l'ecran « reprendre un taux legal » permet de la poser si quelqu'un en a besoin.
      *
      * Le profil est compare par son IDENTIFIANT : a l'ouverture il n'est pas encore flushe, et une
      * entite non geree passee a `findOneBy` ne se compare pas de facon fiable.
      */
     private function existing(ProfilExploitant $profile, LegalVatRate $legal): ?TauxTva
     {
-        return $this->em->getRepository(TauxTva::class)
-            ->findOneBy(['profilExploitant' => $profile->getId(), 'origineLegale' => $legal]);
+        $depot = $this->em->getRepository(TauxTva::class);
+
+        $parOrigine = $depot->findOneBy([
+            'profilExploitant' => $profile->getId(),
+            'origineLegale' => $legal,
+        ]);
+
+        if ($parOrigine instanceof TauxTva) {
+            return $parOrigine;
+        }
+
+        // ⚠ SANS FILTRE SUR `actif`. Un taux que l'exploitant a DESACTIVE est un taux qu'il connait
+        // et dont il ne veut pas : en reposer un second, actif, le lui rendrait sans qu'il l'ait
+        // demande — et lui en laisserait deux a la meme valeur.
+        return $depot->findOneBy([
+            'profilExploitant' => $profile->getId(),
+            'taux' => $legal->getRate(),
+        ]);
     }
 
     private function build(ProfilExploitant $profile, LegalVatRate $legal): TauxTva
@@ -196,13 +234,31 @@ final readonly class VatRateSeeder
      * Il n'est pas un taux a zero parmi d'autres : il dit « cette operation n'entre pas dans le
      * champ de la TVA ». Aucun Etat ne le publie comme un taux — c'est une qualification
      * d'operation — et pourtant tout exploitant en a besoin (cotisation d'association, subvention).
-     * Il se pose donc ici, et son unicite se juge sur la CATEGORIE, pas sur la valeur : un taux zero
-     * AVEC droit a deduction vaut aussi `0.00` et n'est pas la meme chose.
+     * Son unicite se juge sur la CATEGORIE, pas sur la valeur : un taux zero AVEC droit a deduction
+     * vaut aussi `0.00` et n'est pas la meme chose.
+     *
+     * ⚠ ET SUR LE LIBELLE AUSSI, POUR LE PARC EXISTANT. Mesure du 14/09 : les six hors-champ de la
+     * preproduction portent `vat_category` a NULL — ils sont anterieurs a la colonne. Juger sur la
+     * seule categorie en aurait donc cree un SECOND a chaque profil, a la meme valeur et sous le
+     * meme nom. Le libelle est une cle faible, mais c'est la seule que ces lignes portent.
      */
     private function existingOutOfScope(ProfilExploitant $profile): ?TauxTva
     {
-        return $this->em->getRepository(TauxTva::class)
-            ->findOneBy(['profilExploitant' => $profile->getId(), 'vatCategory' => VatCategory::OutOfScope]);
+        $depot = $this->em->getRepository(TauxTva::class);
+
+        $parCategorie = $depot->findOneBy([
+            'profilExploitant' => $profile->getId(),
+            'vatCategory' => VatCategory::OutOfScope,
+        ]);
+
+        if ($parCategorie instanceof TauxTva) {
+            return $parCategorie;
+        }
+
+        return $depot->findOneBy([
+            'profilExploitant' => $profile->getId(),
+            'libelle' => TauxTva::LIBELLE_HORS_CHAMP,
+        ]);
     }
 
     private function buildOutOfScope(ProfilExploitant $profile): TauxTva

@@ -6,6 +6,8 @@ namespace App\Tests\Organisation\Api;
 
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
+use App\Compta\Enum\ReferentielComptable;
+use App\Compta\Enum\TypeExploitant;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Legal\Entity\LegalIdentity;
 use App\Organisation\Command\BackfillAccountingProfilesCommand;
@@ -140,6 +142,73 @@ final class BackfillAccountingProfilesCommandTest extends SecuriteApiTestCase
             $parametre?->getTauxTvaDefaut()?->getTaux(),
             'le defaut ultramarin est 8,5 % — pas le 20 % metropolitain',
         );
+    }
+
+    /**
+     * ⚠ LE PARC EXISTANT NE DOIT PAS RECEVOIR DE DOUBLONS. C'EST LE VRAI RISQUE DE CETTE COMMANDE.
+     *
+     * Mesure sur la preproduction le 14/09 : les 31 taux du parc — six exploitants — ne portent
+     * AUCUNE origine legale, et leurs six hors-champ ont `vat_category` a NULL. Ils viennent tous de
+     * l'ancienne constante, anterieure au referentiel.
+     *
+     * Ma premiere version de `VatRateSeeder` ne comparait que l'ORIGINE. Elle aurait donc juge
+     * « manquants » les quatre taux de chaque profil et en aurait cree des doublons : deux « Taux
+     * normal 20 % » par exploitant, et un second hors-champ. Le docbloc de cette commande dit
+     * pourquoi c'est grave, et il le disait avant moi : « le doublon d'un taux de TVA ne se voit pas
+     * dans une liste et se voit tres bien sur une facture ».
+     *
+     * Aucun test ne pouvait l'attraper : les miens partaient tous d'un profil NEUF, ou l'absence
+     * d'origine et l'absence de taux se confondent.
+     */
+    public function testUnProfilHeriteSansOrigineLegaleNeRecoitAucunDoublon(): void
+    {
+        $em = $this->em();
+        $this->seedFranceMetropolitanVatRates($em);
+
+        $etablissement = $this->structureSansProfil('Reprise — parc existant', 'FR', '');
+        $profil = (new ProfilExploitant())
+            ->setSiren('812403905')
+            ->setEtablissementPrincipal($etablissement)
+            ->setType(TypeExploitant::GroupePrive)
+            ->setReferentielComptable(ReferentielComptable::Pcg);
+        $em->persist($profil);
+
+        // Exactement la forme du parc : valeurs justes, aucune origine, aucune categorie.
+        foreach ([['20.00', 'Taux normal 20 %'], ['10.00', 'Taux intermédiaire 10 %'], ['5.50', 'Taux réduit 5,5 %'], ['2.10', 'Taux particulier 2,1 %'], ['0.00', TauxTva::LIBELLE_HORS_CHAMP]] as [$valeur, $libelle]) {
+            $em->persist(
+                (new TauxTva())
+                    ->setProfilExploitant($profil)
+                    ->setTaux($valeur)
+                    ->setLibelle($libelle)
+                    ->setActif(true)
+            );
+        }
+        $em->flush();
+
+        $testeur = new CommandTester($this->commande());
+        $testeur->execute(['--ecrire' => true]);
+
+        $em->clear();
+        $profil = $em->getRepository(ProfilExploitant::class)
+            ->findOneBy(['etablissementPrincipal' => $etablissement->getId()]);
+        self::assertInstanceOf(ProfilExploitant::class, $profil);
+
+        $valeurs = array_map(
+            static fn (TauxTva $t): string => $t->getTaux(),
+            $em->getRepository(TauxTva::class)->findBy(['profilExploitant' => $profil]),
+        );
+        sort($valeurs);
+
+        self::assertSame(
+            ['0.00', '2.10', '5.50', '10.00', '20.00'],
+            $valeurs,
+            'cinq taux avant, cinq apres : la reprise ajoute ce qui manque, elle ne redouble pas ce qui est la',
+        );
+
+        // Et le defaut se pose quand meme, sur le taux herite : c'est tout l'objet de la reprise.
+        $parametre = $em->getRepository(ParametreFacturationEtablissement::class)
+            ->findOneBy(['profilExploitant' => $profil]);
+        self::assertSame('20.00', $parametre?->getTauxTvaDefaut()?->getTaux());
     }
 
     /**
