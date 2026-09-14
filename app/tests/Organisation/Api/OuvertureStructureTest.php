@@ -13,6 +13,7 @@ use App\Facturation\Einvoicing\BusinessTerm;
 use App\Facturation\Einvoicing\InvoiceReadiness;
 use App\Facturation\Entity\Facture;
 use App\Organisation\Entity\Etablissement;
+use App\Tests\Compta\LegalVatRateFixtureTrait;
 use App\Tests\Securite\SecuriteApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -31,8 +32,24 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class OuvertureStructureTest extends SecuriteApiTestCase
 {
+    use LegalVatRateFixtureTrait;
+
     public function testUneStructureNeuveSaitDejaFacturer(): void
     {
+        // ── LES TAUX NE VIENNENT PLUS D'UNE CONSTANTE, MAIS DU RÉFÉRENTIEL LÉGAL ────────────────
+        //
+        // ⚠ L'ATTENTE DE CE TEST N'A PAS BOUGÉ D'UN CHIFFRE, ET C'EST LE POINT. Les quatre taux
+        // français du référentiel sont exactement ceux que posait l'ancienne constante
+        // `TAUX_TVA_FRANCE` : la sortie est identique, seule la source a changé. Un test dont on
+        // révise l'attente en même temps que le code ne prouve plus rien sur le remplacement.
+        //
+        // En production la table porte 62 taux sur 29 pays ; en test elle est vide, et
+        // `SchemaDuHarnais` la tronque entre deux tests. Il faut donc la poser ici — sans quoi ce
+        // test mesurerait un environnement que la production ne connaît pas.
+        $this->seedFranceMetropolitanVatRates(
+            static::getContainer()->get('doctrine')->getManager(),
+        );
+
         [$client, $entete] = $this->adminSurA();
 
         $client->request('POST', '/api/organisation/structures', $entete + [
