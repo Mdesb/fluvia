@@ -4,6 +4,7 @@ import Modal from '../components/Modal.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 
 function heure(v) {
   if (!v) return '—'
@@ -296,6 +297,8 @@ function SurveillancePoss({ etabActif }) {
  * la différence entre les deux lectures est réglementaire.
  */
 function CreneauxBassins({ etabActif, droits = [] }) {
+  // Vocabulaire piscine (#100, lot 3) : t('staff', 'piscine', …) rend « Maître-nageur ».
+  const { t } = useVocabulaireVerticales()
   const peutConfigurer = aLeDroit(droits, 'piscine.configurer')
   const [version, setVersion] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -369,7 +372,7 @@ function CreneauxBassins({ etabActif, droits = [] }) {
     // On montre le type, qui est ce sur quoi la regle serveur s'aligne.
     {
       cle: 'encadrantRequis',
-      entete: 'Encadrant requis',
+      entete: `${t('staff', 'piscine', 'Encadrant')} requis`,
       rendu: (r) => (!r.encadrantRequis || r.encadrantRequis === 'aucune'
         ? <span className="sub">aucun</span>
         : <span className="badge info">{r.encadrantRequis}</span>),
@@ -488,6 +491,7 @@ function CreneauxBassins({ etabActif, droits = [] }) {
  * rien ne relie les deux.
  */
 function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer, onFait, onErreur }) {
+  const { t } = useVocabulaireVerticales()
   const [choix, setChoix] = useState('')
   const [envoi, setEnvoi] = useState(false)
   // L'affectation en cours de retrait. `null` = aucune.
@@ -572,7 +576,7 @@ function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer,
         </p>
       ) : (
         <div className="field">
-          <label htmlFor="pi-qual">Encadrant</label>
+          <label htmlFor="pi-qual">{t('staff', 'piscine', 'Encadrant')}</label>
           <select id="pi-qual" className="select" value={choix} onChange={(e) => setChoix(e.target.value)}>
             <option value="">Choisir…</option>
             {eligibles.map((q) => (
@@ -610,6 +614,7 @@ function AffecterEncadrantModal({ creneau, qualifications, dejaPosees, onFermer,
  * seulement `Post` et `Patch`. On corrige une date d'échéance, on n'efface pas un historique.
  */
 function QualificationsEncadrants({ etabActif, droits = [] }) {
+  const { t } = useVocabulaireVerticales()
   const peutGerer = aLeDroit(droits, 'piscine.gerer')
   const [version, setVersion] = useState(0)
   const [creation, setCreation] = useState(false)
@@ -634,7 +639,7 @@ function QualificationsEncadrants({ etabActif, droits = [] }) {
           </button>
         ) : null}
         colonnes={[
-          { cle: 'encadrant', entete: 'Encadrant', rendu: (r) => libelleEncadrant(r) },
+          { cle: 'encadrant', entete: t('staff', 'piscine', 'Encadrant'), rendu: (r) => libelleEncadrant(r) },
           { cle: 'type', entete: 'Diplôme', rendu: (r) => <span className="badge info">{r.type || '—'}</span> },
           {
             cle: 'dateValidite',
@@ -685,6 +690,7 @@ function QualificationsEncadrants({ etabActif, droits = [] }) {
 }
 
 function QualificationModal({ onFermer, onCree, onErreur }) {
+  const { t } = useVocabulaireVerticales()
   const [utilisateurs, setUtilisateurs] = useState(null)
   const [encadrant, setEncadrant] = useState('')
   const [type, setType] = useState('MNS')
@@ -725,7 +731,7 @@ function QualificationModal({ onFermer, onCree, onErreur }) {
   return (
     <Modal open onClose={onFermer} titre="Enregistrer un diplôme" taille="md">
       <div className="field">
-        <label htmlFor="pi-enc">Encadrant</label>
+        <label htmlFor="pi-enc">{t('staff', 'piscine', 'Encadrant')}</label>
         {utilisateurs === null ? (
           <div className="spinner" />
         ) : (

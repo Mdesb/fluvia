@@ -6,6 +6,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { libelleProduit } from '../api/produit.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 
 // Padel — cinquante-six opérations exposées, une seule appelée jusqu'ici.
 //
@@ -988,6 +989,8 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
  * reservation ni un agent.
  */
 function SortieMateriel({ open, onClose, onFait, onErreur }) {
+  // Vocabulaire padel (#100, lot 3) : t('deposit', 'padel', …) rend « Caution matériel ».
+  const { t } = useVocabulaireVerticales()
   const [articles, setArticles] = useState(null)
   const [reservations, setReservations] = useState(null)
   const [article, setArticle] = useState('')
@@ -1099,7 +1102,7 @@ function SortieMateriel({ open, onClose, onFait, onErreur }) {
         </label>
 
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-          <span className="sub">Caution — facultative</span>
+          <span className="sub">{t('deposit', 'padel', 'Caution')} — facultative</span>
           <input
             className="input"
             inputMode="decimal"
