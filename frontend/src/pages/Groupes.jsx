@@ -4,6 +4,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
 import { useEtatUrl } from '../api/url.js'
+import { nomsDuCreneau } from '../api/slot-label.js'
 
 // GROUPES — module transverse `App\Group`. Un groupe de participants (classe scolaire, comité
 // d'entreprise, tour-opérateur, association) qu'un établissement reçoit, quel que soit son métier :
@@ -51,18 +52,9 @@ function creneauLabel(c) {
   const quand = debut && !Number.isNaN(debut.getTime())
     ? debut.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
     : idDe(c)
-  // L'activité et la ressource sont embarquées dans le créneau lu : date · activité · ressource.
-  // ⚠ UN CHAMP NUL N'EST PAS ÉCRIT PAR L'API : la clé disparaît (7 créneaux sur 223 sans activité à
-  // Piscine A le 15/09/2026, et aucune clé `activite`). Absente ou nulle, la partie se dit « sans … » ;
-  // réduite à son IRI, jamais libellée ici, elle est omise plutôt qu'affichée en identifiant.
+  // Date · activité · ressource — les règles des parties absentes sont dans api/slot-label.js.
   if (typeof c !== 'object') return quand
-  const partie = (objet, absent) => {
-    if (objet === undefined || objet === null) return absent
-    return objet?.libelle || null
-  }
-  return [quand, partie(c.activite, 'sans activité'), partie(c.ressource, 'sans ressource')]
-    .filter(Boolean)
-    .join(' · ')
+  return [quand, nomsDuCreneau(c)].filter(Boolean).join(' · ')
 }
 
 // `groupe` : le groupe sélectionné ; `panier` : la réservation dont on compose le panier.
