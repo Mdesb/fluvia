@@ -83,25 +83,29 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   // ⚠ LA FACTURE D'UN AVOIR SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est bornée
   // à 200, et un lien ne doit pas en dépendre. Seul un 404 dit « elle n'existe pas » ; tout le
   // reste est une lecture qui a échoué.
-  const [factureAvoir, setFactureAvoir] = useState(null)
-  const [chargementAvoir, setChargementAvoir] = useState(false)
-  const [lectureAvoirEchouee, setLectureAvoirEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
   // ⚠ L'échec d'ENVOI a sa propre bannière : celle de la liste n'est pas rendue sous l'écran.
   const [erreurAvoir, setErreurAvoir] = useState(null)
+  const [lectureAvoir, setLectureAvoir] = useState(null)
+  const cleAvoir = params.avoir ? params.avoir : null
   useEffect(() => {
-    const id = params.avoir
     setErreurAvoir(null)
-    if (!id) { setFactureAvoir(null); setLectureAvoirEchouee(false); return undefined }
+    if (!(params.avoir)) { setLectureAvoir(null); return undefined }
+    const cle = params.avoir
     let vivant = true
-    setChargementAvoir(true)
-    setLectureAvoirEchouee(false)
-    setFactureAvoir(null)
-    api.factureFournisseur(id)
-      .then((f) => { if (vivant) setFactureAvoir(f) })
-      .catch((e) => { if (vivant) setLectureAvoirEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementAvoir(false) })
+    api.factureFournisseur(params.avoir)
+      .then((v) => { if (vivant) setLectureAvoir({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureAvoir({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.avoir])
+  const lectureAvoirCourante = lectureAvoir?.cle === cleAvoir ? lectureAvoir : null
+  const chargementAvoir = cleAvoir !== null && lectureAvoirCourante === null
+  const factureAvoir = lectureAvoirCourante?.valeur ?? null
+  const lectureAvoirEchouee = lectureAvoirCourante?.echouee ?? false
 
   async function annuler(f) {
     if (

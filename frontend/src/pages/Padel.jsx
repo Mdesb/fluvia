@@ -186,22 +186,26 @@ function TerrainsSection({ etabActif, droits, params = {}, majParams }) {
 
   // ⚠ LE TERRAIN RÉSERVÉ SE LIT PAR SON IDENTIFIANT : la liste est bornée à 100. Seul un 404 dit
   // « il n'existe pas » ; tout le reste est une lecture qui a échoué.
-  const [terrainReserve, setTerrainReserve] = useState(null)
-  const [chargementTerrain, setChargementTerrain] = useState(false)
-  const [lectureTerrainEchouee, setLectureTerrainEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureTerrain, setLectureTerrain] = useState(null)
+  const cleTerrain = params.reserver ? `${params.reserver}|${etabActif}` : null
   useEffect(() => {
-    const id = params.reserver
-    if (!id) { setTerrainReserve(null); setLectureTerrainEchouee(false); return undefined }
+    if (!(params.reserver)) { setLectureTerrain(null); return undefined }
+    const cle = `${params.reserver}|${etabActif}`
     let vivant = true
-    setChargementTerrain(true)
-    setLectureTerrainEchouee(false)
-    setTerrainReserve(null)
-    api.padelTerrain(id)
-      .then((t) => { if (vivant) setTerrainReserve(t) })
-      .catch((e) => { if (vivant) setLectureTerrainEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementTerrain(false) })
+    api.padelTerrain(params.reserver)
+      .then((v) => { if (vivant) setLectureTerrain({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureTerrain({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.reserver, etabActif])
+  const lectureTerrainCourante = lectureTerrain?.cle === cleTerrain ? lectureTerrain : null
+  const chargementTerrain = cleTerrain !== null && lectureTerrainCourante === null
+  const terrainReserve = lectureTerrainCourante?.valeur ?? null
+  const lectureTerrainEchouee = lectureTerrainCourante?.echouee ?? false
 
   const ouvertes = useMemo(
     () => (reservations || []).filter((r) => r.ouverte && r.statutPartie !== 'complete'),
