@@ -2713,6 +2713,8 @@ export const api = {
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>
     request('/api/patinoire_location_patins', { query: { itemsPerPage: 100 } }),
+  // Une location par son identifiant : un lien ne dépend pas de la borne de 100 de la liste.
+  patinoireLocation: (id) => request(`/api/patinoire_location_patins/${id}`),
   patinoireAffutages: () =>
     request('/api/patinoire_affutages', { query: { itemsPerPage: 100 } }),
   // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
