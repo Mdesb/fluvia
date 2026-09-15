@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { jourLocal } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import PlanningSemaine from '../components/PlanningSemaine.jsx'
@@ -63,6 +63,39 @@ function labelBeneficiaire(b) {
 // « non confirmée » ne veut pas dire « libre », ça veut dire « pas encore payée ». L'oublier
 // afficherait un créneau libre qui ne l'est pas, et le ferait vendre deux fois.
 const STATUTS_QUI_OCCUPENT = new Set(['a_confirmer', 'confirmee', 'honoree'])
+
+// ⚠ LA ROUTE D'OCCUPATION REFUSE UNE PLAGE DE PLUS DE 366 JOURS (`OccupancyProvider::JOURS_MAX`).
+// Un planning récurrent s'étend sur des années — le bassin sportif de Piscine A va de 2026 à 2029, et
+// sa plage entière rendait 422. On lit donc par tranches de 365 jours, bornes comprises.
+//
+// Chaque plage est élargie d'un jour de part et d'autre : le jour d'un créneau se lit ici sur sa date
+// ISO, en UTC, et le serveur filtre sur son propre fuseau. Un créneau de 23 h 30 changerait de jour
+// entre les deux et sortirait de la réponse — il s'afficherait « non lu ». Les créneaux de trop sont
+// sans effet : on les range par identifiant.
+const JOURS_PAR_TRANCHE = 365
+
+function tranchesDeJours(du, au) {
+  const versDate = (j) => {
+    const [a, m, d] = j.split('-').map(Number)
+    return new Date(Date.UTC(a, m - 1, d))
+  }
+  const versJour = (x) =>
+    `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`
+  const debut = versDate(du)
+  debut.setUTCDate(debut.getUTCDate() - 1)
+  const fin = versDate(au)
+  fin.setUTCDate(fin.getUTCDate() + 1)
+  const tranches = []
+  while (debut <= fin) {
+    const bout = new Date(debut)
+    bout.setUTCDate(bout.getUTCDate() + JOURS_PAR_TRANCHE - 1)
+    const borne = bout < fin ? bout : fin
+    tranches.push([versJour(debut), versJour(borne)])
+    debut.setTime(borne.getTime())
+    debut.setUTCDate(debut.getUTCDate() + 1)
+  }
+  return tranches
+}
 
 // Une date ISO vers la valeur d'un `<input type="datetime-local">`, EN HEURE LOCALE.
 //
@@ -146,6 +179,12 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // Vocabulaire par verticale (#100) : `t('resource', verticale, repli)` rend « Bassin »/« Terrain »…
   const { t } = useVocabulaireVerticales()
   const [reservations, setReservations] = useState([])
+  // ⚠ LES PLACES PRISES VIENNENT DU SERVEUR, PAR CRÉNEAU. `null` = pas encore lues ; un créneau
+  // absent de la carte = non lu (refus, échec) — jamais « libre ».
+  const [occupation, setOccupation] = useState(null)
+  const [occupationIncomplete, setOccupationIncomplete] = useState(false)
+  const lectureOccupation = useRef(0)
+  const [reservationsAConfirmer, setReservationsAConfirmer] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -201,30 +240,92 @@ export default function Reservation({ etabActif, droits = [], session }) {
   const [organisateur, setOrganisateur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
+  // ── LES PLACES PRISES : LA JAUGE DU SERVEUR, PAS UN COMPTE FAIT ICI ──────────────────────────
+  //
+  // L'écran comptait les réservations qui VISENT chaque créneau, dans les 200 premières lues. Deux
+  // fautes, et toutes deux affichaient des places libres sur un créneau complet :
+  //  - au-delà de 200 réservations, les suivantes ne comptaient plus ;
+  //  - une réservation CONSOMME aussi les créneaux englobants — une table réservée prend sur le
+  //    service de la salle (D33) — et `Reservation::$consumedSlots` n'est pas sérialisé. Aucun
+  //    compte fait ici ne peut le voir.
+  // Le serveur refusait la réservation (`ReserverProcessor`, 409), mais l'agent avait lu « 3 places »
+  // et l'avait promise.
+  //
+  // La route d'occupation est servie par `JaugeCreneauGuard`, le service qui DÉCIDE si une réservation
+  // est acceptée : l'écran affiche désormais le chiffre même qui fera accepter ou refuser. Un appel par
+  // ressource et par tranche de 365 jours (voir `tranchesDeJours`).
+  const lireOccupation = useCallback(async (liste) => {
+    const jeton = ++lectureOccupation.current
+    setOccupation(null)
+    setOccupationIncomplete(false)
+    const plages = new Map()
+    for (const c of liste) {
+      const id = idDepuisIri(c.ressource)
+      const jour = String(c.debut || '').slice(0, 10)
+      if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(jour)) continue
+      const p = plages.get(id)
+      if (!p) plages.set(id, { du: jour, au: jour })
+      else {
+        if (jour < p.du) p.du = jour
+        if (jour > p.au) p.au = jour
+      }
+    }
+    const appels = []
+    for (const [id, p] of plages) {
+      for (const [du, au] of tranchesDeJours(p.du, p.au)) appels.push(api.occupationRessource(id, du, au))
+    }
+    // ⚠ `allSettled`, ET UN REFUS N'EST PAS UN ZÉRO : les créneaux d'une tranche refusée restent hors
+    // de la carte, donc « non lus », et l'écran le dit.
+    const lots = await Promise.allSettled(appels)
+    // Une lecture plus récente est partie entre-temps (réservation, changement d'établissement) :
+    // celle-ci décrit un état dépassé.
+    if (jeton !== lectureOccupation.current) return
+    const carte = {}
+    for (const lot of lots) {
+      if (lot.status !== 'fulfilled') continue
+      for (const ligne of lot.value?.creneaux || []) {
+        if (ligne?.creneau) carte[ligne.creneau] = ligne
+      }
+    }
+    setOccupation(carte)
+    setOccupationIncomplete(lots.some((l) => l.status === 'rejected'))
+  }, [])
+
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
+    // Les places d'avant la lecture ne sont plus celles d'après : on ne les montre pas le temps qu'elle
+    // revienne — juste après une réservation, elles annonceraient encore libre la place qu'on vient de
+    // prendre.
+    lectureOccupation.current += 1
+    setOccupation(null)
+    let lus = null
     try {
-      const [rc, cc, rvc, bc, lac] = await Promise.all([
+      const [rc, cc, rvc, bc, lac, acc] = await Promise.all([
         api.reservationRessources(),
         api.reservationCreneaux(),
         api.reservations(),
         api.beneficiaires(),
         api.reservationListesAttente(),
+        api.reservationsAConfirmer(),
       ])
+      lus = membres(cc)
       setRessources(membres(rc))
-      setCreneaux(membres(cc))
+      setCreneaux(lus)
       setReservations(membres(rvc))
       setBeneficiaires(membres(bc))
       setListesAttente(membres(lac))
+      setReservationsAConfirmer(membres(acc))
     } catch (e) {
       setErreur(e.message || 'Chargement du planning impossible.')
       setRessources(null)
       setCreneaux(null)
+      setReservationsAConfirmer([])
     } finally {
       setChargement(false)
     }
-  }, [])
+    if (lus) lireOccupation(lus)
+  }, [lireOccupation])
 
   useEffect(() => {
     setSucces(null)
@@ -232,38 +333,24 @@ export default function Reservation({ etabActif, droits = [], session }) {
     recharger()
   }, [etabActif, recharger])
 
-  // Occupation : voir `STATUTS_QUI_OCCUPENT` ci-dessus — on compte ce qui prend une place, on
-  // n'exclut pas ce qui n'en prend plus.
-  //
-  // ⚠ ET ON COMPTE `quantity`, PAS LES LIGNES. Une réservation peut porter plusieurs places
-  // (`AnnulerReservationProcessor` rend `$data->getQuantity()` à la jauge, « on rend exactement ce
-  // qui avait été pris, pas une unité »). Compter une ligne pour une réservation de quatre
-  // affichait trois places libres de trop, et laissait sur-réserver.
-  const occupation = useMemo(() => {
-    const m = {}
-    for (const r of reservations) {
-      if (!STATUTS_QUI_OCCUPENT.has(r.statut)) continue
-      const cid = idDepuisIri(r.creneau)
-      if (cid) m[cid] = (m[cid] || 0) + (r.quantity ?? 1)
-    }
-    return m
-  }, [reservations])
-
   // Les places qui OCCUPENT mais ne sont PAS ENCORE PAYÉES (R15 a).
   //
-  // ⚠ SOUS-ENSEMBLE DE `occupation`, PAS UNE AUTRE MESURE. `a_confirmer` occupe — c'est écrit
-  // au-dessus, et c'est ce qui empêche la sur-réservation. Ce compte-ci ne dit pas « combien de
-  // places sont prises » mais « combien d'entre elles peuvent disparaître à l'échéance », ce qui
-  // n'est visible nulle part dans la grille.
+  // ⚠ SOUS-ENSEMBLE DE `occupation`, PAS UNE AUTRE MESURE. `a_confirmer` occupe — le serveur le compte
+  // dans la jauge. Ce compte-ci ne dit pas « combien de places sont prises » mais « combien d'entre
+  // elles peuvent disparaître à l'échéance », ce qui n'est visible nulle part dans la grille. On somme
+  // `quantity`, pas les lignes : une réservation peut porter plusieurs places.
+  //
+  // Il porte sur le créneau VISÉ : c'est une marque d'attente, pas une jauge — la jauge vient du
+  // serveur (`lireOccupation`).
   const aConfirmer = useMemo(() => {
     const m = {}
-    for (const r of reservations) {
+    for (const r of reservationsAConfirmer) {
       if (r.statut !== 'a_confirmer') continue
       const cid = idDepuisIri(r.creneau)
       if (cid) m[cid] = (m[cid] || 0) + (r.quantity ?? 1)
     }
     return m
-  }, [reservations])
+  }, [reservationsAConfirmer])
 
   // Les instances d'un type de ressource — « la chambre 214 » sous « chambre double ».
   //
@@ -706,6 +793,12 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+      {occupationIncomplete && (
+        <div className="banner banner-warn">
+          Les places de certains créneaux n’ont pas pu être lues : ils affichent « ? ». Ne concluez
+          pas qu’il en reste — la réservation sera refusée si le créneau est complet.
+        </div>
+      )}
 
       {/* LA VUE SEMAINE EST LE DEFAUT, ET C'EST UN CHOIX.
           La liste par jour repond creneau par creneau ; la question qu'on se pose en ouvrant un
@@ -793,11 +886,15 @@ export default function Reservation({ etabActif, droits = [], session }) {
               ) : (
                 <div className="grid g2">
                   {creneauxJour.map((c) => {
-                    const cap = c.capacite ?? 0
-                    const pris = occupation[c.id] || 0
-                    const reste = Math.max(0, cap - pris)
-                    const pct = cap > 0 ? Math.min(100, Math.round((pris / cap) * 100)) : 0
-                    const complet = cap > 0 && reste <= 0
+                    // ⚠ `restantes` EST RENDU PAR LE SERVEUR, jamais recalculé ici : demain une règle
+                    // de quota le rendra différent de `capacite - occupees`.
+                    const ligne = occupation?.[c.id]
+                    const connue = ligne !== undefined
+                    const cap = connue ? ligne.capacite : (c.capacite ?? 0)
+                    const pris = connue ? ligne.occupees : 0
+                    const reste = connue ? ligne.restantes : null
+                    const pct = connue && cap > 0 ? Math.min(100, Math.round((pris / cap) * 100)) : 0
+                    const complet = connue && cap > 0 && reste <= 0
                     const annulable = c.statut !== 'annule'
                     return (
                       <div key={c.id} className="creneau">
@@ -821,7 +918,13 @@ export default function Reservation({ etabActif, droits = [], session }) {
                         </div>
                         <div className="creneau-places">
                           <div className="bar"><i style={{ width: `${pct}%`, background: complet ? 'var(--crit)' : 'var(--accent)' }} /></div>
-                          <span className={`places ${complet ? 'full' : ''}`}>{pris}/{cap} · {reste} place(s)</span>
+                          <span className={`places ${complet ? 'full' : ''}`}>
+                            {connue
+                              ? `${pris}/${cap} · ${reste} place(s)`
+                              : occupation === null
+                                ? `?/${cap} · lecture des places…`
+                                : `?/${cap} · places non lues`}
+                          </span>
                         </div>
 
                         {reserverPour === c.id ? (
@@ -1437,11 +1540,20 @@ function ReserverRapide({
   onVoirListe,
 }) {
   const ouvert = creneau !== null
-  const cap = creneau?.capacite ?? 0
-  const pris = ouvert ? (occupation[creneau.id] || 0) : 0
-  const reste = Math.max(0, cap - pris)
-  const complet = cap > 0 && reste <= 0
+  const ligne = ouvert ? occupation?.[creneau.id] : undefined
+  const connue = ligne !== undefined
+  const cap = connue ? ligne.capacite : (creneau?.capacite ?? 0)
+  const pris = connue ? ligne.occupees : 0
+  const reste = connue ? ligne.restantes : null
+  const complet = connue && cap > 0 && reste <= 0
   const tarif = creneau?.activite?.tarifReferenceMontant
+  // Places inconnues : on ne bloque pas — le serveur contrôle la jauge à la réservation — mais on ne
+  // laisse pas croire qu'il en reste.
+  const avertissementPlaces = connue
+    ? null
+    : occupation === null
+      ? 'Lecture des places en cours : ne promettez pas de place avant qu’elle aboutisse.'
+      : 'Les places de ce créneau n’ont pas pu être lues. Ne concluez pas qu’il en reste : la réservation sera refusée si le créneau est complet.'
 
   const refus = complet
     ? 'Ce créneau est complet : toutes les places sont prises.'
@@ -1476,16 +1588,17 @@ function ReserverRapide({
           <div className="bar">
             <i
               style={{
-                width: `${cap > 0 ? Math.min(100, Math.round((pris / cap) * 100)) : 0}%`,
+                width: `${connue && cap > 0 ? Math.min(100, Math.round((pris / cap) * 100)) : 0}%`,
                 background: complet ? 'var(--crit)' : 'var(--accent)',
               }}
             />
           </div>
           <span className={`places ${complet ? 'full' : ''}`}>
-            {pris}/{cap} · {reste} place(s)
+            {connue ? `${pris}/${cap} · ${reste} place(s)` : `?/${cap} · places non lues`}
           </span>
         </div>
 
+        {avertissementPlaces && <div className="banner banner-warn">{avertissementPlaces}</div>}
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
         {refus ? (
