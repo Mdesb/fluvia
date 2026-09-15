@@ -295,22 +295,27 @@ export default function Sport({ etabActif, droits = [] }) {
   // ⚠ L'ÉCHÉANCE D'UN REJET SE LIT PAR SON IDENTIFIANT, PAS DANS L'ÉCHÉANCIER : celui-ci est
   // borné à 200 et lu avec six autres listes. Seul un 404 dit « elle n'existe pas » ; tout le
   // reste est une lecture qui a échoué.
-  const [echeanceRejet, setEcheanceRejet] = useState(null)
-  const [chargementRejet, setChargementRejet] = useState(false)
-  const [lectureRejetEchouee, setLectureRejetEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET. Un drapeau de chargement levé par
+  // l'effet ne l'est qu'APRÈS le premier rendu avec `params.rejet` : ce rendu-là n'avait ni échéance
+  // ni chargement, et affirmait « n'existe pas » le temps d'une trame — une absence jamais mesurée.
+  // La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas à l'adresse, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir la même échéance la relit au lieu d'afficher un
+  // statut d'avant le rejet.
+  const [lectureRejet, setLectureRejet] = useState(null)
+  const cleRejet = params.rejet ? `${params.rejet}|${etabActif}` : null
   useEffect(() => {
-    const id = params.rejet
-    if (!id) { setEcheanceRejet(null); setLectureRejetEchouee(false); return undefined }
+    if (!params.rejet) { setLectureRejet(null); return undefined }
+    const cle = `${params.rejet}|${etabActif}`
     let vivant = true
-    setChargementRejet(true)
-    setLectureRejetEchouee(false)
-    setEcheanceRejet(null)
-    api.echeanceSepa(id)
-      .then((e) => { if (vivant) setEcheanceRejet(e) })
-      .catch((e) => { if (vivant) setLectureRejetEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementRejet(false) })
+    api.echeanceSepa(params.rejet)
+      .then((e) => { if (vivant) setLectureRejet({ cle, echeance: e, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureRejet({ cle, echeance: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.rejet, etabActif])
+  const lectureRejetCourante = lectureRejet?.cle === cleRejet ? lectureRejet : null
+  const chargementRejet = cleRejet !== null && lectureRejetCourante === null
+  const echeanceRejet = lectureRejetCourante?.echeance ?? null
+  const lectureRejetEchouee = lectureRejetCourante?.echouee ?? false
 
   useEffect(() => {
     const t = setInterval(() => setTic((n) => n + 1), 60000)
