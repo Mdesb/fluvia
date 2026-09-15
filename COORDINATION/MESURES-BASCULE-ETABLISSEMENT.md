@@ -62,17 +62,36 @@ les deux versions et les deux sens.
 ⚠ **Le flash à l'ouverture n'a pas été rejoué sur main avec contre-témoin.** La dernière ligne est
 relayée, pas mesurée ici.
 
+## Le sens retour — un « n'existe pas » périmé sous l'établissement de départ
+
+L'ancien code a une seconde fuite, au retour : si l'écran affiche déjà le « n'existe pas » reçu de
+l'établissement d'arrivée, rebasculer vers le départ le montre une trame sous le départ.
+
+⚠ **Cette fuite ne peut apparaître que si l'aller a déjà reçu son 404 au moment du retour.** Sinon
+il n'y a rien de périmé à montrer, et son absence ne prouve rien.
+
+| Écran | Code d'avant | Sur main |
+|---|---|---|
+| PlanningTravail | **fuite** : « n'existe pas » sous Piscine A de 7 à 312 ms (l'aller avait son 404 à 319 ms) | aucune ; aller à 309 ms, retour : spinner → créneau |
+| Facturation, FacturesFournisseur | pas de fuite possible : l'ancien code ne relisait pas, l'aller n'a jamais affiché « n'existe pas » | aucune ; allers à 244 et 360 ms, retours : spinner → objet |
+| Padel, Stock | **non concluant ici** : avec un tunnel à 16–18 s, l'aller est resté sur le spinner jusqu'au retour (121 et 161 éch.) | aucune ; allers à 2,5 s et 7,2 s. Retour Stock resté 8 s sur le spinner (objet non réaffiché dans la fenêtre) |
+| Sport, Patinoire | sens retour non échantillonné ici | sens retour non échantillonné ici |
+
+**Relayé, non rejoué ici** : l'autre session, avec un 404 arrivé avant le retour (3,7 à 4,7 s dans
+une fenêtre de 8 à 10 s), mesure sur le code d'avant une trame de « n'existe pas » sous le départ
+pour Sport (@9 → spinner @10), Patinoire (@6 → 7), Padel (@7 → 9) et Stock (@6 → 8), et aucune sur
+main.
+
 ## Ce qui n'est pas mesuré
 
 - Le flash à l'ouverture, sur main, pour les sept écrans.
 - La garde « ← Retour » pour Sport et Patinoire (bascule mesurée avec la première version de
-  l'instrument).
+  l'instrument), et leur sens retour.
+- La fuite au retour sur le code d'avant pour Padel et Stock, par cette session (voir ci-dessus).
 - PlanningTravail sur un vrai créneau : aucun établissement de préprod n'en a.
 - La réouverture **après** une action réellement enregistrée (un rejet, un retour, un règlement) :
   ce serait une écriture. On sait seulement que la réouverture relit.
 - Un seul objet par écran, et deux établissements par bascule.
-- Retours vers l'établissement de départ non conclus dans la fenêtre : Stock sur main (8 s), Padel sur
-  le contre-témoin (6 s). Aucun « n'existe pas » périmé sous le départ dans ces deux cas.
 
 ## Pièges d'instrument rencontrés
 
