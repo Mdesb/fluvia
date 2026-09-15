@@ -1401,6 +1401,10 @@ const CODES_RETOUR = [
  * `apres_representation_echouee`. Annoncer « l'acces sera coupe » serait donc faux dans le cas
  * courant, et « rien ne se passe » serait faux dans les autres.
  *
+ * ⚠ DEUX CAS COUPENT DES L'ENREGISTREMENT, et c'est ce geste-ci qui les declenche :
+ * `apres_1er_echec` (le rejet enregistre EST le premier echec) et toute politique a zero
+ * representation (rien a attendre). Voir `MoteurRecouvrementHandler::detecterRejet()`.
+ *
  * La fenetre LIT la politique de l'etablissement et nomme la consequence. Quand elle n'a pas pu la
  * lire, elle le dit — plutot que d'afficher la version rassurante par defaut.
  */
@@ -1408,7 +1412,70 @@ const CODES_RETOUR = [
 // Sans politique paramétrée, `MoteurRecouvrementHandler::politiquePour()` en construit une par
 // défaut, dont l'entité fixe `momentRefusAcces` à `apres_representation_echouee`. L'écran affichait
 // « n'a pas pu être lue » sur un 200 sans membre : c'était la valeur de l'échec.
-const POLITIQUE_PAR_DEFAUT = Object.freeze({ momentRefusAcces: 'apres_representation_echouee', parDefaut: true })
+const POLITIQUE_PAR_DEFAUT = Object.freeze({
+  momentRefusAcces: 'apres_representation_echouee',
+  nbRepresentationsMax: 1,
+  calendrierRepresentationJours: [5],
+  parDefaut: true,
+})
+
+// Les mots de l'écran de la politique (ImpayesRecouvrement) : les deux écrans nomment la même règle
+// de la même façon. Le code brut ne s'affiche que s'il est inconnu ici.
+const MOMENTS_REFUS = Object.freeze({
+  apres_1er_echec: 'dès le premier échec',
+  apres_representation_echouee: 'après une représentation échouée',
+  apres_n_representations_echouees: 'après N représentations échouées',
+})
+
+const representationsEchouees = (n) => `${n} représentation${n > 1 ? 's' : ''} échouée${n > 1 ? 's' : ''}`
+
+function libelleMomentRefus(politique) {
+  const moment = politique.momentRefusAcces
+  if (moment === 'apres_n_representations_echouees' && politique.nReprAvantBlocage != null) {
+    return `après ${representationsEchouees(Math.max(politique.nReprAvantBlocage, 1))}`
+  }
+  return MOMENTS_REFUS[moment] || moment || 'non renseignée'
+}
+
+// ⚠ CETTE PHRASE RECOPIE `MoteurRecouvrementHandler` : `detecterRejet()` pour ce qui se passe à
+// l'enregistrement, `enregistrerResultatRepresentation()` pour la suite. Une règle changée côté
+// serveur la rend fausse sans rien casser d'autre.
+//
+// ⚠ ELLE COMPARAIT À `'immediat'`, QUI N'EST PAS UNE VALEUR DE `MomentRefusAcces`. La branche
+// « refusé dès l'enregistrement » était morte, et `apres_1er_echec` — qui coupe bien à
+// l'enregistrement — s'annonçait « pas refusé tout de suite ».
+function consequenceRejet(politique) {
+  const nbMax = politique.nbRepresentationsMax ?? 1
+  const exemption = ' Un adhérent exempté de blocage garde son accès.'
+  if (nbMax === 0) {
+    return 'aucune représentation n’est prévue : l’impayé passe directement en recouvrement et '
+      + 'l’accès de l’adhérent est refusé dès l’enregistrement.' + exemption
+  }
+  switch (politique.momentRefusAcces) {
+    case 'apres_1er_echec':
+      return 'ce rejet est le premier échec : l’accès de l’adhérent est refusé dès l’enregistrement.' + exemption
+    case 'apres_representation_echouee': {
+      const delai = politique.calendrierRepresentationJours?.[0] ?? 5
+      return `l’accès n’est pas refusé tout de suite : le prélèvement est représenté ${delai} jour${delai > 1 ? 's' : ''} `
+        + 'après la date du rejet, et l’accès est refusé si cette représentation échoue.' + exemption
+    }
+    case 'apres_n_representations_echouees': {
+      const n = politique.nReprAvantBlocage
+      // Le moteur compare au seuil sans plancher (`>=`) : un seuil nul coupe à la première représentation échouée.
+      if (n == null) {
+        return 'l’accès n’est pas refusé tout de suite, ni plus tard : la politique ne fixe aucun nombre de '
+          + 'représentations avant blocage, et le recouvrement ne refusera pas l’accès de lui-même.'
+      }
+      if (n > nbMax) {
+        return `l’accès n’est pas refusé tout de suite, ni plus tard : la politique attend ${representationsEchouees(n)} `
+          + `mais n’en prévoit que ${nbMax}, et le recouvrement ne refusera pas l’accès de lui-même.`
+      }
+      return `l’accès n’est pas refusé tout de suite : il le sera après ${representationsEchouees(Math.max(n, 1))}.` + exemption
+    }
+    default:
+      return 'cet écran ne connaît pas ce moment de refus : il ne peut pas dire quand l’accès sera refusé.'
+  }
+}
 
 function RejetEcheanceModal({ echeance, onClose, onFait }) {
   const [code, setCode] = useState('AM04')
@@ -1469,11 +1536,9 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
             l’accès de l’adhérent sera refusé. Ce n’est pas la même chose que « il ne le sera pas ».</>
           )}
           {politique && (
-            <>Selon la politique en vigueur (<b>{politique.momentRefusAcces || 'non renseignée'}</b>
+            <>Selon la politique en vigueur (refus d’accès <b>{libelleMomentRefus(politique)}</b>
             {politique.parDefaut ? ' — aucune n’est paramétrée ici, c’est le défaut du serveur' : ''}),
-            {politique.momentRefusAcces === 'immediat'
-              ? ' l’accès de l’adhérent sera refusé dès l’enregistrement.'
-              : ' l’accès n’est pas refusé tout de suite — il le sera au moment que la politique désigne.'}</>
+            {' ' + consequenceRejet(politique)}</>
           )}
         </div>
 
