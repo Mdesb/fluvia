@@ -57,22 +57,26 @@ export default function PlanningTravail({ etabActif, droits = [], params = {}, m
   // ⚠ LE CRÉNEAU CORRIGÉ SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est bornée à
   // 200, et un lien ne doit pas en dépendre. Seul un 404 dit « il n'existe pas » ; tout le reste
   // est une lecture qui a échoué. `nouveau` ne lit rien : c'est une création.
-  const [creneauOuvert, setCreneauOuvert] = useState(null)
-  const [chargementCreneau, setChargementCreneau] = useState(false)
-  const [lectureCreneauEchouee, setLectureCreneauEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureCreneau, setLectureCreneau] = useState(null)
+  const cleCreneau = params.creneau && params.creneau !== 'nouveau' ? params.creneau : null
   useEffect(() => {
-    const id = params.creneau
-    if (!id || id === 'nouveau') { setCreneauOuvert(null); setLectureCreneauEchouee(false); return undefined }
+    if (!(params.creneau && params.creneau !== 'nouveau')) { setLectureCreneau(null); return undefined }
+    const cle = params.creneau
     let vivant = true
-    setChargementCreneau(true)
-    setLectureCreneauEchouee(false)
-    setCreneauOuvert(null)
-    api.creneauTravail(id)
-      .then((c) => { if (vivant) setCreneauOuvert(c) })
-      .catch((e) => { if (vivant) setLectureCreneauEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementCreneau(false) })
+    api.creneauTravail(params.creneau)
+      .then((v) => { if (vivant) setLectureCreneau({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureCreneau({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.creneau, etabActif])
+  const lectureCreneauCourante = lectureCreneau?.cle === cleCreneau ? lectureCreneau : null
+  const chargementCreneau = cleCreneau !== null && lectureCreneauCourante === null
+  const creneauOuvert = lectureCreneauCourante?.valeur ?? null
+  const lectureCreneauEchouee = lectureCreneauCourante?.echouee ?? false
 
   useEffect(() => {
     api.employes()
