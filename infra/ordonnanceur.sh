@@ -12,10 +12,14 @@
 # On n'appelle PAS `platform:scheduler:run` nu : il exécuterait les vingt-deux. On nomme celles que
 # Maxime a autorisées, une par une, et l'ajout d'une ligne est une décision qui se voit en revue.
 #
-# ⚠ `--only` CONTOURNE LA GARDE `safeOnFirstRun`. La commande considère qu'un appel nommément ciblé
-# est supervisé, donc elle ne refuse plus le premier passage d'une tâche qui rattraperait tout
-# l'historique d'un coup. Cette liste ne doit donc contenir QUE des tâches sûres au premier passage —
-# la garde qui protégeait ailleurs ne protège pas ici.
+# ⚠ `--only` NE VAUT PLUS SUPERVISION (D91/D109, 01/09). Cette boucle appelle
+# `platform:scheduler:run --only=<tâche>` SANS `--supervise` ; le verrou de premier passage
+# (`RunScheduledTasksCommand`) RETIENT donc toute tâche `safeOnFirstRun:false` jamais exécutée
+# jusqu'à un `--supervise` humain explicite. Conséquence : cette liste PEUT contenir des tâches
+# non sûres au premier passage (treasury, reporting, et les deux nouvelles ci-dessous) — elles y
+# sont TENUES, pas exécutées, tant que personne ne lance le premier passage supervisé.
+# L'ancien texte disait l'inverse (« --only contourne la garde ») : vrai AVANT D91, faux depuis,
+# corrigé le 15/09.
 #
 # ⚠ EN PARTICULIER, `reservation:no-show:basculer` NE DOIT JAMAIS Y ENTRER (D95). Aucun écran n'écrit
 # la présence : `isPresenceConfirmee()` est faux pour toute réservation ayant jamais existé, donc la
@@ -176,7 +180,31 @@ set -eu
 #                                     sans `--supervise`. Le premier passage reste un geste humain : un
 #                                     arriéré de rapports partirait d'un coup — inoffensif en préprod
 #                                     (`non_expedie`), réel en production.
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports"
+#
+#   personnel:traiter-echeances-sortie  Un salarié dont le contrat est fini garde ses accès : son
+#                                     statut ne bascule pas, son badge n'est jamais révoqué, et rien
+#                                     ne le signale (critical:true). ⚠ EFFET IRRÉVERSIBLE ET PHYSIQUE :
+#                                     révoque DÉFINITIVEMENT les badges (un badge révoqué ne se réactive
+#                                     pas — ré-émission + ré-appairage), coupe l'accès aux portes en
+#                                     ligne ET hors-ligne via ListeRevocation. AUCUNE borne basse de
+#                                     date → un premier passage rattrape TOUT l'arriéré d'un coup. La
+#                                     commande n'a PAS de --dry-run propre. `safeOnFirstRun:false` →
+#                                     TENUE par D109 tant qu'aucun `--supervise` humain n'est passé ;
+#                                     l'inscription ici ne déclenche donc RIEN. Premier passage = geste
+#                                     humain supervisé, APRÈS lecture de la portée en SELECT read-only.
+#
+#   crm:rgpd:appliquer-conservation  La durée de conservation RGPD n'est jamais appliquée — obligation,
+#                                     pas une option (critical:true). ⚠ EFFET IRRÉVERSIBLE : anonymise
+#                                     (nom/e-mail/tél/adresse/naissance/SIRET → null) les fiches clients
+#                                     au-delà du délai, piloté par les règles RegleConservation. SANS
+#                                     borne basse ni LIMIT → balaie tout l'arriéré d'un coup.
+#                                     `safeOnFirstRun:false` → TENUE par D109 ; l'inscription ne
+#                                     déclenche RIEN. Premier passage = `--supervise` humain, APRÈS
+#                                     inspection de RegleConservation. ⚠ Le docblock de la commande
+#                                     prétend réutiliser EffacementRgpdHandler mais anonymise en propre,
+#                                     sans ses garde-fous — revue par la session CRM avant tout premier
+#                                     passage (signalé le 15/09).
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
