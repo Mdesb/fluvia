@@ -40,7 +40,6 @@ export default function NotesDeFrais({ etabActif, droits = [], params = {}, majP
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [creation, setCreation] = useState(false)
   const [remboursePour, setRemboursePour] = useState(null)
 
   const peutSoumettre = aLeDroit(droits, 'finance.expense_report_submit')
@@ -111,6 +110,32 @@ export default function NotesDeFrais({ etabActif, droits = [], params = {}, majP
   // ⚠ `notes` est un `useState(null)` : `null` veut dire « pas lu », pas « aucune note ». On ne
   // monte donc le formulaire qu'une fois la note retrouvée, et on dit laquelle des deux absences
   // on regarde.
+  // ── LA CRÉATION D'UNE NOTE, EN ÉCRAN ────────────────────────────────────────────────────
+  //
+  // Aucun identifiant à résoudre. Le formulaire reçoit `employes` et `profils` tels qu'ils
+  // sont : son effet pose les valeurs par défaut quand ils ARRIVENT, donc un F5 à froid le monte
+  // vide puis le remplit, sans rien à faire ici. `employes === null` (pas lu) n'est pas
+  // « aucun salarié » : le formulaire le distingue déjà.
+  if (params.note === '1') {
+    const fermerNote = () => majParams({ note: '' }, { pousser: true })
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerNote}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux notes de frais
+        </button>
+        <NoteModal
+          open
+          etabActif={etabActif}
+          employes={employes}
+          profils={profils}
+          onClose={fermerNote}
+          onFait={() => { fermerNote(); setSucces('Note de frais créée.'); recharger() }}
+        />
+      </>
+    )
+  }
+
   if (params.depense) {
     const retour = (
       <button
@@ -167,7 +192,7 @@ export default function NotesDeFrais({ etabActif, droits = [], params = {}, majP
           </span>
           {peutSoumettre && (
             <div className="r">
-              <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+              <button className="btn sm" type="button" onClick={() => majParams({ note: '1' }, { pousser: true })}>
                 ＋ Nouvelle note de frais
               </button>
             </div>
@@ -344,15 +369,6 @@ export default function NotesDeFrais({ etabActif, droits = [], params = {}, majP
         </div>
       </section>
 
-      <NoteModal
-        open={creation}
-        etabActif={etabActif}
-        employes={employes}
-        profils={profils}
-        onClose={() => setCreation(false)}
-        onFait={() => { setCreation(false); setSucces('Note de frais créée.'); recharger() }}
-      />
-
       <RemboursementModal
         note={remboursePour}
         onClose={() => setRemboursePour(null)}
@@ -426,8 +442,11 @@ function NoteModal({ open, etabActif, employes, profils, onClose, onFait }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Nouvelle note de frais">
+    <>
+      <h2>Nouvelle note de frais</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -505,7 +524,7 @@ function NoteModal({ open, etabActif, employes, profils, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
