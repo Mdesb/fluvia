@@ -20,6 +20,26 @@ final class ReferentielTest extends ReportingApiTestCase
         self::assertGreaterThanOrEqual(9, $indicateurs['totalItems'] ?? \count($indicateurs['member'] ?? []));
     }
 
+    /**
+     * LA ROUTE DES AXES ANALYTIQUES NE DOIT PLUS EXISTER, et on le vérifie plutôt que de le supposer.
+     *
+     * `AxeAnalytique` a été supprimé le 15/09 (arbitrage de Maxime, point n°2 de
+     * `COORDINATION/A-REVOIR.md`) : six axes alimentés par les fixtures et consommés par rien — ni
+     * écran, ni moteur d'agrégation, ni appel de client d'API.
+     *
+     * ⚠ SUPPRIMER UNE ENTITÉ SANS VÉRIFIER SA ROUTE laisse le cas où API Platform la sert encore
+     * depuis un cache compilé : la suppression aurait l'air faite. Ce test est le seul endroit qui
+     * s'en aperçoive — aucun garde-fou ne compare les routes servies aux entités présentes.
+     */
+    public function testLaRouteDesAxesAnalytiquesNexistePlus(): void
+    {
+        [$client, $entete] = $this->authSite();
+
+        $client->request('GET', '/api/axe_analytiques', $entete);
+
+        self::assertSame(404, $client->getResponse()->getStatusCode());
+    }
+
     public function testAucuneOperationDeleteExposeeSurIndicateur(): void
     {
         [$client, $entete] = $this->authAdmin();
