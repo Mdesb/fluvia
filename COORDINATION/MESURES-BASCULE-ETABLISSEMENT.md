@@ -51,7 +51,34 @@ Facturation (`reglement`), FacturesFournisseur (`avoir`), PlanningTravail (`cren
 Avec la garde « ← Retour » : 0 échantillon hors écran et 0 spinner hors du conteneur de l'écran, dans
 les deux versions et les deux sens.
 
-## Résultats — « n'existe pas » à l'ouverture
+## Résultats — « n'existe pas » à l'ouverture, mesuré sur main avec contre-témoin ✚
+
+Main `ea690b3b`. Contre-témoin : le même main, dont seul le bloc de lecture est ramené à l'état
+d'avant le correctif — bloc de #172 pour Sport, de #178 pour Patinoire, Padel et Stock, de #185 puis
+#178 pour Facturation, FacturesFournisseur et PlanningTravail. Chaque bloc a été retrouvé une seule
+fois, la clé `|${etabActif}` passe de 2 à 0, et l'ancien drapeau `setChargement…` revient (0 → 3).
+
+Ouverture depuis la liste **déjà chargée** (aucun spinner depuis 1 s), par changement de hash, jusqu'à
+l'objet affiché. « Flash » = échantillon « n'existe pas » dans l'écran avant l'objet.
+
+| Écran | Sur main | Contre-témoin |
+|---|---|---|
+| Sport | spinner 6 ms → objet 296 ms · **0 flash** | « n'existe pas » @3 → spinner @5 → objet 287 ms · **1** |
+| Patinoire | spinner 3 ms → formulaire 235 ms · **0** | @2 → spinner @3 → 258 ms · **1** |
+| Facturation | spinner 3 ms → formulaire 513 ms · **0** | @2 → spinner @3 → 311 ms · **1** |
+| FacturesFournisseur | spinner 3 ms → objet 179 ms · **0** | @2 → spinner @3 → 205 ms · **1** |
+| PlanningTravail (créneau fabriqué) | spinner 2 ms → créneau 322 ms · **0** | @1 → spinner @2 → 317 ms · **1** |
+| Stock (depuis GI-ONE) | spinner 17 ms → article 298 ms · **0** | @14 → spinner @18 → 242 ms · **1** |
+| Padel | spinner 4 ms → terrain 573 ms · **0** | spinner @4 → terrain 541 ms · **0** |
+
+⚠ **Padel : le contre-témoin ne clignote pas**, donc le zéro de main n'y est pas prouvé par cette
+mesure. Sur ce chemin, un chargement de la page couvre le premier rendu même dans l'ancien code (même
+constat que la session qui a livré #178). Le défaut existe dans le code ; ce parcours ne l'atteint pas.
+
+Garde « ← Retour » : 0 échantillon hors écran après l'ouverture, 0 spinner hors du conteneur. Aucun
+échec réseau, aucune requête hors GET.
+
+### Mesures antérieures, gardées pour l'historique
 
 | Écran | Qui a mesuré | Sur quel code | Avant | Après |
 |---|---|---|---|---|
@@ -59,8 +86,8 @@ les deux versions et les deux sens.
 | Patinoire | cette session | code de la PR #177, identique à #178 à un nom de variable près — **pas main** | « n'existe pas » à 35, 7, 6 et 8 ms (en cours, rendue, 404, réouverture) | spinner puis état réel dans les quatre cas ; 500 simulé → « n'a pas pu être lue » |
 | Sport, et les six de #178 | l'autre session (worktree `rejet-refus-acces`) | worktrees de #172 et #178 | AUTRE → N_EXISTE_PAS → SPINNER (Padel : pas de flash, `TerrainsSection` couvrait le premier rendu) | jamais N_EXISTE_PAS avant la fin de la lecture, pour 200, réouverture, 404 et 500 simulé |
 
-⚠ **Le flash à l'ouverture n'a pas été rejoué sur main avec contre-témoin.** La dernière ligne est
-relayée, pas mesurée ici.
+Ces mesures antérieures sont **remplacées par la mesure sur main ci-dessus**. Les deux premières
+lignes portaient sur le code de PR fermées, pas sur main. La dernière est relayée, pas mesurée ici.
 
 ## Le sens retour — un « n'existe pas » périmé sous l'établissement de départ
 
@@ -84,7 +111,9 @@ main.
 
 ## Ce qui n'est pas mesuré
 
-- Le flash à l'ouverture, sur main, pour les sept écrans.
+- Le zéro de Padel à l'ouverture : son contre-témoin ne clignote pas sur ce parcours (voir plus haut).
+- À l'ouverture sur main, un identifiant inconnu (vrai 404) et une lecture en 500 : seul un objet
+  existant a été ouvert.
 - La garde « ← Retour » pour Sport et Patinoire (bascule mesurée avec la première version de
   l'instrument), et leur sens retour.
 - La fuite au retour sur le code d'avant pour Padel et Stock, par cette session (voir ci-dessus).
