@@ -144,9 +144,8 @@ function totalReel(reponse, recus) {
 // clique « Enregistrer », rien ne bouge, et l'explication est cachée dessous. `Controleur` et
 // `Equipement` portent des validations serveur (`TopologieCoherente`, contrôleur obligatoire, sens
 // obligatoire) : un 422 est le cas NORMAL ici, pas l'exception.
-function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmit, onClose, erreur, enCours, aide }) {
-  return (
-    <Modal open={open} onClose={onClose} titre={titre}>
+function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmit, onClose, erreur, enCours, aide, enEcran = false }) {
+  const formulaire = (
       <form onSubmit={onSubmit}>
         {aide && <p className="hint" style={{ marginTop: 0 }}>{aide}</p>}
         {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -218,8 +217,11 @@ function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmi
           </button>
         </div>
       </form>
-    </Modal>
   )
+
+  // En écran, la page porte le titre ; en modale — les sous-réseaux —, la fenêtre le porte.
+  if (enEcran) return <><h2>{titre}</h2>{formulaire}</>
+  return <Modal open={open} onClose={onClose} titre={titre}>{formulaire}</Modal>
 }
 
 // Un nombre facultatif part à `null` et non à `0` : `preAlertePct` vide ne veut pas dire « alerter
@@ -230,7 +232,7 @@ function nombreOuNul(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function TopologieAcces({ etabActif, droits, onNav, imbrique = false }) {
+export default function TopologieAcces({ etabActif, droits, onNav, imbrique = false, params = {}, majParams }) {
   const [onglet, setOnglet] = useState('plan')
   // ALLER DU MATÉRIEL À SES PASSAGES SANS REFAIRE LA RECHERCHE.
   //
@@ -256,6 +258,9 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
 
   // Édition : { genre: 'espace'|'controleur'|'equipement', ligne: objet|null, valeurs, erreur, enCours }
   const [edition, setEdition] = useState(null)
+  // L'adresse ouvre le formulaire UNE fois par clé : la page se recharge seule, et rouvrir effacerait la saisie.
+  const cleOuverte = useRef('')
+  const [topologieIntrouvable, setTopologieIntrouvable] = useState(false)
 
   const peutGerer = aLeDroit(droits, 'acces.gerer')
 
@@ -451,6 +456,32 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
     })
   }
 
+  // ── L'ADRESSE OUVRE LE FORMULAIRE ──────────────────────────────────────────────────────────
+  //
+  // `topologie` vaut `<genre>:<nouveau|id>[:<parent>]`. On attend les listes, puis on ouvre par les
+  // fonctions d'avant ; la clé retenue empêche un rechargement de rouvrir — donc de vider — le formulaire.
+  const ouvrirTopologie = (cle) => { setSucces(null); majParams({ topologie: cle }, { pousser: true }) }
+  const fermerTopologie = () => majParams({ topologie: '' }, { pousser: true })
+  useEffect(() => {
+    const cle = params.topologie || ''
+    if (!cle) {
+      if (cleOuverte.current) { cleOuverte.current = ''; setEdition(null) }
+      setTopologieIntrouvable(false)
+      return
+    }
+    if (chargement || cleOuverte.current === cle) return
+    const [genre, cible, parent] = cle.split(':')
+    const listes = { espace: espaces, controleur: controleurs, equipement: equipements }
+    cleOuverte.current = cle
+    const liste = listes[genre]
+    const ligne = !liste ? undefined : cible === 'nouveau' ? null : liste.find((x) => String(x.id) === cible)
+    if (ligne === undefined) { setEdition(null); setTopologieIntrouvable(true); return }
+    setTopologieIntrouvable(false)
+    if (genre === 'espace') ouvrirEspace(ligne)
+    else if (genre === 'controleur') ouvrirControleur(ligne, parent || null)
+    else ouvrirEquipement(ligne, parent || null)
+  }, [params.topologie, chargement, espaces, controleurs, equipements])
+
   const setValeurs = useCallback((fn) => {
     setEdition((s) => (s ? { ...s, valeurs: typeof fn === 'function' ? fn(s.valeurs) : fn } : s))
   }, [])
@@ -531,6 +562,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
         else await api.creerEquipement(corps)
       }
       setEdition(null)
+      fermerTopologie()
       setSucces(ligne ? 'Modification enregistrée.' : 'Ajout enregistré.')
       await charger(true)
     } catch (err) {
@@ -739,6 +771,63 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
   // déclaré, le signe de vie est constaté. Quand les deux divergent, le compteur doit le dire.
   const muets = controleurs.filter((c) => signeDeVie(c).suspect).length
 
+  // ── LA TOPOLOGIE, EN ÉCRAN ───────────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DES BOUTONS ET L'ÉCRAN LE REPREND. Et une liste en échec retombe à
+  // [] : l'écran nomme celle qui manque, plutôt que de déclarer introuvable un élément qui existe
+  // ou de proposer des choix vides.
+  if (params.topologie) {
+    const [genreOuvert, cibleOuverte] = params.topologie.split(':')
+    const creationOuverte = cibleOuverte === 'nouveau'
+    // La liste qui porte l'élément, ou — en création — celle d'où viennent ses choix.
+    const listeDecisive = genreOuvert === 'espace'
+      ? (creationOuverte ? 'Espaces du site' : 'Espaces d’accès')
+      : genreOuvert === 'controleur'
+        ? (creationOuverte ? 'Espaces d’accès' : 'Contrôleurs')
+        : (creationOuverte ? 'Contrôleurs' : 'Équipements')
+    const echecDecisif = echecs.find((e) => e.nom === listeDecisive)
+    let contenu
+    if (!peutGerer) {
+      contenu = <div className="banner banner-warn">Modifier la topologie d’accès demande le droit de gérer l’accès, que ce compte n’a pas.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (echecDecisif) {
+      contenu = (
+        <div className="banner banner-error">
+          La liste « {listeDecisive} » n’a pas pu être lue : cet écran ne peut pas {creationOuverte ? 'proposer ses choix' : 'retrouver cet élément'}.
+          Ce n’est pas la même chose que « il n’y en a pas ».
+        </div>
+      )
+    } else if (topologieIntrouvable) {
+      contenu = <div className="banner banner-warn">Cet élément de la topologie n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+    } else if (!edition) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else {
+      contenu = (
+        <FormulaireTopologie
+          enEcran
+          titre={titreForm}
+          champs={champsCourants}
+          valeurs={edition.valeurs}
+          setValeurs={setValeurs}
+          onSubmit={enregistrer}
+          onClose={fermerTopologie}
+          erreur={edition.erreur}
+          enCours={edition.enCours}
+        />
+      )
+    }
+    return (
+      <div className={imbrique ? undefined : 'view'}>
+        <button className="btn ghost sm" type="button" onClick={fermerTopologie}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la topologie
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   return (
     // ⚠ PAS DE `view` QUAND ON EST IMBRIQUE : Paramètres en pose déjà un, et deux enveloppes de
     // page l'une dans l'autre ajoutent une marge que personne n'a demandée.
@@ -840,7 +929,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
               <h3>Plan du site</h3>
               <div className="r" style={{ marginLeft: 'auto' }}>
                 {peutGerer && (
-                  <button className="btn primary sm" onClick={() => ouvrirEspace(null)} disabled={espacesSocle.length === 0}>
+                  <button className="btn primary sm" onClick={() => ouvrirTopologie('espace:nouveau')} disabled={espacesSocle.length === 0}>
                     ＋ Espace d’accès
                   </button>
                 )}
@@ -880,7 +969,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
                     )}
                   </div>
                   {peutGerer && espacesSocle.length > 0 && etabActif && (
-                    <button className="btn primary sm" onClick={() => ouvrirEspace(null)}>＋ Créer le premier</button>
+                    <button className="btn primary sm" onClick={() => ouvrirTopologie('espace:nouveau')}>＋ Créer le premier</button>
                   )}
                 </div>
               ) : (
@@ -902,8 +991,8 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
                         </button>
                         {peutGerer && (
                           <>
-                            <button className="btn ghost sm" onClick={() => ouvrirEspace(espace)}>Modifier</button>
-                            <button className="btn ghost sm" onClick={() => ouvrirControleur(null, espace.id)}>
+                            <button className="btn ghost sm" onClick={() => ouvrirTopologie(`espace:${espace.id}`)}>Modifier</button>
+                            <button className="btn ghost sm" onClick={() => ouvrirTopologie(`controleur:nouveau:${espace.id}`)}>
                               ＋ Contrôleur
                             </button>
                           </>
@@ -970,8 +1059,8 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
                               </span>
                               {peutGerer && (
                                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                                  <button className="btn ghost sm" onClick={() => ouvrirControleur(controleur)}>Modifier</button>
-                                  <button className="btn ghost sm" onClick={() => ouvrirEquipement(null, controleur.id)}>
+                                  <button className="btn ghost sm" onClick={() => ouvrirTopologie(`controleur:${controleur.id}`)}>Modifier</button>
+                                  <button className="btn ghost sm" onClick={() => ouvrirTopologie(`equipement:nouveau:${controleur.id}`)}>
                                     ＋ Équipement
                                   </button>
                                 </span>
@@ -1014,7 +1103,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
                                       <td className="num">{q.margeRetard ?? 0} min</td>
                                       {peutGerer && (
                                         <td className="num">
-                                          <button className="btn ghost sm" onClick={() => ouvrirEquipement(q)}>Modifier</button>
+                                          <button className="btn ghost sm" onClick={() => ouvrirTopologie(`equipement:${q.id}`)}>Modifier</button>
                                         </td>
                                       )}
                                     </tr>
@@ -1052,8 +1141,8 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
           espaces={espaces}
           peutGerer={peutGerer}
           chargement={chargement}
-          onEditer={(q) => ouvrirEquipement(q)}
-          onAjouter={() => ouvrirEquipement(null)}
+          onEditer={(q) => ouvrirTopologie(`equipement:${q.id}`)}
+          onAjouter={() => ouvrirTopologie('equipement:nouveau')}
           onVoirPassages={(q) => {
             allerA('journal_passages', { equipement: q.id })
           }}
@@ -1071,20 +1160,6 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
       )}
 
       {onglet === 'terminaux' && <TerminauxAcces etabActif={etabActif} peutGerer={peutGerer} />}
-
-      {edition && (
-        <FormulaireTopologie
-          open
-          titre={titreForm}
-          champs={champsCourants}
-          valeurs={edition.valeurs}
-          setValeurs={setValeurs}
-          onSubmit={enregistrer}
-          onClose={() => setEdition(null)}
-          erreur={edition.erreur}
-          enCours={edition.enCours}
-        />
-      )}
     </div>
   )
 }

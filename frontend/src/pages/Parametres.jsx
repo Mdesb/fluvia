@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -615,7 +615,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
   // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
   // au-dessus de lui — vu à l'écran, pas déduit.
-  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen)
+  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen || params.topologie)
 
   return (
     <div className="view">
@@ -640,7 +640,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
         && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
-      {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}
+      {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique params={params} majParams={majParams} />}
 
       {/* Le composant porte ses propres gardes (`compta.lire` / `compta.gerer`) : quelqu'un qui a
           acces aux parametres sans droit comptable voit son refus, pas ses donnees. */}
