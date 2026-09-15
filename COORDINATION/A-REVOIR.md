@@ -101,11 +101,52 @@ ici pour qu'il ne soit pas subi par défaut.
 > |---|---|
 > | `reporting:agreger` | **autorisée**, passé rattrapé |
 > | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
-> | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
+> | `reporting:executer-rapports` | **absente** — et ⚠ **l'autoriser en l'état écrirait « envoyé » sans rien envoyer**, voir ci-dessous |
 > | `finance:treasury:verifier-seuils` | **absente** — aucune alerte de trésorerie n'existera |
 > | `finance:treasury:suggerer-rapprochements` | **absente** — dégradé |
 > | `finance:treasury:detecter-ecarts` | **absente** — dégradé |
 >
+> #### ⚠ `reporting:executer-rapports` : un fait qui n'était pas au dossier (mesuré le 15/09)
+>
+> Le transport de courriel de la préproduction est **`null://`** — rien ne part. Mesuré dans le
+> conteneur qui tourne, aux deux endroits qui le définissent :
+>
+> ```
+> /app/.env         MAILER_DSN=null://…
+> /app/.env.local   MAILER_DSN=null://…      ← précédence, et c'est aussi null
+> mailer.yaml       dsn: '%env(MAILER_DSN)%'
+> ```
+>
+> Or `ExecuterRapportsCommand` écrit `statut = Envoye` parce que l'appel au mailer **n'a pas levé
+> d'exception** — ce que `null://` ne fait jamais. Autoriser la commande produirait donc, à chaque
+> exécution : un fichier généré, aucun courriel, et une ligne `envoye` horodatée en base. L'écran
+> affiche alors le badge « envoyé ».
+>
+> **C'est le mensonge du zéro appliqué à un envoi**, et de la pire espèce : un destinataire qui ne
+> reçoit rien pendant que le système affirme avoir expédié.
+>
+> ⚠ **Ce n'est pas un défaut de code.** Déduire « envoyé » de « aucune exception » est correct
+> vis-à-vis de l'abstraction du mailer, et un transport nul est un réglage d'environnement
+> légitime — pas une panne. Ce qui manquait, c'est que la décision soit prise **en connaissance de
+> ce réglage**.
+>
+> La décision se scinde donc en deux, et l'ordre compte :
+>
+> 1. **donner un transport réel** à l'environnement où la commande tournera ;
+> 2. **puis** l'ajouter à `TACHES_AUTORISEES`.
+>
+> Dans l'autre sens, on fabrique des « envoyés » faux — et ils sont indiscernables des vrais, parce
+> que `envoyeLe` est renseigné dans les deux cas.
+>
+> ⚠ **La production n'est pas mesurée** : il n'y en a pas encore. Le jour où il y en aura, son
+> `MAILER_DSN` sera un autre fait, à vérifier avant d'y autoriser la commande — pas à supposer
+> depuis celui-ci.
+>
+> *Ce qui est vérifié, en revanche : la commande elle-même fonctionne.*
+> `app/tests/Reporting/Command/ExecuterRapportsCommandTest.php` — 2 tests, 21 assertions, verts sur
+> `main` le 15/09, dont le chemin `Envoye` et le cas d'un rapport suspendu. Le risque n'est pas
+> qu'elle casse ; il est qu'elle réussisse en silence.
+
 > Il reste donc **quatre** décisions, dont une seule dans le module d'analyse (`reporting:executer-rapports`).
 
 Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
