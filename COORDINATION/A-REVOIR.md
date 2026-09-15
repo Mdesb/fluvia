@@ -101,7 +101,7 @@ ici pour qu'il ne soit pas subi par défaut.
 > |---|---|
 > | `reporting:agreger` | **autorisée**, passé rattrapé |
 > | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
-> | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
+> | ~~`reporting:executer-rapports`~~ | **AUTORISÉE le 15/09 (#204)**, après que #202 ait rendu l'ajout sûr — et ⚠ **elle n'a encore jamais tourné** : `safeOnFirstRun:false` + garde D109 |
 > | ~~`finance:treasury:verifier-seuils`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 > | ~~`finance:treasury:suggerer-rapprochements`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 > | ~~`finance:treasury:detecter-ecarts`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
@@ -204,11 +204,13 @@ ici pour qu'il ne soit pas subi par défaut.
 > `✗ DROITS SUR /app/var — l'API répond encore, mais elle est amorcée` (3 entrées de
 > `/app/var` hors `www-data`). Même traitement : signalé, pas touché.
 >
-> Il reste donc **une** décision, et c'est celle du module d'analyse (`reporting:executer-rapports`) — les trois de trésorerie ont été autorisées le 15/09 par #193.
+> **Il ne reste AUCUNE décision à ce point — les six sont autorisées.** Les trois de trésorerie par #193, la dernière (`reporting:executer-rapports`) par #204, dans cet ordre : #202 d'abord, qui a rendu l'ajout sûr.
+>
+> ⚠ **Mais aucune des quatre n'a encore expédié quoi que ce soit**, et c'est mesuré : `report_export` contient **0 ligne** (témoin positif : `report_mesure` en contient 4 136, donc la requête et la base sont les bonnes). Le premier passage de `reporting:executer-rapports` reste un geste humain, que Maxime a explicitement choisi de ne pas faire ce soir.
 
 ~~Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09).~~ **Faux depuis le 15/09 : cinq des six
 y sont** (`reporting:agreger`, `dms:purge-expired-documents` et les trois `finance:treasury:*`).
-Seule `reporting:executer-rapports` reste absente.
+Les **six** y sont désormais (#204 a ajouté la dernière).
 
 > ⚠ **Une mesure d'absence ne vieillit pas imprécise, elle s'inverse.** « Aucune » était exact
 > le 06/09 et disait le contraire du vrai le 15/09, sans qu'aucune relecture ne le signale. Le
