@@ -254,6 +254,55 @@ manquant mais sur une garde manquante :
 > ⚠ Ma phrase du 06/09 est rectifiée ici plutôt qu'effacée. C'est la deuxième fiche de ce relevé
 > qui vieillit en un jour — les autres se relisent avec la même méfiance.
 
+### 7. Un site sans instrument rend « 0 », certifié complet — mesuré le 15/09
+
+Le rattrapage de `reporting:agreger` (arbitrage n°1, tranché et exécuté le 15/09) a écrit 2 068
+mesures de plus. En vérifiant **ce qu'il a écrit** plutôt que qu'il avait tourné :
+
+| ce qui a été mesuré | résultat |
+|---|---|
+| sites **sans** aucun contrôleur d'accès | **7 sites × 11 jours** — `FREQUENTATION_CUMULEE` = `0.00`, statut **`complet`** |
+| sites **avec** contrôleur (périmé ou hors ligne) | 5 sites × 11 jours — statut `partiel`, site nommé dans `sitesManquants` |
+
+Les sept comprennent **Musée C** et **Patinoire B**. Un musée avec onze jours de fréquentation
+nulle *certifiée complète*.
+
+**Le mécanisme est sain, et c'est le point.** `etablissementHorsLigne()` lit les contrôleurs ; sans
+contrôleur il rend `false`, avec sa raison écrite dans le code :
+
+> « Pas de contrôleur Accès sur ce site (verticale sans contrôle d'accès physique) : ce seul signal
+> ne peut pas conclure à un défaut de remontée (**Risque §9.7** plan-reporting.md). »
+
+C'est juste : l'absence de tourniquet n'est pas une panne de remontée. Mais §9.7 nommait un
+**risque**, et ce risque n'a jamais été tranché — il a été accepté au niveau de la détection, et
+personne n'a regardé ce que l'écran en fait. L'Explorateur affiche donc `0` comme une valeur
+mesurée, là où il disait honnêtement « aucune mesure » avant le rattrapage.
+
+**Le levier technique est propre et déjà en place** : `Indicateur.sourceModule`.
+`FREQUENTATION_CUMULEE` et les trois `FMI_MAX*` valent `acces` ; `CA` vaut `vente`, `FOND_CAISSE`
+vaut `compta`. On sait donc, pour chaque indicateur, de quel module il tire sa source — et si le
+site est instrumenté pour ce module.
+
+Trois voies, et il n'y a rien d'autre à décider :
+
+- **Ne pas écrire la mesure** quand le site n'a pas la source de l'indicateur. L'Explorateur
+  redirait « aucune mesure », ce qu'il sait déjà faire (il distingue trois états). Le plus honnête,
+  et il retire des lignes que quelqu'un pourrait déjà lire.
+- **Un troisième état de complétude** — « non instrumenté » — distinct de `partiel`. `partiel`
+  signifie « un site n'a pas contribué » et supposerait un défaut passager ; un site sans tourniquet
+  n'est pas en panne, il n'est pas équipé. Plus juste, plus de travail.
+- **Assumer le zéro** et le documenter comme tel. Alors il faut le dire à l'écran : un `0` de
+  fréquentation sur un site non instrumenté n'est pas un fait de fréquentation.
+
+⚠ **Je ne tranche pas, et je ne corrige pas de moi-même** : les trois voies changent ce que le
+module *affirme*, pas seulement ce qu'il affiche. La première retire de la donnée déjà écrite.
+
+⚠ **Et c'est moi qui ai recommandé le rattrapage**, dans le point n°1 de ce relevé, avec la réserve
+« la fréquentation sortira à 0 pour tout jour après le 02/09 ». Cette réserve était juste sur la
+cause et **trop étroite sur la portée** : je l'avais attribuée à l'arrêt du générateur de données de
+la préproduction. Elle vaut en réalité pour **tout site non instrumenté, en production comprise**,
+et indépendamment de tout générateur.
+
 ### 6. Un droit d'accès ne dit pas à qui il appartient — et sans ça, on ne peut pas le rattacher
 
 Mesuré en cherchant à câbler `POST /sport/abonnements/{id}/rattacher-droit-acces`, la route qui lie
