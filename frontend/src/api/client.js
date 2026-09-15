@@ -1994,6 +1994,8 @@ export const api = {
   // --- Achats & tresorerie ---
   facturesFournisseur: () =>
     request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // Une facture par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  factureFournisseur: (id) => request(`/api/supplier_invoices/${id}`),
   // ON POUVAIT APPROUVER UNE FACTURE FOURNISSEUR, ON NE POUVAIT PAS EN ENREGISTRER UNE.
   //
   // Maxime : << Achats & tresorerie -- on ne peut pas enregistrer une facture fournisseur, il faut
