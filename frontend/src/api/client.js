@@ -1230,7 +1230,9 @@ export const api = {
   // << jauge differente padel/tennis >>, et il ne manquait que ceci.
   majRessourceReservation: (id, corps) =>
     request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
-  reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+  // ⚠ LUS EN ENTIER, OU PAS DU TOUT. Lus sur 200 et sans ordre, ils laissaient hors du planning des
+  // créneaux pris au hasard : 23 sur 223 à Piscine A le 15/09/2026, dont un de la semaine en cours.
+  reservationCreneaux: () => requestAll('/api/reservation_creneaus', { complete: true }),
 
   // --- Sejours (App\Stay) ---
   //
@@ -1324,9 +1326,9 @@ export const api = {
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
   // LES CRENEAUX D'UNE ACTIVITE, A PARTIR D'UN INSTANT.
   //
-  // `reservationCreneaux()` (plus haut) rend les 200 premiers creneaux de l'etablissement, tous
-  // confondus : la fiche produit y aurait cherche les siens a l'aveugle, et un etablissement actif
-  // en aurait rempli la page avant d'arriver a l'activite demandee.
+  // `reservationCreneaux()` (plus haut) rend TOUS les creneaux de l'etablissement, toutes activites
+  // confondues : la fiche produit y aurait cherche les siens dans une liste qui grossit avec chaque
+  // recurrence, et lu des annees de planning pour une seule activite.
   //
   // ⚠ LES DEUX FILTRES SONT DECLARES SUR L'ENTITE, ET C'EST CE QUI LES REND SURS :
   // `SearchFilter(activite: exact)` et `DateFilter(debut)`. Un parametre non declare est ignore en
@@ -1573,6 +1575,11 @@ export const api = {
     }),
 
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
+  // Les réservations « à confirmer », toutes : elles marquent au planning les places qui peuvent se
+  // libérer à l'échéance. `statut` est un filtre DÉCLARÉ sur `Reservation` (SearchFilter exact) ;
+  // lues dans les 200 premières réservations, elles disparaissaient dès que l'historique grossissait.
+  reservationsAConfirmer: () =>
+    requestAll('/api/reservations', { query: { statut: 'a_confirmer' }, complete: true }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
   exonererNoShow: (id, corps) =>
