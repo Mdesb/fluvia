@@ -2624,6 +2624,8 @@ export const api = {
     request(`/api/personnel/affectations/${id}/annuler`, { method: 'POST', body: {} }),
   creneauxTravail: (params) =>
     request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  // Un créneau par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  creneauTravail: (id) => request(`/api/creneau_travails/${id}`),
   creerCreneauTravail: (corps) =>
     request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
   annulerCreneauTravail: (id) =>
