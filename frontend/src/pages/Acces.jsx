@@ -6,6 +6,7 @@ import { aLeDroit } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
 import { idDe } from '../api/iri'
+import { useEtatUrl } from '../api/url.js'
 
 // BADGES & TERMINAUX — LE MODULE DE CONTRÔLE D'ACCÈS N'AVAIT QUE SES YEUX.
 //
@@ -49,8 +50,12 @@ const ONGLETS = [
   ['pertes', 'Pertes & vols'],
 ]
 
+// `appairer` : l'écran d'appairage d'une carte est ouvert.
+const DEFAUTS_URL = { appairer: '' }
+
 export default function Acces({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('badges')
+  const [params, majParams] = useEtatUrl('acces', DEFAUTS_URL)
   // ⚠ `null` = PAS LU. << Aucun badge sur cet etablissement >> est suivi d'une consigne
   // (<< Un badge nait de son premier appairage >>) : sur une lecture refusee, on envoie appairer
   // une carte qui existe deja. L'ecran lui-meme dit, quinze lignes plus bas, que le pire sens
@@ -63,12 +68,15 @@ export default function Acces({ etabActif, droits }) {
   const [billetsVendus, setBilletsVendus] = useState([])
   const [utilisateurs, setUtilisateurs] = useState([])
   const [listesPartielles, setListesPartielles] = useState(false)
+  // ⚠ LES VENTES ET LES DROITS RETOMBENT À [] SUR UN REFUS : l'écran d'appairage doit savoir s'il
+  // les a lus, sinon il affirme « aucune vente récente » ou « aucun droit libre » sans avoir regardé.
+  const [ventesLues, setVentesLues] = useState(true)
+  const [droitsLus, setDroitsLus] = useState(true)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [recherche, setRecherche] = useState('')
 
-  const [appairer, setAppairer] = useState(false)
   const [aBloquer, setABloquer] = useState(null)
 
   const peutAppairer = aLeDroit(droits, 'acces.appairer')
@@ -113,6 +121,9 @@ export default function Acces({ etabActif, droits }) {
     // module. Ils arrivent embarqués dans `/api/ventes` — `BilletSupport` n'a pas de collection à
     // lui. Voir le commentaire de `AppairerModal` pour ce que ça permet.
     setBilletsVendus(v.status === 'fulfilled' ? billetsDesVentes(membres(v.value)) : [])
+    setVentesLues(v.status === 'fulfilled')
+    // Les droits LIBRES se calculent en croisant droits ET appairages : il faut les deux.
+    setDroitsLus(d.status === 'fulfilled' && a.status === 'fulfilled')
 
     // UNE LISTE COUPÉE NE REND PAS CET ÉCRAN INCOMPLET, ELLE LUI FAIT DIRE LE CONTRAIRE DU VRAI.
     //
@@ -225,6 +236,61 @@ export default function Acces({ etabActif, droits }) {
     return r
   }
 
+  // ── APPAIRER UNE CARTE, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Le formulaire porte déjà son
+  // erreur (voir `agirDepuisModale`) ; ce que l'écran ajoute, c'est de dire quelle liste manque.
+  if (params.appairer) {
+    const fermerAppairage = () => majParams({ appairer: '' }, { pousser: true })
+    let contenu
+    if (!peutAppairer) {
+      contenu = (
+        <div className="banner banner-warn">
+          Appairer une carte demande le droit d’appairer, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else {
+      contenu = (
+        <>
+          {!ventesLues && (
+            <div className="banner banner-error">
+              Les ventes récentes n’ont pas pu être lues : la liste des billets vendus est vide parce que
+              la lecture a échoué, pas parce qu’aucune vente n’a émis de carte ou de billet.
+            </div>
+          )}
+          {!droitsLus && (
+            <div className="banner banner-error">
+              Les droits d’accès ou leurs appairages n’ont pas pu être lus : la liste des droits libres
+              n’est pas fiable, et « aucun droit libre » n’y voudrait rien dire.
+            </div>
+          )}
+          <AppairerModal
+            open
+            onClose={fermerAppairage}
+            droitsLibres={droitsLibres}
+            billetsVendus={billetsVendus}
+            produitsParId={produitsParId}
+            onFait={async (corps) => {
+              await agirDepuisModale(() => api.appairerSupport(corps), `Carte ${corps.identifiantSupport} appairée.`)
+              fermerAppairage()
+            }}
+          />
+        </>
+      )
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerAppairage}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux badges
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   return (
     <div className="view">
       <div className="view-head">
@@ -273,7 +339,7 @@ export default function Acces({ etabActif, droits }) {
                 onChange={(e) => setRecherche(e.target.value)}
               />
               {peutAppairer && (
-                <button className="btn primary" onClick={() => setAppairer(true)}>Appairer une carte</button>
+                <button className="btn primary" onClick={() => majParams({ appairer: '1' }, { pousser: true })}>Appairer une carte</button>
               )}
             </div>
           </div>
@@ -434,17 +500,6 @@ export default function Acces({ etabActif, droits }) {
         </section>
       )}
 
-      <AppairerModal
-        open={appairer}
-        onClose={() => setAppairer(false)}
-        droitsLibres={droitsLibres}
-        billetsVendus={billetsVendus}
-        produitsParId={produitsParId}
-        onFait={async (corps) => {
-          await agirDepuisModale(() => api.appairerSupport(corps), `Carte ${corps.identifiantSupport} appairée.`)
-          setAppairer(false)
-        }}
-      />
 
       <BloquerModal
         support={aBloquer}
@@ -535,8 +590,11 @@ function AppairerModal({ open, onClose, droitsLibres, billetsVendus, produitsPar
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Appairer une carte" taille="md">
+    <>
+      <h2>Appairer une carte</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -624,7 +682,7 @@ function AppairerModal({ open, onClose, droitsLibres, billetsVendus, produitsPar
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
