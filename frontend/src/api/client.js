@@ -2770,6 +2770,8 @@ export const api = {
   // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
   // sont chargees ensemble et agregees a l'ecran.
   stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  // Un article par son identifiant : la liste est bornée à 200, un lien ne doit pas en dépendre.
+  stockArticle: (id) => request(`/api/article_stocks/${id}`),
   // LES TRANSFERTS ENTRE SITES — trois routes, aucun ecran jusqu'ici.
   //
   // ⚠ LE CLOISONNEMENT DU TRANSFERT EST UN « OU » : source OU destination = etablissement actif.
