@@ -13,6 +13,7 @@ import { mot } from '../api/vocabulaire.js'
 import { euros, libelleProduit } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
 import { confirmer } from '../components/Confirmation.jsx'
+import { useEtatUrl } from '../api/url.js'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
 //
@@ -37,7 +38,11 @@ import { confirmer } from '../components/Confirmation.jsx'
 // reste 12 sur la première page ». On préfère donc afficher un point d'interrogation et dire
 // pourquoi. Le jour où le champ serveur existe, l'agrégation et ce garde-fou disparaissent ensemble.
 
+// `corriger` : l'identifiant de l'article dont on corrige le stock.
+const DEFAUTS_URL = { corriger: '' }
+
 export default function Stock({ etabActif, droits }) {
+  const [params, majParams] = useEtatUrl('stock', DEFAUTS_URL)
   // ⚠ `null` = PAS LU. Sur une lecture refusee, l'ecran annoncait << 0 reference >> puis
   // << Aucun article de stock. Un article, c'est ce que vous achetez et comptez [...] >> --
   // c'est-a-dire le message d'accueil d'un etablissement neuf, servi a un exploitant dont le stock
@@ -65,7 +70,6 @@ export default function Stock({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [ajustement, setAjustement] = useState(null)
   const [rattachement, setRattachement] = useState(null)
   const [recherche, setRecherche] = useState('')
   const [onglet, setOnglet] = useState('etat')
@@ -111,6 +115,25 @@ export default function Stock({ etabActif, droits }) {
     recharger()
   }, [recharger])
 
+  // ⚠ L'ARTICLE CORRIGÉ SE LIT PAR SON IDENTIFIANT : la liste est bornée à 200, et un site en
+  // compte davantage. Seul un 404 dit « il n'existe pas » ; tout le reste est une lecture échouée.
+  const [articleCorrige, setArticleCorrige] = useState(null)
+  const [chargementArticle, setChargementArticle] = useState(false)
+  const [lectureArticleEchouee, setLectureArticleEchouee] = useState(false)
+  useEffect(() => {
+    const id = params.corriger
+    if (!id) { setArticleCorrige(null); setLectureArticleEchouee(false); return undefined }
+    let vivant = true
+    setChargementArticle(true)
+    setLectureArticleEchouee(false)
+    setArticleCorrige(null)
+    api.stockArticle(id)
+      .then((a) => { if (vivant) setArticleCorrige(a) })
+      .catch((e) => { if (vivant) setLectureArticleEchouee(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementArticle(false) })
+    return () => { vivant = false }
+  }, [params.corriger, etabActif])
+
   // Le stock d'un article = la somme de ce qui reste dans ses lots.
   const restantParArticle = useMemo(() => {
     const total = {}
@@ -136,10 +159,83 @@ export default function Stock({ etabActif, droits }) {
     )
   }, [articles, recherche])
 
+  // ⚠ `etat` GARDE SON IDENTITÉ : l'effet du formulaire remet quantité et motif à zéro à chaque
+  // nouvel objet. Écrit en ligne, il effacerait la frappe à chaque rendu.
+  const restantCorrige = articleCorrige ? (restantParArticle[articleCorrige.id] || 0) : 0
+  const etatCorrection = useMemo(
+    () => (articleCorrige ? { article: articleCorrige, restant: restantCorrige } : null),
+    [articleCorrige, restantCorrige],
+  )
+
   async function apres(message) {
     setSucces(message)
     setErreur(null)
     await recharger()
+  }
+
+  // ── CORRIGER UN STOCK, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND : le droit d'ajuster, et
+  // des lots lus EN ENTIER. Le chiffre qu'on corrige est leur somme : sur une lecture échouée,
+  // `lots` garde sa valeur précédente et rend un zéro qui a l'air juste ; sur une lecture tronquée,
+  // une somme partielle. On ne corrige pas un chiffre qu'on ne connaît pas.
+  if (params.corriger) {
+    const fermerCorrection = () => majParams({ corriger: '' }, { pousser: true })
+    let contenu
+    if (!peutAjuster) {
+      contenu = (
+        <div className="banner banner-warn">
+          Corriger le stock demande le droit d’ajuster le stock, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargement || chargementArticle) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!articleCorrige) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureArticleEchouee
+            ? 'Cet article n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cet article n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (articles === null) {
+      contenu = (
+        <div className="banner banner-error">
+          Les lots de stock n’ont pas pu être lus : cet écran ne sait pas combien il reste de
+          « {articleCorrige.libelle} », et on ne corrige pas un chiffre qu’on ne connaît pas.
+        </div>
+      )
+    } else if (lotsTronques) {
+      contenu = (
+        <div className="banner banner-error">
+          Cet établissement a plus de lots que cet écran n’en charge : le stock de
+          « {articleCorrige.libelle} » ne peut pas être calculé en entier, et la correction reste
+          désactivée, comme dans la liste.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <AjustementModal
+            key={params.corriger}
+            etat={etatCorrection}
+            onClose={fermerCorrection}
+            onFait={(m) => { fermerCorrection(); apres(m) }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerCorrection}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au stock
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   return (
@@ -206,7 +302,7 @@ export default function Stock({ etabActif, droits }) {
             recherche={recherche}
             onRecherche={setRecherche}
             peutAjuster={peutAjuster && !lotsTronques}
-            onAjuster={(a) => setAjustement({ article: a, restant: restantParArticle[a.id] || 0 })}
+            onAjuster={(a) => { setErreur(null); setSucces(null); majParams({ corriger: String(a.id) }, { pousser: true }) }}
             onRattacher={peutGererArticle ? (a) => setRattachement(a) : null}
             nonSuivis={(articles || []).filter((a) => !a.produit).length}
           />
@@ -229,12 +325,6 @@ export default function Stock({ etabActif, droits }) {
         </>
       )}
 
-      <AjustementModal
-        etat={ajustement}
-        onClose={() => setAjustement(null)}
-        onFait={(m) => { setAjustement(null); apres(m) }}
-        onErreur={setErreur}
-      />
 
       <RattachementModal
         article={rattachement}
@@ -631,8 +721,11 @@ function AjustementModal({ etat, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!etat) return null
+
   return (
-    <Modal open={!!etat} onClose={onClose} titre={etat ? `Corriger — ${etat.article.libelle}` : ''}>
+    <>
+      <h2>{`Corriger — ${etat.article.libelle}`}</h2>
       {etat && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
@@ -711,7 +804,7 @@ function AjustementModal({ etat, onClose, onFait, onErreur }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
