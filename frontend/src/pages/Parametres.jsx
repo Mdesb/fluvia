@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -615,7 +615,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
   // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
   // au-dessus de lui — vu à l'écran, pas déduit.
-  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen || params.topologie)
+  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen || params.topologie || params.role)
 
   return (
     <div className="view">
@@ -1642,6 +1642,22 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
     )
   }
 
+  // ── CRÉER OU MODIFIER UN RÔLE, EN ÉCRAN ────────────────────────────────────────────────────
+  // La carte des rôles lit ses listes : ComptesDroits lui cède la place, et reçoit son message de
+  // succès — la carte, remontée au retour, le perdrait.
+  if (params.role) {
+    return (
+      <RolesSection
+        droits={droits}
+        peutGerer={aLeDroit(droits, 'securite.gerer')}
+        onChange={charger}
+        params={params}
+        majParams={majParams}
+        onEnregistre={(message) => { setErreur(null); setMsg(message) }}
+      />
+    )
+  }
+
   return (
     <div>
       {msg && <div className="banner" style={{ background: 'var(--good-bg, var(--panel-2))', color: 'var(--good)', marginBottom: 12 }}>{msg}</div>}
@@ -1714,7 +1730,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
         onChange={charger}
       />
 
-      <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} />
+      <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} params={params} majParams={majParams} />
 
       <MatriceDroits roles={roles} etabActif={etabActif} affectations={affectations} utilisateurs={utilisateurs} />
 

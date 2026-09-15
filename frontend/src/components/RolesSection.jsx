@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import Modal from './Modal.jsx'
 import { confirmer } from './Confirmation.jsx'
 
 // Créer et modifier un rôle — sur l'écran qui s'appelle « Utilisateurs et droits » et où l'on ne
@@ -24,7 +23,7 @@ import { confirmer } from './Confirmation.jsx'
 // 4. **La suppression dit ce qu'elle casse.** Un rôle supprimé retire ses droits à tous ceux qui le
 //    portent, d'un coup et sans préavis.
 
-export default function RolesSection({ droits, peutGerer, onChange }) {
+export default function RolesSection({ droits, peutGerer, onChange, params = {}, majParams, onEnregistre }) {
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
   const [erreurEdition, setErreurEdition] = useState(null)
@@ -33,6 +32,8 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
   const [succes, setSucces] = useState(null)
   const [edition, setEdition] = useState(null)
   const [enCours, setEnCours] = useState(false)
+  // ⚠ `null` = PAS ENCORE LU, `false` = LECTURE ÉCHOUÉE : rôles et droits restaient à [] sans le dire.
+  const [rolesLus, setRolesLus] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -41,7 +42,9 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
       const [r, p] = await Promise.all([api.roles(), api.permissions()])
       setRoles(membres(r))
       setPermissions(membres(p))
+      setRolesLus(true)
     } catch (e) {
+      setRolesLus(false)
       setErreur(e.message)
     } finally {
       setChargement(false)
@@ -64,6 +67,26 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
     Object.values(m).forEach((l) => l.sort((a, b) => (a.action || '').localeCompare(b.action || '')))
     return { joker: j, parModule: Object.fromEntries(Object.entries(m).sort(([a], [b]) => a.localeCompare(b))) }
   }, [permissions])
+
+  // ── L'ADRESSE OUVRE LE FORMULAIRE ──────────────────────────────────────────────────────────
+  // Une fois par clé, les listes lues : rouvrir viderait les droits cochés.
+  const cleOuverte = useRef('')
+  const [roleIntrouvable, setRoleIntrouvable] = useState(false)
+  useEffect(() => {
+    const cle = params.role || ''
+    if (!cle) {
+      if (cleOuverte.current) { cleOuverte.current = ''; setEdition(null) }
+      setRoleIntrouvable(false)
+      return
+    }
+    if (chargement || !rolesLus || cleOuverte.current === cle) return
+    cleOuverte.current = cle
+    if (cle === 'nouveau') { setRoleIntrouvable(false); ouvrir(null); return }
+    const role = roles.find((x) => String(x.id) === cle)
+    if (!role) { setEdition(null); setRoleIntrouvable(true); return }
+    setRoleIntrouvable(false)
+    ouvrir(role)
+  }, [params.role, chargement, rolesLus, roles])
 
   function ouvrir(role) {
     setSucces(null)
@@ -105,8 +128,10 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
       }
       if (edition.role) await api.majRole(edition.role.id, corps)
       else await api.creerRole(corps)
-      setSucces(edition.role ? 'Rôle modifié.' : 'Rôle créé.')
+      const message = edition.role ? 'Rôle modifié.' : 'Rôle créé.'
+      setSucces(message)
       setEdition(null)
+      if (params.role) { majParams({ role: '' }, { pousser: true }); onEnregistre?.(message) }
       await recharger()
       onChange?.()
     } catch (err) {
@@ -149,6 +174,146 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
     }
   }
 
+  // ── CRÉER OU MODIFIER UN RÔLE, EN ÉCRAN ────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET L'ÉCRAN LES REPREND : le droit de gérer la
+  // sécurité, et un rôle qui n'est pas un modèle. Et les droits à cocher viennent d'une liste lue.
+  if (params.role) {
+    const fermerRole = () => majParams({ role: '' }, { pousser: true })
+    let contenu
+    if (!peutGerer) {
+      contenu = <div className="banner banner-warn">Créer ou modifier un rôle demande le droit de gérer la sécurité, que ce compte n’a pas.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (rolesLus === false) {
+      contenu = (
+        <div className="banner banner-error">
+          Les rôles et les droits n’ont pas pu être lus : on ne compose pas un rôle sur une liste de droits qu’on n’a pas.
+        </div>
+      )
+    } else if (roleIntrouvable) {
+      contenu = <div className="banner banner-warn">Ce rôle n’existe pas, ou n’est pas visible depuis ce compte.</div>
+    } else if (edition?.role?.estModele) {
+      contenu = (
+        <div className="banner banner-warn">
+          « {edition.role.nom} » est un rôle modèle installé par le socle : il se duplique, il ne se modifie pas.
+        </div>
+      )
+    } else if (!edition) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else {
+      contenu = (
+        <>
+          <h2>{edition.role ? `Modifier — ${edition.role.nom}` : 'Nouveau rôle'}</h2>
+        {edition && (
+          <form onSubmit={enregistrer}>
+            {/* LE REFUS DU SERVEUR S'AFFICHAIT DERRIÈRE LA MODALE RESTÉE OUVERTE.
+                Maxime : « j'ai changé les droits d'un rôle, et je ne peux plus le faire maintenant. »
+                L'erreur était bien récupérée — et écrite dans le bandeau de la CARTE, c'est-à-dire
+                sous la fenêtre ouverte. On cliquait « Enregistrer », rien ne bougeait, et
+                l'explication était cachée.
+                Or le message du serveur est précisément celui qui débloque : « ce rôle est la seule
+                source du droit d'administration de l'établissement X — désignez un remplaçant avant
+                de retirer ce droit. » Il ne dit pas non, il dit dans quel ordre faire.
+                Une modale doit porter l'erreur qui l'empêche de se fermer. Sinon on ferme la modale
+                pour lire pourquoi on n'a pas pu la valider. */}
+            {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
+
+            <div className="field">
+              <label htmlFor="rl-nom">Nom du rôle *</label>
+              <input
+                id="rl-nom"
+                className="input"
+                required
+                value={edition.nom}
+                placeholder="Caissier du samedi"
+                onChange={(e) => setEdition((s) => ({ ...s, nom: e.target.value }))}
+              />
+              <div className="hint">Le nom que verra celui qui attribue ce rôle à un compte.</div>
+            </div>
+
+            {joker.length > 0 && (
+              <>
+                <div className="fiche-sec" style={{ marginTop: 14 }}>Droits sur tout le logiciel</div>
+                <div className="banner banner-error" style={{ marginBottom: 8 }}>
+                  Ces droits s'appliquent à <b>tous les modules</b>, y compris ceux qui seront ajoutés
+                  plus tard. Ne les cochez que pour un rôle d'administration.
+                </div>
+                {joker.map((p) => (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                    <input
+                      type="checkbox"
+                      checked={edition.choisies.has(String(p.id))}
+                      onChange={() => basculer(String(p.id))}
+                    />
+                    Tout {p.action}
+                  </label>
+                ))}
+              </>
+            )}
+
+            <div className="fiche-sec" style={{ marginTop: 14 }}>Droits par module</div>
+            {Object.entries(parModule).map(([module, liste]) => {
+              const coches = liste.filter((p) => edition.choisies.has(String(p.id))).length
+              return (
+                <div key={module} className="card" style={{ marginBottom: 8 }}>
+                  <div className="card-b" style={{ padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <b>{module}</b>
+                      <span className="sub">{coches} / {liste.length}</span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                        <button className="btn ghost sm" type="button" onClick={() => basculerModule(liste, true)}>
+                          Tout
+                        </button>
+                        <button className="btn ghost sm" type="button" onClick={() => basculerModule(liste, false)}>
+                          Rien
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                      {liste.map((p) => (
+                        <label
+                          key={p.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 190, fontWeight: 400 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={edition.choisies.has(String(p.id))}
+                            onChange={() => basculer(String(p.id))}
+                          />
+                          {p.action}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+              <button className="btn" type="button" onClick={fermerRole}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={enCours}>
+                {enCours ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        )}
+        </>
+      )
+    }
+    return (
+      <section className="card">
+        <div className="card-b">
+          <button className="btn ghost sm" type="button" onClick={fermerRole}
+            style={{ marginBottom: 'var(--esp-large)' }}>
+            ← Retour aux comptes et droits
+          </button>
+          {contenu}
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -156,7 +321,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
         <span className="sub">ce que chaque profil a le droit de faire</span>
         {peutGerer && (
           <div className="r">
-            <button className="btn primary sm" type="button" onClick={() => ouvrir(null)}>＋ Nouveau rôle</button>
+            <button className="btn primary sm" type="button" onClick={() => majParams({ role: 'nouveau' }, { pousser: true })}>＋ Nouveau rôle</button>
           </div>
         )}
       </div>
@@ -248,7 +413,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
                           {/* Un rôle modèle se duplique, il ne se modifie pas : l'altérer changerait
                               le point de départ de tous les établissements. */}
                           {!r.estModele && (
-                            <button className="btn ghost sm" type="button" onClick={() => ouvrir(r)}>Modifier</button>
+                            <button className="btn ghost sm" type="button" onClick={() => majParams({ role: String(r.id) }, { pousser: true })}>Modifier</button>
                           )}
                           <button className="btn ghost sm" type="button" onClick={() => dupliquer(r)}>Dupliquer</button>
                           {/* ⚠ TON `danger`, ET LA CONFIRMATION DIT POURQUOI : « tous les
@@ -274,107 +439,6 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
           </table>
         )}
       </div>
-
-      <Modal
-        open={!!edition}
-        onClose={() => { setEdition(null); setErreurEdition(null) }}
-        titre={edition?.role ? `Modifier — ${edition.role.nom}` : 'Nouveau rôle'}
-        taille="lg"
-      >
-        {edition && (
-          <form onSubmit={enregistrer}>
-            {/* LE REFUS DU SERVEUR S'AFFICHAIT DERRIÈRE LA MODALE RESTÉE OUVERTE.
-                Maxime : « j'ai changé les droits d'un rôle, et je ne peux plus le faire maintenant. »
-                L'erreur était bien récupérée — et écrite dans le bandeau de la CARTE, c'est-à-dire
-                sous la fenêtre ouverte. On cliquait « Enregistrer », rien ne bougeait, et
-                l'explication était cachée.
-                Or le message du serveur est précisément celui qui débloque : « ce rôle est la seule
-                source du droit d'administration de l'établissement X — désignez un remplaçant avant
-                de retirer ce droit. » Il ne dit pas non, il dit dans quel ordre faire.
-                Une modale doit porter l'erreur qui l'empêche de se fermer. Sinon on ferme la modale
-                pour lire pourquoi on n'a pas pu la valider. */}
-            {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
-
-            <div className="field">
-              <label htmlFor="rl-nom">Nom du rôle *</label>
-              <input
-                id="rl-nom"
-                className="input"
-                required
-                value={edition.nom}
-                placeholder="Caissier du samedi"
-                onChange={(e) => setEdition((s) => ({ ...s, nom: e.target.value }))}
-              />
-              <div className="hint">Le nom que verra celui qui attribue ce rôle à un compte.</div>
-            </div>
-
-            {joker.length > 0 && (
-              <>
-                <div className="fiche-sec" style={{ marginTop: 14 }}>Droits sur tout le logiciel</div>
-                <div className="banner banner-error" style={{ marginBottom: 8 }}>
-                  Ces droits s'appliquent à <b>tous les modules</b>, y compris ceux qui seront ajoutés
-                  plus tard. Ne les cochez que pour un rôle d'administration.
-                </div>
-                {joker.map((p) => (
-                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                    <input
-                      type="checkbox"
-                      checked={edition.choisies.has(String(p.id))}
-                      onChange={() => basculer(String(p.id))}
-                    />
-                    Tout {p.action}
-                  </label>
-                ))}
-              </>
-            )}
-
-            <div className="fiche-sec" style={{ marginTop: 14 }}>Droits par module</div>
-            {Object.entries(parModule).map(([module, liste]) => {
-              const coches = liste.filter((p) => edition.choisies.has(String(p.id))).length
-              return (
-                <div key={module} className="card" style={{ marginBottom: 8 }}>
-                  <div className="card-b" style={{ padding: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <b>{module}</b>
-                      <span className="sub">{coches} / {liste.length}</span>
-                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                        <button className="btn ghost sm" type="button" onClick={() => basculerModule(liste, true)}>
-                          Tout
-                        </button>
-                        <button className="btn ghost sm" type="button" onClick={() => basculerModule(liste, false)}>
-                          Rien
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
-                      {liste.map((p) => (
-                        <label
-                          key={p.id}
-                          style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 190, fontWeight: 400 }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={edition.choisies.has(String(p.id))}
-                            onChange={() => basculer(String(p.id))}
-                          />
-                          {p.action}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
-              <button className="btn primary" type="submit" disabled={enCours}>
-                {enCours ? 'Enregistrement…' : 'Enregistrer'}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
     </section>
   )
 }

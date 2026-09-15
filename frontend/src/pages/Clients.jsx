@@ -146,7 +146,7 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '' }
+const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '', consentement: '' }
 
 // Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
 const INCLUABLES = [
@@ -194,6 +194,9 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const [devisPour, setDevisPour] = useState(null)
 
   const selId = params.fiche || null
+  // ⚠ LA PAGE PORTE LE MESSAGE DU CONSENTEMENT ENREGISTRÉ : la carte qui l'affichait est remontée au
+  // retour sur la fiche, et le perdrait.
+  const [succesConsentement, setSuccesConsentement] = useState(null)
   // `nouveau` = creation, sinon l'identifiant du client qu'on modifie.
   const enEdition = params.edition || ''
   const page = Math.max(1, parseInt(params.page, 10) || 1)
@@ -436,6 +439,35 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     )
   }
 
+  // ── ENREGISTRER UN CONSENTEMENT, EN ÉCRAN ──────────────────────────────────────────────────
+  //
+  // Posé dans la branche de la fiche : le formulaire a besoin du client qu'elle a lu — c'est
+  // `estMineur` qui décide si le représentant légal est exigé (RG-M4-10).
+  if (selId && params.consentement) {
+    const fermerConsentement = () => majParams({ consentement: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerConsentement}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la fiche
+        </button>
+        {ficheLoading ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : ficheErr ? (
+          <div className="banner banner-error">{ficheErr}</div>
+        ) : fiche?.client ? (
+          <ConsentementsClient
+            client={fiche.client}
+            droits={droits}
+            enEcran
+            onFermer={fermerConsentement}
+            onEnregistre={(message) => { fermerConsentement(); setSuccesConsentement(message) }}
+          />
+        ) : null}
+      </div>
+    )
+  }
+
   // ---------------------------------------------------------------- La fiche, en page
   if (selId) {
     return (
@@ -461,8 +493,10 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
           <div className="banner banner-error">{ficheErr}</div>
         ) : fiche ? (
           <section className="card"><div className="card-b">
+            {succesConsentement && <div className="banner banner-ok">{succesConsentement}</div>}
             <FicheContenu
               fiche={fiche}
+              onConsentement={() => { setSuccesConsentement(null); majParams({ consentement: 'nouveau' }, { pousser: true }) }}
               mouvements={mouvements}
               mouvementsIllisibles={mouvementsIllisibles}
               fidelite={fidelite}
@@ -743,7 +777,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge }) {
+function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge, onConsentement }) {
   const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
   const [devis, setDevis] = useState(false)
@@ -1030,7 +1064,7 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
 
       {/* Ce que ce client accepte de recevoir. La fiche l'ignorait completement : on pouvait
           l'ecrire par l'API, jamais le relire — donc jamais savoir qu'on allait le contredire. */}
-      <ConsentementsClient client={c} droits={droits} />
+      <ConsentementsClient client={c} droits={droits} onOuvrir={onConsentement} />
 
       {/* Le geste du comptoir : le client presente une carte, est-ce la sienne ? */}
       <VerifierCarte client={c} droits={droits} />
