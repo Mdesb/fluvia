@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
@@ -16,11 +16,13 @@ import { idDe } from '../api/iri.js'
  * l'argent à un partenaire qui n'existe pas. Construire le second sans le premier aurait produit
  * une page qui n'aurait jamais rien affiché — et personne n'aurait su pourquoi.
  */
-export default function PartenairesOta({ etabActif, droits = [] }) {
+// ⚠ UNE CONSTANTE DE MODULE : le formulaire recharge ses champs à chaque nouvel objet `valeurs`.
+const PARTENAIRE_NOUVEAU = Object.freeze({ nom: '', vitrine: '', tarifNet: '0.00', commission: '0.00', codeConnecteur: '', actif: true })
+
+export default function PartenairesOta({ etabActif, droits = [], params = {}, majParams }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   const [partenaires, setPartenaires] = useState(null)
   const [vitrines, setVitrines] = useState(null)
-  const [edition, setEdition] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
@@ -58,12 +60,74 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
       .catch(() => setVitrines(undefined))
   }, [etabActif])
 
+  // Le partenaire ouvert : la constante en création, un objet mémorisé sur la ligne lue en modification.
+  const valeursPartenaire = useMemo(() => {
+    if (!params.partenaire) return null
+    if (params.partenaire === 'nouveau') return PARTENAIRE_NOUVEAU
+    if (!Array.isArray(partenaires)) return null
+    const p = partenaires.find((x) => String(x.id) === String(params.partenaire))
+    if (!p) return null
+    return {
+      id: p.id,
+      nom: p.nom || '',
+      vitrine: p.vitrine
+        ? (typeof p.vitrine === 'string' ? String(p.vitrine).split('/').pop() : String(p.vitrine.id || ''))
+        : '',
+      tarifNet: p.tarifNet || '0.00',
+      commission: p.commission || '0.00',
+      codeConnecteur: p.codeConnecteur || '',
+      actif: p.actif !== false,
+    }
+  }, [params.partenaire, partenaires])
+
   function nomVitrine(ref) {
     if (!ref) return null
     const id = typeof ref === 'string' ? String(ref).split('/').pop() : String(ref.id || '')
     if (!Array.isArray(vitrines)) return undefined
     const v = vitrines.find((x) => String(x.id) === id)
     return v ? (v.slug || v.nom) : null
+  }
+
+  // ── NOUVEAU OU MODIFIER UN PARTENAIRE, EN ÉCRAN ────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Une modification se fait sur la
+  // ligne lue : illisible, on ne la réécrit pas, et « introuvable » ne se dit que sur une liste lue.
+  if (params.partenaire) {
+    const fermerPartenaire = () => majParams({ partenaire: '' }, { pousser: true })
+    const creation = params.partenaire === 'nouveau'
+    let contenu
+    if (!peutGerer) {
+      contenu = <div className="banner banner-warn">Gérer les partenaires de revente demande le droit de gérer les connecteurs de revente, que ce compte n’a pas.</div>
+    } else if (vitrines === null || (!creation && partenaires === null)) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!creation && partenaires === undefined) {
+      contenu = <div className="banner banner-error">Les partenaires n’ont pas pu être lus : on ne modifie pas une fiche qu’on n’a pas lue.</div>
+    } else if (!valeursPartenaire) {
+      contenu = <div className="banner banner-warn">Ce partenaire n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <EditionPartenaire
+            key={params.partenaire}
+            valeurs={valeursPartenaire}
+            vitrines={vitrines}
+            onFermer={fermerPartenaire}
+            onFait={(m) => { fermerPartenaire(); setSucces(m); setErreur(null); charger() }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerPartenaire}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux partenaires
+        </button>
+        {contenu}
+      </>
+    )
   }
 
   return (
@@ -78,7 +142,7 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
             className="btn primary sm"
             type="button"
             style={{ marginLeft: 'auto' }}
-            onClick={() => setEdition({ nom: '', vitrine: '', tarifNet: '0.00', commission: '0.00', codeConnecteur: '', actif: true })}
+            onClick={() => { setErreur(null); setSucces(null); majParams({ partenaire: 'nouveau' }, { pousser: true }) }}
           >
             Nouveau partenaire
           </button>
@@ -145,17 +209,7 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
                         <button
                           className="btn ghost sm"
                           type="button"
-                          onClick={() => setEdition({
-                            id: p.id,
-                            nom: p.nom || '',
-                            vitrine: p.vitrine
-                              ? (typeof p.vitrine === 'string' ? String(p.vitrine).split('/').pop() : String(p.vitrine.id || ''))
-                              : '',
-                            tarifNet: p.tarifNet || '0.00',
-                            commission: p.commission || '0.00',
-                            codeConnecteur: p.codeConnecteur || '',
-                            actif: p.actif !== false,
-                          })}
+                          onClick={() => { setErreur(null); setSucces(null); majParams({ partenaire: String(p.id) }, { pousser: true }) }}
                         >
                           Modifier
                         </button>
@@ -184,14 +238,6 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
         produits={produitsCatalogue}
         onFermer={() => setEditionQuota(null)}
         onFait={(m) => { setEditionQuota(null); setSucces(m); setErreur(null); chargerQuotas() }}
-        onErreur={setErreur}
-      />
-
-      <EditionPartenaire
-        valeurs={edition}
-        vitrines={vitrines}
-        onFermer={() => setEdition(null)}
-        onFait={(m) => { setEdition(null); setSucces(m); setErreur(null); charger() }}
         onErreur={setErreur}
       />
     </section>
@@ -242,12 +288,8 @@ function EditionPartenaire({ valeurs, vitrines, onFermer, onFait, onErreur }) {
   }
 
   return (
-    <Modal
-      open
-      onClose={onFermer}
-      titre={v.id ? 'Modifier le partenaire' : 'Nouveau partenaire de revente'}
-      taille="sm"
-    >
+    <>
+      <h2>{v.id ? 'Modifier le partenaire' : 'Nouveau partenaire de revente'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Nom du partenaire *</span>
@@ -317,7 +359,7 @@ function EditionPartenaire({ valeurs, vitrines, onFermer, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 

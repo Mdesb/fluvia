@@ -12,14 +12,14 @@ import { useEtatUrl } from '../api/url.js'
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. Le traitement d'une demande vit
 // dans un composant que seul l'onglet « Remboursements » monte : sans le paramètre `tab`, un
 // F5 sur `?demande=…` retomberait sur un onglet qui ne le rend pas.
-const DEFAUTS_URL = { tab: 'remboursements', demande: '', sens: '' }
+const DEFAUTS_URL = { tab: 'remboursements', demande: '', sens: '', partenaire: '' }
 
 export default function Boutique({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('boutique', DEFAUTS_URL)
   const sousOnglet = params.tab
-  const setSousOnglet = (v) => majParams({ tab: v, demande: '', sens: '' })
+  const setSousOnglet = (v) => majParams({ tab: v, demande: '', sens: '', partenaire: '' })
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
-  const ecranOuvert = Boolean(params.demande)
+  const ecranOuvert = Boolean(params.demande || params.partenaire)
 
   return (
     <div className="view">
@@ -53,7 +53,7 @@ export default function Boutique({ etabActif, droits }) {
       )}
 
       {sousOnglet === 'partenaires' && (
-        <PartenairesOta etabActif={etabActif} droits={droits} />
+        <PartenairesOta etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'comptes' && (
