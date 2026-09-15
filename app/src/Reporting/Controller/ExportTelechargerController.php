@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Reporting\Controller;
 
 use App\Reporting\Entity\Export;
-use App\Reporting\Enum\StatutExport;
 use App\Reporting\Security\ExportDownloadAuthorizer;
 use App\Reporting\Service\StockageExportInterface;
 use App\Securite\Entity\Utilisateur;
@@ -51,7 +50,12 @@ final class ExportTelechargerController
         // reserve a son demandeur cessait de l'etre par `/api/reporting/exports/{id}/telecharger`.
         $this->autorisation->assertPeutTelecharger($export, $utilisateur);
 
-        if ($export->getStatut() !== StatutExport::Genere && $export->getStatut() !== StatutExport::Envoye) {
+        // LA REGLE DU FICHIER VIT DANS `StatutExport::fichierDisponible()`, ET PLUS ICI.
+        // Elle etait ecrite deux fois, et en COMPLEMENT : ici « autorise Genere|Envoye », dans
+        // `TelechargerExportProvider` « refuse Echec ». Les deux s'accordaient par coincidence
+        // tant qu'il y avait trois etats ; au quatrieme, cette porte refusait un fichier que
+        // l'autre servait.
+        if (!$export->getStatut()->fichierDisponible()) {
             throw new ConflictHttpException(sprintf('Export non disponible (statut : %s).', $export->getStatut()->value));
         }
         if ($export->getCheminStockage() === null) {

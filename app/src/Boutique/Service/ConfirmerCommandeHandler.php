@@ -29,7 +29,9 @@ use App\Offre\Enum\Canal;
 use App\Offre\Service\ResolveurPrix;
 use App\Organisation\Entity\Espace;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Entity\Creneau;
 use App\Reservation\Enum\ModeDecompteReservation;
+use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Vente\Entity\BilletSupport;
@@ -98,13 +100,36 @@ final class ConfirmerCommandeHandler
         return $client;
     }
 
-    /** RG-M3-08/§0 décision n°8 : refuse avant même l'initiation du paiement si plus de place. */
+    /**
+     * RG-M3-08/§0 décision n°8 : refuse avant même l'initiation du paiement si plus de place.
+     *
+     * ⚠ EN QUANTITÉ, PAS « COMPLET OU NON ». Trois billets sur un créneau à deux places libres ne le
+     * rendent pas « complet », et passaient. Ce contrôle reste un pré-contrôle : la place ne se prend
+     * qu'à la confirmation, sous verrou (`prendrePlacesSousVerrou()`).
+     */
     public function reverifierDisponibilite(PanierEnLigne $panier): void
     {
+        $demandes = [];
         foreach ($panier->getLignes() as $ligne) {
             $creneau = $ligne->getCreneau();
-            if ($creneau !== null && $this->jauge->estComplet($creneau)) {
+            if ($creneau === null) {
+                continue;
+            }
+            $cle = (string) $creneau->getId();
+            $demandes[$cle] ??= [$creneau, 0];
+            $demandes[$cle][1] += max(1, $ligne->getQuantite());
+        }
+
+        foreach ($demandes as [$creneau, $quantite]) {
+            if ($this->jauge->estComplet($creneau)) {
                 throw new ConflictHttpException('RG-M3-08 : créneau complet, place non disponible.');
+            }
+            if (!$this->jauge->peutAccueillir($creneau, $quantite)) {
+                throw new ConflictHttpException(sprintf(
+                    'RG-M3-08 : places insuffisantes sur ce créneau (%d demandée(s), %d restante(s)).',
+                    $quantite,
+                    $this->jauge->placesRestantes($creneau),
+                ));
             }
         }
     }
@@ -176,6 +201,25 @@ final class ConfirmerCommandeHandler
      */
     public function confirmerApresPaiementReussi(PanierEnLigne $panier, Vente $vente, string $moyenCode, string $referenceTransaction): bool
     {
+        // ── LES PLACES SE PRENNENT AVANT LA VALIDATION, SOUS VERROU, EN QUANTITÉ ───────────────────────
+        //
+        // Les réservations se créaient APRÈS la validation, sans aucun contrôle de jauge : le seul
+        // contrôle était `reverifierDisponibilite()`, à l'initiation du paiement. Tout ce qui se vendait
+        // entre les deux — un guichet, une autre commande, une OTA — faisait déborder le créneau. Et
+        // chaque réservation valait UNE place quelle que soit la quantité de la ligne : trois billets
+        // (trois supports émis par `ValiderVenteService`) ne pesaient qu'une place sur la jauge.
+        //
+        // Désormais : places prises sous verrou (voir `JaugeCreneauGuard::verrouiller()`), quantité de la
+        // ligne comprise, puis validation. Si une place manque, rien n'est validé et la demande de
+        // remboursement de la décision n°8 est créée, comme pour tout conflit d'inventaire. Si la
+        // validation échoue ensuite, les places prises sont rendues.
+        //
+        // Le paiement est enregistré APRÈS la prise de places : la transaction de prise de places ne
+        // doit rien écrire d'autre, sinon son annulation effacerait un paiement capturé que la mémoire de
+        // Doctrine croirait déjà en base.
+        $payeur = $this->resoudreClient($panier);
+        $reservations = $this->prendrePlacesSousVerrou($vente, $payeur);
+
         $paiement = new Paiement();
         $paiement->setMoyenCode($moyenCode)
             ->setMontant($vente->getTotal())
@@ -184,6 +228,13 @@ final class ConfirmerCommandeHandler
         $vente->addPaiement($paiement);
         $this->em->persist($paiement);
         $this->calculateur->recalculerVente($vente);
+
+        if ($reservations === null) {
+            return $this->demanderRemboursement(
+                $vente,
+                'Conflit d\'inventaire à la confirmation (paiement déjà capturé) : une place de la commande a été prise entre la vérification et le paiement.',
+            );
+        }
 
         // Le code de support (unique, signé HMAC — CA-12) est généré automatiquement par
         // `ValiderVenteService::creerSupport()` (`App\Vente\Service\GenerateurCodeSupport`) : seul le
@@ -196,38 +247,25 @@ final class ConfirmerCommandeHandler
         try {
             $this->validerVente->valider($vente, $overrides);
         } catch (ConflictHttpException|UnprocessableEntityHttpException $e) {
-            // §0 décision n°8b : paiement déjà capturé, place prise entre-temps — jamais d'avoir
-            // automatique (RG-M3-15) : une demande de remboursement pré-remplie est créée à la place.
-            $demande = new DemandeRemboursement();
-            $demande->setVente($vente)
-                ->setMotif('Conflit d\'inventaire à la confirmation (paiement déjà capturé) : ' . $e->getMessage())
-                ->setStatut(StatutDemandeRemboursement::Recue)
-                ->setOrigineAutomatique(true)
-                ->setEtablissement($vente->getEtablissement());
-            $this->em->persist($demande);
-            $this->em->flush();
+            // La vente n'est pas validée : les places prises plus haut se rendent.
+            foreach ($reservations as $reservation) {
+                $reservation->setStatut(StatutReservation::AnnuleeLibre);
+            }
 
-            return true;
+            return $this->demanderRemboursement(
+                $vente,
+                'Conflit d\'inventaire à la confirmation (paiement déjà capturé) : ' . $e->getMessage(),
+            );
         }
 
         $this->em->flush();
 
-        $payeur = $this->resoudreClient($panier);
-
         foreach ($vente->getLignes() as $ligneVente) {
             $meta = $this->em->getRepository(LigneCommandeMeta::class)->findOneBy(['ligneVente' => $ligneVente]);
 
-            if ($meta instanceof LigneCommandeMeta && $meta->getCreneau() !== null) {
-                $beneficiaire = $this->resoudreBeneficiaire($payeur, $meta);
-                $reservation = new Reservation();
-                $reservation->setCreneau($meta->getCreneau())
-                    ->setOrganisateur($beneficiaire)
-                    ->setEtablissement($vente->getEtablissement())
-                    ->setModeDecompte(ModeDecompteReservation::VenteUnite)
-                    ->setVenteRattachee($vente)
-                    ->setMontantDu('0.00');
-                $this->em->persist($reservation);
-                $this->em->flush();
+            // L'accès ne s'ouvre qu'une fois la vente validée, jamais à la prise de place.
+            $reservation = $reservations[(string) $ligneVente->getId()] ?? null;
+            if ($reservation !== null) {
                 $this->projectionAcces->projeterSiApplicable($reservation);
             }
 
@@ -247,6 +285,96 @@ final class ConfirmerCommandeHandler
         $this->mailer->envoyer($vente, $panier);
 
         return false;
+    }
+
+    /**
+     * Prend, sous verrou, les places de chaque ligne à créneau de la vente — une réservation par ligne,
+     * portant la quantité de la ligne.
+     *
+     * Les lectures (métadonnées de ligne, bénéficiaires) se font AVANT la transaction : une lecture
+     * faite avant les verrous figerait l'instantané (voir `JaugeCreneauGuard::verrouiller()`).
+     *
+     * @return array<string, Reservation>|null par identifiant de ligne de vente ; `null` si une place
+     *                                         manque — rien n'a alors été écrit
+     */
+    private function prendrePlacesSousVerrou(Vente $vente, Client $payeur): ?array
+    {
+        $lignes = [];
+        $creneaux = [];
+        $demandes = [];
+        foreach ($vente->getLignes() as $ligneVente) {
+            $meta = $this->em->getRepository(LigneCommandeMeta::class)->findOneBy(['ligneVente' => $ligneVente]);
+            $creneau = $meta instanceof LigneCommandeMeta ? $meta->getCreneau() : null;
+            if (!$creneau instanceof Creneau) {
+                continue;
+            }
+            $quantite = max(1, $ligneVente->getQuantite());
+            $lignes[] = [$ligneVente, $creneau, $quantite, $this->resoudreBeneficiaire($payeur, $meta)];
+            $cle = (string) $creneau->getId();
+            $creneaux[$cle] = $creneau;
+            $demandes[$cle] = ($demandes[$cle] ?? 0) + $quantite;
+        }
+
+        if ($lignes === []) {
+            return [];
+        }
+
+        $connexion = $this->em->getConnection();
+        $connexion->beginTransaction();
+        try {
+            $this->jauge->verrouiller(array_values($creneaux), null);
+
+            foreach ($demandes as $cle => $quantite) {
+                if (!$this->jauge->peutAccueillir($creneaux[$cle], $quantite)) {
+                    // Rien n'a été écrit dans cette transaction : la défaire ne perd rien.
+                    $connexion->rollBack();
+
+                    return null;
+                }
+            }
+
+            $reservations = [];
+            foreach ($lignes as [$ligneVente, $creneau, $quantite, $beneficiaire]) {
+                $reservation = new Reservation();
+                $reservation->setCreneau($creneau)
+                    ->setOrganisateur($beneficiaire)
+                    ->setEtablissement($vente->getEtablissement())
+                    ->setModeDecompte(ModeDecompteReservation::VenteUnite)
+                    ->setVenteRattachee($vente)
+                    ->setMontantDu('0.00')
+                    ->setQuantity($quantite);
+                $this->em->persist($reservation);
+                $reservations[(string) $ligneVente->getId()] = $reservation;
+            }
+            $this->em->flush();
+            $connexion->commit();
+        } catch (\Throwable $echec) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw $echec;
+        }
+
+        return $reservations;
+    }
+
+    /**
+     * §0 décision n°8b : paiement déjà capturé, place indisponible — jamais d'avoir automatique
+     * (RG-M3-15) : une demande de remboursement pré-remplie est créée à la place.
+     */
+    private function demanderRemboursement(Vente $vente, string $motif): bool
+    {
+        $demande = new DemandeRemboursement();
+        $demande->setVente($vente)
+            ->setMotif($motif)
+            ->setStatut(StatutDemandeRemboursement::Recue)
+            ->setOrigineAutomatique(true)
+            ->setEtablissement($vente->getEtablissement());
+        $this->em->persist($demande);
+        $this->em->flush();
+
+        return true;
     }
 
     private function creerBilletQrMeta(BilletSupport $support, Vente $vente, ?LigneCommandeMeta $meta): void

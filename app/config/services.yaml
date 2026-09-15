@@ -20,6 +20,11 @@ services:
             # Le marqueur de version chargee vit dans `var/`, hors du depot : le provider a besoin
             # de la racine pour le trouver.
             string $projectDir: '%kernel.project_dir%'
+            # Le DSN du mailer, lu comme un FAIT et non devine depuis APP_ENV : une
+            # preproduction peut porter `null://` (c'etait le cas le 15/09/2026) et un
+            # environnement de test peut recevoir un vrai transport. Voir
+            # `Reporting\Notification\TransportCourrielSelonDsn`.
+            string $mailerDsn: '%env(MAILER_DSN)%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
@@ -43,6 +48,11 @@ services:
     # deux classes implementent l'interface — le journal et le decorateur de consentement de Crm —
     # et l'autowiring ne peut pas choisir seul.
     App\Platform\Notification\ClientNotifierInterface: '@App\Platform\Notification\LogClientNotifier'
+
+    # Le transport expedie-t-il reellement ? Alias explicite, comme celui du dessus : un
+    # test doit pouvoir repondre « oui » sous un transport de test qui, lui, n'expedie pas,
+    # sans quoi le chemin `StatutExport::Envoye` ne serait couvert par aucun test.
+    App\Reporting\Notification\TransportCourrielInterface: '@App\Reporting\Notification\TransportCourrielSelonDsn'
 
     # ⚠ ALIAS DEVENU OBLIGATOIRE LE 06/09. Symfony le déduisait tant qu'une seule classe implémentait
     # `EventBus` ; le décorateur du module « connecteurs » en est une seconde, et la déduction cesse

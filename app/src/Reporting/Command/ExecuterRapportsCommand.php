@@ -14,6 +14,7 @@ use App\Reporting\Enum\PeriodiciteRapport;
 use App\Reporting\Enum\StatutExport;
 use App\Reporting\Exception\GenerationExportNonSupporteeException;
 use App\Reporting\Notification\RapportPlanifieMailer;
+use App\Reporting\Notification\TransportCourrielInterface;
 use App\Reporting\Service\MesureLookupService;
 use App\Reporting\Service\ResolveurGenerateurExport;
 use App\Reporting\Service\StockageExportInterface;
@@ -45,6 +46,7 @@ final class ExecuterRapportsCommand extends Command
         private readonly StockageExportInterface $stockage,
         private readonly RapportPlanifieMailer $mailer,
         private readonly MesureLookupService $lookup,
+        private readonly TransportCourrielInterface $transport,
     ) {
         parent::__construct();
     }
@@ -68,6 +70,7 @@ final class ExecuterRapportsCommand extends Command
         $nbGeneres = 0;
         $nbEnvoyes = 0;
         $nbEchecs = 0;
+        $nbNonExpedies = 0;
 
         foreach ($rapports as $rapport) {
             foreach ($rapport->getDestinataires() as $destinataire) {
@@ -79,6 +82,7 @@ final class ExecuterRapportsCommand extends Command
                     StatutExport::Envoye => ++$nbEnvoyes,
                     StatutExport::Genere => ++$nbGeneres,
                     StatutExport::Echec => ++$nbEchecs,
+                    StatutExport::NonExpedie => ++$nbNonExpedies,
                 };
             }
 
@@ -89,12 +93,25 @@ final class ExecuterRapportsCommand extends Command
         $this->em->flush();
 
         $io->success(sprintf(
-            '%d rapport(s) traité(s) : %d export(s) envoyé(s), %d généré(s) sans envoi, %d échec(s).',
+            '%d rapport(s) traité(s) : %d export(s) envoyé(s), %d non expédié(s), %d généré(s) sans envoi, %d échec(s).',
             \count($rapports),
             $nbEnvoyes,
+            $nbNonExpedies,
             $nbGeneres,
             $nbEchecs,
         ));
+
+        // ⚠ RENDRE L'ABSENCE BRUYANTE. Un « 0 envoyé » se lit comme « rien n'était dû ». La
+        // raison est donc dite explicitement, sur la sortie que l'ordonnanceur journalise —
+        // sans quoi la seule trace serait une colonne `statut` que personne ne regarde.
+        if ($nbNonExpedies > 0) {
+            $io->warning(sprintf(
+                '%d export(s) générés et NON expédiés. %s Les fichiers restent disponibles au '
+                . 'téléchargement ; aucun destinataire n\'a reçu de courriel.',
+                $nbNonExpedies,
+                $this->transport->raison() ?? '',
+            ));
+        }
 
         return Command::SUCCESS;
     }
@@ -119,9 +136,22 @@ final class ExecuterRapportsCommand extends Command
             $export->setCheminStockage($reference);
             $export->setStatut(StatutExport::Genere);
 
+            // ⚠ ON APPELLE LE MAILER MEME QUAND LE TRANSPORT N'EXPEDIE RIEN, ET C'EST VOULU.
+            // Sauter l'appel cacherait un gabarit casse ou une piece jointe illisible jusqu'au
+            // jour ou un vrai transport arrive. On execute donc le chemin entier, et on ne
+            // change que ce qu'on AFFIRME : `null://` avale le message sans lever, donc
+            // deduire « envoye » de « aucune exception » serait faux ici.
             $this->mailer->envoyer($export, $destinataire->getEmail(), $rapport->getNom(), $genere->contenu, 'rapport.' . $genere->extension);
-            $export->setStatut(StatutExport::Envoye);
-            $export->setEnvoyeLe(new \DateTimeImmutable());
+
+            if ($this->transport->estReel()) {
+                $export->setStatut(StatutExport::Envoye);
+                $export->setEnvoyeLe(new \DateTimeImmutable());
+            } else {
+                // ⚠ `envoyeLe` RESTE NUL. C'est ce qui rend le faux impossible : une ligne
+                // « envoyee » sans horodatage n'existe pas, donc aucune requete ne peut
+                // confondre un rapport non expedie avec un rapport recu.
+                $export->setStatut(StatutExport::NonExpedie);
+            }
         } catch (GenerationExportNonSupporteeException $e) {
             $export->setStatut(StatutExport::Echec);
             $export->setMessageErreur($e->getMessage());

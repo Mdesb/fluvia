@@ -4,6 +4,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
 import { useEtatUrl } from '../api/url.js'
+import { nomsDuCreneau } from '../api/slot-label.js'
 
 // GROUPES — module transverse `App\Group`. Un groupe de participants (classe scolaire, comité
 // d'entreprise, tour-opérateur, association) qu'un établissement reçoit, quel que soit son métier :
@@ -51,18 +52,9 @@ function creneauLabel(c) {
   const quand = debut && !Number.isNaN(debut.getTime())
     ? debut.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
     : idDe(c)
-  // L'activité et la ressource sont embarquées dans le créneau lu : date · activité · ressource.
-  // ⚠ UN CHAMP NUL N'EST PAS ÉCRIT PAR L'API : la clé disparaît (7 créneaux sur 223 sans activité à
-  // Piscine A le 15/09/2026, et aucune clé `activite`). Absente ou nulle, la partie se dit « sans … » ;
-  // réduite à son IRI, jamais libellée ici, elle est omise plutôt qu'affichée en identifiant.
+  // Date · activité · ressource — les règles des parties absentes sont dans api/slot-label.js.
   if (typeof c !== 'object') return quand
-  const partie = (objet, absent) => {
-    if (objet === undefined || objet === null) return absent
-    return objet?.libelle || null
-  }
-  return [quand, partie(c.activite, 'sans activité'), partie(c.ressource, 'sans ressource')]
-    .filter(Boolean)
-    .join(' · ')
+  return [quand, nomsDuCreneau(c)].filter(Boolean).join(' · ')
 }
 
 // `groupe` : le groupe sélectionné ; `panier` : la réservation dont on compose le panier.
@@ -173,10 +165,16 @@ export default function Groupes({ etabActif, droits }) {
   // ⚠ LA LECTURE DU GROUPE A TROIS ÉTATS, ET UNE RÉPONSE TARDIVE EST IGNORÉE. Sur un échec, l'ancienne
   // sélection restait affichée : on lisait le détail d'un autre groupe que celui demandé.
   // `null` = aucun groupe demandé · 'chargement' · 'lu' · 'introuvable' (404) · 'echec'.
-  const [lectureGroupe, setLectureGroupe] = useState(null)
+  const [lectureGroupeBrute, setLectureGroupe] = useState(null)
+  // ⚠ L'ÉTABLISSEMENT DE LA LECTURE. `ouvrir` pose « chargement » dans l'effet, donc après le rendu :
+  // juste après une bascule, le groupe lu depuis l'ancien établissement restait affiché une trame.
+  const [groupeLuPour, setGroupeLuPour] = useState(null)
+  const etabCourant = useRef(etabActif)
+  etabCourant.current = etabActif
   const demandeCourante = useRef('')
   const ouvrir = useCallback(async (id, silencieux = false) => {
     demandeCourante.current = id
+    const cleDemande = `${id}|${etabCourant.current}`
     if (!silencieux) { setErreur(null); setLectureGroupe('chargement') }
     try {
       // GET item : on relit le groupe frais plutôt que de se fier à la ligne de liste.
@@ -187,10 +185,12 @@ export default function Groupes({ etabActif, droits }) {
       setSelection(detail)
       setMembresSel(lesMembres)
       setReservations(toutes.filter((b) => idDe(b.group) === id))
+      setGroupeLuPour(cleDemande)
       setLectureGroupe('lu')
     } catch (e) {
       if (demandeCourante.current !== id) return
       setSelection(null)
+      setGroupeLuPour(cleDemande)
       setLectureGroupe(e?.status === 404 ? 'introuvable' : 'echec')
     }
   }, [])
@@ -200,24 +200,31 @@ export default function Groupes({ etabActif, droits }) {
     if (!params.groupe) { demandeCourante.current = ''; setSelection(null); setLectureGroupe(null); return }
     ouvrir(params.groupe)
   }, [params.groupe, etabActif, ouvrir])
+  const cleGroupe = params.groupe ? `${params.groupe}|${etabActif}` : null
+  const lectureGroupe = cleGroupe !== null && lectureGroupeBrute !== 'chargement' && groupeLuPour !== cleGroupe
+    ? 'chargement'
+    : lectureGroupeBrute
 
   // ⚠ LE PANIER SE LIT PAR SON IDENTIFIANT : la liste des réservations est bornée à 200, et l'écran
   // doit vérifier que la réservation appartient bien au groupe de l'adresse.
-  const [reservationEcran, setReservationEcran] = useState(null)
-  const [lectureReservation, setLectureReservation] = useState(null)
+  // ⚠ LA CLÉ PORTE L'ÉTABLISSEMENT. `'chargement'` était posé dans l'effet, donc après le rendu :
+  // juste après une bascule, ce rendu-là montrait encore la réservation lue depuis l'ancien.
+  const [lectureReservationBrute, setLectureReservationBrute] = useState(null)
   // Le panier et les écrans d'une réservation lisent la même fiche, par son identifiant.
   const idReservationEcran = params.panier || (ECRANS_RESERVATION.includes(params.ecran) ? params.reservation : '')
+  const cleReservation = idReservationEcran ? `${idReservationEcran}|${etabActif}` : null
   useEffect(() => {
-    const id = idReservationEcran
-    if (!id) { setReservationEcran(null); setLectureReservation(null); return undefined }
+    if (!idReservationEcran) { setLectureReservationBrute(null); return undefined }
+    const cle = `${idReservationEcran}|${etabActif}`
     let vivant = true
-    setLectureReservation('chargement')
-    setReservationEcran(null)
-    api.reservationGroupe(id)
-      .then((b) => { if (vivant) { setReservationEcran(b); setLectureReservation('lu') } })
-      .catch((e) => { if (vivant) setLectureReservation(e?.status === 404 ? 'introuvable' : 'echec') })
+    api.reservationGroupe(idReservationEcran)
+      .then((b) => { if (vivant) setLectureReservationBrute({ cle, etat: 'lu', reservation: b }) })
+      .catch((e) => { if (vivant) setLectureReservationBrute({ cle, etat: e?.status === 404 ? 'introuvable' : 'echec', reservation: null }) })
     return () => { vivant = false }
   }, [idReservationEcran, etabActif])
+  const lectureReservationCourante = lectureReservationBrute?.cle === cleReservation ? lectureReservationBrute : null
+  const lectureReservation = cleReservation === null ? null : (lectureReservationCourante?.etat ?? 'chargement')
+  const reservationEcran = lectureReservationCourante?.reservation ?? null
 
   async function geste(fn, message) {
     setErreur(null)
@@ -291,7 +298,7 @@ export default function Groupes({ etabActif, droits }) {
       <div className="view">
         <button className="btn ghost sm" type="button" onClick={fermerPanier}
           style={{ marginBottom: 'var(--esp-large)' }}>
-          ← Retour au groupe{selection?.label ? ` « ${selection.label} »` : ''}
+          ← Retour au groupe{lectureGroupe === 'lu' && selection?.label ? ` « ${selection.label} »` : ''}
         </button>
         {contenu}
       </div>
@@ -330,7 +337,7 @@ export default function Groupes({ etabActif, droits }) {
     } else if (nomEcran === 'contingents') {
       contenu = <FormContingents onFermer={fermerEcran} onChange={chargerContingents} />
     } else {
-      retour = `au groupe${selection?.label ? ` « ${selection.label} »` : ''}`
+      retour = `au groupe${lectureGroupe === 'lu' && selection?.label ? ` « ${selection.label} »` : ''}`
       if (!params.groupe) {
         contenu = <div className="banner banner-warn">Aucun groupe n’est désigné dans l’adresse.</div>
       } else if (lectureGroupe === 'introuvable') {

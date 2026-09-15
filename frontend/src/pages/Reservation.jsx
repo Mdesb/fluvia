@@ -11,6 +11,7 @@ import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
+import { activiteDuCreneau, ressourceDuCreneau } from '../api/slot-label.js'
 import { confirmer } from '../components/Confirmation.jsx'
 import Modal from '../components/Modal.jsx'
 import { useEtatUrl } from '../api/url.js'
@@ -900,10 +901,10 @@ export default function Reservation({ etabActif, droits = [], session }) {
                       <div key={c.id} className="creneau">
                         <div className="creneau-h">
                           <div>
-                            <div className="nm">{c.ressource?.libelle || t('resource', c.ressource?.verticale, 'Ressource')}</div>
+                            <div className="nm">{ressourceDuCreneau(c) || t('resource', c.ressource?.verticale, 'Ressource')}</div>
                             <div className="creneau-sub">
                               {c.ressource?.codeType || '—'}
-                              {c.activite?.libelle ? ` · ${c.activite.libelle}` : ''}
+                              {activiteDuCreneau(c) ? ` · ${activiteDuCreneau(c)}` : ''}
                             </div>
                           </div>
                           <span className={`badge ${c.statut === 'planifie' ? 'info' : c.statut === 'annule' ? 'crit' : 'mut'}`}>
@@ -1570,7 +1571,7 @@ function ReserverRapide({
       open
       onClose={onFermer}
       taille="sm"
-      titre={`Réserver — ${creneau.ressource?.libelle || 'créneau'}`}
+      titre={`Réserver — ${ressourceDuCreneau(creneau) || 'créneau'}`}
     >
       <div className="grid" style={{ gap: 'var(--esp-bloc)' }}>
         <div>
@@ -1579,7 +1580,7 @@ function ReserverRapide({
           </div>
           <div className="creneau-sub">
             {creneau.ressource?.codeType || '—'}
-            {creneau.activite?.libelle ? ` · ${creneau.activite.libelle}` : ''}
+            {activiteDuCreneau(creneau) ? ` · ${activiteDuCreneau(creneau)}` : ''}
             {tarif != null ? ` · ${euros(tarif)}` : ''}
           </div>
         </div>

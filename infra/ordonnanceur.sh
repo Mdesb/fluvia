@@ -157,7 +157,26 @@ set -eu
 #                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme ses voisines d'argent,
 #                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements"
+#
+#   reporting:executer-rapports  Les rapports planifiés que les exploitants ont programmés ne
+#                                     partaient jamais : cataloguée (ScheduleCatalog:401, 60 min),
+#                                     jamais autorisée. Cette ligne ouvre la porte de la liste blanche.
+#
+#                                     ⚠ L'ORDRE DE FUSION COMPTE — À DÉPLOYER APRÈS #202. Avant #202,
+#                                     la commande écrivait `Envoyé`+`envoyeLe` dès que l'envoi ne levait
+#                                     pas d'exception, ce que le transport `null://` de la préprod ne
+#                                     fait jamais : des « envoyé » sans destinataire, horodatés,
+#                                     indiscernables des vrais, donc irréparables. #202 pose
+#                                     `StatutExport::NonExpedie` décidé sur une mesure du `MAILER_DSN`,
+#                                     et laisse `envoyeLe` nul sur ce chemin.
+#
+#                                     ⚠ L'INSCRIPTION NE DÉCLENCHE RIEN. `safeOnFirstRun: false` au
+#                                     catalogue → `RunScheduledTasksCommand:192` retient la tâche tant
+#                                     que `--supervise` n'est pas passé, et cette boucle appelle `--only`
+#                                     sans `--supervise`. Le premier passage reste un geste humain : un
+#                                     arriéré de rapports partirait d'un coup — inoffensif en préprod
+#                                     (`non_expedie`), réel en production.
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
