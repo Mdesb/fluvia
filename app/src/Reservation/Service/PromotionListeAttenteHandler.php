@@ -7,6 +7,7 @@ namespace App\Reservation\Service;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\ListeAttente;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutListeAttente;
 use App\Reservation\Enum\StatutReservation;
@@ -42,6 +43,38 @@ final class PromotionListeAttenteHandler
 
     public function promouvoirSiPlaceDisponible(Creneau $creneau): ?Reservation
     {
+        // ⚠ LE MÊME VERROU QUE `ReserverProcessor`. Deux annulations simultanées libèrent chacune une
+        // place et appellent chacune cette méthode : sans verrou, elles lisaient la même jauge et
+        // pouvaient promouvoir deux personnes dans la même place — ou promouvoir pendant qu'une
+        // réservation ordinaire prenait la place qui venait de se libérer. Mêmes conditions : créneaux
+        // consommés résolus avant la transaction, verrou en première lecture (voir
+        // `JaugeCreneauGuard::verrouiller()`).
+        $consommes = $this->creneauxConsommes->resolve($creneau);
+        $ressourcePorteuse = $creneau->getRessource();
+        $connexion = $this->em->getConnection();
+        $connexion->beginTransaction();
+        try {
+            $this->jauge->verrouiller($consommes, $ressourcePorteuse?->ressourcePorteuseJauge());
+            $reservation = $this->promouvoirSousVerrou($creneau, $consommes, $ressourcePorteuse);
+            $connexion->commit();
+        } catch (\Throwable $echec) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw $echec;
+        }
+
+        return $reservation;
+    }
+
+    /**
+     * Appelé SOUS le verrou posé par `promouvoirSiPlaceDisponible()`, qui valide.
+     *
+     * @param list<Creneau> $consommes
+     */
+    private function promouvoirSousVerrou(Creneau $creneau, array $consommes, ?Ressource $ressourcePorteuse): ?Reservation
+    {
         if ($this->jauge->estComplet($creneau)) {
             return null;
         }
@@ -72,7 +105,6 @@ final class PromotionListeAttenteHandler
         // Le créneau peut avoir de la place sans que la ressource porteuse en ait (RG-M5-08, CA-14) :
         // le même double contrôle que `ReserverProcessor`, sans quoi la promotion serait le seul
         // chemin capable de faire déborder la jauge globale.
-        $ressourcePorteuse = $creneau->getRessource();
         if ($ressourcePorteuse !== null && $this->jaugeMere->jaugeDepassee($ressourcePorteuse, $inscription->getQuantity())) {
             return null;
         }
@@ -81,7 +113,6 @@ final class PromotionListeAttenteHandler
         // ordinaire sur ce créneau. L'oublier ici ferait de la promotion un chemin qui remplit la
         // salle sans jamais apparaître dans son service : même famille que le défaut de jauge
         // corrigé juste avant, par le même mécanisme.
-        $consommes = $this->creneauxConsommes->resolve($creneau);
         foreach ($consommes as $consomme) {
             if (!$this->jauge->peutAccueillir($consomme, $inscription->getQuantity())) {
                 return null;

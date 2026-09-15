@@ -17,6 +17,8 @@ use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Vente\Service\LecteurCorps;
+use Doctrine\DBAL\Exception\RetryableException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -67,49 +69,100 @@ final class ConfirmGroupBookingProcessor implements ProcessorInterface
         }
 
         $creneau = $data->getCreneau();
-        if ($creneau !== null && $data->getJaugeReservations()->isEmpty()) {
-            $total = max(1, $data->getEffectif() + $data->getAccompagnateurs());
+        if ($creneau === null || !$data->getJaugeReservations()->isEmpty()) {
+            $data->setStatus(GroupBookingStatus::Confirmed);
+            $this->em->flush();
 
-            if ($this->jauge->placesRestantes($creneau) < $total) {
-                throw new ConflictHttpException(sprintf(
-                    'Jauge insuffisante : %d place(s) restante(s) sur ce créneau pour un effectif de %d.',
-                    $this->jauge->placesRestantes($creneau),
-                    $total,
-                ));
-            }
-
-            $responsable = $this->responsable($data);
-            if (!$responsable instanceof Beneficiaire) {
-                throw new UnprocessableEntityHttpException(
-                    'Responsable requis pour décompter la jauge : fournissez « responsable » (bénéficiaire) '
-                    . 'ou rattachez un client au groupe.'
-                );
-            }
-
-            // Répartition payant / gratuit (musée : vente_unite différée vs gratuit).
-            $gratuites = min($this->nombreGratuites($data), $total);
-            $payantes = $total - $gratuites;
-
-            $perPerson = $data->getGrain() === GroupBookingGrain::PerPerson;
-            if ($perPerson) {
-                // Un billet par visiteur : N réservations de quantité 1.
-                $this->poser($data, $creneau, $responsable, ModeDecompteReservation::VenteUnite, $payantes, 1);
-                $this->poser($data, $creneau, $responsable, ModeDecompteReservation::Gratuit, $gratuites, 1);
-            } else {
-                // Bloc : au plus une réservation par mode, portant la quantité de ce mode.
-                if ($payantes > 0) {
-                    $this->poser($data, $creneau, $responsable, ModeDecompteReservation::VenteUnite, 1, $payantes);
-                }
-                if ($gratuites > 0) {
-                    $this->poser($data, $creneau, $responsable, ModeDecompteReservation::Gratuit, 1, $gratuites);
-                }
-            }
+            return $data;
         }
 
-        $data->setStatus(GroupBookingStatus::Confirmed);
-        $this->em->flush();
+        // ── LA JAUGE SE POSE SOUS VERROU, DANS LA TRANSACTION QUI ÉCRIT ───────────────────────────────
+        //
+        // Deux courses fermées ici :
+        //  - deux confirmations de groupes différents sur le même créneau lisaient la même jauge et la
+        //    débordaient ensemble — même défaut, même remède que `ReserverProcessor` ;
+        //  - deux confirmations du MÊME groupe (double clic, deux onglets) voyaient toutes deux « aucune
+        //    réservation posée » et posaient la jauge deux fois. Le verrou sur la réservation de groupe,
+        //    suivi d'une relecture, rend la seconde idempotente.
+        //
+        // Le responsable se résout AVANT la transaction : ce sont des lectures, et une lecture faite avant
+        // les verrous figerait l'instantané (voir `JaugeCreneauGuard::verrouiller()`). Son refus reste
+        // posé APRÈS le contrôle de jauge, dans l'ordre d'origine.
+        $responsable = $this->responsable($data);
+
+        $connexion = $this->em->getConnection();
+        $connexion->beginTransaction();
+        try {
+            $this->em->lock($data, LockMode::PESSIMISTIC_WRITE);
+            $this->jauge->verrouiller([$creneau], null);
+            $this->em->refresh($data);
+
+            if ($data->getStatus() === GroupBookingStatus::Cancelled) {
+                throw new UnprocessableEntityHttpException('Une réservation annulée ne peut pas être confirmée.');
+            }
+            // Une confirmation concurrente a déjà posé la jauge : on ne la pose pas une seconde fois.
+            if ($data->getJaugeReservations()->isEmpty()) {
+                $this->poserJauge($data, $creneau, $responsable);
+            }
+
+            $data->setStatus(GroupBookingStatus::Confirmed);
+            $this->em->flush();
+            $connexion->commit();
+        } catch (RetryableException $concurrence) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw new ConflictHttpException('Une autre réservation était en cours sur ce créneau : la confirmation n\'a pas été enregistrée. Réessayez.', $concurrence);
+        } catch (\Throwable $echec) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw $echec;
+        }
 
         return $data;
+    }
+
+    /** Contrôle et pose la jauge du groupe — appelé SOUS le verrou posé par `process()`, qui valide. */
+    private function poserJauge(GroupBooking $data, Creneau $creneau, ?Beneficiaire $responsable): void
+    {
+        $total = max(1, $data->getEffectif() + $data->getAccompagnateurs());
+
+        if ($this->jauge->placesRestantes($creneau) < $total) {
+            throw new ConflictHttpException(sprintf(
+                'Jauge insuffisante : %d place(s) restante(s) sur ce créneau pour un effectif de %d.',
+                $this->jauge->placesRestantes($creneau),
+                $total,
+            ));
+        }
+
+        if (!$responsable instanceof Beneficiaire) {
+            throw new UnprocessableEntityHttpException(
+                'Responsable requis pour décompter la jauge : fournissez « responsable » (bénéficiaire) '
+                . 'ou rattachez un client au groupe.'
+            );
+        }
+
+        // Répartition payant / gratuit (musée : vente_unite différée vs gratuit).
+        $gratuites = min($this->nombreGratuites($data), $total);
+        $payantes = $total - $gratuites;
+
+        $perPerson = $data->getGrain() === GroupBookingGrain::PerPerson;
+        if ($perPerson) {
+            // Un billet par visiteur : N réservations de quantité 1.
+            $this->poser($data, $creneau, $responsable, ModeDecompteReservation::VenteUnite, $payantes, 1);
+            $this->poser($data, $creneau, $responsable, ModeDecompteReservation::Gratuit, $gratuites, 1);
+        } else {
+            // Bloc : au plus une réservation par mode, portant la quantité de ce mode.
+            if ($payantes > 0) {
+                $this->poser($data, $creneau, $responsable, ModeDecompteReservation::VenteUnite, 1, $payantes);
+            }
+            if ($gratuites > 0) {
+                $this->poser($data, $creneau, $responsable, ModeDecompteReservation::Gratuit, 1, $gratuites);
+            }
+        }
     }
 
     /**
