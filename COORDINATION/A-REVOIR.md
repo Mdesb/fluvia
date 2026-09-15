@@ -160,6 +160,34 @@ main).
 Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
 premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
 
+> **Complété le 15/09 — ce point a un précédent dans le dépôt, il n'est plus une question ouverte.**
+>
+> Le même problème a déjà été tranché une fois, pour la GED :
+>
+> | | |
+> |---|---|
+> | commande | `dms:purge-expired-documents` (`app/src/Dms/Command/PurgeDocumentsCommand.php`) |
+> | règle | 30 jours de grâce après `deletedAt`, et jamais si une rétention est active |
+> | décidé par | arbitrage **D18 pt.6**, RG-DMS-15 |
+> | déclarée | dans `ScheduleCatalog` |
+>
+> Côté exports d'analyse : **aucune commande**. Les fichiers atterrissent dans
+> `var/reporting/exports/` (`StockageExportLocal`) et **rien ne les retire** — cherché dans tout le
+> dépôt, pas seulement dans le module. Aujourd'hui le coût est nul : 0 fichier, 0 ligne dans
+> `report_export`, 0 rapport planifié. Il devient réel dès que `reporting:executer-rapports` est
+> autorisée, à raison d'un fichier par destinataire et par exécution.
+>
+> La décision se réduit donc à **deux mots** : adopter la forme de la GED (une commande, 30 jours,
+> au catalogue puis dans la liste blanche), ou déclarer les exports éphémères et ne rien stocker.
+>
+> ⚠ **Et le précédent ne tourne pas non plus.** `dms:purge-expired-documents` est déclarée au
+> catalogue et **absente de `TACHES_AUTORISEES`** : un document marqué supprimé n'est jamais détruit
+> physiquement. Mesuré le 15/09 — 1 document supprimé le 06/09, **pas encore** purgeable ; il le
+> devient le **06/10**. C'est daté, ce n'est pas un défaut actuel. Ça appartient au point n°1 de ce
+> relevé, dont la liste passe donc de cinq commandes à six, et celle-ci a une dimension données
+> personnelles : « supprimé » y veut dire « marqué », pas « effacé ».
+
+
 ### 5. Un créneau validé peut perdre son encadrant — **reformulé le 07/09**
 
 Écrit le 06/09, et déjà à moitié dépassé : `feat(piscine): renouveler un diplôme, retirer une

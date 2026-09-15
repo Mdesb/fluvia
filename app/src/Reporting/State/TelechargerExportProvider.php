@@ -7,6 +7,7 @@ namespace App\Reporting\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Reporting\Entity\Export;
+use App\Reporting\Security\ExportDownloadAuthorizer;
 use App\Reporting\Enum\NiveauEntite;
 use App\Reporting\Enum\StatutExport;
 use App\Reporting\Security\PerimetreReportingResolver;
@@ -52,6 +53,7 @@ use Symfony\Component\Uid\Uuid;
 final class TelechargerExportProvider implements ProviderInterface
 {
     public function __construct(
+        private readonly ExportDownloadAuthorizer $autorisation,
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly PerimetreReportingResolver $resolver,
@@ -83,6 +85,16 @@ final class TelechargerExportProvider implements ProviderInterface
             throw new NotFoundHttpException('Export introuvable.');
         }
 
+        // LA MEME REGLE QUE LE CONTROLEUR, ET LA MEME IMPLEMENTATION.
+        // Elle manquait ici : mesure du 15/09, directeur regional couvrant A1 et non demandeur,
+        // controleur 403 et provider 200.
+        $this->autorisation->assertPeutTelecharger($export, $utilisateur);
+
+        // ⚠ EN PLUS, ET ON NE LE RETIRE PAS. Ce controle porte sur la PORTEE de l'export confrontee
+        // au perimetre du lecteur, la ou la regle ci-dessus porte sur son DEMANDEUR. Il couvre le
+        // cas d'un `reporting.configurer` qui partage un etablissement avec le demandeur sans que
+        // son perimetre couvre la portee de l'export. Ce provider est donc strictement plus severe
+        // que le controleur — dit, et non suppose identique.
         $this->verifierPerimetreLecture($export, $utilisateur);
 
         // TROIS CAS, ET ILS NE SE DISENT PAS PAREIL.
