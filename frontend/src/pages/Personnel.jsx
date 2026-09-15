@@ -88,14 +88,24 @@ function etatQualification(r) {
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. La fiche vit dans un composant
 // que seul l'onglet « Employés » monte : sans le paramètre `tab`, un F5 sur `?employe=…`
 // retomberait sur un onglet qui ne la rend pas.
-const DEFAUTS_URL = { tab: 'employes', employe: '', nouvel: '', badge: '', creneau: '' }
+const DEFAUTS_URL = { tab: 'employes', employe: '', nouvel: '', badge: '', creneau: '', absence: '' }
 
 export default function Personnel({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('personnel', DEFAUTS_URL)
   const sousOnglet = params.tab
-  const setSousOnglet = (v) => majParams({ tab: v, employe: '', nouvel: '', badge: '', creneau: '' })
+  const setSousOnglet = (v) => majParams({ tab: v, employe: '', nouvel: '', badge: '', creneau: '', absence: '' })
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
   const ecranOuvert = Boolean(params.employe || params.nouvel || params.badge || params.creneau)
+
+  // ⚠ LA DÉCLARATION D'UNE ABSENCE PREND LA PAGE, ET C'EST ABSENCESSECTION QUI LA PORTE : elle est
+  // posée sous tous les onglets, et démontée dès qu'un autre écran est ouvert (#147).
+  if (params.absence) {
+    return (
+      <div className="view">
+        <AbsencesSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -193,7 +203,7 @@ export default function Personnel({ etabActif, droits = [] }) {
       {/* ⚠ HORS DES CONDITIONS D ONGLET, donc rendue sous CHAQUE écran de niveau 2 — la fiche,
           la déclaration, le badge. Le masquage de l en-tête ne la couvrait pas : sous la fiche
           d un employé, la carte « Absences » de tout l effectif restait affichée. */}
-      {!ecranOuvert && <AbsencesSection etabActif={etabActif} droits={droits} />}
+      {!ecranOuvert && <AbsencesSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
     </div>
   )
 }
