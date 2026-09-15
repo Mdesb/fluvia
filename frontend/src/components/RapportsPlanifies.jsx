@@ -40,9 +40,13 @@ function jour(iso) {
 }
 
 export default function RapportsPlanifies({ etabActif, droits, versionTableaux }) {
-  const [rapportsLus, setRapportsLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [rapportsLus, setRapportsLus] = useState()
   const rapports = rapportsLus || []
-  const [tableauxLus, setTableauxLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [tableauxLus, setTableauxLus] = useState()
   const tableaux = tableauxLus || []
 
   const [nom, setNom] = useState('')
@@ -135,7 +139,9 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
           <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{erreur}</div>
         )}
 
-        {rapportsLus === null ? (
+        {rapportsLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : rapportsLus === null ? (
           <div className="banner banner-warn">
             La liste des rapports planifiés n’a pas pu être lue. Ce qui existe déjà n’est pas
             affiché ici — ce n’est pas une absence, c’est une lecture qui a échoué.
@@ -253,7 +259,9 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
               </button>
             </div>
 
-            {tableauxLus === null ? (
+            {tableauxLus === undefined ? (
+              <p className="hint">Lecture…</p>
+            ) : tableauxLus === null ? (
               <div className="banner banner-warn" style={{ marginTop: 'var(--esp-normal)' }}>
                 La liste des tableaux de bord n’a pas pu être lue : impossible de choisir sur quoi
                 porte le rapport.

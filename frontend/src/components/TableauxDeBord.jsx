@@ -36,9 +36,13 @@ function libellePerimetre(tdb) {
 }
 
 export default function TableauxDeBord({ etabActif, etablissements, droits, onChangement }) {
-  const [tableauxLus, setTableauxLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [tableauxLus, setTableauxLus] = useState()
   const tableaux = tableauxLus || []
-  const [indicateursLus, setIndicateursLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [indicateursLus, setIndicateursLus] = useState()
   const indicateurs = indicateursLus || []
   const [groupesLus, setGroupesLus] = useState(null)
 
@@ -142,7 +146,9 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
           </div>
         )}
 
-        {tableauxLus === null ? (
+        {tableauxLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : tableauxLus === null ? (
           <div className="banner banner-warn">
             La liste des tableaux de bord n’a pas pu être lue. Ce qui existe déjà n’est pas affiché
             ici — ce n’est pas une absence, c’est une lecture qui a échoué.
@@ -221,7 +227,9 @@ export default function TableauxDeBord({ etabActif, etablissements, droits, onCh
               <legend className="field-lbl">
                 Indicateurs composés {choisis.length > 0 && <>· {choisis.length} choisi(s)</>}
               </legend>
-              {indicateursLus === null ? (
+              {indicateursLus === undefined ? (
+                <p className="hint">Lecture…</p>
+              ) : indicateursLus === null ? (
                 <div className="banner banner-warn">
                   Le référentiel des indicateurs n’a pas pu être lu : impossible de composer sans lui.
                 </div>
