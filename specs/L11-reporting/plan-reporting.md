@@ -1,4 +1,19 @@
 # Plan technique — Reporting & pilotage multi-niveaux (`M7` / lot `L11`)
+> ### ⚠ `AxeAnalytique` A ÉTÉ SUPPRIMÉ LE 15/09/2026 — les mentions ci-dessous sont historiques
+>
+> Arbitrage de Maxime, point n°2 de `COORDINATION/A-REVOIR.md` (ouvert le 07/09). Six axes en base,
+> alimentés par les fixtures et consommés par **rien** : ni écran, ni moteur d'agrégation, ni appel
+> de client d'API. Mesuré deux fois, avec témoin positif (`Indicateur` ressort dans 3 fichiers de
+> service, `AxeAnalytique` dans aucun).
+>
+> Aucun écran n'avait été construit pour lui **à dessein** : un formulaire aurait laissé définir des
+> axes qui ne changent aucune analyse. C'est ce constat qui a fait ouvrir l'arbitrage plutôt que de
+> le construire quand même.
+>
+> Les sections qui le décrivent sont **conservées telles quelles**, et non effacées : elles portent
+> le raisonnement qui a conduit à le concevoir, et l'effacer rendrait la suppression inexplicable.
+> Ce qu'il faut lire : **ce référentiel n'existe plus** (entité, enum, table, fixtures et route).
+
 
 - **Spec source :** specs/L11-reporting/spec-reporting.md
 - **Stack :** Symfony 7 · API Platform · Doctrine/MariaDB
