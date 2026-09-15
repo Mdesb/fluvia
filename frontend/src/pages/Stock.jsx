@@ -50,6 +50,11 @@ export default function Stock({ etabActif, droits }) {
   // c'est-a-dire le message d'accueil d'un etablissement neuf, servi a un exploitant dont le stock
   // existe et n'a simplement pas pu etre lu.
   const [articles, setArticles] = useState(null)
+  // ⚠ LE NOMBRE D'ARTICLES EST CELUI QU'ANNONCE LE SERVEUR, PAS CELUI DES LIGNES REÇUES. L'écran lisait
+  // 200 articles et affichait « 200 références » là où GI-ONE en a 422 (mesuré le 15/09/2026). La
+  // liste est désormais lue en entier ; si la lecture s'arrête avant, `articlesTronques` le dit.
+  const [articlesAnnonces, setArticlesAnnonces] = useState(null)
+  const articlesTronques = articles !== null && articlesAnnonces !== null && articlesAnnonces > articles.length
   const [lots, setLots] = useState([])
   const [lotsTronques, setLotsTronques] = useState(false)
   // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. Ici la phrase de l'etat vide VANTE le filet :
@@ -95,7 +100,9 @@ export default function Stock({ etabActif, droits }) {
       const [a, l, m] = await Promise.all([api.stockArticles(), api.stockLots(), api.stockMouvements()])
       const lus = membres(l)
       const annonces = l?.totalItems ?? l?.['hydra:totalItems'] ?? lus.length
-      setArticles(membres(a))
+      const articlesLus = membres(a)
+      setArticles(articlesLus)
+      setArticlesAnnonces(a?.totalItems ?? a?.['hydra:totalItems'] ?? articlesLus.length)
       setLots(lus)
       // Le serveur annonce combien de lots existent ; si on n'en a pas reçu autant, toute somme
       // calculée dessus est fausse — et rien à l'écran ne le montrerait.
@@ -104,6 +111,7 @@ export default function Stock({ etabActif, droits }) {
     } catch (e) {
       setErreur(e.message)
       setArticles(null)
+      setArticlesAnnonces(null)
       setMouvementsLus(null)
     } finally {
       setChargement(false)
@@ -120,8 +128,9 @@ export default function Stock({ etabActif, droits }) {
     recharger()
   }, [recharger])
 
-  // ⚠ L'ARTICLE CORRIGÉ SE LIT PAR SON IDENTIFIANT : la liste est bornée à 200, et un site en
-  // compte davantage. Seul un 404 dit « il n'existe pas » ; tout le reste est une lecture échouée.
+  // ⚠ L'ARTICLE CORRIGÉ SE LIT PAR SON IDENTIFIANT : un lien ne doit pas dépendre de la liste, dont la
+  // lecture peut échouer ou s'arrêter avant la fin. Seul un 404 dit « il n'existe pas » ; tout le
+  // reste est une lecture échouée.
   // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
   // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
   // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
@@ -203,15 +212,18 @@ export default function Stock({ etabActif, droits }) {
             qu’on peut y mettre.
           </div>
         ) : (
-          <AchatsStock
-            articles={articles}
-            droits={droits}
-            etabActif={etabActif}
-            onErreur={setErreur}
-            onFait={apres}
-            params={params}
-            majParams={majParams}
-          />
+          <>
+            {articlesTronques && <ArticlesIncomplets lus={articles.length} annonces={articlesAnnonces} />}
+            <AchatsStock
+              articles={articles}
+              droits={droits}
+              etabActif={etabActif}
+              onErreur={setErreur}
+              onFait={apres}
+              params={params}
+              majParams={majParams}
+            />
+          </>
         )}
       </div>
     )
@@ -239,6 +251,14 @@ export default function Stock({ etabActif, droits }) {
           <div className="banner banner-error">
             La liste des articles n’a pas pu être lue : le périmètre d’un inventaire ne peut pas être
             présenté, et on ne lance pas un comptage sur une liste qu’on n’a pas.
+          </div>
+        ) : articlesTronques ? (
+          // « Les 200 articles en service » sur 422 : le formulaire présenterait un périmètre faux,
+          // et la sélection ne proposerait qu'une partie des articles.
+          <div className="banner banner-error">
+            Seuls {articles.length} articles sur {articlesAnnonces} ont pu être lus : le périmètre d’un
+            inventaire ne peut pas être présenté en entier, et on ne lance pas un comptage sur une
+            partie de la liste. Rechargez la page.
           </div>
         ) : (
           <InventaireStock
@@ -331,6 +351,8 @@ export default function Stock({ etabActif, droits }) {
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+      {/* Au-dessus des onglets : les quatre lisent la même liste d'articles. */}
+      {!chargement && articlesTronques && <ArticlesIncomplets lus={articles.length} annonces={articlesAnnonces} />}
 
       <Tabs
         onglets={[
@@ -379,7 +401,8 @@ export default function Stock({ etabActif, droits }) {
 
           <ArticlesSection
             articles={filtres}
-            total={articles === null ? null : articles.length}
+            total={articles === null ? null : articlesAnnonces}
+            lus={articles === null ? null : articles.length}
             restantParArticle={restantParArticle}
             lotsCharges={lots.length}
             tronque={lotsTronques}
@@ -407,7 +430,12 @@ export default function Stock({ etabActif, droits }) {
 
           {/* ⚠ `articles || []` et non `articles` : la liste vaut `null` tant que la lecture
               n'a pas abouti, et le journal doit rendre une colonne vide plutôt que tomber. */}
-          <JournalSection mouvements={mouvements} articles={articles || []} nonLu={mouvementsLus === null} />
+          <JournalSection
+            mouvements={mouvements}
+            articles={articles || []}
+            articlesIncomplets={articlesTronques}
+            nonLu={mouvementsLus === null}
+          />
         </>
       )}
 
@@ -418,6 +446,24 @@ export default function Stock({ etabActif, droits }) {
         onFait={(m) => { setRattachement(null); apres(m) }}
         onErreur={setErreur}
       />
+    </div>
+  )
+}
+
+// --------------------------------------------------------------------------------------------
+// La liste d'articles n'a pas été lue jusqu'au bout.
+// --------------------------------------------------------------------------------------------
+// Tout ce qui s'appuie sur elle — recherche, décompte des non-rattachés, listes de choix d'une
+// commande, d'un retour ou d'un inventaire, noms du journal et sens des transferts — porte alors sur
+// une partie. Un article absent d'une liste ne veut plus dire qu'il n'existe pas : c'est ce qu'il
+// faut dire, puisque rien d'autre à l'écran ne le distingue.
+function ArticlesIncomplets({ lus, annonces }) {
+  return (
+    <div className="banner banner-error">
+      <b>Seuls {lus} articles sur {annonces} ont pu être lus.</b> La recherche, le décompte des
+      articles non rattachés, les listes de choix (commande, retour, inventaire), les noms du journal
+      et le sens des transferts portent sur ceux-là seulement : un article qui n’y figure pas peut
+      exister. Rechargez la page ; si l’écart persiste, signalez-le.
     </div>
   )
 }
@@ -507,14 +553,23 @@ function AlertesSection({ alertes }) {
 // Les articles et ce qu'il en reste.
 // --------------------------------------------------------------------------------------------
 function ArticlesSection({
-  articles, total, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster,
+  articles, total, lus, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster,
   onAjuster, onRattacher, nonSuivis,
 }) {
+  // `total` est le nombre annoncé par le serveur, `lus` celui des lignes reçues. Ils ne diffèrent que
+  // si la lecture s'est arrêtée avant la fin — et alors le compte dit les deux.
+  const incomplet = total !== null && lus !== null && total > lus
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
         <h3>Articles</h3>
-        <span className="sub">{total === null ? '—' : `${total} référence${total > 1 ? 's' : ''}`}</span>
+        <span className="sub">
+          {total === null
+            ? '—'
+            : incomplet
+              ? `${lus} lues sur ${total} références`
+              : `${total} référence${total > 1 ? 's' : ''}`}
+        </span>
         <div className="r" style={{ minWidth: 240 }}>
           <input
             className="input"
@@ -537,12 +592,15 @@ function ArticlesSection({
             catalogue.
           </div>
         ) : articles.length === 0 ? (
-          <div className="empty">Aucun article ne correspond à « {recherche.trim()} ».</div>
+          <div className="empty">
+            Aucun article ne correspond à « {recherche.trim()} »
+            {incomplet ? ` parmi les ${lus} articles lus sur ${total}.` : '.'}
+          </div>
         ) : (
           <>
             {nonSuivis > 0 && (
               <div className="banner banner-warn">
-                <b>{nonSuivis} article{nonSuivis > 1 ? 's ne sont' : " n'est"} rattaché
+                <b>{incomplet ? 'Au moins ' : ''}{nonSuivis} article{nonSuivis > 1 ? 's ne sont' : " n'est"} rattaché
                 {nonSuivis > 1 ? 's' : ''} à aucun produit du catalogue.</b> Vendre ne les fera pas
                 descendre : leur quantité ne bougera que par correction manuelle. Ce n'est pas
                 forcément une erreur — on peut suivre un consommable qu'on ne vend pas — mais un
@@ -1057,7 +1115,7 @@ function RegleEcart({ parametrage, lu, droits }) {
 // --------------------------------------------------------------------------------------------
 // Une correction sans trace visible est ce qui rend les corrections effrayantes. Le journal est donc
 // sur le même écran que le bouton qui les crée, et non dans un module de rapports.
-function JournalSection({ mouvements, articles = [], nonLu }) {
+function JournalSection({ mouvements, articles = [], articlesIncomplets = false, nonLu }) {
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -1095,7 +1153,13 @@ function JournalSection({ mouvements, articles = [], nonLu }) {
                       mouvements était donc vide en permanence — un journal de stock qui ne dit pas
                       SUR QUOI porte le mouvement ne sert à rien. Résolu contre la liste des
                       articles déjà chargée par cet écran. */}
-                  <td>{resoudre(m.articleStock, articles)?.libelle || <span className="sub">article non transmis</span>}</td>
+                  {/* Sur une liste lue en partie, l'article absent peut simplement ne pas avoir été
+                      lu : « non transmis » accuserait le serveur à tort. */}
+                  <td>
+                    {resoudre(m.articleStock, articles)?.libelle || (
+                      <span className="sub">{articlesIncomplets ? 'article non lu' : 'article non transmis'}</span>
+                    )}
+                  </td>
                   <td><span className="badge mut">{mot(m.type)}</span></td>
                   <td className="num">{nombre(m.quantite)}</td>
                   <td>{m.motif || <span className="sub">—</span>}</td>
@@ -1144,8 +1208,9 @@ function TransfertsSection({ articles, peutTransferer, onErreur, onFait }) {
     setTransferts(null)
     api.stockTransferts()
       .then((r) => setTransferts(membres(r)))
-      .catch(() => setTransferts(undefined))
-  }, [])
+      // La raison est dite : une liste refusée parce qu'incomplète n'est pas une panne.
+      .catch((e) => { setTransferts(undefined); onErreur(e.message || 'Les transferts n’ont pas pu être lus.') })
+  }, [onErreur])
 
   useEffect(charger, [charger])
 

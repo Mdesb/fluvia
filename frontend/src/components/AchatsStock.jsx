@@ -82,7 +82,8 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
     recharger()
   }, [recharger])
 
-  // ⚠ LA COMMANDE SE LIT PAR SON IDENTIFIANT : la liste est bornée à 100, commandes closes comprises.
+  // ⚠ LA COMMANDE SE LIT PAR SON IDENTIFIANT : un lien ne doit pas dépendre de la liste, dont la
+  // lecture peut échouer.
   // Seul un 404 dit « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
   const [commandeOuverte, setCommandeOuverte] = useState(null)
   const [chargementCommande, setChargementCommande] = useState(false)
