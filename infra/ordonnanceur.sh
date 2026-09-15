@@ -157,7 +157,7 @@ set -eu
 #                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme ses voisines d'argent,
 #                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents"
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
