@@ -333,6 +333,70 @@ export function membres(collection) {
   return collection.member || collection['hydra:member'] || []
 }
 
+// ── LIRE UNE COLLECTION JUSQU'AU BOUT ────────────────────────────────────────────────────────
+//
+// Mesuré le 15/09/2026 sur GI-ONE FITNESS : `/api/article_stocks` annonce 422 articles, l'écran Stock
+// en lisait 200 et affichait « 200 références » — sans un mot. Les articles 201 à 422 ne pouvaient
+// être ni cherchés, ni commandés, ni inventoriés, ni réintégrés, et le journal ne savait pas les
+// nommer. Une liste qui sert à CHOISIR, à COMPTER ou à RETROUVER un nom ne se lit pas sur une page.
+//
+// On suit donc `view.next` page après page, au plafond du serveur (500 par page,
+// `pagination_maximum_items_per_page`), jusqu'à `totalItems`.
+//
+// ⚠ LA COLLECTION RENDUE GARDE LE `totalItems` DU SERVEUR, JAMAIS LE NOMBRE DE LIGNES LUES. Si la
+// lecture s'arrête avant (plafond de pages atteint, collection modifiée entre deux pages), la
+// comparaison des deux le montre, exactement comme sur une page unique — c'est ce que font déjà
+// les écrans qui gardent la troncature. Pour ceux qui ne la gardent pas, `complete: true` refuse de
+// rendre une liste partielle : la lecture ÉCHOUE, et l'écran dit « n'a pas pu être lue » au lieu
+// d'afficher un compte qui n'est que celui des lignes reçues.
+//
+// Les lignes sont dédoublonnées par identifiant : une ligne créée entre deux pages décale
+// l'offset et ferait lire deux fois la dernière de la page précédente.
+const PAGES_MAX = 40
+
+function nextPageOf(collection) {
+  const view = collection?.view || collection?.['hydra:view']
+  return view?.next || view?.['hydra:next'] || null
+}
+
+async function requestAll(path, { query = {}, complete = false, ...options } = {}) {
+  const first = await request(path, { ...options, query: { itemsPerPage: 500, ...query } })
+  const announced = first?.totalItems ?? first?.['hydra:totalItems']
+  const seen = new Set()
+  const rows = []
+  const add = (page) => {
+    for (const row of membres(page)) {
+      const key = row?.['@id'] ?? row?.id
+      if (key !== undefined && key !== null) {
+        if (seen.has(key)) continue
+        seen.add(key)
+      }
+      rows.push(row)
+    }
+  }
+  add(first)
+  let next = nextPageOf(first)
+  let pages = 1
+  while (next && pages < PAGES_MAX && !(typeof announced === 'number' && rows.length >= announced)) {
+    const page = await request(next, options)
+    const before = rows.length
+    add(page)
+    pages += 1
+    // Une page qui n'apporte rien de neuf ne fera pas mieux à la suivante.
+    if (rows.length === before) break
+    next = nextPageOf(page)
+  }
+  if (complete && typeof announced === 'number' && rows.length < announced) {
+    throw new ApiError(
+      `Cette liste compte ${announced} éléments et seuls ${rows.length} ont pu être lus : `
+        + 'elle n’est pas affichée, pour ne pas présenter une partie comme le tout.',
+      0,
+      null,
+    )
+  }
+  return { ...first, member: rows, totalItems: announced, view: undefined, 'hydra:member': undefined }
+}
+
 // Les routes des gestes d'une pièce commerciale (FAC-1). Aucune ne prend de corps : tout est dans
 // la route, et le serveur les déclare `input: false`.
 const GESTES_PIECE = {
@@ -2771,8 +2835,13 @@ export const api = {
   // `articleStock` ne porte AUCUNE quantite : le stock reel vit dans les lots, un article pouvant en
   // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
   // sont chargees ensemble et agregees a l'ecran.
-  stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
-  // Un article par son identifiant : la liste est bornée à 200, un lien ne doit pas en dépendre.
+  //
+  // ⚠ LUE EN ENTIER (`requestAll`) : elle sert à compter, à chercher, à choisir et à nommer. Lue sur
+  // 200, elle affichait « 200 références » pour 422. Pas de `complete` : l'écran Stock compare
+  // lui-même `totalItems` aux lignes reçues et le dit, comme pour les lots.
+  stockArticles: () => requestAll('/api/article_stocks'),
+  // Un article par son identifiant : un lien ne doit pas dépendre d'une liste, dont la lecture peut
+  // échouer ou s'arrêter au plafond de pages.
   stockArticle: (id) => request(`/api/article_stocks/${id}`),
   // LES TRANSFERTS ENTRE SITES — trois routes, aucun ecran jusqu'ici.
   //
@@ -2780,15 +2849,17 @@ export const api = {
   // On voit donc ses transferts DANS LES DEUX SENS, alors que les articles, eux, sont limites a
   // l'etablissement actif. Un seul des deux articles d'un transfert est donc lisible — celui qui
   // est chez soi — et c'est ce qui donne la direction.
+  // L'en-tête de l'écran en affiche le nombre : lue en entier, ou pas du tout.
   stockTransferts: () =>
-    request('/api/stock_transferts', { query: { itemsPerPage: 200, 'order[dateDemande]': 'desc' } }),
+    requestAll('/api/stock_transferts', { query: { 'order[dateDemande]': 'desc' }, complete: true }),
   // ⚠ 409 SI L'ETAT NE S'Y PRETE PAS : `expedier` exige `demande`, `recevoir` exige `expedie`.
   // Et le serveur restreint l'un a l'etablissement SOURCE, l'autre a la DESTINATION (RG-STOCK-14).
   expedierTransfertStock: (id) =>
     request(`/api/stock/transferts/${id}/expedier`, { method: 'POST', body: {} }),
   recevoirTransfertStock: (id) =>
     request(`/api/stock/transferts/${id}/recevoir`, { method: 'POST', body: {} }),
-  stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
+  // Lus en entier ; l'écran garde son contrôle de troncature pour le cas où la lecture s'arrête.
+  stockLots: () => requestAll('/api/stock_lots'),
   stockMouvements: () =>
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
@@ -2796,7 +2867,8 @@ export const api = {
   //
   // ⚠ PAS D'`order[...]` ICI : `Avoir` ne declare AUCUN filtre. Un parametre d'ordre serait ignore
   // en silence et la liste aurait l'air triee. Le tri se fait dans le composant, qui le sait.
-  avoirs: () => request('/api/avoirs', { query: { itemsPerPage: 200 } }),
+  // Lus en entier : un avoir au-delà de la page ne pouvait pas être réintégré, et rien ne le disait.
+  avoirs: () => requestAll('/api/avoirs', { complete: true }),
   // Sert a savoir ce qui a DEJA ete reintegre : le mouvement genere porte `referenceType: 'Avoir'`
   // et `referenceId`. `type` est l'un des trois seuls filtres declares sur `MouvementStock` — il
   // n'y en a aucun sur la reference, d'ou la lecture large et le controle de troncature.
@@ -2831,8 +2903,10 @@ export const api = {
   // Inventaire.
   stockInventaires: () =>
     request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  // Lignes de TOUS les inventaires, filtrées à l'écran sur celui en cours : lues en entier, sinon
+  // les lignes de l'inventaire ouvert pouvaient tomber hors de la page sans que rien ne le dise.
   stockLignesInventaire: () =>
-    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+    requestAll('/api/stock_ligne_inventaires', { complete: true }),
   // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
   // suivantes sont sur mesure et n'en ont pas besoin.
   stockLancerInventaire: (corps) =>
@@ -2845,16 +2919,20 @@ export const api = {
     request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
 
   // Cycle d'achat : fournisseur -> commande -> envoi -> confirmation -> reception -> validation.
+  // Les quatre listes des achats sont lues en entier, ou pas du tout : l'écran en tire des comptes
+  // (« 3 en cours »), un choix de fournisseur, et les lignes d'une commande — « aucune ligne » sur
+  // une commande dont les lignes sont hors de la page serait faux.
   stockFournisseurs: () =>
-    request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
+    requestAll('/api/stock_fournisseurs', { complete: true }),
   stockCommandesAchat: () =>
-    request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
-  // Une commande par son identifiant : la liste est bornée à 100, un lien ne doit pas en dépendre.
+    requestAll('/api/stock_commande_achats', { complete: true }),
+  // Une commande par son identifiant : un lien ne doit pas dépendre d'une liste, dont la lecture peut
+  // échouer.
   stockCommandeAchat: (id) => request(`/api/stock_commande_achats/${id}`),
   stockLignesCommandeAchat: () =>
-    request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
+    requestAll('/api/stock_ligne_commande_achats', { complete: true }),
   stockReceptions: () =>
-    request('/api/stock_reception_achats', { query: { itemsPerPage: 100 } }),
+    requestAll('/api/stock_reception_achats', { complete: true }),
   // Operations STANDARD : elles deserialisent, donc `ld: true`.
   //
   // `etablissement` n'est JAMAIS envoye, bien que le modele l'accepte en ecriture : le serveur le
