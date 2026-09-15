@@ -2847,6 +2847,8 @@ export const api = {
     request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
   stockCommandesAchat: () =>
     request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
+  // Une commande par son identifiant : la liste est bornée à 100, un lien ne doit pas en dépendre.
+  stockCommandeAchat: (id) => request(`/api/stock_commande_achats/${id}`),
   stockLignesCommandeAchat: () =>
     request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
   stockReceptions: () =>

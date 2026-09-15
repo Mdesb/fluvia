@@ -40,7 +40,8 @@ import { useEtatUrl } from '../api/url.js'
 
 // `corriger` : l'identifiant de l'article dont on corrige le stock.
 // `inventaire` : `lancer` quand on lance un inventaire.
-const DEFAUTS_URL = { corriger: '', inventaire: '' }
+// `commande` : la commande d'achat dont on compose les lignes ; `onglet` : l'onglet de la page.
+const DEFAUTS_URL = { onglet: 'etat', corriger: '', inventaire: '', commande: '' }
 
 export default function Stock({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('stock', DEFAUTS_URL)
@@ -73,7 +74,10 @@ export default function Stock({ etabActif, droits }) {
   const [succes, setSucces] = useState(null)
   const [rattachement, setRattachement] = useState(null)
   const [recherche, setRecherche] = useState('')
-  const [onglet, setOnglet] = useState('etat')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE avec l'écran des lignes d'une commande : sans lui, « précédent »
+  // après un F5 ramènerait à « Ce qu'il reste », et non aux achats d'où l'on venait.
+  const onglet = params.onglet
+  const setOnglet = (v) => majParams({ onglet: v })
 
   const peutAjuster = aUnDesDroits(droits, ['stock.ajuster', 'stock.gerer'])
   // Le meme couple que le serveur exige sur les trois routes de transfert.
@@ -172,6 +176,41 @@ export default function Stock({ etabActif, droits }) {
     setSucces(message)
     setErreur(null)
     await recharger()
+  }
+
+  // ── LES LIGNES D'UNE COMMANDE D'ACHAT, EN ÉCRAN ────────────────────────────────────────────
+  //
+  // La page cède la place à AchatsStock : c'est lui qui lit commandes et lignes, et lui qui reprend
+  // les conditions du bouton. Les articles qu'on peut commander viennent de la liste de la page.
+  if (params.commande) {
+    const fermerCommande = () => majParams({ commande: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerCommande}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux achats
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : articles === null ? (
+          <div className="banner banner-error">
+            La liste des articles n’a pas pu être lue : on ne compose pas une commande sans savoir ce
+            qu’on peut y mettre.
+          </div>
+        ) : (
+          <AchatsStock
+            articles={articles}
+            droits={droits}
+            etabActif={etabActif}
+            onErreur={setErreur}
+            onFait={apres}
+            params={params}
+            majParams={majParams}
+          />
+        )}
+      </div>
+    )
   }
 
   // ── LANCER UN INVENTAIRE, EN ÉCRAN ─────────────────────────────────────────────────────────
@@ -327,6 +366,8 @@ export default function Stock({ etabActif, droits }) {
           etabActif={etabActif}
           onErreur={setErreur}
           onFait={apres}
+          params={params}
+          majParams={majParams}
         />
       ) : (
         <>
