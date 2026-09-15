@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import { confirmer } from '../components/Confirmation.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
+import { useEtatUrl } from '../api/url.js'
 
 // GROUPES — module transverse `App\Group`. Un groupe de participants (classe scolaire, comité
 // d'entreprise, tour-opérateur, association) qu'un établissement reçoit, quel que soit son métier :
@@ -54,10 +55,17 @@ function creneauLabel(c) {
   return quand
 }
 
+// `groupe` : le groupe sélectionné ; `panier` : la réservation dont on compose le panier.
+const DEFAUTS_URL = { groupe: '', panier: '' }
+
 export default function Groupes({ etabActif, droits }) {
   const peutGerer = aLeDroit(droits, 'group.manage')
+  // ⚠ LA SÉLECTION ENTRE DANS L'ADRESSE : sans elle, un panier n'avait pas de groupe où revenir.
+  const [params, majParams] = useEtatUrl('groupes', DEFAUTS_URL)
 
   const [groupes, setGroupes] = useState([])
+  // ⚠ `false` = LECTURE ÉCHOUÉE : « Aucun groupe pour l'instant » s'affichait sur un refus.
+  const [groupesLus, setGroupesLus] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -69,6 +77,10 @@ export default function Groupes({ etabActif, droits }) {
   const [taux, setTaux] = useState([])
   const [forfaits, setForfaits] = useState([])
   const [produits, setProduits] = useState([])
+  // ⚠ Drapeaux de lecture des listes du panier : `false` = LECTURE ÉCHOUÉE, pas « aucun ».
+  const [tauxLus, setTauxLus] = useState(null)
+  const [produitsLus, setProduitsLus] = useState(null)
+  const [forfaitsLus, setForfaitsLus] = useState(null)
   const [contingents, setContingents] = useState([])
 
   const [modale, setModale] = useState(null) // { type, ... }
@@ -78,7 +90,9 @@ export default function Groupes({ etabActif, droits }) {
     setErreur(null)
     try {
       setGroupes(membres(await api.groupesParticipants()))
+      setGroupesLus(true)
     } catch (e) {
+      setGroupesLus(false)
       setErreur(e?.message || 'Impossible de lire les groupes.')
     } finally {
       setChargement(false)
@@ -103,8 +117,8 @@ export default function Groupes({ etabActif, droits }) {
   useEffect(() => {
     let vivant = true
     api.tauxTvas()
-      .then((r) => { if (vivant) setTaux(membres(r)) })
-      .catch(() => { if (vivant) setTaux([]) })
+      .then((r) => { if (vivant) { setTaux(membres(r)); setTauxLus(true) } })
+      .catch(() => { if (vivant) { setTaux([]); setTauxLus(false) } })
     return () => { vivant = false }
   }, [etabActif])
 
@@ -112,8 +126,8 @@ export default function Groupes({ etabActif, droits }) {
   useEffect(() => {
     let vivant = true
     api.produits({ itemsPerPage: 200 })
-      .then((r) => { if (vivant) setProduits(membres(r)) })
-      .catch(() => { if (vivant) setProduits([]) })
+      .then((r) => { if (vivant) { setProduits(membres(r)); setProduitsLus(true) } })
+      .catch(() => { if (vivant) { setProduits([]); setProduitsLus(false) } })
     return () => { vivant = false }
   }, [etabActif])
 
@@ -121,8 +135,10 @@ export default function Groupes({ etabActif, droits }) {
   const chargerForfaits = useCallback(async () => {
     try {
       setForfaits(membres(await api.groupProducts()))
+      setForfaitsLus(true)
     } catch {
       setForfaits([])
+      setForfaitsLus(false)
     }
   }, [])
   useEffect(() => { chargerForfaits() }, [chargerForfaits, etabActif])
@@ -137,19 +153,52 @@ export default function Groupes({ etabActif, droits }) {
   }, [])
   useEffect(() => { chargerContingents() }, [chargerContingents, etabActif])
 
-  const ouvrir = useCallback(async (id) => {
-    setErreur(null)
+  // ⚠ LA LECTURE DU GROUPE A TROIS ÉTATS, ET UNE RÉPONSE TARDIVE EST IGNORÉE. Sur un échec, l'ancienne
+  // sélection restait affichée : on lisait le détail d'un autre groupe que celui demandé.
+  // `null` = aucun groupe demandé · 'chargement' · 'lu' · 'introuvable' (404) · 'echec'.
+  const [lectureGroupe, setLectureGroupe] = useState(null)
+  const demandeCourante = useRef('')
+  const ouvrir = useCallback(async (id, silencieux = false) => {
+    demandeCourante.current = id
+    if (!silencieux) { setErreur(null); setLectureGroupe('chargement') }
     try {
       // GET item : on relit le groupe frais plutôt que de se fier à la ligne de liste.
       const detail = await api.groupeParticipant(id)
-      setSelection(detail)
-      setMembresSel(membres(await api.membresGroupe(id)))
+      const lesMembres = membres(await api.membresGroupe(id))
       const toutes = membres(await api.reservationsGroupe())
+      if (demandeCourante.current !== id) return
+      setSelection(detail)
+      setMembresSel(lesMembres)
       setReservations(toutes.filter((b) => idDe(b.group) === id))
+      setLectureGroupe('lu')
     } catch (e) {
-      setErreur(e?.message || "Impossible d'ouvrir ce groupe.")
+      if (demandeCourante.current !== id) return
+      setSelection(null)
+      setLectureGroupe(e?.status === 404 ? 'introuvable' : 'echec')
     }
   }, [])
+
+  // L'adresse décide du groupe ouvert : un lien, un F5 et « précédent » le rouvrent.
+  useEffect(() => {
+    if (!params.groupe) { demandeCourante.current = ''; setSelection(null); setLectureGroupe(null); return }
+    ouvrir(params.groupe)
+  }, [params.groupe, etabActif, ouvrir])
+
+  // ⚠ LE PANIER SE LIT PAR SON IDENTIFIANT : la liste des réservations est bornée à 200, et l'écran
+  // doit vérifier que la réservation appartient bien au groupe de l'adresse.
+  const [reservationPanier, setReservationPanier] = useState(null)
+  const [lecturePanier, setLecturePanier] = useState(null)
+  useEffect(() => {
+    const id = params.panier
+    if (!id) { setReservationPanier(null); setLecturePanier(null); return undefined }
+    let vivant = true
+    setLecturePanier('chargement')
+    setReservationPanier(null)
+    api.reservationGroupe(id)
+      .then((b) => { if (vivant) { setReservationPanier(b); setLecturePanier('lu') } })
+      .catch((e) => { if (vivant) setLecturePanier(e?.status === 404 ? 'introuvable' : 'echec') })
+    return () => { vivant = false }
+  }, [params.panier, etabActif])
 
   async function geste(fn, message) {
     setErreur(null)
@@ -158,7 +207,7 @@ export default function Groupes({ etabActif, droits }) {
       await fn()
       setSucces(message)
       await charger()
-      if (selection) await ouvrir(idDe(selection))
+      if (params.groupe) await ouvrir(params.groupe, true)
     } catch (e) {
       setErreur(e?.message || "L'opération a échoué.")
     }
@@ -166,6 +215,45 @@ export default function Groupes({ etabActif, droits }) {
 
   if (!aLeDroit(droits, 'group.read')) {
     return <p className="empty">Vous n’avez pas accès aux groupes.</p>
+  }
+
+  // ── LE PANIER D'UNE RÉSERVATION, EN ÉCRAN ────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND : le droit de gérer les
+  // groupes, une réservation non annulée — et qui appartient au groupe de l'adresse.
+  if (params.groupe && params.panier) {
+    const fermerPanier = () => majParams({ panier: '' }, { pousser: true })
+    const r = reservationPanier
+    let contenu
+    if (!peutGerer) {
+      contenu = <div className="banner banner-warn">Composer le panier d’une réservation demande le droit de gérer les groupes, que ce compte n’a pas.</div>
+    } else if (lecturePanier === 'chargement' || lecturePanier === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (lecturePanier !== 'lu' || !r) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lecturePanier === 'echec'
+            ? 'Cette réservation n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette réservation n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (idDe(r.group) !== params.groupe) {
+      contenu = <div className="banner banner-warn">Cette réservation appartient à un autre groupe que celui de l’adresse.</div>
+    } else if (r.status === 'cancelled') {
+      contenu = <div className="banner banner-warn">Cette réservation est annulée : son panier ne se modifie plus.</div>
+    } else {
+      contenu = <FormPanier key={params.panier} reservationId={r.id} forfaits={forfaits} produits={produits} taux={taux} onFermer={fermerPanier}
+        listesIllisibles={[forfaitsLus === false && 'les forfaits', produitsLus === false && 'les produits', tauxLus === false && 'les taux de TVA'].filter(Boolean)} />
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerPanier}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au groupe{selection?.label ? ` « ${selection.label} »` : ''}
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   return (
@@ -195,6 +283,10 @@ export default function Groupes({ etabActif, droits }) {
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+      ) : groupesLus === false ? (
+        <div className="banner banner-error">
+          La liste des groupes n’a pas pu être lue : ce n’est pas la même chose que « aucun groupe ».
+        </div>
       ) : groupes.length === 0 ? (
         <p className="empty">Aucun groupe pour l’instant.</p>
       ) : (
@@ -208,9 +300,9 @@ export default function Groupes({ etabActif, droits }) {
                 </thead>
                 <tbody>
                   {groupes.map((g) => (
-                    <tr key={g.id} style={{ fontWeight: selection && idDe(selection) === g.id ? 600 : 400 }}>
+                    <tr key={g.id} style={{ fontWeight: params.groupe === String(g.id) ? 600 : 400 }}>
                       <td>
-                        <button type="button" className="btn ghost sm" onClick={() => ouvrir(g.id)}>{g.label}</button>
+                        <button type="button" className="btn ghost sm" onClick={() => majParams({ groupe: String(g.id), panier: '' }, { pousser: true })}>{g.label}</button>
                       </td>
                       <td className="sub">{TYPES[g.type] || g.type}</td>
                       <td className="num">{g.headcount}</td>
@@ -221,7 +313,7 @@ export default function Groupes({ etabActif, droits }) {
             </div>
           </div>
 
-          {selection && (
+          {params.groupe && (selection && lectureGroupe === 'lu' ? (
             <DetailGroupe
               groupe={selection}
               membres={membresSel}
@@ -230,8 +322,21 @@ export default function Groupes({ etabActif, droits }) {
               peutGerer={peutGerer}
               onGeste={geste}
               onModale={setModale}
+              onPanier={(id) => majParams({ panier: String(id) }, { pousser: true })}
             />
-          )}
+          ) : (
+            <div className="card">
+              <div className="card-b">
+                {lectureGroupe === 'chargement' ? (
+                  <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+                ) : lectureGroupe === 'introuvable' ? (
+                  <div className="banner banner-warn">Ce groupe n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+                ) : (
+                  <div className="banner banner-error">Ce groupe n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas ».</div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -325,10 +430,6 @@ export default function Groupes({ etabActif, droits }) {
         <FormForfaits produits={produits} taux={taux} onFermer={() => setModale(null)} onChange={chargerForfaits} />
       )}
 
-      {modale?.type === 'panier' && (
-        <FormPanier reservationId={modale.reservationId} forfaits={forfaits} produits={produits} taux={taux} onFermer={() => setModale(null)} />
-      )}
-
       {modale?.type === 'contingents' && (
         <FormContingents onFermer={() => setModale(null)} onChange={chargerContingents} />
       )}
@@ -344,7 +445,7 @@ export default function Groupes({ etabActif, droits }) {
   )
 }
 
-function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGerer, onGeste, onModale }) {
+function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGerer, onGeste, onModale, onPanier }) {
   return (
     <div className="card">
       <div className="card-h">
@@ -426,7 +527,7 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                     {peutGerer && r.status !== 'cancelled' && (
                       <>
                         {' '}
-                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'panier', reservationId: r.id })}>Panier</button>
+                        <button className="btn ghost sm" type="button" onClick={() => onPanier(r.id)}>Panier</button>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'gratuites', reservationId: r.id })}>Gratuités</button>
                         {' '}
@@ -945,7 +1046,7 @@ function FormForfait({ produits, taux, onAnnuler, onEnregistre }) {
 }
 
 // ── Panier d'une réservation : forfait appliqué et/ou lignes à la carte ─────────────────────────
-function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
+function FormPanier({ reservationId, forfaits, produits, taux, onFermer, listesIllisibles = [] }) {
   const vide = { produit: '', quantite: '1', prixUnitaireHT: '', tauxTva: '' }
   const [items, setItems] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -955,7 +1056,8 @@ function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
 
   const recharger = useCallback(async () => {
     setChargement(true)
-    try { setItems(membres(await api.articlesReservation(reservationId))) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+    // ⚠ Un échec de lecture n'est pas un panier vide : `items` passe à null, et l'écran le dit.
+    try { setItems(membres(await api.articlesReservation(reservationId))) } catch (e) { setItems(null); setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
   }, [reservationId])
   useEffect(() => { recharger() }, [recharger])
 
@@ -984,7 +1086,13 @@ function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Panier de la réservation" taille="lg">
+    <>
+      <h2>Panier de la réservation</h2>
+      {listesIllisibles.length > 0 && (
+        <div className="banner banner-warn">
+          Lecture impossible : {listesIllisibles.join(', ')}. Les listes de choix correspondantes sont vides pour cette raison, pas faute d’éléments.
+        </div>
+      )}
       {erreur && <div className="banner banner-error">{erreur}</div>}
       <div className="field">
         <label htmlFor="pa-forfait">Appliquer un forfait</label>
@@ -997,9 +1105,14 @@ function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
         </div>
       </div>
 
-      <h4>Articles ({items.length})</h4>
+      <h4>{items ? `Articles (${items.length})` : 'Articles'}</h4>
       {chargement ? (
         <div className="center"><div className="spinner" /></div>
+      ) : items === null ? (
+        <div className="banner banner-error">
+          Les articles de cette réservation n’ont pas pu être lus : ce n’est pas un panier vide.{' '}
+          <button className="btn ghost sm" type="button" onClick={recharger}>Réessayer</button>
+        </div>
       ) : items.length === 0 ? (
         <p className="empty">Panier vide. Appliquez un forfait ou ajoutez des produits ci-dessous.</p>
       ) : (
@@ -1053,9 +1166,9 @@ function FormPanier({ reservationId, forfaits, produits, taux, onFermer }) {
       </div>
 
       <div className="modal-actions">
-        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+        <button className="btn ghost" type="button" onClick={onFermer}>Retour au groupe</button>
       </div>
-    </Modal>
+    </>
   )
 }
 
