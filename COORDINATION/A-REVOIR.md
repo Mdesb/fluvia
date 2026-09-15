@@ -129,6 +129,51 @@ ici pour qu'il ne soit pas subi par défaut.
 > **Donc l'arbitrage est rendu, et son effet ne l'est pas.** Le registre aurait été faux dans
 > un sens en disant « à trancher », et faux dans l'autre en disant « autorisée » tout court.
 >
+> ##### ⚠ TROISIÈME RECTIFICATION, à 21h — et cette fois le fait lui-même était faux
+>
+> **La liste du conteneur n'est PAS périmée : elle porte 20, comme le fichier. En phase.**
+> Mon `17 contre 20` était la plainte **qui a déclenché** le redémarrage, pas l'état courant :
+>
+> ```
+> ligne 185536   ✗ LISTE PERIMEE — ce conteneur exécute 17 tâche(s), le fichier en déclare 20.
+> ligne 185568   [ordonnanceur] démarrage · intervalle 60s · 20 tâche(s)     ← 32 lignes APRÈS
+> ```
+>
+> Le journal porte **quatre** démarrages — 15, 16, 17, puis **20**. Et zéro divergence depuis.
+>
+> ⚠ **J'avais écrit moi-même, dans ce bloc, que cette ligne ne s'imprime qu'au changement.** J'ai
+> pourtant lu sa dernière occurrence comme l'état courant. « La dernière fois qu'il s'est plaint »
+> n'est pas « il se plaint encore » — surtout pour un message qui, par construction, ne se répète
+> pas. Le savoir écrit noir sur blanc n'a pas empêché l'inférence.
+>
+> ⚠ **Et l'instrument juste, je l'ai cherché avec un motif inventé.** `démarrage · [0-9]+ tâche`
+> rend zéro ; la source imprime `démarrage · intervalle ${INTERVALLE}s · N tâche(s)`. Le zéro m'a
+> conforté dans la mauvaise lecture au lieu de me faire ouvrir le script.
+>
+> ⚠ **`RestartCount 0` ne dit rien des vies du script.** Quatre démarrages dans un seul conteneur :
+> le script redémarre à l'intérieur, et les compteurs de `docker inspect` ne comptent que les
+> instances du **conteneur**. C'est ce qui m'a fait croire à une seule vie depuis 14h32.
+>
+> ⚠ **`TACHES_AUTORISEES` n'est pas exportée** : `docker exec printenv` et `/proc/1/environ` la
+> rendent **vide** tous les deux. Faux zéro. Les deux seuls témoins fiables sont le bloc de
+> démarrage que le script s'imprime, et `platform:scheduler:run --status`.
+>
+> **Ce qui reste vrai, remesuré à 21h par `--status` :**
+>
+> ```
+> finance:treasury:suggerer-rapprochements   à jour   15/09 12:32
+> finance:treasury:verifier-seuils           JAMAIS   ← garde D109
+> finance:treasury:detecter-ecarts           JAMAIS   ← garde D109
+> reporting:executer-rapports                JAMAIS   ← cataloguée, HORS liste blanche
+> ```
+>
+> **Les deux portes, établies par allaccess-06 dont c'est le périmètre** — et je ne les avais
+> qu'entrevues : (1) la liste blanche `TACHES_AUTORISEES` du shell, figée au démarrage ; (2) le
+> catalogue applicatif lu à l'exécution par `platform:scheduler:run --only=`. Une tâche ne tourne
+> que si elle est dans **les deux**, que sa cadence tombe, **et** (`safeOnFirstRun` ou
+> `--supervise`). `reporting:executer-rapports` étant hors de la porte 1, elle ne peut pas partir
+> avant que sa correction soit prête.
+>
 > ##### ⚠ Rectifications de ce bloc, le même soir à 20h22
 >
 > **L'heure était fausse.** « 16h » était une estimation, pas une lecture : le conteneur a
