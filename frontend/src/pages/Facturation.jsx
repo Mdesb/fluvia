@@ -80,7 +80,7 @@ const STATUT_FACTURE = {
   echue: { libelle: 'Échue', ton: 'crit' },
 }
 
-const DEFAUTS = { tab: 'factures', statut: '' }
+const DEFAUTS = { tab: 'factures', statut: '', reglement: '' }
 
 function jours(depuis) {
   const d = new Date(depuis)
@@ -113,7 +113,6 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
 
   const [nouveauDevis, setNouveauDevis] = useState(false)
   const [nouvelleFacture, setNouvelleFacture] = useState(false)
-  const [reglementPour, setReglementPour] = useState(null)
   // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
   // le bouton n'apparait donc que sur une facture emise.
   const [documentPour, setDocumentPour] = useState(null)
@@ -150,6 +149,26 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
 
   useEffect(() => { recharger() }, [etabActif, recharger])
 
+  // ⚠ LA FACTURE À ENCAISSER SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est
+  // filtrée par statut, et un lien vers une facture hors du filtre ne s'y retrouverait pas.
+  // Seul un 404 dit « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
+  const [factureReglee, setFactureReglee] = useState(null)
+  const [chargementReglement, setChargementReglement] = useState(false)
+  const [erreurReglement, setErreurReglement] = useState(false)
+  useEffect(() => {
+    const id = params.reglement
+    if (!id) { setFactureReglee(null); setErreurReglement(false); return undefined }
+    let vivant = true
+    setChargementReglement(true)
+    setErreurReglement(false)
+    setFactureReglee(null)
+    api.facture(id)
+      .then((f) => { if (vivant) setFactureReglee(f) })
+      .catch((e) => { if (vivant) setErreurReglement(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementReglement(false) })
+    return () => { vivant = false }
+  }, [params.reglement])
+
   async function agir(fn, message) {
     setErreur(null)
     setSucces(null)
@@ -175,6 +194,68 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
     } finally {
       setEnCours(null)
     }
+  }
+
+  // ── L'ENCAISSEMENT, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // Posé au niveau de la page : il remplace en-tête, bandeaux et onglets d'un coup.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES TROIS CONDITIONS DU BOUTON — droit de lettrer, facture émise,
+  // solde dû — ET L'ÉCRAN LES REPREND, en disant laquelle manque. Sans elles, un lien copié
+  // avant qu'une facture soit réglée ouvrirait un formulaire pré-rempli à zéro, que le serveur
+  // refuserait.
+  if (params.reglement) {
+    const fermerReglement = () => majParams({ reglement: '' }, { pousser: true })
+    const f = factureReglee
+    let contenu
+    if (!peutLettrer) {
+      contenu = (
+        <div className="banner banner-warn">
+          Encaisser un règlement demande le droit de lettrer les factures, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargementReglement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {erreurReglement
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut === 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          Un brouillon n’est dû par personne : il ne s’encaisse pas. Émettez la facture d’abord.
+        </div>
+      )
+    } else if (Number(f.soldeDu || 0) <= 0) {
+      contenu = (
+        <div className="banner banner-ok">
+          La facture {f.numero || ''} n’a plus de solde dû — elle a sans doute été réglée depuis
+          que ce lien a été copié. Il n’y a rien à encaisser.
+        </div>
+      )
+    } else {
+      contenu = (
+        <ReglementModal
+          key={params.reglement}
+          facture={f}
+          onClose={fermerReglement}
+          onFait={() => { fermerReglement(); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerReglement}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux factures
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   // UN BROUILLON N'EST DU PAR PERSONNE, ET LE COMPTER SERAIT UNE FAUSSE ALERTE.
@@ -392,7 +473,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                               </button>
                             )}
                             {peutLettrer && !brouillon && solde > 0 && (
-                              <button className="btn sm" type="button" onClick={() => setReglementPour(f)}>
+                              <button className="btn sm" type="button" onClick={() => majParams({ reglement: String(f.id) }, { pousser: true })}>
                                 Encaisser
                               </button>
                             )}
@@ -523,11 +604,6 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         onCree={() => { setBrouillonEdite(null); setSucces('Brouillon corrigé.'); recharger() }}
       />
 
-      <ReglementModal
-        facture={reglementPour}
-        onClose={() => setReglementPour(null)}
-        onFait={() => { setReglementPour(null); recharger() }}
-      />
 
       {/* Montee seulement quand une facture est choisie : le composant lit le document a
           l'ouverture, et le monter en permanence declencherait une lecture par rendu. */}
@@ -721,8 +797,11 @@ function ReglementModal({ facture, onClose, onFait }) {
     }
   }
 
+  if (!facture) return null
+
   return (
-    <Modal open={!!facture} onClose={onClose} titre="Encaisser un règlement">
+    <>
+      <h2>Encaisser un règlement</h2>
       {facture && (
         <form onSubmit={soumettre}>
           {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -788,7 +867,7 @@ function ReglementModal({ facture, onClose, onFait }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
