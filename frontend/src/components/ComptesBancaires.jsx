@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import Modal from './Modal.jsx'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros } from '../api/produit.js'
@@ -12,7 +11,13 @@ import { euros } from '../api/produit.js'
  * rapprochent. Sans ce rattachement 512, l'écran de rapprochement ne peut rien suggérer — on le dit
  * ici plutôt que de laisser l'exploitant le découvrir deux onglets plus loin.
  */
-export default function ComptesBancaires({ etabActif, droits }) {
+// ⚠ UNE CONSTANTE DE MODULE : le formulaire s'initialise depuis l'objet reçu, une fois.
+const COMPTE_NEUF = Object.freeze({})
+
+export default function ComptesBancaires({ etabActif, droits, params = {}, majParams }) {
+  // `nouveau`, ou l'identifiant du compte qu'on modifie.
+  const ouvert = params.compte || ''
+  const fermer = () => majParams({ compte: '' }, { pousser: true })
   const [comptes, setComptes] = useState([])
   const [comptesComptables, setComptesComptables] = useState([])
   // ⚠ « LU » N'EST PAS « VIDE ». Sans ce témoin, un refus laissait la liste à [] et l'écran
@@ -23,7 +28,6 @@ export default function ComptesBancaires({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [edition, setEdition] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'finance.treasury_manage_account')
 
@@ -66,6 +70,53 @@ export default function ComptesBancaires({ etabActif, droits }) {
     )
   }
 
+  // ── LE COMPTE BANCAIRE, EN ÉCRAN ────────────────────────────────────────────────────────
+  //
+  // Posé APRÈS la garde de chargement, qui répond déjà à « on n'a pas encore lu ».
+  //
+  // ⚠ `comptes` part à [] : c'est `comptesLus` qui dit si on a lu, pas la longueur — une lecture
+  // refusée laisse [] et n'autorise PAS à conclure « ce compte n'existe pas ».
+  //
+  // ⚠ `FormulaireCompte` s'initialise PARESSEUSEMENT depuis `compte` et ne se resynchronise
+  // jamais : d'où la `key`, et `COMPTE_NEUF` plutôt qu'un `{}` écrit en ligne.
+  if (ouvert) {
+    const creation = ouvert === 'nouveau'
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux comptes bancaires
+      </button>
+    )
+    const compte = creation ? COMPTE_NEUF : comptes.find((c) => String(c.id) === String(ouvert))
+    if (!creation && !compte) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            {!comptesLus
+              ? 'Les comptes bancaires n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Ce compte bancaire n’est plus dans la liste — il a sans doute été retiré depuis que ce lien a été copié.'}
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <FormulaireCompte
+          key={ouvert}
+          compte={compte}
+          etabActif={etabActif}
+          comptesComptables={comptesComptables}
+          planLu={planLu}
+          onAnnuler={fermer}
+          onEnregistre={async (msg) => { fermer(); setSucces(msg); setErreur(null); await recharger() }}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -73,7 +124,7 @@ export default function ComptesBancaires({ etabActif, droits }) {
 
       {peutGerer && (
         <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 'var(--esp-large)' }}>
-          <button className="btn primary" type="button" onClick={() => setEdition({})}>
+          <button className="btn primary" type="button" onClick={() => majParams({ compte: 'nouveau' }, { pousser: true })}>
             Nouveau compte
           </button>
         </div>
@@ -113,7 +164,7 @@ export default function ComptesBancaires({ etabActif, droits }) {
                     <td>{c.active ? <span className="badge good">actif</span> : <span className="badge mut">inactif</span>}</td>
                     {peutGerer && (
                       <td className="num">
-                        <button className="btn ghost sm" type="button" onClick={() => setEdition(c)}>Modifier</button>
+                        <button className="btn ghost sm" type="button" onClick={() => majParams({ compte: String(c.id) }, { pousser: true })}>Modifier</button>
                       </td>
                     )}
                   </tr>
@@ -123,22 +174,6 @@ export default function ComptesBancaires({ etabActif, droits }) {
           )}
         </div>
       </section>
-
-      {edition && (
-        <FormulaireCompte
-          compte={edition}
-          etabActif={etabActif}
-          comptesComptables={comptesComptables}
-          planLu={planLu}
-          onAnnuler={() => setEdition(null)}
-          onEnregistre={async (msg) => {
-            setEdition(null)
-            setSucces(msg)
-            setErreur(null)
-            await recharger()
-          }}
-        />
-      )}
     </>
   )
 }
@@ -188,7 +223,8 @@ function FormulaireCompte({ compte, etabActif, comptesComptables, planLu, onAnnu
   }
 
   return (
-    <Modal open onClose={onAnnuler} titre={creation ? 'Nouveau compte bancaire' : 'Modifier le compte'}>
+    <>
+      <h2>{creation ? 'Nouveau compte bancaire' : 'Modifier le compte'}</h2>
       <form onSubmit={enregistrer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
         <div className="field">
@@ -254,6 +290,6 @@ function FormulaireCompte({ compte, etabActif, comptesComptables, planLu, onAnnu
           <button className="btn primary" type="submit" disabled={busy || !label}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
