@@ -2891,6 +2891,8 @@ export const api = {
   // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
   // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
   padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
+  // Un terrain par son identifiant : un lien ne dépend pas de la borne de 100 de la liste.
+  padelTerrain: (id) => request(`/api/padel_terrains/${id}`),
   // ⚠ LA CREATION N'EST PAS SUR LA COLLECTION : elle porte un `uriTemplate` a elle,
   // `/padel/terrains`. Un POST sur `/api/padel_terrains` rend 405 — mesure du 30/08, faite avant
   // d'ecrire cette ligne.
