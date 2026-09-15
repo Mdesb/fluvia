@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -611,8 +611,15 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
     )
   }
 
+  // ⚠ L'EN-TÊTE SE RETIRE DEVANT UN ÉCRAN RENDU PAR UN COMPOSANT D'ONGLET. L'écran de la
+  // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
+  // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
+  // au-dessus de lui — vu à l'écran, pas déduit.
+  const ecranSousOnglet = Boolean(params.destination)
+
   return (
     <div className="view">
+      {!ecranSousOnglet && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Paramètres</h1>
@@ -626,9 +633,11 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
           conditions sont remplies. */}
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
+      </>)}
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
-      {sousOnglet === 'connecteurs' && <ConnecteursSortants droits={droits} etabActif={etabActif} />}
+      {sousOnglet === 'connecteurs'
+        && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
       {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}
