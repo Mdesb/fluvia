@@ -264,8 +264,27 @@ mesures de plus. En vérifiant **ce qu'il a écrit** plutôt que qu'il avait tou
 | sites **sans** aucun contrôleur d'accès | **7 sites × 11 jours** — `FREQUENTATION_CUMULEE` = `0.00`, statut **`complet`** |
 | sites **avec** contrôleur (périmé ou hors ligne) | 5 sites × 11 jours — statut `partiel`, site nommé dans `sitesManquants` |
 
-Les sept comprennent **Musée C** et **Patinoire B**. Un musée avec onze jours de fréquentation
-nulle *certifiée complète*.
+Les sept comprennent **Musée C** et **Patinoire B** : dans la base, un musée porte onze jours de
+fréquentation nulle *certifiée complète*.
+
+> ⚠ **RECTIFICATION DU 15/09, DANS LA DEMI-HEURE : CE ZÉRO N'EST ATTEIGNABLE PAR AUCUN RÔLE
+> AUJOURD'HUI.** J'ai d'abord écrit la phrase ci-dessus seule, et elle sur-affirmait — vraie de la
+> *donnée*, fausse de ce qu'un utilisateur voit. Mesuré ensuite :
+>
+> | entité | statut | atteignable par un rôle reporting |
+> |---|---|---|
+> | Site A1 / A2 / B1 Reporting | `partiel` | oui — et **correctement signalés** |
+> | Groupe Démo Reporting, Région A/B Reporting | `partiel` | oui — **correctement signalés** |
+> | GI-ONE FITNESS, Groupe Démo Support, Groupe Second Loisirs, Région B | `complet` à 0 | **non** |
+>
+> Les trois sites que le reporting atteint ont tous un contrôleur ; leurs mesures sont donc
+> `partiel`, et le signal fonctionne. Les entités qui portent le zéro certifié sont hors du
+> périmètre de tous les rôles reporting.
+>
+> **Le point reste entier, mais il est LATENT** : il se réveille le jour où un rôle reporting
+> couvre un site non instrumenté — un musée, une patinoire, une salle de sport sans tourniquet.
+> C'est-à-dire au premier client de ce type. « Atteignable » et « cassé » sont deux choses
+> différentes, et je l'avais oublié sur ma propre trouvaille.
 
 **Le mécanisme est sain, et c'est le point.** `etablissementHorsLigne()` lit les contrôleurs ; sans
 contrôleur il rend `false`, avec sa raison écrite dans le code :
