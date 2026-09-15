@@ -414,8 +414,23 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
                         {/* ⚠ TROIS ÉTATS, PAS DEUX. `envoye` est un SUCCÈS — le rapport
                             planifié a produit le fichier PUIS l'a expédié. Le ranger avec
                             `echec` affichait en rouge un rapport que le destinataire a reçu. */}
-                        <span className={x.statut === 'echec' ? 'badge crit' : 'badge good'}>
-                          {{ genere: 'disponible', envoye: 'envoyé' }[x.statut] || 'échec'}
+                        {/* ⚠ QUATRE ÉTATS, ET UN TON PAR SENS. `non_expedie` n'est ni un succès
+                            ni une panne : le fichier est là, et personne ne l'a reçu. Le vert
+                            affirmerait un envoi, le rouge une panne. Il est neutre, et il se nomme.
+                            ⚠ Et le repli ne dit plus « échec » : c'est lui qui affichait un badge
+                            VERT libellé « échec » pour tout statut qu'il ne connaissait pas. */}
+                        <span className={{
+                          genere: 'badge good',
+                          envoye: 'badge good',
+                          non_expedie: 'badge',
+                          echec: 'badge crit',
+                        }[x.statut] || 'badge'}>
+                          {{
+                            genere: 'disponible',
+                            envoye: 'envoyé',
+                            non_expedie: 'non expédié — aucun transport de courriel',
+                            echec: 'échec',
+                          }[x.statut] || x.statut}
                         </span>
                         {x.statut === 'envoye' && x.destinataireEmail && (
                           <div className="hint">à {x.destinataireEmail}</div>
