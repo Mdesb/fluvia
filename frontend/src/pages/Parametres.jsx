@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -615,7 +615,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
   // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
   // au-dessus de lui — vu à l'écran, pas déduit.
-  const ecranSousOnglet = Boolean(params.destination || params.invitation)
+  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen)
 
   return (
     <div className="view">
@@ -775,7 +775,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
-          <MoyensPaiement etabActif={etabActif} />
+          <MoyensPaiement etabActif={etabActif} params={params} majParams={majParams} />
           {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
               Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
               elle, ne se declarait a AUCUN endroit. `POST /api/regie_recettes` existait, et le
@@ -823,13 +823,19 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
 //
 // Le libellé « Exige une référence (TPE) » décrivait donc mal la troisième : elle ne demande pas une
 // saisie à l'agent, elle branche l'encaissement sur le TPE. Renommée en conséquence.
-function MoyensPaiement({ etabActif }) {
+// ⚠ UNE CONSTANTE DE MODULE : l'effet du formulaire recharge ses champs à chaque nouvel objet
+// `edition`. Un `{ moyen: null }` écrit en ligne effacerait la frappe à chaque rendu.
+const EDITION_NOUVEAU_MOYEN = Object.freeze({ moyen: null })
+
+function MoyensPaiement({ etabActif, params = {}, majParams }) {
+  // `nouveau`, ou l'identifiant du moyen qu'on modifie.
+  const ouvert = params.moyen || ''
+  const fermer = () => majParams({ moyen: '' }, { pousser: true })
   const [rows, setRows] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null) // id en cours de bascule
-  const [edition, setEdition] = useState(null) // { moyen: null } = création, { moyen } = modification
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -848,6 +854,12 @@ function MoyensPaiement({ etabActif }) {
     charger()
   }, [charger])
 
+  // L'objet d'édition, mémorisé sur l'identité du moyen retrouvé : stable tant que `rows` ne
+  // recharge pas, donc l'effet du formulaire ne remet pas la saisie à zéro.
+  const moyenOuvert = ouvert && ouvert !== 'nouveau' ? rows.find((m) => String(m.id) === String(ouvert)) : null
+  const editionModif = useMemo(() => (moyenOuvert ? { moyen: moyenOuvert } : null), [moyenOuvert])
+  const editionOuverte = ouvert === 'nouveau' ? EDITION_NOUVEAU_MOYEN : editionModif
+
   async function basculerActif(m) {
     const actif = m.actif !== false
     setBusy(m.id)
@@ -864,13 +876,62 @@ function MoyensPaiement({ etabActif }) {
     }
   }
 
+  // ── LE MOYEN DE PAIEMENT, EN ÉCRAN ──────────────────────────────────────────────────────
+  //
+  // ⚠ `rows` part à [] et RETOMBE à [] sur un échec : sa longueur ne dit rien. C'est
+  // `chargement` puis `erreur` qui disent si on a lu, avant de conclure « introuvable ».
+  //
+  // ⚠ `edition` doit garder son identité : l'effet du formulaire recharge ses champs à chaque
+  // nouvel objet. D'où la constante en création, et `useMemo` en modification.
+  if (ouvert) {
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux moyens de paiement
+      </button>
+    )
+    if (ouvert !== 'nouveau' && chargement) {
+      return <section className="card"><div className="card-b">{retour}<div className="center"><div className="spinner" /></div></div></section>
+    }
+    if (!editionOuverte) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            {erreur
+              ? 'Les moyens de paiement n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Ce moyen de paiement n’est plus dans la liste — il a sans doute été retiré depuis que ce lien a été copié.'}
+          </div>
+        </div></section>
+      )
+    }
+    return (
+      <section className="card"><div className="card-b">
+        {retour}
+        <ModalMoyenPaiement
+          key={ouvert}
+          edition={editionOuverte}
+          onClose={fermer}
+          onEnregistre={async (corps) => {
+            const existant = editionOuverte.moyen
+            if (existant) await api.majMoyenPaiement(existant.id, corps)
+            else await api.creerMoyenPaiement({ ...corps, actif: true })
+            fermer()
+            setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
+            await charger()
+          }}
+        />
+      </div></section>
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-h">
         <h3>Moyens de paiement</h3>
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
+          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); majParams({ moyen: 'nouveau' }, { pousser: true }) }}>+ Ajouter</button>
           <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
@@ -918,7 +979,7 @@ function MoyensPaiement({ etabActif }) {
                     <td><span className={`badge ${actif ? 'good' : 'mut'}`}>{actif ? 'actif' : 'inactif'}</span></td>
                     <td className="num">
                       <div style={{ display: 'inline-flex', gap: 6 }}>
-                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: m }) }}>Modifier</button>
+                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); majParams({ moyen: String(m.id) }, { pousser: true }) }}>Modifier</button>
                         <button
                           className="btn ghost sm"
                           onClick={() => basculerActif(m)}
@@ -938,18 +999,6 @@ function MoyensPaiement({ etabActif }) {
         )}
       </div>
 
-      <ModalMoyenPaiement
-        edition={edition}
-        onClose={() => setEdition(null)}
-        onEnregistre={async (corps) => {
-          const existant = edition?.moyen
-          if (existant) await api.majMoyenPaiement(existant.id, corps)
-          else await api.creerMoyenPaiement({ ...corps, actif: true })
-          setEdition(null)
-          setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
-          await charger()
-        }}
-      />
     </section>
   )
 }
@@ -1214,12 +1263,11 @@ function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
     && !CODES_FIDUCIAIRES.includes(codeNettoye)
     && /(cheque|chèque|espece|espèce|liquide|ticket|bon)/.test(codeNettoye + ' ' + libelle.toLowerCase())
 
+  if (!edition) return null
+
   return (
-    <Modal
-      open={!!edition}
-      onClose={onClose}
-      titre={creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}
-    >
+    <>
+      <h2>{creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
 
@@ -1280,7 +1328,7 @@ function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
