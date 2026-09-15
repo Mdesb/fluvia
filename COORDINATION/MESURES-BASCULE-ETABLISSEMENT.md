@@ -20,6 +20,53 @@ Facturation (`reglement`), FacturesFournisseur (`avoir`), PlanningTravail (`cren
    Corrigé par **#185** pour ces trois écrans ; Sport, Patinoire, Padel et Stock portaient déjà
    l'établissement dans la clé depuis #172 et #178.
 
+Cinq autres écrans ouverts par l'adresse ont eu le second défaut, corrigé par **#201** : voir la
+section qui leur est consacrée. Les tableaux de mesure ci-dessous portent sur les sept premiers.
+
+## Les cinq écrans de #201 — relayé, sauf le code
+
+**#201** (`3c4ffe71`, fusionnée le 15/09) : AchatsStock (`commande`), Groupes (`panier`, et le
+groupe), AudioguidesMusee (`audioguide`), PartenairesOta (`partenaire`), TopologieAcces
+(`topologie`). RolesSection (`role`) n'a rien à corriger : `/api/roles` rend les mêmes 58 rôles, avec
+les mêmes identifiants, depuis trois établissements.
+
+Deux formes de correctif. AchatsStock et la réservation de Groupes gardent une lecture avec la clé
+`identifiant|établissement`. AudioguidesMusee, PartenairesOta et TopologieAcces n'ont **pas de lecture
+propre** : l'objet se déduit d'une liste, qui garde l'établissement pour lequel elle a été lue.
+⚠ Pour identifier le code servi sur ces deux derniers, compter `|${etabActif}` ne sert à rien : sur
+main, il vaut 0 pour AudioguidesMusee et PartenairesOta.
+
+**Bascule d'établissement** — mesurée par la session qui a livré #201, relayée depuis sa description,
+**non rejouée ici**. Piscine A → Patinoire B puis retour, garde « ← Retour », contre-témoin `01616e52`.
+
+| Écran | Avant, vers B | Après, vers B | Après, retour vers A |
+|---|---|---|---|
+| AchatsStock | objet de A à 9 ms | spinner 9 ms → « n'existe pas » | spinner → commande |
+| Groupes | réservation de A à 19 ms | spinner 12 ms → « n'existe pas » ; nom du groupe jamais affiché sous B | spinner → réservation |
+| AudioguidesMusee | objet de A à 10 ms, **puis de nouveau de 586 ms à 4,07 s** | spinner 7 ms → « n'existe pas » | spinner → formulaire |
+| PartenairesOta | objet de A à 9 ms | spinner 7 ms → « n'existe pas » → renvoi à la caisse | non mesurable (renvoi) |
+| TopologieAcces | objet de A à 9 ms, **puis formulaire de A jusqu'à la fin des 8 s** | spinner 9 ms → « n'existe pas » | spinner → formulaire |
+
+Avant, au retour, « n'existe pas » s'affichait sous A (Groupes à 12 ms, AudioguidesMusee à 7 ms) ;
+après : spinner, puis l'objet. PartenairesOta renvoie à la caisse sous Patinoire B, qui n'a pas la
+capacité boutique. Des passages ont été écartés (lien navigateur–préprod calé, jeton expiré).
+
+**« N'existe pas » à l'ouverture** — mesuré par la même session sur main `eccd2c3e`, contre-témoin =
+main dont seul #201 est retiré (`git apply -R`), deux ouvertures par écran, garde « ← Retour », liste
+stable depuis 1 s. **Relayé.** Résultat : **0 flash sur main comme sur le contre-témoin, donc cette
+mesure ne prouve rien sur ces cinq écrans** — l'ancien code ne pouvait pas y clignoter. Les causes
+ont été **vérifiées ici dans le code d'avant #201** (`3c4ffe71^`) :
+
+- **AchatsStock** : `chargement` démarre à `true` (`AchatsStock.jsx:38`) et son spinner est rendu
+  avant la branche `commande` (l. 141) — le premier rendu est couvert, comme Padel.
+- **Groupes** : `lectureReservation === null` était déjà traité comme un chargement (l. 264, 354).
+- **AudioguidesMusee, PartenairesOta** : aucun appel `api.…(params.…)`, l'objet est cherché dans une
+  liste. **TopologieAcces** : l'effet qui ouvre le formulaire dépend des listes (l. 466–483) ; les
+  seuls appels avec un identifiant sont des écritures.
+
+Autrement dit, #201 corrige des fuites à la bascule sur ces écrans, pas un flash à l'ouverture qui
+n'y existait pas.
+
 ## Méthode
 
 - Worktree détaché, Vite branché sur l'API de préprod, tunnel SSH, jeton `lexik:jwt:generate-token`.
