@@ -61,12 +61,15 @@ export default function PlanningTravail({ etabActif, droits = [], params = {}, m
   // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
   // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
   // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // ⚠ LA CLÉ PORTE L'ÉTABLISSEMENT. L'effet relisait déjà à la bascule, mais la clé ne changeait
+  // pas : le créneau lu depuis l'ancien établissement restait affiché sous le nouveau jusqu'au
+  // retour de la lecture. Avec lui, la lecture rangée ne correspond plus : l'écran charge.
   // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
   const [lectureCreneau, setLectureCreneau] = useState(null)
-  const cleCreneau = params.creneau && params.creneau !== 'nouveau' ? params.creneau : null
+  const cleCreneau = params.creneau && params.creneau !== 'nouveau' ? `${params.creneau}|${etabActif}` : null
   useEffect(() => {
     if (!(params.creneau && params.creneau !== 'nouveau')) { setLectureCreneau(null); return undefined }
-    const cle = params.creneau
+    const cle = `${params.creneau}|${etabActif}`
     let vivant = true
     api.creneauTravail(params.creneau)
       .then((v) => { if (vivant) setLectureCreneau({ cle, valeur: v, echouee: false }) })

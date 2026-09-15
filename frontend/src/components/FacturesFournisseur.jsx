@@ -87,21 +87,24 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
   // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
   // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // ⚠ LA CLÉ PORTE L'ÉTABLISSEMENT. Sans lui, basculer d'établissement laissait l'objet lu depuis
+  // l'ancien affiché sous le nouveau — la facture de Piscine A, formulaire actif, sous Patinoire B.
+  // Avec lui, la lecture rangée ne correspond plus : l'écran charge et relit.
   // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
   // ⚠ L'échec d'ENVOI a sa propre bannière : celle de la liste n'est pas rendue sous l'écran.
   const [erreurAvoir, setErreurAvoir] = useState(null)
   const [lectureAvoir, setLectureAvoir] = useState(null)
-  const cleAvoir = params.avoir ? params.avoir : null
+  const cleAvoir = params.avoir ? `${params.avoir}|${etabActif}` : null
   useEffect(() => {
     setErreurAvoir(null)
     if (!(params.avoir)) { setLectureAvoir(null); return undefined }
-    const cle = params.avoir
+    const cle = `${params.avoir}|${etabActif}`
     let vivant = true
     api.factureFournisseur(params.avoir)
       .then((v) => { if (vivant) setLectureAvoir({ cle, valeur: v, echouee: false }) })
       .catch((e) => { if (vivant) setLectureAvoir({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
-  }, [params.avoir])
+  }, [params.avoir, etabActif])
   const lectureAvoirCourante = lectureAvoir?.cle === cleAvoir ? lectureAvoir : null
   const chargementAvoir = cleAvoir !== null && lectureAvoirCourante === null
   const factureAvoir = lectureAvoirCourante?.valeur ?? null
