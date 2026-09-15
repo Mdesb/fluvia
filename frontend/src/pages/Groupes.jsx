@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Modal from '../components/Modal.jsx'
 import { confirmer } from '../components/Confirmation.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -56,7 +55,11 @@ function creneauLabel(c) {
 }
 
 // `groupe` : le groupe sélectionné ; `panier` : la réservation dont on compose le panier.
-const DEFAUTS_URL = { groupe: '', panier: '' }
+// `ecran` : un formulaire de la page ; `membre` et `reservation` désignent ce qu'il édite.
+const DEFAUTS_URL = { groupe: '', panier: '', ecran: '', reservation: '', membre: '' }
+const ECRANS_PAGE = ['nouveau-groupe', 'forfaits', 'contingents']
+const ECRANS_GROUPE = ['modifier-groupe', 'participant', 'nouvelle-reservation']
+const ECRANS_RESERVATION = ['detail', 'affecter', 'paiement', 'facturer', 'gratuites']
 
 export default function Groupes({ etabActif, droits }) {
   const peutGerer = aLeDroit(droits, 'group.manage')
@@ -82,8 +85,9 @@ export default function Groupes({ etabActif, droits }) {
   const [produitsLus, setProduitsLus] = useState(null)
   const [forfaitsLus, setForfaitsLus] = useState(null)
   const [contingents, setContingents] = useState([])
-
-  const [modale, setModale] = useState(null) // { type, ... }
+  // ⚠ `false` = LECTURE ÉCHOUÉE : un refus rendait une liste vide, donc « rien à choisir ».
+  const [creneauxLus, setCreneauxLus] = useState(null)
+  const [contingentsLus, setContingentsLus] = useState(null)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -108,8 +112,8 @@ export default function Groupes({ etabActif, droits }) {
   useEffect(() => {
     let vivant = true
     api.reservationCreneaux()
-      .then((r) => { if (vivant) setCreneaux(membres(r)) })
-      .catch(() => { if (vivant) setCreneaux([]) })
+      .then((r) => { if (vivant) { setCreneaux(membres(r)); setCreneauxLus(true) } })
+      .catch(() => { if (vivant) { setCreneaux([]); setCreneauxLus(false) } })
     return () => { vivant = false }
   }, [etabActif])
 
@@ -147,8 +151,10 @@ export default function Groupes({ etabActif, droits }) {
   const chargerContingents = useCallback(async () => {
     try {
       setContingents(membres(await api.gratuiteContingents()))
+      setContingentsLus(true)
     } catch {
       setContingents([])
+      setContingentsLus(false)
     }
   }, [])
   useEffect(() => { chargerContingents() }, [chargerContingents, etabActif])
@@ -186,19 +192,21 @@ export default function Groupes({ etabActif, droits }) {
 
   // ⚠ LE PANIER SE LIT PAR SON IDENTIFIANT : la liste des réservations est bornée à 200, et l'écran
   // doit vérifier que la réservation appartient bien au groupe de l'adresse.
-  const [reservationPanier, setReservationPanier] = useState(null)
-  const [lecturePanier, setLecturePanier] = useState(null)
+  const [reservationEcran, setReservationEcran] = useState(null)
+  const [lectureReservation, setLectureReservation] = useState(null)
+  // Le panier et les écrans d'une réservation lisent la même fiche, par son identifiant.
+  const idReservationEcran = params.panier || (ECRANS_RESERVATION.includes(params.ecran) ? params.reservation : '')
   useEffect(() => {
-    const id = params.panier
-    if (!id) { setReservationPanier(null); setLecturePanier(null); return undefined }
+    const id = idReservationEcran
+    if (!id) { setReservationEcran(null); setLectureReservation(null); return undefined }
     let vivant = true
-    setLecturePanier('chargement')
-    setReservationPanier(null)
+    setLectureReservation('chargement')
+    setReservationEcran(null)
     api.reservationGroupe(id)
-      .then((b) => { if (vivant) { setReservationPanier(b); setLecturePanier('lu') } })
-      .catch((e) => { if (vivant) setLecturePanier(e?.status === 404 ? 'introuvable' : 'echec') })
+      .then((b) => { if (vivant) { setReservationEcran(b); setLectureReservation('lu') } })
+      .catch((e) => { if (vivant) setLectureReservation(e?.status === 404 ? 'introuvable' : 'echec') })
     return () => { vivant = false }
-  }, [params.panier, etabActif])
+  }, [idReservationEcran, etabActif])
 
   async function geste(fn, message) {
     setErreur(null)
@@ -213,6 +221,29 @@ export default function Groupes({ etabActif, droits }) {
     }
   }
 
+  // ── LES FORMULAIRES EN ÉCRANS : OUVRIR, FERMER, ENVOYER ───────────────────────────────────────
+  // ⚠ UN ÉCHEC GARDE L'ÉCRAN OUVERT, SAISIE COMPRISE : la modale se fermait quel que soit le résultat
+  // et l'erreur s'affichait derrière, sur la page — la saisie était perdue. Le succès ferme l'écran,
+  // et son message s'affiche sur la page, qui reste montée.
+  const [erreurEcran, setErreurEcran] = useState(null)
+  useEffect(() => { setErreurEcran(null) }, [params.ecran, params.membre, params.reservation])
+  const ouvrirEcran = (patch) => majParams({ ecran: '', membre: '', reservation: '', panier: '', ...patch }, { pousser: true })
+  const fermerEcran = () => majParams({ ecran: '', membre: '', reservation: '' }, { pousser: true })
+  async function gesteEcran(fn, message) {
+    setErreurEcran(null)
+    setSucces(null)
+    try {
+      await fn()
+    } catch (e) {
+      setErreurEcran(e?.message || "L'opération a échoué.")
+      return
+    }
+    setSucces(message)
+    fermerEcran()
+    await charger()
+    if (params.groupe) await ouvrir(params.groupe, true)
+  }
+
   if (!aLeDroit(droits, 'group.read')) {
     return <p className="empty">Vous n’avez pas accès aux groupes.</p>
   }
@@ -223,16 +254,16 @@ export default function Groupes({ etabActif, droits }) {
   // groupes, une réservation non annulée — et qui appartient au groupe de l'adresse.
   if (params.groupe && params.panier) {
     const fermerPanier = () => majParams({ panier: '' }, { pousser: true })
-    const r = reservationPanier
+    const r = reservationEcran
     let contenu
     if (!peutGerer) {
       contenu = <div className="banner banner-warn">Composer le panier d’une réservation demande le droit de gérer les groupes, que ce compte n’a pas.</div>
-    } else if (lecturePanier === 'chargement' || lecturePanier === null) {
+    } else if (lectureReservation === 'chargement' || lectureReservation === null) {
       contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
-    } else if (lecturePanier !== 'lu' || !r) {
+    } else if (lectureReservation !== 'lu' || !r) {
       contenu = (
         <div className="banner banner-warn">
-          {lecturePanier === 'echec'
+          {lectureReservation === 'echec'
             ? 'Cette réservation n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
             : 'Cette réservation n’existe pas, ou n’est pas visible depuis cet établissement.'}
         </div>
@@ -256,6 +287,136 @@ export default function Groupes({ etabActif, droits }) {
     )
   }
 
+  // ── LES FORMULAIRES DE LA PAGE, EN ÉCRANS ────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET L'ÉCRAN LES REPREND : le droit de gérer les
+  // groupes (sauf pour lire une fiche), un groupe lu, une réservation lue qui appartient au groupe de
+  // l'adresse — non annulée pour la modifier, sans devis pour la facturer.
+  if (params.ecran) {
+    const nomEcran = params.ecran
+    const r = reservationEcran
+    const attente = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    const connu = ECRANS_PAGE.includes(nomEcran) || ECRANS_GROUPE.includes(nomEcran) || ECRANS_RESERVATION.includes(nomEcran)
+    let retour = 'aux groupes'
+    let contenu
+    if (!connu) {
+      contenu = <div className="banner banner-warn">Cet écran n’existe pas sur la page Groupes.</div>
+    } else if (nomEcran !== 'detail' && !peutGerer) {
+      contenu = <div className="banner banner-warn">Ce formulaire demande le droit de gérer les groupes, que ce compte n’a pas.</div>
+    } else if (nomEcran === 'nouveau-groupe') {
+      contenu = <FormGroupe onFermer={fermerEcran} onValider={(corps) => gesteEcran(() => api.creerGroupeParticipant(corps), 'Groupe créé.')} />
+    } else if (nomEcran === 'forfaits') {
+      contenu = (
+        <>
+          {(produitsLus === false || tauxLus === false) && (
+            <div className="banner banner-warn">
+              Lecture impossible : {[produitsLus === false && 'les produits', tauxLus === false && 'les taux de TVA'].filter(Boolean).join(', ')}. Les listes de choix d’un nouveau forfait sont vides pour cette raison, pas faute d’éléments.
+            </div>
+          )}
+          <FormForfaits produits={produits} taux={taux} onFermer={fermerEcran} onChange={chargerForfaits} />
+        </>
+      )
+    } else if (nomEcran === 'contingents') {
+      contenu = <FormContingents onFermer={fermerEcran} onChange={chargerContingents} />
+    } else {
+      retour = `au groupe${selection?.label ? ` « ${selection.label} »` : ''}`
+      if (!params.groupe) {
+        contenu = <div className="banner banner-warn">Aucun groupe n’est désigné dans l’adresse.</div>
+      } else if (lectureGroupe === 'introuvable') {
+        contenu = <div className="banner banner-warn">Ce groupe n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+      } else if (lectureGroupe === 'echec') {
+        contenu = <div className="banner banner-error">Ce groupe n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas ».</div>
+      } else if (lectureGroupe !== 'lu' || !selection) {
+        contenu = attente
+      } else if (nomEcran === 'modifier-groupe') {
+        contenu = (
+          <FormGroupe key={idDe(selection)} initial={selection} onFermer={fermerEcran}
+            onValider={(corps) => gesteEcran(() => api.modifierGroupeParticipant(idDe(selection), corps), 'Groupe modifié.')} />
+        )
+      } else if (nomEcran === 'participant') {
+        contenu = (
+          <FormMembre key={params.membre || 'nouveau'} groupe={selection} membreId={params.membre || null} onFermer={fermerEcran}
+            onValider={(corps, membreId) => gesteEcran(
+              () => membreId ? api.modifierMembre(membreId, { category: corps.category }) : api.ajouterMembre(corps),
+              membreId ? 'Participant modifié.' : 'Participant ajouté.',
+            )} />
+        )
+      } else if (nomEcran === 'nouvelle-reservation') {
+        contenu = (
+          <FormReservation key={idDe(selection)} groupe={selection} onFermer={fermerEcran}
+            onValider={(corps) => gesteEcran(() => api.creerReservationGroupe(corps), 'Réservation créée.')} />
+        )
+      } else if (!params.reservation) {
+        contenu = <div className="banner banner-warn">Aucune réservation n’est désignée dans l’adresse.</div>
+      } else if (lectureReservation === 'chargement' || lectureReservation === null) {
+        contenu = attente
+      } else if (lectureReservation !== 'lu' || !r) {
+        contenu = (
+          <div className="banner banner-warn">
+            {lectureReservation === 'echec'
+              ? 'Cette réservation n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+              : 'Cette réservation n’existe pas, ou n’est pas visible depuis cet établissement.'}
+          </div>
+        )
+      } else if (idDe(r.group) !== params.groupe) {
+        contenu = <div className="banner banner-warn">Cette réservation appartient à un autre groupe que celui de l’adresse.</div>
+      } else if (nomEcran === 'detail') {
+        contenu = <DetailReservation resa={r} creneaux={creneaux} />
+      } else if (r.status === 'cancelled') {
+        contenu = <div className="banner banner-warn">Cette réservation est annulée : elle ne se modifie plus.</div>
+      } else if (nomEcran === 'affecter') {
+        if (creneauxLus === null) {
+          contenu = attente
+        } else if (creneauxLus === false) {
+          contenu = <div className="banner banner-error">La liste des créneaux n’a pas pu être lue : il n’y a rien à choisir. Ce n’est pas qu’il n’y en a aucun.</div>
+        } else if (creneaux.length === 0) {
+          contenu = <div className="banner banner-warn">Aucun créneau n’est ouvert sur cet établissement : il n’y a rien à affecter.</div>
+        } else {
+          contenu = (
+            <FormAffecter key={r.id} creneaux={creneaux} onFermer={fermerEcran}
+              onValider={(creneauId) => gesteEcran(() => api.affecterReservationGroupe(r.id, { creneau: creneauId }), 'Réservation affectée.')} />
+          )
+        }
+      } else if (nomEcran === 'paiement') {
+        contenu = (
+          <FormPaiement key={r.id} valeur={r.paymentStatus} onFermer={fermerEcran}
+            onValider={(paymentStatus) => gesteEcran(() => api.modifierReservationGroupe(r.id, { paymentStatus }), 'Paiement mis à jour.')} />
+        )
+      } else if (nomEcran === 'facturer') {
+        contenu = r.commercialDocument
+          ? <div className="banner banner-warn">Cette réservation a déjà un devis : elle ne se facture pas deux fois.</div>
+          : (
+            <>
+              {tauxLus === false && (
+                <div className="banner banner-warn">Les taux de TVA n’ont pas pu être lus : leur liste est vide pour cette raison. Un devis tiré d’un panier n’en a pas besoin.</div>
+              )}
+              <FormFacture key={r.id} taux={taux} onFermer={fermerEcran}
+                onValider={(corps) => gesteEcran(() => api.facturerReservationGroupe(r.id, corps), 'Devis créé.')} />
+            </>
+          )
+      } else {
+        contenu = (
+          <>
+            {contingentsLus === false && (
+              <div className="banner banner-warn">La liste des contingents n’a pas pu être lue : rien n’est proposé à l’octroi pour cette raison, pas faute de contingent.</div>
+            )}
+            <FormGratuites key={r.id} reservationId={r.id} contingents={contingents} onFermer={fermerEcran} onChange={chargerContingents} />
+          </>
+        )
+      }
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerEcran}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour {retour}
+        </button>
+        {erreurEcran && <div className="banner banner-error">{erreurEcran}</div>}
+        {contenu}
+      </div>
+    )
+  }
+
   return (
     <div className="view">
       <div className="view-head">
@@ -265,13 +426,13 @@ export default function Groupes({ etabActif, droits }) {
         </div>
         {peutGerer && (
           <div className="actions">
-            <button className="btn ghost" type="button" onClick={() => setModale({ type: 'contingents' })}>
+            <button className="btn ghost" type="button" onClick={() => ouvrirEcran({ ecran: 'contingents' })}>
               Gratuités
             </button>
-            <button className="btn ghost" type="button" onClick={() => setModale({ type: 'forfaits' })}>
+            <button className="btn ghost" type="button" onClick={() => ouvrirEcran({ ecran: 'forfaits' })}>
               Forfaits groupe
             </button>
-            <button className="btn primary" type="button" onClick={() => setModale({ type: 'groupe' })}>
+            <button className="btn primary" type="button" onClick={() => ouvrirEcran({ ecran: 'nouveau-groupe' })}>
               Nouveau groupe
             </button>
           </div>
@@ -321,7 +482,7 @@ export default function Groupes({ etabActif, droits }) {
               creneaux={creneaux}
               peutGerer={peutGerer}
               onGeste={geste}
-              onModale={setModale}
+              onEcran={ouvrirEcran}
               onPanier={(id) => majParams({ panier: String(id) }, { pousser: true })}
             />
           ) : (
@@ -339,119 +500,17 @@ export default function Groupes({ etabActif, droits }) {
           ))}
         </div>
       )}
-
-      {modale?.type === 'groupe' && (
-        <FormGroupe
-          initial={modale.groupe}
-          onFermer={() => setModale(null)}
-          onValider={async (corps) => {
-            const edition = Boolean(modale.groupe)
-            await geste(
-              () => edition
-                ? api.modifierGroupeParticipant(idDe(modale.groupe), corps)
-                : api.creerGroupeParticipant(corps),
-              edition ? 'Groupe modifié.' : 'Groupe créé.',
-            )
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'membre' && (
-        <FormMembre
-          groupe={selection}
-          membreId={modale.membreId}
-          onFermer={() => setModale(null)}
-          onValider={async (corps, membreId) => {
-            await geste(
-              () => membreId
-                ? api.modifierMembre(membreId, { category: corps.category })
-                : api.ajouterMembre(corps),
-              membreId ? 'Participant modifié.' : 'Participant ajouté.',
-            )
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'reservation' && (
-        <FormReservation
-          groupe={selection}
-          onFermer={() => setModale(null)}
-          onValider={async (corps) => {
-            await geste(() => api.creerReservationGroupe(corps), 'Réservation créée.')
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'affecter' && (
-        <FormAffecter
-          reservationId={modale.reservationId}
-          creneaux={creneaux}
-          onFermer={() => setModale(null)}
-          onValider={async (creneauId) => {
-            await geste(
-              () => api.affecterReservationGroupe(modale.reservationId, { creneau: creneauId }),
-              'Réservation affectée.',
-            )
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'paiement' && (
-        <FormPaiement
-          reservationId={modale.reservationId}
-          valeur={modale.paymentStatus}
-          onFermer={() => setModale(null)}
-          onValider={async (paymentStatus) => {
-            await geste(
-              () => api.modifierReservationGroupe(modale.reservationId, { paymentStatus }),
-              'Paiement mis à jour.',
-            )
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'facturer' && (
-        <FormFacture
-          taux={taux}
-          onFermer={() => setModale(null)}
-          onValider={async (corps) => {
-            await geste(() => api.facturerReservationGroupe(modale.reservationId, corps), 'Devis créé.')
-            setModale(null)
-          }}
-        />
-      )}
-
-      {modale?.type === 'forfaits' && (
-        <FormForfaits produits={produits} taux={taux} onFermer={() => setModale(null)} onChange={chargerForfaits} />
-      )}
-
-      {modale?.type === 'contingents' && (
-        <FormContingents onFermer={() => setModale(null)} onChange={chargerContingents} />
-      )}
-
-      {modale?.type === 'gratuites' && (
-        <FormGratuites reservationId={modale.reservationId} contingents={contingents} onFermer={() => setModale(null)} onChange={chargerContingents} />
-      )}
-
-      {modale?.type === 'detailReservation' && (
-        <DetailReservation reservationId={modale.reservationId} onFermer={() => setModale(null)} />
-      )}
     </div>
   )
 }
 
-function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGerer, onGeste, onModale, onPanier }) {
+function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGerer, onGeste, onEcran, onPanier }) {
   return (
     <div className="card">
       <div className="card-h">
         <h3>{groupe.label}</h3>
         {peutGerer && (
-          <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'groupe', groupe })}>
+          <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'modifier-groupe' })}>
             Modifier
           </button>
         )}
@@ -469,7 +528,7 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h4>Participants ({liste.length})</h4>
           {peutGerer && (
-            <button className="btn sm" type="button" onClick={() => onModale({ type: 'membre' })}>Ajouter</button>
+            <button className="btn sm" type="button" onClick={() => onEcran({ ecran: 'participant' })}>Ajouter</button>
           )}
         </div>
         {liste.length === 0 ? (
@@ -484,7 +543,7 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                   <td className="sub">{CATEGORIES[m.category] || m.category}</td>
                   {peutGerer && (
                     <td className="num">
-                      <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'membre', membreId: m.id })}>Modifier</button>
+                      <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'participant', membre: String(m.id) })}>Modifier</button>
                       {' '}
                       <button
                         className="btn danger sm"
@@ -507,7 +566,7 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h4>Réservations ({reservations.length})</h4>
           {peutGerer && (
-            <button className="btn sm" type="button" onClick={() => onModale({ type: 'reservation' })}>Nouvelle réservation</button>
+            <button className="btn sm" type="button" onClick={() => onEcran({ ecran: 'nouvelle-reservation' })}>Nouvelle réservation</button>
           )}
         </div>
         {reservations.length === 0 ? (
@@ -523,21 +582,21 @@ function DetailGroupe({ groupe, membres: liste, reservations, creneaux, peutGere
                   <td className="sub">{creneauLabel(creneaux.find((c) => idDe(c) === idDe(r.creneau)) || r.creneau)}</td>
                   <td className="sub">{PAIEMENTS[r.paymentStatus] || r.paymentStatus}</td>
                   <td className="num">
-                    <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'detailReservation', reservationId: r.id })}>Détail</button>
+                    <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'detail', reservation: String(r.id) })}>Détail</button>
                     {peutGerer && r.status !== 'cancelled' && (
                       <>
                         {' '}
                         <button className="btn ghost sm" type="button" onClick={() => onPanier(r.id)}>Panier</button>
                         {' '}
-                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'gratuites', reservationId: r.id })}>Gratuités</button>
+                        <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'gratuites', reservation: String(r.id) })}>Gratuités</button>
                         {' '}
-                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'affecter', reservationId: r.id })}>Affecter</button>
+                        <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'affecter', reservation: String(r.id) })}>Affecter</button>
                         {' '}
-                        <button className="btn ghost sm" type="button" onClick={() => onModale({ type: 'paiement', reservationId: r.id, paymentStatus: r.paymentStatus })}>Paiement</button>
+                        <button className="btn ghost sm" type="button" onClick={() => onEcran({ ecran: 'paiement', reservation: String(r.id) })}>Paiement</button>
                         {' '}
                         {r.commercialDocument
                           ? <span className="badge good">Devis</span>
-                          : <button className="btn primary sm" type="button" onClick={() => onModale({ type: 'facturer', reservationId: r.id })}>Facturer</button>}
+                          : <button className="btn primary sm" type="button" onClick={() => onEcran({ ecran: 'facturer', reservation: String(r.id) })}>Facturer</button>}
                         {r.status === 'option' && (
                           <>
                             {' '}
@@ -597,7 +656,8 @@ function FormGroupe({ initial, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre={initial ? 'Modifier le groupe' : 'Nouveau groupe'}>
+    <>
+      <h2>{initial ? 'Modifier le groupe' : 'Nouveau groupe'}</h2>
       <form onSubmit={soumettre}>
         <div className="field">
           <label htmlFor="g-label">Nom du groupe *</label>
@@ -634,7 +694,7 @@ function FormGroupe({ initial, onFermer, onValider }) {
           <button className="btn primary" type="submit" disabled={envoi}>{initial ? 'Enregistrer' : 'Créer'}</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -643,7 +703,11 @@ function FormMembre({ groupe, membreId, onFermer, onValider }) {
   const [lastName, setLastName] = useState('')
   const [category, setCategory] = useState('adult')
   const [envoi, setEnvoi] = useState(false)
-  const [chargement, setChargement] = useState(Boolean(membreId))
+  // ⚠ LA LECTURE A QUATRE ISSUES. Sur un échec, le formulaire s'ouvrait vide, catégorie « Adulte » —
+  // et l'enregistrer écrasait la vraie catégorie. L'adresse peut aussi désigner le participant d'un
+  // autre groupe. 'chargement' · 'lu' · 'introuvable' (404) · 'echec' · 'autre'.
+  const [lecture, setLecture] = useState(membreId ? 'chargement' : 'lu')
+  const idGroupe = idDe(groupe)
 
   useEffect(() => {
     if (!membreId) return
@@ -652,13 +716,15 @@ function FormMembre({ groupe, membreId, onFermer, onValider }) {
     api.membreGroupe(membreId)
       .then((m) => {
         if (!vivant) return
+        if (idDe(m.group) !== idGroupe) { setLecture('autre'); return }
         setFirstName(m.firstName || '')
         setLastName(m.lastName || '')
         setCategory(m.category || 'adult')
+        setLecture('lu')
       })
-      .finally(() => { if (vivant) setChargement(false) })
+      .catch((e) => { if (vivant) setLecture(e?.status === 404 ? 'introuvable' : 'echec') })
     return () => { vivant = false }
-  }, [membreId])
+  }, [membreId, idGroupe])
 
   async function soumettre(e) {
     e.preventDefault()
@@ -676,9 +742,18 @@ function FormMembre({ groupe, membreId, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre={membreId ? 'Modifier le participant' : 'Ajouter un participant'}>
-      {chargement ? (
+    <>
+      <h2>{membreId ? 'Modifier le participant' : 'Ajouter un participant'}</h2>
+      {lecture === 'chargement' ? (
         <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+      ) : lecture === 'echec' ? (
+        <div className="banner banner-error">Ce participant n’a pas pu être lu : le modifier maintenant écraserait ce qu’on n’a pas vu.</div>
+      ) : lecture !== 'lu' ? (
+        <div className="banner banner-warn">
+          {lecture === 'autre'
+            ? 'Ce participant appartient à un autre groupe que celui de l’adresse.'
+            : 'Ce participant n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
       ) : (
         <form onSubmit={soumettre}>
           {!membreId && (
@@ -705,7 +780,7 @@ function FormMembre({ groupe, membreId, onFermer, onValider }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -731,7 +806,8 @@ function FormReservation({ groupe, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Nouvelle réservation de groupe">
+    <>
+      <h2>Nouvelle réservation de groupe</h2>
       <form onSubmit={soumettre}>
         <p className="sub">Pour le groupe « {groupe?.label} ». La réservation part en option ; on l’affecte à un créneau ensuite.</p>
         <div className="field">
@@ -754,7 +830,7 @@ function FormReservation({ groupe, onFermer, onValider }) {
           <button className="btn primary" type="submit" disabled={envoi}>Créer</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -774,7 +850,8 @@ function FormAffecter({ creneaux, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Affecter à un créneau">
+    <>
+      <h2>Affecter à un créneau</h2>
       <form onSubmit={soumettre}>
         <div className="field">
           <label htmlFor="a-creneau">Créneau *</label>
@@ -790,7 +867,7 @@ function FormAffecter({ creneaux, onFermer, onValider }) {
           <button className="btn primary" type="submit" disabled={envoi || !creneau}>Affecter</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -809,7 +886,8 @@ function FormPaiement({ valeur, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="État de paiement">
+    <>
+      <h2>État de paiement</h2>
       <form onSubmit={soumettre}>
         <div className="field">
           <label htmlFor="p-statut">Paiement</label>
@@ -822,7 +900,7 @@ function FormPaiement({ valeur, onFermer, onValider }) {
           <button className="btn primary" type="submit" disabled={envoi}>Enregistrer</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -847,7 +925,8 @@ function FormFacture({ taux, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Facturer — générer un devis">
+    <>
+      <h2>Facturer — générer un devis</h2>
       <form onSubmit={soumettre}>
         <p className="sub">Le devis part au payeur du groupe et entre dans la chaîne devis → bon de commande → facture (NF525, comptabilité incluse).</p>
         <p className="sub">Si un panier est composé, laissez ces champs vides : le devis reprend le panier, chaque ligne avec sa TVA. Sinon, choisissez un taux (le prix par défaut est le tarif de l’activité).</p>
@@ -867,40 +946,24 @@ function FormFacture({ taux, onFermer, onValider }) {
           <button className="btn primary" type="submit" disabled={envoi}>Générer le devis</button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
-function DetailReservation({ reservationId, onFermer }) {
-  const [resa, setResa] = useState(null)
-  const [erreur, setErreur] = useState(null)
-
-  useEffect(() => {
-    let vivant = true
-    // GET item : la fiche complète d'une réservation.
-    api.reservationGroupe(reservationId)
-      .then((r) => { if (vivant) setResa(r) })
-      .catch((e) => { if (vivant) setErreur(e?.message || 'Lecture impossible.') })
-    return () => { vivant = false }
-  }, [reservationId])
-
+// La fiche d'une réservation : l'écran la lit et vérifie son groupe, ce composant l'affiche.
+function DetailReservation({ resa, creneaux }) {
   return (
-    <Modal open onClose={onFermer} titre="Réservation de groupe">
-      {erreur ? (
-        <p className="empty">{erreur}</p>
-      ) : !resa ? (
-        <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
-      ) : (
-        <div className="deflist">
-          <div><span>Statut</span><span>{badgeStatut(resa.status)}</span></div>
-          <div><span>Effectif</span><span>{resa.effectif}</span></div>
-          <div><span>Accompagnateurs</span><span>{resa.accompagnateurs}</span></div>
-          <div><span>Paiement</span><span>{PAIEMENTS[resa.paymentStatus] || resa.paymentStatus}</span></div>
-          <div><span>Créneau</span><span>{resa.creneau ? idDe(resa.creneau) : '—'}</span></div>
-          <div><span>Option jusqu’au</span><span>{resa.optionExpiresAt ? new Date(resa.optionExpiresAt).toLocaleDateString('fr-FR') : '—'}</span></div>
-        </div>
-      )}
-    </Modal>
+    <>
+      <h2>Réservation de groupe</h2>
+      <div className="deflist">
+        <div><span>Statut</span><span>{badgeStatut(resa.status)}</span></div>
+        <div><span>Effectif</span><span>{resa.effectif}</span></div>
+        <div><span>Accompagnateurs</span><span>{resa.accompagnateurs}</span></div>
+        <div><span>Paiement</span><span>{PAIEMENTS[resa.paymentStatus] || resa.paymentStatus}</span></div>
+        <div><span>Créneau</span><span>{resa.creneau ? creneauLabel(creneaux.find((c) => idDe(c) === idDe(resa.creneau)) || resa.creneau) : '—'}</span></div>
+        <div><span>Option jusqu’au</span><span>{resa.optionExpiresAt ? new Date(resa.optionExpiresAt).toLocaleDateString('fr-FR') : '—'}</span></div>
+      </div>
+    </>
   )
 }
 
@@ -913,7 +976,7 @@ function FormForfaits({ produits, taux, onFermer, onChange }) {
 
   const recharger = useCallback(async () => {
     setChargement(true)
-    try { setListe(membres(await api.groupProducts())) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+    try { setListe(membres(await api.groupProducts())) } catch (e) { setListe(null); setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
   }, [])
   useEffect(() => { recharger() }, [recharger])
 
@@ -928,7 +991,8 @@ function FormForfaits({ produits, taux, onFermer, onChange }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Forfaits groupe" taille="lg">
+    <>
+      <h2>Forfaits groupe</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {creation ? (
         <FormForfait
@@ -945,6 +1009,8 @@ function FormForfaits({ produits, taux, onFermer, onChange }) {
           </div>
           {chargement ? (
             <div className="center"><div className="spinner" /></div>
+          ) : liste === null ? (
+            <div className="banner banner-error">Les forfaits n’ont pas pu être lus : ce n’est pas la même chose que « aucun forfait ».</div>
           ) : liste.length === 0 ? (
             <p className="empty">Aucun forfait pour l’instant.</p>
           ) : (
@@ -968,7 +1034,7 @@ function FormForfaits({ produits, taux, onFermer, onChange }) {
           )}
         </>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -1182,7 +1248,7 @@ function FormContingents({ onFermer, onChange }) {
 
   const recharger = useCallback(async () => {
     setChargement(true)
-    try { setListe(membres(await api.gratuiteContingents())) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+    try { setListe(membres(await api.gratuiteContingents())) } catch (e) { setListe(null); setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
   }, [])
   useEffect(() => { recharger() }, [recharger])
 
@@ -1204,7 +1270,8 @@ function FormContingents({ onFermer, onChange }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Contingents de gratuité" taille="lg">
+    <>
+      <h2>Contingents de gratuité</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       <p className="sub">Des enveloppes de gratuités réutilisables (scolaires, partenaires…) qu'on accorde ensuite à une réservation depuis sa fiche « Gratuités ».</p>
       <form onSubmit={creer}>
@@ -1222,6 +1289,8 @@ function FormContingents({ onFermer, onChange }) {
       </form>
       {chargement ? (
         <div className="center"><div className="spinner" /></div>
+      ) : liste === null ? (
+        <div className="banner banner-error">Les contingents n’ont pas pu être lus : ce n’est pas la même chose que « aucun contingent ».</div>
       ) : liste.length === 0 ? (
         <p className="empty">Aucun contingent.</p>
       ) : (
@@ -1245,9 +1314,9 @@ function FormContingents({ onFermer, onChange }) {
         </table>
       )}
       <div className="modal-actions">
-        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+        <button className="btn ghost" type="button" onClick={onFermer}>Retour aux groupes</button>
       </div>
-    </Modal>
+    </>
   )
 }
 
@@ -1262,7 +1331,7 @@ function FormGratuites({ reservationId, contingents, onFermer, onChange }) {
 
   const recharger = useCallback(async () => {
     setChargement(true)
-    try { setListe(membres(await api.gratuitesReservation(reservationId))) } catch (e) { setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
+    try { setListe(membres(await api.gratuitesReservation(reservationId))) } catch (e) { setListe(null); setErreur(e?.message || 'Lecture impossible.') } finally { setChargement(false) }
   }, [reservationId])
   useEffect(() => { recharger() }, [recharger])
 
@@ -1286,7 +1355,8 @@ function FormGratuites({ reservationId, contingents, onFermer, onChange }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Gratuités de la réservation" taille="lg">
+    <>
+      <h2>Gratuités de la réservation</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       <p className="sub">Les entrées gratuites sortent du décompte payant du devis.</p>
       <form onSubmit={accorder}>
@@ -1314,6 +1384,8 @@ function FormGratuites({ reservationId, contingents, onFermer, onChange }) {
       <h4>Gratuités accordées</h4>
       {chargement ? (
         <div className="center"><div className="spinner" /></div>
+      ) : liste === null ? (
+        <div className="banner banner-error">Les gratuités de cette réservation n’ont pas pu être lues : ce n’est pas la même chose que « aucune gratuité ».</div>
       ) : liste.length === 0 ? (
         <p className="empty">Aucune gratuité accordée.</p>
       ) : (
@@ -1332,8 +1404,8 @@ function FormGratuites({ reservationId, contingents, onFermer, onChange }) {
         </table>
       )}
       <div className="modal-actions">
-        <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+        <button className="btn ghost" type="button" onClick={onFermer}>Retour au groupe</button>
       </div>
-    </Modal>
+    </>
   )
 }
