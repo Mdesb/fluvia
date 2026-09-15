@@ -119,6 +119,41 @@ versionnée. Elles ne pèsent pas la même chose :
 **Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
 `reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
 
+> **Complété le 15/09 — ce point a deux moitiés, et une seule était écrite.**
+>
+> **a) Autoriser la tâche ne répare pas le passé.** `reporting:agreger` accepte `--depuis` et
+> `--jusqu-a`, **par défaut aujourd'hui**, et `ScheduleCatalog` l'inscrit **sans option**. L'ajouter
+> à `TACHES_AUTORISEES` empêche donc les trous à venir, et laisse le trou existant en place —
+> définitivement, puisque rien d'autre ne le comble.
+>
+> **b) Le rattrapage est possible et sans risque.** Un jour passé est recalculable : l'agrégateur
+> passe la période à ses projections (`caEncaisse`, `frequentationCumulee`), et l'écriture est un
+> **upsert idempotent** via `Mesure.cleAgregation`. La commande peut donc être rejouée :
+>
+>     reporting:agreger --depuis=2026-09-05 --jusqu-a=<aujourd'hui>
+>
+> **c) ⚠ Et il y a de la vraie donnée à récupérer.** Mesuré le 15/09 sur la préproduction :
+>
+> | | |
+> |---|---|
+> | ventes depuis le 05/09, **invisibles** du module | **40**, sur 8 jours et 2 sites |
+> | passages d'accès sur la même fenêtre | 0 |
+> | *témoin* : ventes dans la fenêtre déjà agrégée (25/08 → 04/09) | 28 |
+>
+> Le module d'analyse est donc aveugle à **plus de ventes qu'il n'en montre**. Et le témoin des 28
+> prouve que l'agrégation lit bien cette source quand elle tourne — ce n'est pas une hypothèse.
+>
+> ⚠ **J'ai failli conclure l'inverse.** Ma première lecture ne regardait que `acces_passage`, qui
+> s'arrête au 02/09 : j'en avais déduit qu'un rattrapage remplirait le trou de faux zéros, et donc
+> qu'il valait mieux ne rien faire. Les ventes démentent. Une conclusion tirée d'**une** des deux
+> sources de l'indicateur valait exactement le contraire de la bonne.
+>
+> **Réserve, à écrire si le rattrapage est lancé** : la fréquentation sortira à **0** pour tout jour
+> après le 02/09, faute de passages en base. C'est arithmétiquement juste et ça ne dit rien de la
+> fréquentation réelle — c'est le générateur de données de la préproduction qui s'est arrêté, pas
+> les visiteurs. Un `0` de fréquentation sur ces jours ne doit pas se lire comme un fait métier.
+
+
 ### 2. `AxeAnalytique` sert-il encore à quelque chose ?
 
 Six axes en base, alimentés par les fixtures, **consommés par rien** : ni écran, ni moteur
