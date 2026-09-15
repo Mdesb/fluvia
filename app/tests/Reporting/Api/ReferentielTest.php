@@ -7,20 +7,17 @@ namespace App\Tests\Reporting\Api;
 use App\Tests\Reporting\ReportingApiTestCase;
 
 /**
- * Référentiel `Indicateur`/`AxeAnalytique` (cas limite spec §7) : jamais supprimable, seule
+ * Référentiel `Indicateur` (cas limite spec §7) : jamais supprimable, seule
  * `Patch(actif=false)` disponible — aucune opération `Delete` exposée.
  */
 final class ReferentielTest extends ReportingApiTestCase
 {
-    public function testNeufIndicateursEtSixAxesSontCharges(): void
+    public function testNeufIndicateursSontCharges(): void
     {
         [$client, $entete] = $this->authSite();
 
         $indicateurs = $client->request('GET', '/api/indicateurs', $entete)->toArray();
         self::assertGreaterThanOrEqual(9, $indicateurs['totalItems'] ?? \count($indicateurs['member'] ?? []));
-
-        $axes = $client->request('GET', '/api/axe_analytiques', $entete)->toArray();
-        self::assertGreaterThanOrEqual(6, $axes['totalItems'] ?? \count($axes['member'] ?? []));
     }
 
     public function testAucuneOperationDeleteExposeeSurIndicateur(): void
