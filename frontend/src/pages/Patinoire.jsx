@@ -109,22 +109,26 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
 
   // ⚠ LA LOCATION RENDUE SE LIT PAR SON IDENTIFIANT : la liste est bornée à 100. Seul un 404 dit
   // « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
-  const [locationRendue, setLocationRendue] = useState(null)
-  const [chargementLocation, setChargementLocation] = useState(false)
-  const [lectureLocationEchouee, setLectureLocationEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureLocation, setLectureLocation] = useState(null)
+  const cleLocation = params.retour ? `${params.retour}|${etabActif}` : null
   useEffect(() => {
-    const id = params.retour
-    if (!id) { setLocationRendue(null); setLectureLocationEchouee(false); return undefined }
+    if (!(params.retour)) { setLectureLocation(null); return undefined }
+    const cle = `${params.retour}|${etabActif}`
     let vivant = true
-    setChargementLocation(true)
-    setLectureLocationEchouee(false)
-    setLocationRendue(null)
-    api.patinoireLocation(id)
-      .then((l) => { if (vivant) setLocationRendue(l) })
-      .catch((e) => { if (vivant) setLectureLocationEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementLocation(false) })
+    api.patinoireLocation(params.retour)
+      .then((v) => { if (vivant) setLectureLocation({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureLocation({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.retour, etabActif])
+  const lectureLocationCourante = lectureLocation?.cle === cleLocation ? lectureLocation : null
+  const chargementLocation = cleLocation !== null && lectureLocationCourante === null
+  const locationRendue = lectureLocationCourante?.valeur ?? null
+  const lectureLocationEchouee = lectureLocationCourante?.echouee ?? false
 
   // La liste ne sert qu'à ceux qui peuvent louer : la charger pour les autres serait un appel de plus
   // à chaque ouverture de l'écran, pour un menu qu'ils ne verront jamais.

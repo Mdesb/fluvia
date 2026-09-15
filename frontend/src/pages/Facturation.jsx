@@ -152,22 +152,26 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // ⚠ LA FACTURE À ENCAISSER SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est
   // filtrée par statut, et un lien vers une facture hors du filtre ne s'y retrouverait pas.
   // Seul un 404 dit « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
-  const [factureReglee, setFactureReglee] = useState(null)
-  const [chargementReglement, setChargementReglement] = useState(false)
-  const [erreurReglement, setErreurReglement] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureReglement, setLectureReglement] = useState(null)
+  const cleReglement = params.reglement ? params.reglement : null
   useEffect(() => {
-    const id = params.reglement
-    if (!id) { setFactureReglee(null); setErreurReglement(false); return undefined }
+    if (!(params.reglement)) { setLectureReglement(null); return undefined }
+    const cle = params.reglement
     let vivant = true
-    setChargementReglement(true)
-    setErreurReglement(false)
-    setFactureReglee(null)
-    api.facture(id)
-      .then((f) => { if (vivant) setFactureReglee(f) })
-      .catch((e) => { if (vivant) setErreurReglement(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementReglement(false) })
+    api.facture(params.reglement)
+      .then((v) => { if (vivant) setLectureReglement({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureReglement({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.reglement])
+  const lectureReglementCourante = lectureReglement?.cle === cleReglement ? lectureReglement : null
+  const chargementReglement = cleReglement !== null && lectureReglementCourante === null
+  const factureReglee = lectureReglementCourante?.valeur ?? null
+  const erreurReglement = lectureReglementCourante?.echouee ?? false
 
   async function agir(fn, message) {
     setErreur(null)

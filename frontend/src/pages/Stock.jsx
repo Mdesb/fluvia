@@ -122,22 +122,26 @@ export default function Stock({ etabActif, droits }) {
 
   // ⚠ L'ARTICLE CORRIGÉ SE LIT PAR SON IDENTIFIANT : la liste est bornée à 200, et un site en
   // compte davantage. Seul un 404 dit « il n'existe pas » ; tout le reste est une lecture échouée.
-  const [articleCorrige, setArticleCorrige] = useState(null)
-  const [chargementArticle, setChargementArticle] = useState(false)
-  const [lectureArticleEchouee, setLectureArticleEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureArticle, setLectureArticle] = useState(null)
+  const cleArticle = params.corriger ? `${params.corriger}|${etabActif}` : null
   useEffect(() => {
-    const id = params.corriger
-    if (!id) { setArticleCorrige(null); setLectureArticleEchouee(false); return undefined }
+    if (!(params.corriger)) { setLectureArticle(null); return undefined }
+    const cle = `${params.corriger}|${etabActif}`
     let vivant = true
-    setChargementArticle(true)
-    setLectureArticleEchouee(false)
-    setArticleCorrige(null)
-    api.stockArticle(id)
-      .then((a) => { if (vivant) setArticleCorrige(a) })
-      .catch((e) => { if (vivant) setLectureArticleEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementArticle(false) })
+    api.stockArticle(params.corriger)
+      .then((v) => { if (vivant) setLectureArticle({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureArticle({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.corriger, etabActif])
+  const lectureArticleCourante = lectureArticle?.cle === cleArticle ? lectureArticle : null
+  const chargementArticle = cleArticle !== null && lectureArticleCourante === null
+  const articleCorrige = lectureArticleCourante?.valeur ?? null
+  const lectureArticleEchouee = lectureArticleCourante?.echouee ?? false
 
   // Le stock d'un article = la somme de ce qui reste dans ses lots.
   const restantParArticle = useMemo(() => {
