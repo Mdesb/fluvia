@@ -142,6 +142,23 @@ ici pour qu'il ne soit pas subi par défaut.
 > `MAILER_DSN` sera un autre fait, à vérifier avant d'y autoriser la commande — pas à supposer
 > depuis celui-ci.
 >
+> **Et la maison a déjà le motif honnête — il n'est pas dans mon module.** La famille « appelle un
+> mailer ET écrit un statut d'envoi » a exactement **deux** membres, mesurés sur tout `app/src`
+> (16 fichiers appellent un mailer, 15 écrivent un statut d'envoi, intersection = 2) :
+>
+> | fichier | ce qu'il fait |
+> |---|---|
+> | `Reporting/Command/ExecuterRapportsCommand.php` | écrit `Envoye` dès qu'aucune exception n'est levée |
+> | `Marketing/State/SendCampaignProcessor.php` | renvoie **`'envoiReelDisponible' => false`** — il ne prétend pas avoir envoyé |
+>
+> Le second porte même la discipline jumelle, dans un commentaire : « le détail par issue, jamais un
+> total : *310 exclus faute de consentement* dit qu'il faut travailler le recueil, *930 envoyés* ne
+> dit rien. »
+>
+> Cela ouvre une **troisième voie**, que je n'ai pas eu à concevoir puisqu'elle tourne déjà
+> ailleurs : autoriser la commande **et** déclarer l'envoi indisponible tant que le transport est
+> nul — plutôt que d'attendre un transport réel, ou d'enregistrer des « envoyés » faux.
+>
 > *Ce qui est vérifié, en revanche : la commande elle-même fonctionne.*
 > `app/tests/Reporting/Command/ExecuterRapportsCommandTest.php` — 2 tests, 21 assertions, verts sur
 > `main` le 15/09, dont le chemin `Envoye` et le cas d'un rapport suspendu. Le risque n'est pas
