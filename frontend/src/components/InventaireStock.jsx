@@ -25,13 +25,12 @@ import { confirmer } from './Confirmation.jsx'
 // des groupes `article:read`. On recoupe donc avec la liste d'articles déjà chargée par l'écran
 // parent — pas un appel de plus, et le nom vaut mieux qu'un identifiant.
 
-export default function InventaireStock({ articles, droits, etabActif, onErreur, onFait }) {
+export default function InventaireStock({ articles, droits, etabActif, onErreur, onFait, params = {}, majParams }) {
   // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
   const [inventairesLus, setInventairesLus] = useState(null)
   const inventaires = inventairesLus || []
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
-  const [lancement, setLancement] = useState(false)
 
   const peutInventorier = aUnDesDroits(droits, ['stock.inventorier', 'stock.gerer'])
   const peutValiderEcart = aUnDesDroits(droits, ['stock.valider_ecart', 'stock.gerer'])
@@ -78,6 +77,47 @@ export default function InventaireStock({ articles, droits, etabActif, onErreur,
     )
   }
 
+  // ── LANCER UN INVENTAIRE, EN ÉCRAN ─────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND : le droit
+  // d'inventorier, une liste d'inventaires LUE — sans elle on ne sait pas si un autre est ouvert —
+  // et aucun inventaire ouvert.
+  if (params.inventaire) {
+    const fermerLancement = () => majParams({ inventaire: '' }, { pousser: true })
+    if (!peutInventorier) {
+      return (
+        <div className="banner banner-warn">
+          Lancer un inventaire demande le droit d’inventorier, que ce compte n’a pas.
+        </div>
+      )
+    }
+    if (inventairesLus === null) {
+      return (
+        <div className="banner banner-error">
+          La liste des inventaires n’a pas pu être lue : cet écran ne sait pas si un inventaire est
+          déjà ouvert, et n’en lance donc pas un autre.
+        </div>
+      )
+    }
+    if (enCours) {
+      return (
+        <div className="banner banner-warn">
+          Un inventaire est déjà ouvert depuis le {dateHeureFr(enCours.dateLancement)} : il se clôture
+          avant qu’on en lance un autre.
+        </div>
+      )
+    }
+    return (
+      <LancementModal
+        open
+        articles={articles}
+        onClose={fermerLancement}
+        onFait={(m) => { fermerLancement(); recharger(); onFait(m) }}
+        onErreur={onErreur}
+      />
+    )
+  }
+
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -87,7 +127,7 @@ export default function InventaireStock({ articles, droits, etabActif, onErreur,
         </span>
         {peutInventorier && !enCours && (
           <div className="r">
-            <button className="btn primary sm" type="button" onClick={() => setLancement(true)}>
+            <button className="btn primary sm" type="button" onClick={() => majParams({ inventaire: 'lancer' }, { pousser: true })}>
               ＋ Lancer un inventaire
             </button>
           </div>
@@ -123,13 +163,6 @@ export default function InventaireStock({ articles, droits, etabActif, onErreur,
         )}
       </div>
 
-      <LancementModal
-        open={lancement}
-        articles={articles}
-        onClose={() => setLancement(false)}
-        onFait={(m) => { setLancement(false); recharger(); onFait(m) }}
-        onErreur={onErreur}
-      />
     </section>
   )
 }
@@ -358,8 +391,11 @@ function LancementModal({ open, articles, onClose, onFait, onErreur }) {
     setChoisis((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Lancer un inventaire" taille="lg">
+    <>
+      <h2>Lancer un inventaire</h2>
       <form onSubmit={envoyer}>
         <p style={{ marginTop: 0 }}>
           Le logiciel fige ce qu'il croit avoir, vous comptez ce qu'il y a vraiment, et vous corrigez
@@ -437,7 +473,7 @@ function LancementModal({ open, articles, onClose, onFait, onErreur }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

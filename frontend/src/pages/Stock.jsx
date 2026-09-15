@@ -39,7 +39,8 @@ import { useEtatUrl } from '../api/url.js'
 // pourquoi. Le jour où le champ serveur existe, l'agrégation et ce garde-fou disparaissent ensemble.
 
 // `corriger` : l'identifiant de l'article dont on corrige le stock.
-const DEFAUTS_URL = { corriger: '' }
+// `inventaire` : `lancer` quand on lance un inventaire.
+const DEFAUTS_URL = { corriger: '', inventaire: '' }
 
 export default function Stock({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('stock', DEFAUTS_URL)
@@ -171,6 +172,44 @@ export default function Stock({ etabActif, droits }) {
     setSucces(message)
     setErreur(null)
     await recharger()
+  }
+
+  // ── LANCER UN INVENTAIRE, EN ÉCRAN ─────────────────────────────────────────────────────────
+  //
+  // La page cède toute la place à InventaireStock : c'est lui qui lit les inventaires, donc lui
+  // qui sait si un autre est déjà ouvert, et lui qui reprend les conditions du bouton.
+  //
+  // ⚠ LE PÉRIMÈTRE SE PRÉSENTE SUR LA LISTE DES ARTICLES. Illisible, elle ferait annoncer « les 0
+  // articles en service » : on le dit au lieu d'ouvrir le formulaire.
+  if (params.inventaire) {
+    const fermerInventaire = () => majParams({ inventaire: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerInventaire}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au stock
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : articles === null ? (
+          <div className="banner banner-error">
+            La liste des articles n’a pas pu être lue : le périmètre d’un inventaire ne peut pas être
+            présenté, et on ne lance pas un comptage sur une liste qu’on n’a pas.
+          </div>
+        ) : (
+          <InventaireStock
+            articles={articles}
+            droits={droits}
+            etabActif={etabActif}
+            onErreur={setErreur}
+            onFait={apres}
+            params={params}
+            majParams={majParams}
+          />
+        )}
+      </div>
+    )
   }
 
   // ── CORRIGER UN STOCK, EN ÉCRAN ────────────────────────────────────────────────────────────
@@ -317,6 +356,8 @@ export default function Stock({ etabActif, droits }) {
             etabActif={etabActif}
             onErreur={setErreur}
             onFait={apres}
+            params={params}
+            majParams={majParams}
           />
 
           {/* ⚠ `articles || []` et non `articles` : la liste vaut `null` tant que la lecture
