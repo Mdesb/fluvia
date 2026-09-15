@@ -85,6 +85,11 @@ final class ProjectionAccesDoctrine implements ProjectionAccesInterface
         return $resultat;
     }
 
+    public function etablissementSansControleur(Uuid $etablissementId): bool
+    {
+        return $this->em->getRepository(Controleur::class)->count(['etablissement' => $etablissementId]) === 0;
+    }
+
     public function etablissementHorsLigne(Uuid $etablissementId, int $seuilMinutes): bool
     {
         /** @var list<Controleur> $controleurs */
