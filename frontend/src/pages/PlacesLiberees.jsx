@@ -8,6 +8,7 @@ import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
 import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 import { useEtatUrl } from '../api/url.js'
+import { activiteDuCreneau, ressourceDuCreneau } from '../api/slot-label.js'
 
 // PLACES LIBÉRÉES — sept routes servies, aucun écran, et un mécanisme qui a tourné dans le vide.
 //
@@ -189,8 +190,11 @@ export default function PlacesLiberees({ etabActif, droits }) {
     if (!id) return null
     const c = parCreneau[String(id)]
     if (!c) return `créneau ${String(id).slice(0, 8)}…`
-    const ressource = parRessource[idDe(c.ressource)] || 'ressource inconnue'
-    return `${dateHeureFr(c.debut)} → ${dateHeureFr(c.fin)} · ${ressource}`
+    // Activité et ressource embarquées dans le créneau (règles : api/slot-label.js). Une ressource
+    // qu'on ne sait pas nommer se cherche dans la liste lue ; introuvable, elle se dit inconnue.
+    const activite = activiteDuCreneau(c)
+    const ressource = ressourceDuCreneau(c) ?? (parRessource[idDe(c.ressource)] || 'ressource inconnue')
+    return [`${dateHeureFr(c.debut)} → ${dateHeureFr(c.fin)}`, activite, ressource].filter(Boolean).join(' · ')
   }
 
   function libelleClient(id) {
