@@ -43,7 +43,6 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [approbation, setApprobation] = useState(null)
   const [contestation, setContestation] = useState(null)
   // La facture en cours de correction. `null` = aucune.
   const [correction, setCorrection] = useState(null)
@@ -92,23 +91,20 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   // Avec lui, la lecture rangée ne correspond plus : l'écran charge et relit.
   // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
   // ⚠ L'échec d'ENVOI a sa propre bannière : celle de la liste n'est pas rendue sous l'écran.
+  // La lecture elle-même est dans `useFactureParId` (bas du fichier) : l'approbation lit de la même
+  // façon, et deux copies de ce mécanisme auraient divergé au premier correctif.
   const [erreurAvoir, setErreurAvoir] = useState(null)
-  const [lectureAvoir, setLectureAvoir] = useState(null)
-  const cleAvoir = params.avoir ? `${params.avoir}|${etabActif}` : null
-  useEffect(() => {
-    setErreurAvoir(null)
-    if (!(params.avoir)) { setLectureAvoir(null); return undefined }
-    const cle = `${params.avoir}|${etabActif}`
-    let vivant = true
-    api.factureFournisseur(params.avoir)
-      .then((v) => { if (vivant) setLectureAvoir({ cle, valeur: v, echouee: false }) })
-      .catch((e) => { if (vivant) setLectureAvoir({ cle, valeur: null, echouee: e?.status !== 404 }) })
-    return () => { vivant = false }
-  }, [params.avoir, etabActif])
-  const lectureAvoirCourante = lectureAvoir?.cle === cleAvoir ? lectureAvoir : null
-  const chargementAvoir = cleAvoir !== null && lectureAvoirCourante === null
-  const factureAvoir = lectureAvoirCourante?.valeur ?? null
-  const lectureAvoirEchouee = lectureAvoirCourante?.echouee ?? false
+  useEffect(() => { setErreurAvoir(null) }, [params.avoir, etabActif])
+  const { chargement: chargementAvoir, facture: factureAvoir, echouee: lectureAvoirEchouee } = useFactureParId(params.avoir, etabActif)
+
+  // ⚠ L'échec d'APPROBATION a sa bannière dans l'écran : celle de la liste n'y est pas rendue.
+  const [erreurApprobation, setErreurApprobation] = useState(null)
+  useEffect(() => { setErreurApprobation(null) }, [params.approbation, etabActif])
+  const {
+    chargement: chargementApprobation,
+    facture: factureApprobation,
+    echouee: lectureApprobationEchouee,
+  } = useFactureParId(params.approbation, etabActif)
 
   async function annuler(f) {
     if (
@@ -185,6 +181,66 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
     return (
       <>
         <button className="btn ghost sm" type="button" onClick={fermerAvoir}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux factures
+        </button>
+        {contenu}
+      </>
+    )
+  }
+
+  // ── EXAMINER ET APPROUVER, EN ÉCRAN ─────────────────────────────────────────────────────────
+  //
+  // Posé avant l'attente de la liste, comme l'avoir : il lit sa facture lui-même.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES DEUX CONDITIONS DU BOUTON — droit d'approuver, facture en brouillon —
+  // ET L'ÉCRAN LES REPREND. Un lien copié avant l'approbation ou l'annulation ouvrirait sinon un
+  // bouton « Approuver le paiement » sur une facture que le serveur refuserait.
+  if (params.approbation) {
+    const fermerApprobation = () => majParams({ approbation: '' }, { pousser: true })
+    const f = factureApprobation
+    let contenu
+    if (!peutApprouver) {
+      contenu = (
+        <div className="banner banner-warn">
+          Examiner et approuver une facture demande le droit d’approuver les factures fournisseur, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargementApprobation) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureApprobationEchouee
+            ? 'Cette facture fournisseur n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture fournisseur n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (!A_TRAITER.includes(f.status)) {
+      contenu = (
+        <div className="banner banner-warn">
+          La facture {f.supplierInvoiceNumber || ''} n’est plus à approuver ({mot(f.status)}) : seule une
+          facture en brouillon s’examine et s’approuve.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreurApprobation && <div className="banner banner-error">{erreurApprobation}</div>}
+          <ApprobationFacture
+            key={params.approbation}
+            facture={f}
+            fournisseurs={fournisseurs}
+            onClose={fermerApprobation}
+            onFait={async (message) => { fermerApprobation(); setSucces(message); await recharger() }}
+            onErreur={setErreurApprobation}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerApprobation}
           style={{ marginBottom: 'var(--esp-large)' }}>
           ← Retour aux factures
         </button>
@@ -272,7 +328,7 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
         actions={(f) => (
           <>
             {peutApprouver && (
-              <button className="btn primary sm" type="button" onClick={() => setApprobation(f)}>
+              <button className="btn primary sm" type="button" onClick={() => majParams({ approbation: String(f.id) }, { pousser: true })}>
                 Examiner et approuver
               </button>
             )}
@@ -340,13 +396,6 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
         onErreur={setErreur}
       />
 
-      <ApprobationModal
-        facture={approbation}
-        fournisseurs={fournisseurs}
-        onClose={() => setApprobation(null)}
-        onFait={(m) => { setApprobation(null); setSucces(m); recharger() }}
-        onErreur={setErreur}
-      />
 
 
       <MotifModal
@@ -825,9 +874,12 @@ function tonStatut(s) {
 }
 
 // L'approbation charge le rapprochement AVANT d'afficher le bouton.
-function ApprobationModal({ facture, fournisseurs = [], onClose, onFait, onErreur }) {
+function ApprobationFacture({ facture, fournisseurs = [], onClose, onFait, onErreur }) {
   const [ecarts, setEcarts] = useState(null)
-  const [chargement, setChargement] = useState(false)
+  // ⚠ LE RAPPROCHEMENT DÉMARRE « EN LECTURE ». À `false`, le premier rendu — avant que l'effet ne
+  // lance la lecture — affichait « Le rapprochement n'a pas pu être calculé » et un bouton
+  // « Approuver » actif, le temps d'une trame.
+  const [chargement, setChargement] = useState(true)
   const [enCours, setEnCours] = useState(false)
 
   useEffect(() => {
@@ -856,7 +908,8 @@ function ApprobationModal({ facture, fournisseurs = [], onClose, onFait, onErreu
   const depasses = (ecarts || []).filter((e) => e.thresholdExceeded)
 
   return (
-    <Modal open={!!facture} onClose={onClose} titre="Examiner et approuver" taille="lg">
+    <>
+      <h2>Examiner et approuver</h2>
       {facture && (
         <>
           <p style={{ marginTop: 0 }}>
@@ -927,14 +980,14 @@ function ApprobationModal({ facture, fournisseurs = [], onClose, onFait, onErreu
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-            <button className="btn" type="button" onClick={onClose}>Fermer</button>
+            <button className="btn" type="button" onClick={onClose}>Retour aux factures</button>
             <button className="btn primary" type="button" disabled={enCours || chargement} onClick={approuver}>
               {enCours ? 'Approbation…' : 'Approuver le paiement'}
             </button>
           </div>
         </>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -1223,4 +1276,31 @@ function CorrectionFactureModal({ facture, fournisseurs, onClose, onFait, onErre
       </div>
     </Modal>
   )
+}
+
+// ── UNE FACTURE D'ÉCRAN SE LIT PAR SON IDENTIFIANT ────────────────────────────────────────────
+//
+// Pour l'avoir comme pour l'approbation. La liste est bornée à 200, et un lien ne doit pas en
+// dépendre ; seul un 404 dit « elle n'existe pas », tout le reste est une lecture qui a échoué.
+// « Pas encore lu » se DÉDUIT de la clé (#172) ; la clé porte l'établissement, pour qu'une bascule
+// ne laisse pas la facture d'un site sous un autre ; un identifiant vide oublie la lecture, pour
+// qu'un écran rouvert relise au lieu de montrer l'état d'avant l'action.
+function useFactureParId(id, etabActif) {
+  const [lecture, setLecture] = useState(null)
+  const cle = id ? `${id}|${etabActif}` : null
+  useEffect(() => {
+    if (!id) { setLecture(null); return undefined }
+    const cleLue = `${id}|${etabActif}`
+    let vivant = true
+    api.factureFournisseur(id)
+      .then((v) => { if (vivant) setLecture({ cle: cleLue, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLecture({ cle: cleLue, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [id, etabActif])
+  const courante = lecture?.cle === cle ? lecture : null
+  return {
+    chargement: cle !== null && courante === null,
+    facture: courante?.valeur ?? null,
+    echouee: courante?.echouee ?? false,
+  }
 }
