@@ -929,6 +929,8 @@ export const api = {
   // abonnements de l'ecran, jamais avec cette reponse.
   echeancesSepaSport: (params = {}) =>
     request('/api/echeance_sepas', { query: { itemsPerPage: 200, ...params } }),
+  // Une échéance par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  echeanceSepa: (id) => request(`/api/echeance_sepas/${id}`),
   // LE MOTIF EST EXIGE PAR LE SERVEUR : blanc ou vide, il rend 422. Ce n'est pas de la
   // bureaucratie — une echeance annulee est une somme que le club n'encaissera jamais, et la seule
   // question posee six mois plus tard sera « pourquoi ». Operation SUR MESURE, donc pas de
@@ -2622,6 +2624,8 @@ export const api = {
     request(`/api/personnel/affectations/${id}/annuler`, { method: 'POST', body: {} }),
   creneauxTravail: (params) =>
     request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  // Un créneau par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  creneauTravail: (id) => request(`/api/creneau_travails/${id}`),
   creerCreneauTravail: (corps) =>
     request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
   annulerCreneauTravail: (id) =>

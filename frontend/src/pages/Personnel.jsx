@@ -88,14 +88,14 @@ function etatQualification(r) {
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. La fiche vit dans un composant
 // que seul l'onglet « Employés » monte : sans le paramètre `tab`, un F5 sur `?employe=…`
 // retomberait sur un onglet qui ne la rend pas.
-const DEFAUTS_URL = { tab: 'employes', employe: '', nouvel: '', badge: '' }
+const DEFAUTS_URL = { tab: 'employes', employe: '', nouvel: '', badge: '', creneau: '' }
 
 export default function Personnel({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('personnel', DEFAUTS_URL)
   const sousOnglet = params.tab
-  const setSousOnglet = (v) => majParams({ tab: v, employe: '', nouvel: '', badge: '' })
+  const setSousOnglet = (v) => majParams({ tab: v, employe: '', nouvel: '', badge: '', creneau: '' })
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
-  const ecranOuvert = Boolean(params.employe || params.nouvel || params.badge)
+  const ecranOuvert = Boolean(params.employe || params.nouvel || params.badge || params.creneau)
 
   return (
     <div className="view">
@@ -137,7 +137,7 @@ export default function Personnel({ etabActif, droits = [] }) {
           faut couvrir, le roster dit si ça l'est. Sans le premier, le second ne peut rien
           affirmer — il comparait un besoin qu'aucun écran ne savait exprimer. */}
       {sousOnglet === 'planning' && (
-        <PlanningTravail etabActif={etabActif} droits={droits} />
+        <PlanningTravail etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'roster' && (
