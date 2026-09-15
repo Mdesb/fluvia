@@ -106,7 +106,7 @@ ici pour qu'il ne soit pas subi par défaut.
 > | ~~`finance:treasury:suggerer-rapprochements`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 > | ~~`finance:treasury:detecter-ecarts`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 >
-> #### ⚠ « Autorisée dans le fichier » n'est pas « tourne » — mesuré le 15/09 à 16h
+> #### ⚠ « Autorisée dans le fichier » n'est pas « tourne » — mesuré le 15/09 à **14h50**
 >
 > Les trois commandes de trésorerie sont dans `TACHES_AUTORISEES` depuis #193. Elles ne
 > tournent pourtant pas, pour **deux** raisons distinctes, et l'ordonnanceur les crie
@@ -128,6 +128,29 @@ ici pour qu'il ne soit pas subi par défaut.
 >
 > **Donc l'arbitrage est rendu, et son effet ne l'est pas.** Le registre aurait été faux dans
 > un sens en disant « à trancher », et faux dans l'autre en disant « autorisée » tout court.
+>
+> ##### ⚠ Rectifications de ce bloc, le même soir à 20h22
+>
+> **L'heure était fausse.** « 16h » était une estimation, pas une lecture : le conteneur a
+> démarré à **14h32** locales, `RestartCount 0`, et affichait « Up 18 minutes » quand je
+> l'ai lu — donc **14h50**. Une mesure datée d'une heure qu'elle n'a pas ne peut pas être
+> refaite, et c'est tout ce qu'on demande à une mesure consignée.
+>
+> **Et je n'ai pas établi que la liste figée soit la cause.** Les traces portent
+> `ok finance:treasury:suggerer-rapprochements` : **une des trois a tourné**, alors qu'elle
+> n'est pas dans la liste figée de 17. Il y a donc **deux portes distinctes** — la liste
+> blanche du shell, et le catalogue applicatif que lit `platform:scheduler:run` — et je ne
+> sais pas laquelle gouverne une tâche cataloguée. Le point 1 ci-dessus décrit donc un
+> **fait mesuré** (la liste portée vaut 17, le fichier 20) et non un mécanisme établi.
+>
+> **Un piège de lecture, pour la prochaine fois.** `docker logs --tail 400` ne montrait plus
+> aucune ligne de divergence, et j'ai failli conclure qu'elle avait cessé. Elle n'est
+> imprimée **qu'au changement** : 9 fois sur toute la vie du conteneur, `14 vs 15`, puis
+> `16 vs 17`, puis `17 vs 20` — la dernière étant toujours vraie. **Une absence dans un
+> `tail` n'est pas une absence.**
+>
+> Ce qui reste vrai sans réserve, et remesuré à 20h22 : `MAILER_DSN=null://null`, et la
+> garde D109 retient encore `verifier-seuils` et `detecter-ecarts`.
 >
 > ⚠ `finance:treasury` et `infra/` ne sont pas mon périmètre : **mesuré et signalé, non
 > corrigé**. Je n'ai redémarré aucun conteneur et levé aucune garde.
