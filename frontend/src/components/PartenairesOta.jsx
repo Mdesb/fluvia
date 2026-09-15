@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
@@ -21,8 +21,15 @@ const PARTENAIRE_NOUVEAU = Object.freeze({ nom: '', vitrine: '', tarifNet: '0.00
 
 export default function PartenairesOta({ etabActif, droits = [], params = {}, majParams }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
-  const [partenaires, setPartenaires] = useState(null)
-  const [vitrines, setVitrines] = useState(null)
+  // ⚠ UNE LISTE EST LUE POUR UN ÉTABLISSEMENT (même défaut qu'AudioguidesMusee) : elle garde
+  // l'établissement pour lequel elle a été lue, une réponse périmée est ignorée, et une liste d'un
+  // autre établissement compte comme « on lit ».
+  const [lecturePartenaires, setLecturePartenaires] = useState({ etab: null, lignes: null })
+  const [lectureVitrines, setLectureVitrines] = useState({ etab: null, lignes: null })
+  const etabCourant = useRef(etabActif)
+  etabCourant.current = etabActif
+  const partenaires = lecturePartenaires.etab === etabActif ? lecturePartenaires.lignes : null
+  const vitrines = lectureVitrines.etab === etabActif ? lectureVitrines.lignes : null
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
@@ -33,10 +40,11 @@ export default function PartenairesOta({ etabActif, droits = [], params = {}, ma
   const peutGerer = aLeDroit(droits, 'boutique.gerer_connecteur_ota')
 
   function charger() {
-    setPartenaires(null)
+    const etab = etabActif
+    setLecturePartenaires({ etab, lignes: null })
     api.partenairesOta()
-      .then((r) => setPartenaires(membres(r)))
-      .catch(() => setPartenaires(undefined))
+      .then((r) => { if (etabCourant.current === etab) setLecturePartenaires({ etab, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etab) setLecturePartenaires({ etab, lignes: undefined }) })
   }
 
   useEffect(charger, [etabActif])
@@ -56,8 +64,8 @@ export default function PartenairesOta({ etabActif, droits = [], params = {}, ma
 
   useEffect(() => {
     api.vitrines()
-      .then((r) => setVitrines(membres(r)))
-      .catch(() => setVitrines(undefined))
+      .then((r) => { if (etabCourant.current === etabActif) setLectureVitrines({ etab: etabActif, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etabActif) setLectureVitrines({ etab: etabActif, lignes: undefined }) })
   }, [etabActif])
 
   // Le partenaire ouvert : la constante en création, un objet mémorisé sur la ligne lue en modification.

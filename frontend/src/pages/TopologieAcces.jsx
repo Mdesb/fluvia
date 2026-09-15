@@ -249,6 +249,12 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
   const [tronques, setTronques] = useState([])
   const [echecs, setEchecs] = useState([])
   const [chargement, setChargement] = useState(true)
+  // ⚠ LES LISTES SONT LUES POUR UN ÉTABLISSEMENT. Après une bascule, le formulaire ouvert restait
+  // celui de l'ancien : la clé retenue (`cleOuverte`) ne portait pas l'établissement, et une lecture
+  // partie avant la bascule remettait ses listes en place après elle.
+  const [listesEtab, setListesEtab] = useState(null)
+  const etabCourant = useRef(etabActif)
+  etabCourant.current = etabActif
   const [statutErreur, setStatutErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [maj, setMaj] = useState(null)
@@ -263,8 +269,10 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
   const [topologieIntrouvable, setTopologieIntrouvable] = useState(false)
 
   const peutGerer = aLeDroit(droits, 'acces.gerer')
+  const listesAJour = !chargement && listesEtab === etabActif
 
   const charger = useCallback(async (silencieux = false) => {
+    const etab = etabCourant.current
     if (!silencieux) setChargement(true)
     const resultats = await Promise.allSettled([
       api.espacesAcces(),
@@ -273,6 +281,8 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
       api.sousReseauxAcces(),
       api.espaces(),
     ])
+    // Une réponse arrivée après une bascule décrit l'ancien établissement : on la laisse tomber.
+    if (etabCourant.current !== etab) return
     const noms = ['Espaces d’accès', 'Contrôleurs', 'Équipements', 'Sous-réseaux', 'Espaces du site']
     const poseurs = [setEspaces, setControleurs, setEquipements, setReseaux, setEspacesSocle]
     const coupees = []
@@ -297,6 +307,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
     setStatutErreur(rates[0]?.statut ?? null)
     setSessionPerdue(vu401)
     setMaj(new Date())
+    setListesEtab(etab)
     if (!silencieux) setChargement(false)
   }, [])
 
@@ -469,10 +480,11 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
       setTopologieIntrouvable(false)
       return
     }
-    if (chargement || cleOuverte.current === cle) return
+    const cleEtab = `${cle}|${etabActif}`
+    if (!listesAJour || cleOuverte.current === cleEtab) return
     const [genre, cible, parent] = cle.split(':')
     const listes = { espace: espaces, controleur: controleurs, equipement: equipements }
-    cleOuverte.current = cle
+    cleOuverte.current = cleEtab
     const liste = listes[genre]
     const ligne = !liste ? undefined : cible === 'nouveau' ? null : liste.find((x) => String(x.id) === cible)
     if (ligne === undefined) { setEdition(null); setTopologieIntrouvable(true); return }
@@ -480,7 +492,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
     if (genre === 'espace') ouvrirEspace(ligne)
     else if (genre === 'controleur') ouvrirControleur(ligne, parent || null)
     else ouvrirEquipement(ligne, parent || null)
-  }, [params.topologie, chargement, espaces, controleurs, equipements])
+  }, [params.topologie, listesAJour, etabActif, espaces, controleurs, equipements])
 
   const setValeurs = useCallback((fn) => {
     setEdition((s) => (s ? { ...s, valeurs: typeof fn === 'function' ? fn(s.valeurs) : fn } : s))
@@ -789,7 +801,7 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
     let contenu
     if (!peutGerer) {
       contenu = <div className="banner banner-warn">Modifier la topologie d’accès demande le droit de gérer l’accès, que ce compte n’a pas.</div>
-    } else if (chargement) {
+    } else if (!listesAJour) {
       contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
     } else if (echecDecisif) {
       contenu = (
