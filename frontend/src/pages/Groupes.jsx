@@ -51,12 +51,18 @@ function creneauLabel(c) {
   const quand = debut && !Number.isNaN(debut.getTime())
     ? debut.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
     : idDe(c)
-  // L'activité est embarquée dans le créneau lu (7 créneaux sur 223 n'en ont pas à Piscine A le
-  // 15/09/2026). ⚠ UN CHAMP NUL N'EST PAS ÉCRIT PAR L'API : la clé disparaît, et `=== null` ne voyait
-  // aucun de ces sept. Une activité réduite à son IRI, jamais libellée ici, laisse la date seule.
+  // L'activité et la ressource sont embarquées dans le créneau lu : date · activité · ressource.
+  // ⚠ UN CHAMP NUL N'EST PAS ÉCRIT PAR L'API : la clé disparaît (7 créneaux sur 223 sans activité à
+  // Piscine A le 15/09/2026, et aucune clé `activite`). Absente ou nulle, la partie se dit « sans … » ;
+  // réduite à son IRI, jamais libellée ici, elle est omise plutôt qu'affichée en identifiant.
   if (typeof c !== 'object') return quand
-  if (c.activite === undefined || c.activite === null) return `${quand} · sans activité`
-  return c.activite?.libelle ? `${quand} · ${c.activite.libelle}` : quand
+  const partie = (objet, absent) => {
+    if (objet === undefined || objet === null) return absent
+    return objet?.libelle || null
+  }
+  return [quand, partie(c.activite, 'sans activité'), partie(c.ressource, 'sans ressource')]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 // `groupe` : le groupe sélectionné ; `panier` : la réservation dont on compose le panier.
