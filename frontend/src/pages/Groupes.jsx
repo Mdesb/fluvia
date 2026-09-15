@@ -835,6 +835,18 @@ function FormReservation({ groupe, onFermer, onValider }) {
 }
 
 function FormAffecter({ creneaux, onFermer, onValider }) {
+  // ⚠ CRÉNEAUX À VENIR, DANS L'ORDRE. Lus en entier (#187), ils arrivaient dans le désordre et passés
+  // compris : 223 à Piscine A le 15/09/2026, dont 50 passés, et 117 inversions de date dans la liste.
+  // Un créneau sans date lisible reste proposé : l'écarter serait décider à la place de l'exploitant.
+  // ⚠ `new Date(null)` vaut le 1er janvier 1970, pas une date invalide : une valeur absente se lit NaN.
+  const lireDate = (v) => (v ? new Date(v).getTime() : Number.NaN)
+  const instant = (c) => lireDate(c?.debut)
+  const maintenant = Date.now()
+  const passe = (c) => { const fin = lireDate(c?.fin || c?.debut); return !Number.isNaN(fin) && fin < maintenant }
+  // Les créneaux sans date lisible viennent en dernier.
+  const cle = (c) => (Number.isNaN(instant(c)) ? Number.POSITIVE_INFINITY : instant(c))
+  const aVenir = creneaux.filter((c) => !passe(c)).sort((a, b) => (cle(a) === cle(b) ? 0 : cle(a) < cle(b) ? -1 : 1))
+  const passes = creneaux.length - aVenir.length
   const [creneau, setCreneau] = useState('')
   const [envoi, setEnvoi] = useState(false)
 
@@ -857,10 +869,15 @@ function FormAffecter({ creneaux, onFermer, onValider }) {
           <label htmlFor="a-creneau">Créneau *</label>
           <select id="a-creneau" className="input" value={creneau} onChange={(e) => setCreneau(e.target.value)} required>
             <option value="">— choisir —</option>
-            {creneaux.map((c) => (
+            {aVenir.map((c) => (
               <option key={idDe(c)} value={idDe(c)}>{creneauLabel(c)}</option>
             ))}
           </select>
+          <p className="sub">
+            {aVenir.length === 0
+              ? `Aucun créneau à venir${passes ? ` : les ${passes} créneaux de l’établissement sont passés` : ''}.`
+              : `${aVenir.length} créneau${aVenir.length > 1 ? 'x' : ''} à venir${passes ? `, ${passes} passé${passes > 1 ? 's' : ''} non proposé${passes > 1 ? 's' : ''}` : ''}.`}
+          </p>
         </div>
         <div className="modal-actions">
           <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
