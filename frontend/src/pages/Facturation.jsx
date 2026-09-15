@@ -156,18 +156,21 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
   // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
   // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // ⚠ LA CLÉ PORTE L'ÉTABLISSEMENT. Sans lui, basculer d'établissement laissait l'objet lu depuis
+  // l'ancien affiché sous le nouveau — la facture de Piscine A, formulaire actif, sous Patinoire B.
+  // Avec lui, la lecture rangée ne correspond plus : l'écran charge et relit.
   // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
   const [lectureReglement, setLectureReglement] = useState(null)
-  const cleReglement = params.reglement ? params.reglement : null
+  const cleReglement = params.reglement ? `${params.reglement}|${etabActif}` : null
   useEffect(() => {
     if (!(params.reglement)) { setLectureReglement(null); return undefined }
-    const cle = params.reglement
+    const cle = `${params.reglement}|${etabActif}`
     let vivant = true
     api.facture(params.reglement)
       .then((v) => { if (vivant) setLectureReglement({ cle, valeur: v, echouee: false }) })
       .catch((e) => { if (vivant) setLectureReglement({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
-  }, [params.reglement])
+  }, [params.reglement, etabActif])
   const lectureReglementCourante = lectureReglement?.cle === cleReglement ? lectureReglement : null
   const chargementReglement = cleReglement !== null && lectureReglementCourante === null
   const factureReglee = lectureReglementCourante?.valeur ?? null
