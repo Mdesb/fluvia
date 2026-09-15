@@ -5,6 +5,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
 import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
+import { useEtatUrl } from '../api/url.js'
 
 function heure(v) {
   if (!v) return '—'
@@ -46,12 +47,42 @@ function libelleEncadrant(q) {
 // Le voir comme deux listes concurrentes conduirait à en créer une troisième. Le formulaire
 // CHOISIT donc un espace existant au lieu d'en inventer un, et ne propose que ceux de type
 // « bassin » : les autres ne sont pas des lieux de baignade.
+// `bassin` : `nouveau` quand on déclare un bassin.
+const DEFAUTS_URL = { bassin: '' }
+
 export default function Piscine({ etabActif, droits }) {
-  const [creation, setCreation] = useState(false)
+  const [params, majParams] = useEtatUrl('piscine', DEFAUTS_URL)
   // Incrementé après une création : `Liste` recharge sur ses `deps`, sans que l'écran ait à
   // connaître son état interne.
   const [rechargement, setRechargement] = useState(0)
   const peutConfigurer = aLeDroit(droits, 'piscine.configurer')
+
+  // ── DÉCLARER UN BASSIN, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Le formulaire lit lui-même
+  // espaces et bassins, et dit leurs échecs.
+  if (params.bassin) {
+    const fermerBassin = () => majParams({ bassin: '' }, { pousser: true })
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerBassin}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la piscine
+        </button>
+        {!peutConfigurer ? (
+          <div className="banner banner-warn">
+            Déclarer un bassin demande le droit de configurer la piscine, que ce compte n’a pas.
+          </div>
+        ) : (
+          <BassinModal
+            open
+            onClose={fermerBassin}
+            onCree={() => { fermerBassin(); setRechargement((n) => n + 1) }}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -64,12 +95,6 @@ export default function Piscine({ etabActif, droits }) {
 
       <SurveillancePoss etabActif={etabActif} />
 
-      <BassinModal
-        open={creation}
-        onClose={() => setCreation(false)}
-        onCree={() => { setCreation(false); setRechargement((n) => n + 1) }}
-      />
-
       {/* Plus de barre d'onglets : les casiers ont leur propre ecran (R10), il ne restait qu'un
           seul contenu. Un onglet unique se lit comme un choix, alors qu'il n'y en a plus. */}
       <div className="resa-grid">
@@ -80,7 +105,7 @@ export default function Piscine({ etabActif, droits }) {
           charger={api.bassins}
           vide="Aucun bassin déclaré. Un bassin porte les lignes d’eau, la capacité et l’occupation : sans lui, ni jauge ni créneau."
           actions={peutConfigurer ? (
-            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            <button className="btn sm" type="button" onClick={() => majParams({ bassin: 'nouveau' }, { pousser: true })}>
               ＋ Déclarer un bassin
             </button>
           ) : null}
@@ -809,6 +834,10 @@ function BassinModal({ open, onClose, onCree }) {
   const [capacite, setCapacite] = useState('1')
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // ⚠ `null` = LECTURE EN COURS, `false` = LECTURE ÉCHOUÉE. Les deux listes retombaient à [] sans
+  // drapeau : un refus des espaces faisait envoyer créer, dans Paramètres, un espace qui existe peut-être.
+  const [espacesLus, setEspacesLus] = useState(null)
+  const [bassinsLus, setBassinsLus] = useState(null)
 
   useEffect(() => {
     if (!open) return
@@ -816,7 +845,11 @@ function BassinModal({ open, onClose, onCree }) {
     setLignes('1')
     setCapacite('1')
     setErreur(null)
+    setEspacesLus(null)
+    setBassinsLus(null)
     Promise.allSettled([api.espaces(), api.bassins()]).then(([e, b]) => {
+      setEspacesLus(e.status === 'fulfilled')
+      setBassinsLus(b.status === 'fulfilled')
       const liste = e.status === 'fulfilled' ? membres(e.value) : []
       setEspaces(liste)
       setBassins(b.status === 'fulfilled' ? membres(b.value) : [])
@@ -853,12 +886,29 @@ function BassinModal({ open, onClose, onCree }) {
 
   const pret = libelle.trim() !== '' && espace !== '' && Number(lignes) > 0 && Number(capacite) > 0
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Déclarer un bassin">
+    <>
+      <h2>Déclarer un bassin</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
-        {lieux.length === 0 ? (
+        {bassinsLus === false && (
+          <div className="banner banner-warn">
+            Les bassins existants n’ont pas pu être lus : la mention « porte déjà un bassin » ne peut pas
+            être affichée, et son absence ne veut pas dire qu’un espace est libre.
+          </div>
+        )}
+
+        {espacesLus === null ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : espacesLus === false ? (
+          <div className="banner banner-error">
+            Les espaces n’ont pas pu être lus. Ce n’est pas la même chose que « aucun espace de type
+            bassin » : n’en créez pas un dans Paramètres sur la foi de cet écran.
+          </div>
+        ) : lieux.length === 0 ? (
           <div className="banner banner-warn">
             Aucun espace de type « bassin » n’est déclaré sur cet établissement. Un bassin s’appuie
             sur un espace du socle — celui qui porte les accès et les tourniquets. Créez-le d’abord
@@ -921,7 +971,7 @@ function BassinModal({ open, onClose, onCree }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
