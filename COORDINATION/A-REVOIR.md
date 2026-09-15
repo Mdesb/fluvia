@@ -94,6 +94,20 @@ ici pour qu'il ne soit pas subi par défaut.
 
 ### 1. Cinq commandes à autoriser, ou non, dans `TACHES_AUTORISEES`
 
+> **État au 15/09, mesuré dans `infra/ordonnanceur.sh` et non supposé.** Le titre dit
+> « cinq » ; elles sont six depuis le 15/09, et deux sont réglées :
+>
+> | commande | état |
+> |---|---|
+> | `reporting:agreger` | **autorisée**, passé rattrapé |
+> | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
+> | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
+> | `finance:treasury:verifier-seuils` | **absente** — aucune alerte de trésorerie n'existera |
+> | `finance:treasury:suggerer-rapprochements` | **absente** — dégradé |
+> | `finance:treasury:detecter-ecarts` | **absente** — dégradé |
+>
+> Il reste donc **quatre** décisions, dont une seule dans le module d'analyse (`reporting:executer-rapports`).
+
 Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
 périodique entre au dépôt avec sa planification ; D109/D110, que cette liste est une décision
 versionnée. Elles ne pèsent pas la même chose :
@@ -101,7 +115,7 @@ versionnée. Elles ne pèsent pas la même chose :
 | commande | ce qu'il se passe tant qu'elle n'y est pas |
 |---|---|
 | `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
-| `reporting:agreger` | **les mesures cessent d'être produites** — dernière mesure générée le **04/09 à 21:49** (`genereLe`, mesuré le 07/09) ; depuis, l'Explorateur rend « sans mesure » pour chaque jour écoulé, et la consolidation région/groupe est vide de bout en bout |
+| ~~`reporting:agreger`~~ | **AUTORISÉE le 15/09**, et le passé rattrapé (`--depuis=2026-09-05`) : `report_mesure` est passé de 2 068 à 4 136 lignes, et les 40 ventes que le module ne montrait pas sont revenues. Plus rien à décider ici |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
 | `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
 | `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
@@ -117,7 +131,8 @@ versionnée. Elles ne pèsent pas la même chose :
 
 
 **Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
-`reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
+~~`reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».~~
+**Autorisée le 15/09** — cette phrase ne décrit plus rien.
 
 > **Complété le 15/09 — ce point a deux moitiés, et une seule était écrite.**
 >
@@ -154,7 +169,17 @@ versionnée. Elles ne pèsent pas la même chose :
 > les visiteurs. Un `0` de fréquentation sur ces jours ne doit pas se lire comme un fait métier.
 
 
-### 2. `AxeAnalytique` sert-il encore à quelque chose ?
+### 2. ~~`AxeAnalytique` sert-il encore à quelque chose ?~~ — **tranché le 15/09 : SUPPRIMÉ, rien à revoir**
+
+> Réponse : non. Supprimé le 15/09 — entité, enum, fixtures, table (`DROP`, PR #180) et
+> route (test de disparition, PR #183). Les trois spécifications qui le décrivaient portent
+> désormais un en-tête disant qu'il n'existe plus ; elles sont **annotées et non effacées**,
+> pour que le raisonnement qui a conduit à le concevoir reste lisible.
+>
+> ⚠ Le premier retrait était incomplet et se présentait comme vérifié : la table avait bien
+> disparu (témoin en base), mais **aucun test n'exigeait la disparition de la route** et les
+> `specs/` n'avaient pas été regardées. « Ce qui référence cet objet » et « ce qui l'affirme »
+> ne se cherchent pas au même endroit.
 
 Six axes en base, alimentés par les fixtures, **consommés par rien** : ni écran, ni moteur
 d'agrégation. Je n'ai délibérément pas construit son écran — un formulaire de configuration
@@ -254,7 +279,21 @@ manquant mais sur une garde manquante :
 > ⚠ Ma phrase du 06/09 est rectifiée ici plutôt qu'effacée. C'est la deuxième fiche de ce relevé
 > qui vieillit en un jour — les autres se relisent avec la même méfiance.
 
-### 7. Un site sans instrument rend « 0 », certifié complet — mesuré le 15/09
+### 7. ~~Un site sans instrument rend « 0 », certifié complet~~ — **tranché le 15/09 : option B, FAIT**
+
+> Décision : un **troisième état de complétude**, `non_instrumente` — ni « complet » ni
+> « partiel ». Livré (PR #157), puis complété (PR #173) parce que la première version
+> s'arrêtait à la passe site et laissait les agrégats région/groupe repartir en `complet`.
+>
+> Vérifié aux **trois** niveaux après rattrapage, témoin positif d'abord :
+>
+> ```
+> complet de source `acces` sur la fenêtre        0
+> TÉMOIN POSITIF : complet d'autres sources     715
+> ```
+>
+> ⚠ Deux fois, la vérification a été annoncée sur **un niveau sur trois** — et deux fois le
+> zéro manquant était au-dessus du site. Un agrégat se vérifie à tous ses étages.
 
 Le rattrapage de `reporting:agreger` (arbitrage n°1, tranché et exécuté le 15/09) a écrit 2 068
 mesures de plus. En vérifiant **ce qu'il a écrit** plutôt que qu'il avait tourné :
