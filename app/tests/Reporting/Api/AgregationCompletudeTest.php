@@ -6,6 +6,7 @@ namespace App\Tests\Reporting\Api;
 
 use App\Acces\Entity\Controleur;
 use App\Organisation\Entity\Etablissement;
+use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
 use App\Reporting\DataFixtures\L11Fixtures;
 use App\Reporting\Entity\Indicateur;
@@ -92,6 +93,99 @@ final class AgregationCompletudeTest extends ReportingApiTestCase
             'le nouvel état ne concerne que les indicateurs de source `acces` : le chiffre '
             . 'd\'affaires d\'un site sans tourniquet reste une mesure ordinaire',
         );
+    }
+
+    public function testUnAgregatDontUnSiteNestPasInstrumenteEstPartielEtLeNomme(): void
+    {
+        // Région A Reporting porte déjà deux sites équipés. On lui en ajoute un sans contrôleur :
+        // l'agrégat régional couvre donc une portée dont une partie n'est pas mesurable.
+        $site = $this->creerSiteSansControleur('Site sans instrument (région)', L11Fixtures::REGION_A_NOM);
+        $idSite = $site->getId()->toRfc4122();
+
+        $this->agreger();
+
+        $mesure = $this->mesureDe(
+            NiveauEntite::Region,
+            'FREQUENTATION_CUMULEE',
+            ['region' => $this->entite(Region::class, ['nom' => L11Fixtures::REGION_A_NOM])],
+        );
+
+        // ⚠ C'EST LE CAS QUE LA PREMIÈRE VERSION LAISSAIT PASSER : le parent ressortait `complet`
+        // avec un total qui OMET le site sans source, puisque sa valeur est zéro.
+        self::assertSame(
+            StatutCompletude::Partiel,
+            $mesure->getStatutCompletude(),
+            'un agrégat dont une partie de la portée n\'est pas instrumentée n\'est pas complet',
+        );
+        self::assertContains(
+            $idSite,
+            $mesure->getSitesManquants() ?? [],
+            'le site sans instrument doit être NOMMÉ : un total partiel qui ne dit pas ce qui '
+            . 'manque est un nombre faux qui a l\'air juste',
+        );
+    }
+
+    public function testUnAgregatEntierementNonInstrumenteNestPasPartielMaisNonInstrumente(): void
+    {
+        // Une région neuve, dont le SEUL site n'a aucun contrôleur : rien n'y est mesurable.
+        $groupe = $this->entite(Groupe::class, ['nom' => L11Fixtures::GROUPE_NOM]);
+        $region = (new Region())->setNom('Région sans instrument (test)');
+        $region->setGroupe($groupe);
+        $em = $this->em();
+        $em->persist($region);
+        $em->flush();
+        $em->clear();
+
+        $this->creerSiteSansControleur('Site unique sans instrument', 'Région sans instrument (test)');
+
+        $this->agreger();
+
+        // ⚠ NI COMPLET NI PARTIEL. « Partiel » supposerait qu'une partie a répondu ; ici rien
+        // n'était attendu, donc rien ne manque.
+        self::assertSame(
+            StatutCompletude::NonInstrumente,
+            $this->mesureDe(
+                NiveauEntite::Region,
+                'FREQUENTATION_CUMULEE',
+                ['region' => $this->entite(Region::class, ['nom' => 'Région sans instrument (test)'])],
+            )->getStatutCompletude(),
+            'une région dont AUCUN site n\'est instrumenté n\'est pas partielle : elle n\'est '
+            . 'pas instrumentée',
+        );
+    }
+
+    private function creerSiteSansControleur(string $nom, string $nomRegion): Etablissement
+    {
+        $em = $this->em();
+        $site = (new Etablissement())->setNom($nom);
+        $site->setRegion($this->entite(Region::class, ['nom' => $nomRegion]));
+        $em->persist($site);
+        $em->flush();
+        $em->clear();
+
+        $relu = $this->entite(Etablissement::class, ['nom' => $nom]);
+        self::assertSame(
+            0,
+            $this->em()->getRepository(Controleur::class)->count(['etablissement' => $relu]),
+            'précondition : ce site neuf ne porte aucun contrôleur',
+        );
+
+        return $relu;
+    }
+
+    /** @param array<string, mixed> $criteres */
+    private function mesureDe(NiveauEntite $niveau, string $codeIndicateur, array $criteres): Mesure
+    {
+        $mesure = $this->em()->getRepository(Mesure::class)->findOneBy($criteres + [
+            'indicateur' => $this->entite(Indicateur::class, ['code' => $codeIndicateur]),
+            'niveau' => $niveau,
+        ]);
+        self::assertNotNull(
+            $mesure,
+            sprintf('aucune mesure %s au niveau %s — le test ne mesure rien', $codeIndicateur, $niveau->value),
+        );
+
+        return $mesure;
     }
 
     private function em(): EntityManagerInterface
