@@ -114,9 +114,13 @@ function lireLeFichier(csv) {
 }
 
 export default function ExportsAnalyse({ etabActif, etablissements }) {
-  const [exportsLus, setExportsLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [exportsLus, setExportsLus] = useState()
   const listeExports = exportsLus || []
-  const [indicateursLus, setIndicateursLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [indicateursLus, setIndicateursLus] = useState()
   const indicateurs = indicateursLus || []
   const [groupesLus, setGroupesLus] = useState(null)
 
@@ -310,7 +314,9 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
             <legend className="field-lbl">
               Indicateurs {choisis.length === 0 ? '· tous les actifs' : `· ${choisis.length} choisi(s)`}
             </legend>
-            {indicateursLus === null ? (
+            {indicateursLus === undefined ? (
+              <p className="hint">Lecture…</p>
+            ) : indicateursLus === null ? (
               <div className="banner banner-warn">
                 Le référentiel des indicateurs n’a pas pu être lu : on ne sait pas ce qu’un export
                 contiendrait.
@@ -371,7 +377,9 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
         )}
 
         <h3 style={{ marginTop: 'var(--esp-bloc)' }}>Exports demandés</h3>
-        {exportsLus === null ? (
+        {exportsLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : exportsLus === null ? (
           <div className="banner banner-warn">
             La liste des exports n’a pas pu être lue. Ce qui a déjà été demandé n’apparaît pas ici —
             ce n’est pas une absence.
