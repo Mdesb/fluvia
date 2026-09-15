@@ -13,6 +13,7 @@ use App\Reporting\Entity\Mesure;
 use App\Reporting\Enum\ModeCalculIndicateur;
 use App\Reporting\Enum\NiveauEntite;
 use App\Reporting\Enum\RegimeExploitantMesure;
+use App\Reporting\Enum\SourceModuleIndicateur;
 use App\Reporting\Enum\StatutCompletude;
 use App\Reporting\Projection\ProjectionAccesInterface;
 use App\Reporting\Projection\ProjectionComptaInterface;
@@ -78,10 +79,28 @@ final class AgregateurMesuresService
                     continue;
                 }
 
-                $seuil = $indicateur->getSeuilCompletudeMinutes() ?? 60;
-                $horsLigne = $this->projectionAcces->etablissementHorsLigne($etablissement->getId(), $seuil);
-                $statut = $horsLigne ? StatutCompletude::Partiel : StatutCompletude::Complet;
-                $sitesManquants = $horsLigne ? [$etablissement->getId()->toRfc4122()] : null;
+                // ⚠ PAS DE SOURCE SUR CE SITE ? ALORS CE N'EST PAS UNE MESURE COMPLETE A ZERO.
+                //
+                // `etablissementHorsLigne()` rend `false` aussi bien quand les controleurs
+                // repondent que quand il n'y en a AUCUN (Risque §9.7). Le second cas donnait
+                // donc « complet 0,00 » : mesure du 15/09, 77 lignes sur sept sites, dont un
+                // musee et une patinoire. Arbitrage de Maxime : un troisieme etat.
+                //
+                // ⚠ ON NE BASCULE QUE POUR `acces`, PARCE QUE C'EST LE SEUL MODULE DONT ON
+                // SAIT DIRE S'IL EST INSTRUMENTE. Pour `vente`, `compta`, `reservation` et
+                // `recouvrement`, aucun signal n'existe : le comportement reste inchange.
+                // Basculer sans signal serait poser une regle sur une mesure qu'on n'a pas.
+                if ($indicateur->getSourceModule() === SourceModuleIndicateur::Acces
+                    && $this->projectionAcces->etablissementSansControleur($etablissement->getId())) {
+                    $statut = StatutCompletude::NonInstrumente;
+                    // Pas un site « manquant » : rien ne manque, rien n'etait attendu.
+                    $sitesManquants = null;
+                } else {
+                    $seuil = $indicateur->getSeuilCompletudeMinutes() ?? 60;
+                    $horsLigne = $this->projectionAcces->etablissementHorsLigne($etablissement->getId(), $seuil);
+                    $statut = $horsLigne ? StatutCompletude::Partiel : StatutCompletude::Complet;
+                    $sitesManquants = $horsLigne ? [$etablissement->getId()->toRfc4122()] : null;
+                }
 
                 $this->upsert(
                     $indicateur,
