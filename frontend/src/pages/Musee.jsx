@@ -4,7 +4,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import ReversementsOta from '../components/ReversementsOta.jsx'
 import { api, membres } from '../api/client.js'
-import { allerA } from '../api/url.js'
+import { allerA, useEtatUrl } from '../api/url.js'
 import AudioguidesMusee from '../components/AudioguidesMusee.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -30,8 +30,23 @@ import { mot } from '../api/vocabulaire.js'
 // Un dossier scolaire porte une `dateOption` : au-delà, l'option devrait tomber. L'écran le signale
 // quand la date est passée plutôt que d'afficher une option périmée comme une réservation acquise.
 
+// `visite` : `nouvelle` à la planification ; `audioguide` : `nouveau` ou l'identifiant modifié.
+const DEFAUTS_URL = { onglet: 'salles', visite: '', audioguide: '' }
+
 export default function Musee({ etabActif, droits }) {
-  const [onglet, setOnglet] = useState('salles')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE avec les écrans : sans lui, « précédent » après un F5 ramènerait
+  // aux salles, et non à l'onglet d'où l'on venait.
+  const [params, majParams] = useEtatUrl('musee', DEFAUTS_URL)
+  const onglet = params.onglet
+  const setOnglet = (v) => majParams({ onglet: v, visite: '', audioguide: '' })
+
+  // Chaque section lit ses listes : la page lui cède toute la place.
+  if (params.visite) {
+    return <div className="view large"><VisitesSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} /></div>
+  }
+  if (params.audioguide) {
+    return <div className="view large"><AudioguidesMusee etabActif={etabActif} droits={droits} params={params} majParams={majParams} /></div>
+  }
 
   return (
     <div className="view large">
@@ -56,8 +71,8 @@ export default function Musee({ etabActif, droits }) {
       />
 
       {onglet === 'salles' && <SallesSection etabActif={etabActif} droits={droits} />}
-      {onglet === 'audioguides' && <AudioguidesMusee etabActif={etabActif} droits={droits} />}
-      {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} />}
+      {onglet === 'audioguides' && <AudioguidesMusee etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
+      {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
       {onglet === 'groupes' && <GroupesRenvoi />}
       {onglet === 'reversements' && (
         <ReversementsOta etabActif={etabActif} droits={droits} />
@@ -254,13 +269,12 @@ function SallesSection({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Les visites guidées.
 // --------------------------------------------------------------------------------------------
-function VisitesSection({ etabActif, droits }) {
+function VisitesSection({ etabActif, droits, params = {}, majParams }) {
   const [visites, setVisites] = useState(null)
   const [guides, setGuides] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [nouvelle, setNouvelle] = useState(false)
 
   const peutGerer = aUnDesDroits(droits, ['musee.gerer_visite', 'musee.gerer'])
 
@@ -296,6 +310,48 @@ function VisitesSection({ etabActif, droits }) {
   const planifiees = (visites || []).filter((v) => v.statut === 'planifiee')
   const autres = (visites || []).filter((v) => v.statut !== 'planifiee')
 
+  // ── PLANIFIER UNE VISITE GUIDÉE, EN ÉCRAN ───────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Et le guide se choisit dans une
+  // liste lue avec les visites : sur un échec, « à désigner plus tard » serait la seule option.
+  if (params.visite) {
+    const fermerVisite = () => majParams({ visite: '' }, { pousser: true })
+    let contenu
+    if (!peutGerer) {
+      contenu = <div className="banner banner-warn">Planifier une visite guidée demande le droit de gérer les visites, que ce compte n’a pas.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (visites === null) {
+      contenu = (
+        <div className="banner banner-error">
+          Les visites et les guides n’ont pas pu être lus : on ne désigne pas un guide dans une liste qu’on n’a pas.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <NouvelleVisiteModal
+            open
+            guides={guides}
+            onClose={fermerVisite}
+            onFait={(m) => { fermerVisite(); setSucces(m); recharger() }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerVisite}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux visites guidées
+        </button>
+        {contenu}
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -311,7 +367,7 @@ function VisitesSection({ etabActif, droits }) {
           </span>
           {peutGerer && (
             <div className="r">
-              <button className="btn primary sm" type="button" onClick={() => setNouvelle(true)}>
+              <button className="btn primary sm" type="button" onClick={() => { setErreur(null); setSucces(null); majParams({ visite: 'nouvelle' }, { pousser: true }) }}>
                 ＋ Nouvelle visite
               </button>
             </div>
@@ -399,13 +455,6 @@ function VisitesSection({ etabActif, droits }) {
         </section>
       )}
 
-      <NouvelleVisiteModal
-        open={nouvelle}
-        guides={guides}
-        onClose={() => setNouvelle(false)}
-        onFait={(m) => { setNouvelle(false); setSucces(m); recharger() }}
-        onErreur={setErreur}
-      />
     </>
   )
 }
@@ -452,8 +501,11 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Planifier une visite guidée">
+    <>
+      <h2>Planifier une visite guidée</h2>
       <form onSubmit={envoyer}>
         <div className="field">
           <label htmlFor="vg-theme">Thème *</label>
@@ -515,7 +567,7 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
