@@ -149,7 +149,7 @@ function nomEspace(espace) {
 // ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. On lui en pose un, avec le seul paramètre dont elle a
 // besoin : la souscription ouverte. Tout le reste de l'écran reste en état local, parce que
 // rien d'autre n'a de raison d'être partagé, mis en signet, ni retrouvé après un F5.
-const DEFAUTS_URL = { souscrire: '' }
+const DEFAUTS_URL = { souscrire: '', rejet: '' }
 
 export default function Sport({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('sport', DEFAUTS_URL)
@@ -205,7 +205,6 @@ export default function Sport({ etabActif, droits = [] }) {
     setDetection(false)
   }
   const [echeances, setEcheances] = useState(null)
-  const [rejet, setRejet] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
   const [abonnementOuvert, setAbonnementOuvert] = useState(null)
   const [annulation, setAnnulation] = useState(null)
@@ -293,6 +292,26 @@ export default function Sport({ etabActif, droits = [] }) {
     recharger()
   }, [recharger, etabActif])
 
+  // ⚠ L'ÉCHÉANCE D'UN REJET SE LIT PAR SON IDENTIFIANT, PAS DANS L'ÉCHÉANCIER : celui-ci est
+  // borné à 200 et lu avec six autres listes. Seul un 404 dit « elle n'existe pas » ; tout le
+  // reste est une lecture qui a échoué.
+  const [echeanceRejet, setEcheanceRejet] = useState(null)
+  const [chargementRejet, setChargementRejet] = useState(false)
+  const [lectureRejetEchouee, setLectureRejetEchouee] = useState(false)
+  useEffect(() => {
+    const id = params.rejet
+    if (!id) { setEcheanceRejet(null); setLectureRejetEchouee(false); return undefined }
+    let vivant = true
+    setChargementRejet(true)
+    setLectureRejetEchouee(false)
+    setEcheanceRejet(null)
+    api.echeanceSepa(id)
+      .then((e) => { if (vivant) setEcheanceRejet(e) })
+      .catch((e) => { if (vivant) setLectureRejetEchouee(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementRejet(false) })
+    return () => { vivant = false }
+  }, [params.rejet, etabActif])
+
   useEffect(() => {
     const t = setInterval(() => setTic((n) => n + 1), 60000)
     return () => clearInterval(t)
@@ -348,6 +367,62 @@ export default function Sport({ etabActif, droits = [] }) {
           onClose={() => majParams({ souscrire: '' }, { pousser: true })}
           onFait={() => { majParams({ souscrire: '' }, { pousser: true }); recharger() }}
         />
+      </div>
+    )
+  }
+
+  // ── LE REJET BANCAIRE, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // Même place que la souscription, et pour la même raison : il lit son échéance lui-même.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES DEUX CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND. La seconde est la
+  // plus grave : le processeur ne refuse AUCUN état. Un rejet déclaré sur une échéance qui n'est
+  // pas prélevée ouvrirait un impayé imaginaire — et le serveur l'accepterait.
+  if (params.rejet) {
+    const fermerRejet = () => majParams({ rejet: '' }, { pousser: true })
+    const e = echeanceRejet
+    let contenu
+    if (!peutPiloterRecouvrement) {
+      contenu = (
+        <div className="banner banner-warn">
+          Enregistrer un rejet bancaire demande le droit de piloter le recouvrement, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargementRejet) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!e) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureRejetEchouee
+            ? 'Cette échéance n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette échéance n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (e.statut !== 'prelevee') {
+      contenu = (
+        <div className="banner banner-warn">
+          Cette échéance est « {etatEcheance(e.statut)?.mot || e.statut} » : un rejet bancaire ne se
+          déclare que sur une échéance prélevée. Un prélèvement qui n’est jamais parti ne peut pas
+          revenir impayé.
+        </div>
+      )
+    } else {
+      contenu = (
+        <RejetEcheanceModal
+          key={params.rejet}
+          echeance={e}
+          onClose={fermerRejet}
+          onFait={() => { fermerRejet(); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerRejet}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à Sport &amp; fitness
+        </button>
+        {contenu}
       </div>
     )
   }
@@ -608,14 +683,9 @@ export default function Sport({ etabActif, droits = [] }) {
         peutGerer={peutGererAbonnement}
         onAnnuler={setAnnulation}
         peutPiloterRecouvrement={peutPiloterRecouvrement}
-        onRejet={setRejet}
+        onRejet={(e) => majParams({ rejet: String(e.id) }, { pousser: true })}
       />
 
-      <RejetEcheanceModal
-        echeance={rejet}
-        onClose={() => setRejet(null)}
-        onFait={() => { setRejet(null); recharger() }}
-      />
 
       <AnnulationEcheanceModal
         echeance={annulation}
@@ -1334,6 +1404,12 @@ const CODES_RETOUR = [
  * La fenetre LIT la politique de l'etablissement et nomme la consequence. Quand elle n'a pas pu la
  * lire, elle le dit — plutot que d'afficher la version rassurante par defaut.
  */
+// ⚠ UNE LISTE VIDE N'EST PAS UNE LECTURE ÉCHOUÉE, ET « AUCUNE POLITIQUE » N'EST PAS « ON NE SAIT PAS ».
+// Sans politique paramétrée, `MoteurRecouvrementHandler::politiquePour()` en construit une par
+// défaut, dont l'entité fixe `momentRefusAcces` à `apres_representation_echouee`. L'écran affichait
+// « n'a pas pu être lue » sur un 200 sans membre : c'était la valeur de l'échec.
+const POLITIQUE_PAR_DEFAUT = Object.freeze({ momentRefusAcces: 'apres_representation_echouee', parDefaut: true })
+
 function RejetEcheanceModal({ echeance, onClose, onFait }) {
   const [code, setCode] = useState('AM04')
   const [codeLibre, setCodeLibre] = useState('')
@@ -1349,7 +1425,7 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
     let annule = false
     setPolitique(null)
     api.politiquesRecouvrement()
-      .then((r) => { if (!annule) setPolitique(membres(r)[0] ?? undefined) })
+      .then((r) => { if (!annule) setPolitique(membres(r)[0] ?? POLITIQUE_PAR_DEFAUT) })
       .catch(() => { if (!annule) setPolitique(undefined) })
     return () => { annule = true }
   }, [echeance])
@@ -1374,8 +1450,11 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
     }
   }
 
+  if (!echeance) return null
+
   return (
-    <Modal open={!!echeance} onClose={onClose} titre="Enregistrer un rejet bancaire" taille="sm">
+    <>
+      <h2>Enregistrer un rejet bancaire</h2>
       <form onSubmit={envoyer} style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div className="banner banner-warn">
           <b>Ce geste n’est pas un essai.</b> L’échéance passe en « rejetée » et un impayé est ouvert
@@ -1390,7 +1469,8 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
             l’accès de l’adhérent sera refusé. Ce n’est pas la même chose que « il ne le sera pas ».</>
           )}
           {politique && (
-            <>Selon la politique en vigueur (<b>{politique.momentRefusAcces || 'non renseignée'}</b>),
+            <>Selon la politique en vigueur (<b>{politique.momentRefusAcces || 'non renseignée'}</b>
+            {politique.parDefaut ? ' — aucune n’est paramétrée ici, c’est le défaut du serveur' : ''}),
             {politique.momentRefusAcces === 'immediat'
               ? ' l’accès de l’adhérent sera refusé dès l’enregistrement.'
               : ' l’accès n’est pas refusé tout de suite — il le sera au moment que la politique désigne.'}</>
@@ -1448,6 +1528,6 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
