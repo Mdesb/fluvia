@@ -63,6 +63,9 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
   const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const peutPlanifier = aLeDroit(droits, 'reporting.planifier')
+  // Qui peut COMPOSER un tableau de bord — pas le meme droit que planifier un
+  // rapport, et la spec le veut ainsi (§1.5 : `configurer` = administrateur seul).
+  const peutComposer = aLeDroit(droits, 'reporting.configurer')
 
   const recharger = useCallback(() => {
     api.rapportsPlanifies()
@@ -268,8 +271,17 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
               </div>
             ) : tableaux.length === 0 && (
               <div className="banner banner-warn" style={{ marginTop: 'var(--esp-normal)' }}>
+                {/* ⚠ LE REMÈDE DÉPEND DE QUI LIT. Composer un tableau exige
+                    `reporting.configurer`, réservé à l'administrateur par la spec (§1.5) ; le
+                    formulaire de composition n'est pas rendu sans ce droit. Dire « composez-en un
+                    ci-dessus » à un rôle qui ne peut pas le fait chercher un formulaire absent, et
+                    conclure que l'écran est cassé. */}
                 Aucun tableau de bord actif : un rapport porte toujours sur un tableau (RG-M7-06).
-                Composez-en un ci-dessus avant de planifier.
+                {peutComposer
+                  ? ' Composez-en un ci-dessus avant de planifier.'
+                  : ' Votre rôle permet de planifier un rapport, pas de composer le tableau sur'
+                    + ' lequel il porte (droit reporting.configurer) : demandez-en un à un'
+                    + ' administrateur du reporting.'}
               </div>
             )}
           </form>
