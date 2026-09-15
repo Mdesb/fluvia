@@ -70,7 +70,7 @@ Rien ne merge tant que ce n'est pas vert.
 
   > ### ⚠ IL N'Y A PAS DE CI. RIEN NE RELIT TA PR — NI HUMAIN, NI MACHINE.
   >
-  > Cette ligne disait « merge = automatique dès que la CI est verte, le gate est la CI, plus de feu vert manuel ». **C'est faux, et ça l'a toujours été.** Mesuré le 15/09/2026 : **0 run** GitHub Actions depuis la création du dépôt, tous workflows et tous événements confondus, et **0 suite de contrôles** créée sur `main`. Les workflows sont pourtant bien déclarés et actifs.
+  > Cette ligne disait « merge = automatique dès que la CI est verte, le gate est la CI, plus de feu vert manuel ». **C'est faux aujourd'hui.** Mesuré le 15/09/2026 : la CI **a tourné** — **36 runs** entre le 06/09 20:19 et le **07/09 09:12:30 UTC** — **puis plus rien**. (L'appel `actions/runs` sans filtre rend `0` à cause de la restriction du compte ; `?status=completed` rend **36** — c'est ce dernier qui dit vrai.) Depuis le 07/09 09:12:30, **aucun run ni suite de contrôles** sur `main`, alors que les workflows restent déclarés et `active`. La CI a donc relu des PR pendant ~13 h, puis s'est arrêtée net — et **ne relit plus rien** depuis.
   >
   > La cause est hors du dépôt : le compte `Mdesb` est **écarté par GitHub** — `github.com/Mdesb` rend 404 à un visiteur anonyme, et `api/users/Mdesb` rend 404 **même à Mdesb authentifié**. Voir `COORDINATION/BLOQUEURS-EXTERNES.md` (E-10) ; seul le support GitHub peut le lever.
   >
