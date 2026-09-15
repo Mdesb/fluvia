@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
@@ -26,18 +26,30 @@ const AUDIOGUIDE_NOUVEAU = Object.freeze({ produit: '', langues: [] })
 
 export default function AudioguidesMusee({ etabActif, droits, params = {}, majParams }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
-  const [audioguides, setAudioguides] = useState(null)
+  // ⚠ UNE LISTE EST LUE POUR UN ÉTABLISSEMENT. Remise à `null` dans l'effet, elle restait affichée
+  // une trame après une bascule ; et une réponse partie avant la bascule arrivait après elle et
+  // réaffichait, sous le nouvel établissement, l'audioguide de l'ancien. La lecture garde
+  // l'établissement pour lequel elle a été faite, une réponse périmée est ignorée, et une liste
+  // d'un autre établissement compte comme « on lit ».
+  const [lectureAudioguides, setLectureAudioguides] = useState({ etab: null, lignes: null })
   const [qualifications, setQualifications] = useState(null)
   const [bascules, setBascules] = useState(null)
-  const [produits, setProduits] = useState(null)
+  const [lectureProduits, setLectureProduits] = useState({ etab: null, lignes: null })
+  const etabCourant = useRef(etabActif)
+  etabCourant.current = etabActif
+  const audioguides = lectureAudioguides.etab === etabActif ? lectureAudioguides.lignes : null
+  const produits = lectureProduits.etab === etabActif ? lectureProduits.lignes : null
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
 
   const peutConfigurer = aUnDesDroits(droits, ['musee.configurer', 'musee.gerer'])
 
   function charger() {
-    setAudioguides(null)
-    api.museeAudioguides().then((r) => setAudioguides(membres(r))).catch(() => setAudioguides(undefined))
+    const etab = etabActif
+    setLectureAudioguides({ etab, lignes: null })
+    api.museeAudioguides()
+      .then((r) => { if (etabCourant.current === etab) setLectureAudioguides({ etab, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etab) setLectureAudioguides({ etab, lignes: undefined }) })
   }
 
   useEffect(charger, [etabActif])
@@ -50,8 +62,8 @@ export default function AudioguidesMusee({ etabActif, droits, params = {}, majPa
       .then((r) => setBascules(membres(r)))
       .catch(() => setBascules(undefined))
     api.produits({ itemsPerPage: 200 })
-      .then((r) => setProduits(membres(r)))
-      .catch(() => setProduits(undefined))
+      .then((r) => { if (etabCourant.current === etabActif) setLectureProduits({ etab: etabActif, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etabActif) setLectureProduits({ etab: etabActif, lignes: undefined }) })
   }, [etabActif])
 
   function nomProduit(ref) {
