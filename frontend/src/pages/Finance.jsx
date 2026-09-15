@@ -28,16 +28,16 @@ import TresorerieDashboard from '../components/TresorerieDashboard.jsx'
 // échéancier, écarts — qui n'avaient elles non plus aucun écran.
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE LES ÉCRANS. Sans lui, revenir d'un écran
 // retomberait sur « Factures fournisseur » quel que soit l'onglet d'où l'on venait.
-const DEFAUTS_URL = { tab: 'fournisseurs', facture: '', depense: '', note: '', compte: '' }
+const DEFAUTS_URL = { tab: 'fournisseurs', facture: '', depense: '', note: '', compte: '', avoir: '' }
 
 export default function Finance({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('finance', DEFAUTS_URL)
   const onglet = params.tab
   // Changer d'onglet ferme les écrans : un identifiant laissé dans l'adresse rouvrirait
   // l'écran d'un autre onglet dès qu'on y reviendrait.
-  const setOnglet = (v) => majParams({ tab: v, facture: '', depense: '', note: '', compte: '' })
+  const setOnglet = (v) => majParams({ tab: v, facture: '', depense: '', note: '', compte: '', avoir: '' })
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
-  const ecranOuvert = Boolean(params.facture || params.depense || params.note || params.compte)
+  const ecranOuvert = Boolean(params.facture || params.depense || params.note || params.compte || params.avoir)
 
   return (
     <div className="view large">

@@ -47,7 +47,6 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   const [contestation, setContestation] = useState(null)
   // La facture en cours de correction. `null` = aucune.
   const [correction, setCorrection] = useState(null)
-  const [avoir, setAvoir] = useState(null)
   const [resolution, setResolution] = useState(null)
 
   const peutApprouver = aLeDroit(droits, 'finance.supplier_invoice_approve')
@@ -81,6 +80,29 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
     recharger()
   }, [recharger])
 
+  // ⚠ LA FACTURE D'UN AVOIR SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est bornée
+  // à 200, et un lien ne doit pas en dépendre. Seul un 404 dit « elle n'existe pas » ; tout le
+  // reste est une lecture qui a échoué.
+  const [factureAvoir, setFactureAvoir] = useState(null)
+  const [chargementAvoir, setChargementAvoir] = useState(false)
+  const [lectureAvoirEchouee, setLectureAvoirEchouee] = useState(false)
+  // ⚠ L'échec d'ENVOI a sa propre bannière : celle de la liste n'est pas rendue sous l'écran.
+  const [erreurAvoir, setErreurAvoir] = useState(null)
+  useEffect(() => {
+    const id = params.avoir
+    setErreurAvoir(null)
+    if (!id) { setFactureAvoir(null); setLectureAvoirEchouee(false); return undefined }
+    let vivant = true
+    setChargementAvoir(true)
+    setLectureAvoirEchouee(false)
+    setFactureAvoir(null)
+    api.factureFournisseur(id)
+      .then((f) => { if (vivant) setFactureAvoir(f) })
+      .catch((e) => { if (vivant) setLectureAvoirEchouee(e?.status !== 404) })
+      .finally(() => { if (vivant) setChargementAvoir(false) })
+    return () => { vivant = false }
+  }, [params.avoir])
+
   async function annuler(f) {
     if (
       !await confirmer(
@@ -104,6 +126,65 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
   const contestees = (factures || []).filter((f) => f.status === 'disputed')
   const aPayer = (factures || []).filter((f) => A_PAYER.includes(f.status))
   const closes = (factures || []).filter((f) => f.status === 'paid' || f.status === 'cancelled')
+
+  // ── L'AVOIR, EN ÉCRAN ───────────────────────────────────────────────────────────────────────
+  //
+  // Posé avant l'attente de la liste : il n'en dépend pas, il lit sa facture lui-même.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES DEUX CONDITIONS DU BOUTON — droit d'approuver, facture à payer — ET
+  // L'ÉCRAN LES REPREND, en disant laquelle manque. Un lien copié avant qu'une facture soit
+  // réglée ou annulée ouvrirait sinon un formulaire que le serveur refuserait.
+  if (params.avoir) {
+    const fermerAvoir = () => majParams({ avoir: '' }, { pousser: true })
+    const f = factureAvoir
+    let contenu
+    if (!peutApprouver) {
+      contenu = (
+        <div className="banner banner-warn">
+          Émettre un avoir demande le droit d’approuver les factures fournisseur, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargementAvoir) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureAvoirEchouee
+            ? 'Cette facture fournisseur n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture fournisseur n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (!A_PAYER.includes(f.status)) {
+      contenu = (
+        <div className="banner banner-warn">
+          La facture {f.supplierInvoiceNumber || ''} n’est plus à payer ({mot(f.status)}) : un avoir ne
+          s’émet que sur une facture approuvée, en attente de règlement.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreurAvoir && <div className="banner banner-error">{erreurAvoir}</div>}
+          <AvoirFournisseur
+            key={params.avoir}
+            facture={f}
+            onClose={fermerAvoir}
+            onFait={async (message) => { fermerAvoir(); setSucces(message); await recharger() }}
+            onErreur={setErreurAvoir}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerAvoir}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux factures
+        </button>
+        {contenu}
+      </>
+    )
+  }
 
   if (chargement) {
     return (
@@ -233,7 +314,7 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
           factures={aPayer}
           actions={(f) =>
             peutApprouver && (
-              <button className="btn ghost sm" type="button" onClick={() => setAvoir(f)}>
+              <button className="btn ghost sm" type="button" onClick={() => majParams({ avoir: String(f.id) }, { pousser: true })}>
                 Émettre un avoir
               </button>
             )}
@@ -260,12 +341,6 @@ export default function FacturesFournisseur({ etabActif, droits, params = {}, ma
         onErreur={setErreur}
       />
 
-      <AvoirFournisseur
-        facture={avoir}
-        onClose={() => setAvoir(null)}
-        onFait={async (message) => { setAvoir(null); setSucces(message); await recharger() }}
-        onErreur={setErreur}
-      />
 
       <MotifModal
         facture={contestation}
@@ -963,8 +1038,11 @@ function AvoirFournisseur({ facture, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!facture) return null
+
   return (
-    <Modal open={!!facture} onClose={onClose} titre="Émettre un avoir" taille="sm">
+    <>
+      <h2>Émettre un avoir</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div className="sub">
           Facture <b>{facture?.supplierInvoiceNumber || '—'}</b>, {euros(facture?.amountInclTax)} TTC.
@@ -1027,7 +1105,7 @@ function AvoirFournisseur({ facture, onClose, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 
