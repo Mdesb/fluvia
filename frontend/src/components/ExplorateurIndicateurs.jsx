@@ -159,6 +159,22 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   const partiels = mesures.filter((p) => p.completude === 'partiel').length
   const absents = (points || []).filter((p) => p.etat === 'absent').length
 
+  // ⚠ OU S'ARRETE LA DONNEE, ET PAS SEULEMENT COMBIEN IL EN MANQUE. Onze trous
+  // disperses et onze jours d'arret net s'interpretent de facon opposee : les premiers
+  // disent qu'un site n'a pas remonte, les seconds que l'agregation ne tourne plus.
+  //
+  // La phrase rendue dit « aucune mesure APRES le <jour> », jamais « arrete le » :
+  // l'ecran ne regarde qu'une fenetre, et ne sait rien de ce qui la suit.
+  const dernierJourMesure = useMemo(() => {
+    const mesuresTriees = (points || []).filter((p) => p.etat === 'mesure')
+    if (mesuresTriees.length === 0 || absents === 0) return null
+    const dernier = mesuresTriees[mesuresTriees.length - 1].jour
+    const apres = (points || []).filter((p) => p.jour > dernier)
+    // On ne le dit que si TOUT ce qui suit est sans mesure : sinon la phrase serait fausse.
+    if (apres.length === 0 || apres.some((p) => p.etat !== 'absent')) return null
+    return { jour: dernier, suivants: apres.length }
+  }, [points, absents])
+
   // ⚠ UNE CIBLE NE JUGE QUE LA PERIODE QU'ELLE COUVRE. Un objectif de septembre ne dit rien d'une
   // journee d'aout : on ne retient que celui dont la periode contient les jours regardes, au bon
   // niveau et sur le bon indicateur.
@@ -345,6 +361,13 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                   <span>{mesures.length} jour(s) mesuré(s)</span>
                   {partiels > 0 && <span><b>{partiels} partiel(s)</b> — un site au moins n’a pas remonté</span>}
                   {absents > 0 && <span><b>{absents} sans mesure</b> — l’agrégation n’a pas couvert ces jours</span>}
+                  {dernierJourMesure && (
+                    <span>
+                      <b>aucune mesure après le {dernierJourMesure.jour}</b> — les
+                      {' '}{dernierJourMesure.suivants} dernier(s) jour(s) de la fenêtre
+                      {' '}n’ont pas été agrégés
+                    </span>
+                  )}
                   {valeurCible !== null && (
                     <span>
                       cible {formatValeur(valeurCible, indicateur?.unite)} ·{' '}
