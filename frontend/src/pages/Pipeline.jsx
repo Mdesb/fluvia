@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { useEtatUrl } from '../api/url.js'
 import Modal from '../components/Modal.jsx'
 import Relances from '../components/Relances.jsx'
 import DevisModal from '../components/DevisModal.jsx'
@@ -56,14 +57,17 @@ function jour(v) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
 }
 
+// ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. Une seule clé : la création ouverte.
+const DEFAUTS_URL = { nouvelle: '' }
+
 export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
+  const [params, majParams] = useEtatUrl('affaires', DEFAUTS_URL)
   const peutModifier = aLeDroit(droits, 'crm.modifier') || aLeDroit(droits, 'crm.creer')
 
   const [tableau, setTableau] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [nouvelle, setNouvelle] = useState(false)
   const [aPerdre, setAPerdre] = useState(null)
   const [busy, setBusy] = useState(false)
   // L'affaire pour laquelle on est en train d'établir un devis, et le client résolu qui va le
@@ -148,6 +152,33 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
     }
   }
 
+  // ── LA CRÉATION D'UNE AFFAIRE, EN ÉCRAN ─────────────────────────────────────────────────
+  //
+  // Avant la garde de chargement : le formulaire n'a besoin de rien de ce que la page lit.
+  if (params.nouvelle === '1') {
+    const fermer = () => majParams({ nouvelle: '' }, { pousser: true })
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermer}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux affaires
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <NouvelleAffaire
+          open
+          busy={busy}
+          onFermer={fermer}
+          onCreer={(corps) =>
+            agir(async () => {
+              await api.creerOpportunite(corps)
+              fermer()
+            }, 'Affaire créée.')
+          }
+        />
+      </div>
+    )
+  }
+
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
   const colonnes = tableau?.colonnes || []
@@ -172,7 +203,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
           </div>
         </div>
         {peutModifier && (
-          <button className="btn primary" type="button" onClick={() => setNouvelle(true)}>
+          <button className="btn primary" type="button" onClick={() => majParams({ nouvelle: '1' }, { pousser: true })}>
             + Nouvelle affaire
           </button>
         )}
@@ -297,17 +328,6 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
       </div>
       )}
 
-      <NouvelleAffaire
-        open={nouvelle}
-        busy={busy}
-        onFermer={() => setNouvelle(false)}
-        onCreer={(corps) =>
-          agir(async () => {
-            await api.creerOpportunite(corps)
-            setNouvelle(false)
-          }, 'Affaire créée.')
-        }
-      />
 
       <MarquerPerdue
         affaire={aPerdre}
@@ -384,8 +404,11 @@ function NouvelleAffaire({ open, busy, onFermer, onCreer }) {
   const nomClient = (c) =>
     c?.raisonSociale || [c?.prenom, c?.nom].filter(Boolean).join(' ').trim() || c?.email || 'Client'
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onFermer} titre="Nouvelle affaire" taille="md">
+    <>
+      <h2>Nouvelle affaire</h2>
       <div style={{ display: 'grid', gap: 12 }}>
         <div>
           <label htmlFor="op-titre">Intitulé *</label>
@@ -474,7 +497,7 @@ function NouvelleAffaire({ open, busy, onFermer, onCreer }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 

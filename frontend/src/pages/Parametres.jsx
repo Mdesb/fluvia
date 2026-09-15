@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -615,7 +615,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
   // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
   // au-dessus de lui — vu à l'écran, pas déduit.
-  const ecranSousOnglet = Boolean(params.destination)
+  const ecranSousOnglet = Boolean(params.destination || params.invitation)
 
   return (
     <div className="view">
@@ -788,7 +788,8 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       )}
 
       {sousOnglet === 'droits' && (
-        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} envoiCourriel={envoiCourriel} />
+        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} envoiCourriel={envoiCourriel}
+          params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
@@ -1449,7 +1450,9 @@ function MonMfa({ moi, actif, onChange }) {
   )
 }
 
-function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envoiCourriel = false }) {
+function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envoiCourriel = false, params = {}, majParams }) {
+  const invitationOuverte = params.invitation === '1'
+  const fermerInvitation = () => majParams({ invitation: '' }, { pousser: true })
   const [utilisateurs, setUtilisateurs] = useState([])
   const [roles, setRoles] = useState([])
   const [affectations, setAffectations] = useState([])
@@ -1458,7 +1461,6 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
   const [statut, setStatut] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [modalInvit, setModalInvit] = useState(false)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -1513,6 +1515,85 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
     )
   }
 
+  // ── L'INVITATION, EN ÉCRAN ──────────────────────────────────────────────────────────
+  //
+  // ⚠ LE GESTE EST DÉPLACÉ, PAS RÉÉCRIT : création du compte, affectation optionnelle d'un
+  // rôle, et le message qui suit l'état réel de l'expéditeur de courriel. Seules ses deux
+  // fermetures passent désormais par l'adresse.
+  //
+  // ⚠ LES RÔLES SE LISENT APRÈS COUP : on attend `chargement` avant de monter le formulaire,
+  // sinon un F5 à froid le montrerait avec une liste de rôles vide.
+  if (invitationOuverte) {
+    return (
+      <div>
+        <button className="btn ghost sm" type="button" onClick={fermerInvitation}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux comptes
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : (
+          <ModalInvitation
+            envoiCourriel={envoiCourriel}
+            open
+            roles={roles}
+            etablissements={etablissements}
+            etabActif={etabActif}
+            onClose={fermerInvitation}
+            onInvite={async (payload) => {
+              // Création du compte (invitation) puis, si un rôle + établissement sont choisis,
+              // affectation du rôle sur ce périmètre.
+              // LE SERVEUR ACCEPTE LES DEUX CHEMINS, ET L'ECRAN N'EN OFFRAIT QU'UN.
+              //
+              // `UtilisateurProcessor` : si `motDePasseClair` est fourni, il le hache, efface la
+              // valeur en clair et active le compte immediatement — aucun jeton d'invitation n'est
+              // genere. Sinon il cree un jeton et appelle `InvitationMailer`.
+              //
+              // La modale n'exposait pas ce champ : le seul chemin restant passait donc par un
+              // courriel, et `MAILER_DSN` vaut `null://null`. Aucun utilisateur nouveau ne pouvait se
+              // connecter — ni caissier, ni comptable. Le logiciel ne savait inscrire personne.
+              const cree = await api.creerUtilisateur({
+                email: payload.email,
+                nom: payload.nom,
+                ...(payload.motDePasse ? { motDePasseClair: payload.motDePasse } : {}),
+              })
+              if (payload.roleId && payload.etabId) {
+                await api.creerAffectation({
+                  utilisateur: cree['@id'] || `/api/utilisateurs/${cree.id}`,
+                  role: `/api/roles/${payload.roleId}`,
+                  etablissement: `/api/etablissements/${payload.etabId}`,
+                })
+              }
+              fermerInvitation()
+              // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
+              // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
+              // partage — souvent une caisse en libre-service.
+              // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
+              //
+              // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
+              // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
+              // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
+              // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
+              // laisser ici.
+              //
+              // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
+              // suit l'état réel de l'instance et se corrigera toute seule.
+              setMsg(payload.motDePasse
+                ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
+                : envoiCourriel
+                  ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
+                  : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
+                    + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
+                    + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
+              await charger()
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       {msg && <div className="banner" style={{ background: 'var(--good-bg, var(--panel-2))', color: 'var(--good)', marginBottom: 12 }}>{msg}</div>}
@@ -1523,7 +1604,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
           <h3>Comptes utilisateurs</h3>
           <span className="sub">{utilisateurs.length} compte(s)</span>
           <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalInvit(true) }}>+ Inviter un utilisateur</button>
+            <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); majParams({ invitation: '1' }, { pousser: true }) }}>+ Inviter un utilisateur</button>
             <button title="Actualiser" className="btn ghost sm" onClick={charger}>↻</button>
           </div>
         </div>
@@ -1610,61 +1691,6 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
         </div>
       </section>
 
-      <ModalInvitation
-        envoiCourriel={envoiCourriel}
-        open={modalInvit}
-        roles={roles}
-        etablissements={etablissements}
-        etabActif={etabActif}
-        onClose={() => setModalInvit(false)}
-        onInvite={async (payload) => {
-          // Création du compte (invitation) puis, si un rôle + établissement sont choisis,
-          // affectation du rôle sur ce périmètre.
-          // LE SERVEUR ACCEPTE LES DEUX CHEMINS, ET L'ECRAN N'EN OFFRAIT QU'UN.
-          //
-          // `UtilisateurProcessor` : si `motDePasseClair` est fourni, il le hache, efface la
-          // valeur en clair et active le compte immediatement — aucun jeton d'invitation n'est
-          // genere. Sinon il cree un jeton et appelle `InvitationMailer`.
-          //
-          // La modale n'exposait pas ce champ : le seul chemin restant passait donc par un
-          // courriel, et `MAILER_DSN` vaut `null://null`. Aucun utilisateur nouveau ne pouvait se
-          // connecter — ni caissier, ni comptable. Le logiciel ne savait inscrire personne.
-          const cree = await api.creerUtilisateur({
-            email: payload.email,
-            nom: payload.nom,
-            ...(payload.motDePasse ? { motDePasseClair: payload.motDePasse } : {}),
-          })
-          if (payload.roleId && payload.etabId) {
-            await api.creerAffectation({
-              utilisateur: cree['@id'] || `/api/utilisateurs/${cree.id}`,
-              role: `/api/roles/${payload.roleId}`,
-              etablissement: `/api/etablissements/${payload.etabId}`,
-            })
-          }
-          setModalInvit(false)
-          // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
-          // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
-          // partage — souvent une caisse en libre-service.
-          // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
-          //
-          // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
-          // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
-          // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
-          // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
-          // laisser ici.
-          //
-          // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
-          // suit l'état réel de l'instance et se corrigera toute seule.
-          setMsg(payload.motDePasse
-            ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
-            : envoiCourriel
-              ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
-              : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
-                + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
-                + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
-          await charger()
-        }}
-      />
     </div>
   )
 }
@@ -2000,8 +2026,12 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
     }
   }
 
+  // ⚠ CE N'EST PLUS UNE MODALE — le nom `ModalInvitation` est historique.
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Donner accès à quelqu’un">
+    <>
+      <h2>Donner accès à quelqu’un</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
         <div className="field">
@@ -2090,7 +2120,7 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
