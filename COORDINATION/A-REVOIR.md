@@ -102,23 +102,61 @@ ici pour qu'il ne soit pas subi par défaut.
 > | `reporting:agreger` | **autorisée**, passé rattrapé |
 > | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
 > | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
-> | `finance:treasury:verifier-seuils` | **absente** — aucune alerte de trésorerie n'existera |
-> | `finance:treasury:suggerer-rapprochements` | **absente** — dégradé |
-> | `finance:treasury:detecter-ecarts` | **absente** — dégradé |
+> | ~~`finance:treasury:verifier-seuils`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
+> | ~~`finance:treasury:suggerer-rapprochements`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
+> | ~~`finance:treasury:detecter-ecarts`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 >
-> Il reste donc **quatre** décisions, dont une seule dans le module d'analyse (`reporting:executer-rapports`).
+> #### ⚠ « Autorisée dans le fichier » n'est pas « tourne » — mesuré le 15/09 à 16h
+>
+> Les trois commandes de trésorerie sont dans `TACHES_AUTORISEES` depuis #193. Elles ne
+> tournent pourtant pas, pour **deux** raisons distinctes, et l'ordonnanceur les crie
+> lui-même dans ses traces :
+>
+> ```
+> [ordonnanceur] ✗ LISTE PERIMEE — ce conteneur exécute 17 tâche(s), le fichier en déclare 20.
+> [ordonnanceur]   Tant que ce conteneur n'a pas redémarré, l'écart ne tourne PAS.
+> ```
+>
+> 1. **La liste du conteneur est figée à son démarrage.** Le shell évalue l'affectation une
+>    fois ; ajouter une tâche au fichier ne change rien jusqu'au redémarrage. C'est le défaut
+>    du 31/08 (`personnel:recalculer-fenetres-badges`, neuf heures inerte pendant que le
+>    journal disait « ok »), et le script a été instrumenté pour le dire — il le dit.
+> 2. **Deux des trois attendent un premier passage supervisé** (garde D109) :
+>    `verifier-seuils` et `detecter-ecarts` n'ont jamais tourné et ne sont pas marquées sûres
+>    au premier passage — elles rattraperaient tout leur retard d'un coup. Seule
+>    `suggerer-rapprochements` apparaît exécutée dans les traces.
+>
+> **Donc l'arbitrage est rendu, et son effet ne l'est pas.** Le registre aurait été faux dans
+> un sens en disant « à trancher », et faux dans l'autre en disant « autorisée » tout court.
+>
+> ⚠ `finance:treasury` et `infra/` ne sont pas mon périmètre : **mesuré et signalé, non
+> corrigé**. Je n'ai redémarré aucun conteneur et levé aucune garde.
+>
+> ⚠ Au passage, et pour la même raison : les traces portent aussi
+> `✗ DROITS SUR /app/var — l'API répond encore, mais elle est amorcée` (3 entrées de
+> `/app/var` hors `www-data`). Même traitement : signalé, pas touché.
+>
+> Il reste donc **une** décision, et c'est celle du module d'analyse (`reporting:executer-rapports`) — les trois de trésorerie ont été autorisées le 15/09 par #193.
 
-Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
-périodique entre au dépôt avec sa planification ; D109/D110, que cette liste est une décision
-versionnée. Elles ne pèsent pas la même chose :
+~~Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09).~~ **Faux depuis le 15/09 : cinq des six
+y sont** (`reporting:agreger`, `dms:purge-expired-documents` et les trois `finance:treasury:*`).
+Seule `reporting:executer-rapports` reste absente.
 
-| commande | ce qu'il se passe tant qu'elle n'y est pas |
+> ⚠ **Une mesure d'absence ne vieillit pas imprécise, elle s'inverse.** « Aucune » était exact
+> le 06/09 et disait le contraire du vrai le 15/09, sans qu'aucune relecture ne le signale. Le
+> tableau ci-dessous garde donc sa colonne au passé — « ce que son absence coûtait » — parce que
+> c'est ce coût qui a motivé l'arbitrage. On barre, on n'efface pas.
+
+D36 a établi qu'une commande périodique entre au dépôt avec sa planification ; D109/D110, que
+cette liste est une décision versionnée. Elles ne pèsent pas la même chose :
+
+| commande | ce que son absence coûtait — au passé pour les cinq autorisées |
 |---|---|
-| `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
+| ~~`finance:treasury:verifier-seuils`~~ **(autorisée #193)** | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
 | ~~`reporting:agreger`~~ | **AUTORISÉE le 15/09**, et le passé rattrapé (`--depuis=2026-09-05`) : `report_mesure` est passé de 2 068 à 4 136 lignes, et les 40 ventes que le module ne montrait pas sont revenues. Plus rien à décider ici |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
-| `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
-| `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
+| ~~`finance:treasury:suggerer-rapprochements`~~ **(autorisée #193)** | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
+| ~~`finance:treasury:detecter-ecarts`~~ **(autorisée #193)** | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
 
 > ⚠ **Ce point se dégrade pendant qu'il attend.** La version du 06/09 chiffrait « 3 jours sans
 > mesure sur 14 ». Un compte de jours ne vieillit pas en devenant imprécis : il devient faux, et
