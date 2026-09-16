@@ -1240,6 +1240,9 @@ export const api = {
   // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
   // que personne ne pouvait lire.
   sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // Un séjour par son identifiant : 404 s'il n'existe pas OU s'il appartient à un autre
+  // établissement (mesuré le 15/09/2026 : SEJ-TEST-B de Patinoire B, lu depuis Piscine A).
+  sejour: (id) => request(`/api/stays/${id}`),
   // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
   // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
   ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
