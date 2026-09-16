@@ -5,7 +5,7 @@ import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
-import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
+import HistoriqueVentes from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
@@ -29,15 +29,16 @@ import {
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
 // `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
-const DEFAUTS_URL = { facture: '' }
+// `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
+const DEFAUTS_URL = { facture: '', historique: '' }
 
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [params, majParams] = useEtatUrl('caisse', DEFAUTS_URL)
   // Avec les autres crochets, et avant tout retour anticipé : un crochet conditionnel casserait
   // le rendu dès que l'adresse change.
   const lectureFacture = useFactureLue(params.facture, etabActif)
+  const fermerHistorique = () => majParams({ historique: '' }, { pousser: true })
   const [caisseModale, setCaisseModale] = useState(false)
-  const [historique, setHistorique] = useState(false)
   // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
   // La fenêtre existait et n'était atteignable que depuis l'écran de supervision — que le
   // caissier n'a jamais ouvert. Son propre commentaire le disait déjà.
@@ -1019,6 +1020,47 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     )
   }
 
+  // ── L'HISTORIQUE DES VENTES, EN ÉCRAN ───────────────────────────────────────────────────────
+  //
+  // Posé avant la garde de session, comme le document : relire une vente d'hier ne demande pas
+  // une caisse ouverte. La vente en cours vit dans l'état de ce composant, qui reste monté.
+  // Le détail d'une vente reste DANS l'écran, avec son « ← Retour à la liste » : c'est la même
+  // lecture, pas un second niveau d'adresse.
+  if (params.historique === '1') {
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerHistorique}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <HistoriqueVentes
+          onClose={fermerHistorique}
+          droits={droits}
+          onDuplicata={async (vente) => {
+            setErreur(null)
+            try {
+              const info = await api.ticket(vente.id, 'duplicata')
+              setTicket(construireTicket(info, [], null))
+              majParams({ historique: '' }, { pousser: true })
+            } catch (e) {
+              setErreur(e.message || "Le duplicata n'a pas pu être édité.")
+            }
+          }}
+          onFacture={(f) => {
+            // ⚠ ON FERME L'HISTORIQUE AVANT D'OUVRIR LE DOCUMENT. `FactureRendu` monte sa PROPRE
+            // modale : la laisser s'ouvrir par-dessus celle de l'historique empilerait deux pièges à
+            // focus, et le caissier refermerait la mauvaise. Le geste se lit donc en une ligne — je
+            // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
+            setErreur(null)
+            // Une seule entrée d'historique : on quitte l'historique ET on ouvre le document.
+            majParams({ historique: '', facture: String(f.id) }, { pousser: true })
+          }}
+        />
+      </div>
+    )
+  }
+
   // --- Rendu : pas de session ouverte ---
   if (!chargement && !session) {
     return (
@@ -1065,7 +1107,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         </div>
         <div className="actions">
           <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
-          <button className="btn" onClick={() => setHistorique(true)} disabled={enPaiement}>Historique</button>
+          <button className="btn" onClick={() => majParams({ historique: '1' }, { pousser: true })} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
@@ -1456,30 +1498,6 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         }}
       />
 
-      <HistoriqueVentesModal
-        open={historique}
-        onClose={() => setHistorique(false)}
-        droits={droits}
-        onDuplicata={async (vente) => {
-          setErreur(null)
-          try {
-            const info = await api.ticket(vente.id, 'duplicata')
-            setTicket(construireTicket(info, [], null))
-            setHistorique(false)
-          } catch (e) {
-            setErreur(e.message || "Le duplicata n'a pas pu être édité.")
-          }
-        }}
-        onFacture={(f) => {
-          // ⚠ ON FERME L'HISTORIQUE AVANT D'OUVRIR LE DOCUMENT. `FactureRendu` monte sa PROPRE
-          // modale : la laisser s'ouvrir par-dessus celle de l'historique empilerait deux pièges à
-          // focus, et le caissier refermerait la mauvaise. Le geste se lit donc en une ligne — je
-          // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
-          setErreur(null)
-          setHistorique(false)
-          majParams({ facture: String(f.id) }, { pousser: true })
-        }}
-      />
 
       {modaleSession}
       {modaleClient}
