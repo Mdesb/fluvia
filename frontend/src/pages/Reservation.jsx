@@ -170,7 +170,8 @@ const LIBELLE_STATUT = {
   honoree: 'Honorée',
 }
 
-const DEFAUTS_URL = { vue: 'semaine', activite: '' }
+// `reserver` : le créneau dont on prend une place depuis le planning.
+const DEFAUTS_URL = { vue: 'semaine', activite: '', reserver: '' }
 
 export default function Reservation({ etabActif, droits = [], session }) {
   // ⚠ `null` = PAS LU. << 0 ressource(s) · 0 créneau(x) >> se lit << ce site n'a rien de
@@ -196,11 +197,10 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // l'écran vient. Cinq vues, une seule porte des activités.
   const [params, majParams] = useEtatUrl('reservation', DEFAUTS_URL)
   const vue = params.vue
-  const setVue = (v) => majParams({ vue: v, activite: '' })
+  const setVue = (v) => majParams({ vue: v, activite: '', reserver: '' })
   const [jour, setJour] = useState('')
   const [reserverPour, setReserverPour] = useState(null) // id du créneau en cours de réservation
   // Le créneau cliqué dans le planning, ouvert en réservation rapide (voir `onCreneau`).
-  const [creneauRapide, setCreneauRapide] = useState(null)
   const [inscritsPour, setInscritsPour] = useState(null) // id du créneau dont on déplie les inscrits
   const [gesteEnCours, setGesteEnCours] = useState(null) // id de la réservation en cours de geste
 
@@ -754,8 +754,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
     }
   }
 
+  // ⚠ REND SON ISSUE. L'écran de réservation se fermait quel que soit le résultat, et le refus du
+  // serveur s'affichait derrière, sur le planning : le caissier voyait sa place refusée sans savoir
+  // laquelle. `true` = la place est prise.
   async function reserver(creneau) {
-    if (!organisateur) return
+    if (!organisateur) return false
     setEnCours(true)
     setErreur(null)
     setSucces(null)
@@ -768,8 +771,10 @@ export default function Reservation({ etabActif, droits = [], session }) {
       setReserverPour(null)
       setOrganisateur('')
       await recharger()
+      return true
     } catch (e) {
       setErreur(e.message || 'La réservation a échoué.')
+      return false
     } finally {
       setEnCours(false)
     }
@@ -777,6 +782,68 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
   const ecranOuvert = Boolean(params.activite)
+
+  // ── PRENDRE UNE PLACE SUR UN CRÉNEAU, EN ÉCRAN ──────────────────────────────────────────────
+  //
+  // ⚠ LE CRÉNEAU VIENT DE LA LISTE, LUE EN ENTIER OU PAS DU TOUT (#187). Un identifiant qui n'y
+  // figure pas n'existe pas pour cet établissement : on le dit, au lieu d'ouvrir un formulaire sur
+  // un créneau fantôme. Et une lecture échouée n'est pas une liste vide — les deux se distinguent.
+  //
+  // La boîte disait déjà pourquoi elle refuse (complet, annulé, arbitrage en attente) : l'écran
+  // garde ces trois phrases, elles sont dans le composant.
+  if (params.reserver) {
+    const fermerReserver = () => {
+      setOrganisateur('')
+      setErreur(null)
+      majParams({ reserver: '' }, { pousser: true })
+    }
+    const cr = (creneaux || []).find((c) => String(c.id) === String(params.reserver)) || null
+    let contenu
+    if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (creneaux === null) {
+      contenu = (
+        <div className="banner banner-error">
+          La liste des créneaux n’a pas pu être lue : il n’y a rien à réserver ici. Ce n’est pas qu’il
+          n’y en a aucun.
+        </div>
+      )
+    } else if (!cr) {
+      contenu = <div className="banner banner-warn">Ce créneau n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+    } else {
+      contenu = (
+        <ReserverRapide
+          key={String(params.reserver)}
+          creneau={cr}
+          occupation={occupation}
+          beneficiaires={beneficiaires}
+          organisateur={organisateur}
+          setOrganisateur={setOrganisateur}
+          enCours={enCours}
+          erreur={erreur}
+          onFermer={fermerReserver}
+          onReserver={async (creneauPris) => {
+            const pris = await reserver(creneauPris)
+            if (pris) majParams({ reserver: '' }, { pousser: true })
+          }}
+          onVoirListe={(creneauVu) => {
+            setJour(jourCle(creneauVu.debut))
+            setReserverPour(creneauVu.id)
+            majParams({ vue: 'liste', activite: '', reserver: '' }, { pousser: true })
+          }}
+        />
+      )
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerReserver}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au planning
+        </button>
+        {contenu}
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -859,10 +926,10 @@ export default function Reservation({ etabActif, droits = [], session }) {
             // boutons. Ce qui etait trop gros pour une case de 40 px ne l'est pas pour une boite.
             // La liste reste joignable DEPUIS la modale pour tout le reste (inscrits, emargement,
             // annulation) : on n'a rien retire, on a arrete d'y forcer.
-            setCreneauRapide(cr)
             setOrganisateur('')
             setErreur(null)
             setSucces(null)
+            majParams({ reserver: String(cr.id) }, { pousser: true })
           }}
         />
       ) : (
@@ -1491,31 +1558,6 @@ export default function Reservation({ etabActif, droits = [], session }) {
           activite distincte — et parce qu'un ecran de plus pour deux boutons serait une exception a
           D13 que rien ne justifie. */}
       <NoShowSection etabActif={etabActif} droits={droits} session={session} />
-
-      {/* RESERVATION RAPIDE — le geste que le planning appelle, la ou le planning le pose.
-          Ce qu'elle NE fait PAS est aussi delibere : ni inscrits, ni emargement, ni annulation.
-          Ce sont des gestes qu'on pose sur une reservation EXISTANTE, et les empiler ici referait
-          l'ecran entier dans une boite. Le bouton de bas de modale y emmene en un clic. */}
-      <ReserverRapide
-        creneau={creneauRapide}
-        occupation={occupation}
-        beneficiaires={beneficiaires}
-        organisateur={organisateur}
-        setOrganisateur={setOrganisateur}
-        enCours={enCours}
-        erreur={erreur}
-        onFermer={() => { setCreneauRapide(null); setOrganisateur(''); setErreur(null) }}
-        onReserver={async (cr) => {
-          await reserver(cr)
-          setCreneauRapide(null)
-        }}
-        onVoirListe={(cr) => {
-          setJour(jourCle(cr.debut))
-          setVue('liste')
-          setReserverPour(cr.id)
-          setCreneauRapide(null)
-        }}
-      />
     </div>
   )
 }
@@ -1567,12 +1609,8 @@ function ReserverRapide({
   if (!ouvert) return null
 
   return (
-    <Modal
-      open
-      onClose={onFermer}
-      taille="sm"
-      titre={`Réserver — ${ressourceDuCreneau(creneau) || 'créneau'}`}
-    >
+    <>
+      <h2>Réserver — {ressourceDuCreneau(creneau) || 'créneau'}</h2>
       <div className="grid" style={{ gap: 'var(--esp-bloc)' }}>
         <div>
           <div className="nm">
@@ -1626,7 +1664,7 @@ function ReserverRapide({
           <button className="btn ghost" type="button" onClick={() => onVoirListe(creneau)}>
             Ouvrir dans la liste du jour
           </button>
-          <button className="btn" type="button" onClick={onFermer} disabled={enCours}>Annuler</button>
+          <button className="btn" type="button" onClick={onFermer} disabled={enCours}>Retour au planning</button>
           {!refus && (
             <button
               className="btn primary"
@@ -1639,6 +1677,6 @@ function ReserverRapide({
           )}
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
