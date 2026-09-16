@@ -358,7 +358,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
 
       {peutGererFournisseur && (
         <div style={{ marginTop: 16 }}>
-          <FournisseursSection onChange={recharger} />
+          <FournisseursSection onChange={recharger} params={params} majParams={majParams} />
         </div>
       )}
 
@@ -788,7 +788,7 @@ function ReceptionsSection({ receptions, fournisseurs, peutReceptionner, onValid
 // --------------------------------------------------------------------------------------------
 // Les fournisseurs.
 // --------------------------------------------------------------------------------------------
-function FournisseursSection({ onChange }) {
+function FournisseursSection({ onChange, params, majParams }) {
   // Pas de suppression : un fournisseur porte des commandes et des réceptions. Ce qu'on veut, c'est
   // cesser de lui commander — c'est la case « actif », et elle est réversible.
   const descripteur = {
@@ -836,5 +836,5 @@ function FournisseursSection({ onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} params={params} majParams={majParams} />
 }
