@@ -22,6 +22,7 @@ use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutPaiementParticipant;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\ChevauchementCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\ResolveurRegleAnnulation;
 use App\Reservation\Service\VenteReservationHandler;
@@ -55,6 +56,7 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
         private readonly ChevauchementCreneauGuard $guard,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly CalculateurTarifTerrainHandler $calculateur,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
@@ -228,6 +230,11 @@ final class ReserverTerrainProcessor implements ProcessorInterface
             $reservation->setStatut(StatutReservation::AConfirmer);
         }
         $this->em->persist($reservation);
+        // ⚠ LA JAUGE GLOBALE DU TERRAIN COMPTE CETTE PLACE (RG-M5-08). Le padel ne lit pas ce
+        // compteur, mais les annulations, elles, le décrémentent : sans cet incrément, annuler une
+        // réservation de terrain rendait une unité que personne n'avait posée, et le compteur
+        // dérivait vers le bas — donc vers la surréservation, pour les chemins qui le lisent.
+        $this->jaugeMere->incrementer($ressource);
 
         // ⚠ LES PARTS SONT INDICATIVES, ET SEUL L'ORGANISATEUR DOIT. Arbitrage de Maxime sur
         // R15 (b) : « l'organisateur reste redevable du montant global ». Laisser les trois autres

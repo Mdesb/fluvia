@@ -13,6 +13,7 @@ use App\Crm\Entity\Beneficiaire;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
@@ -36,6 +37,7 @@ final class IngestionVenteOtaProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly ConnecteurOtaInterface $connecteur,
     ) {
     }
@@ -102,6 +104,12 @@ final class IngestionVenteOtaProcessor implements ProcessorInterface
                     ->setModeDecompte(ModeDecompteReservation::VenteUnite)
                     ->setMontantDu($allocation->getPartenaire()?->getTarifNet() ?? '0.00');
                 $this->em->persist($reservation);
+                // Même jauge globale que la vente directe (RG-M5-08) : sans cet incrément,
+                // l'annulation de cette réservation rendrait une unité jamais posée.
+                $ressource = $creneau->getRessource();
+                if ($ressource !== null) {
+                    $this->jaugeMere->incrementer($ressource);
+                }
             } else {
                 if ($stock->disponibiliteEffective() <= 0) {
                     throw new ConflictHttpException('RG-M3-09 : stock épuisé (inventaire partagé avec la vente directe).');

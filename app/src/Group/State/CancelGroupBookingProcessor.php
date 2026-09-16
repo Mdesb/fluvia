@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Group\Entity\GroupBooking;
 use App\Group\Enum\GroupBookingStatus;
 use App\Reservation\Enum\StatutReservation;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -26,6 +27,7 @@ final class CancelGroupBookingProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
     ) {
     }
 
@@ -36,6 +38,13 @@ final class CancelGroupBookingProcessor implements ProcessorInterface
         foreach ($data->getJaugeReservations() as $reservation) {
             if ($reservation->getStatut() === StatutReservation::Confirmee) {
                 $reservation->setStatut(StatutReservation::AnnuleeLibre);
+                // La jauge globale de la ressource se rend aussi (RG-M5-08) : la confirmation l'a
+                // prise, l'annulation la rend. Sans ce geste, le compteur garderait les entrées d'un
+                // groupe qui n'occupe plus rien.
+                $porteuse = $reservation->getCreneau()?->getRessource();
+                if ($porteuse !== null) {
+                    $this->jaugeMere->decrementer($porteuse, $reservation->getQuantity());
+                }
             }
         }
 
