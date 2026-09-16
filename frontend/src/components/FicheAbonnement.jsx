@@ -57,11 +57,10 @@ function Champ({ libelle, children, aide }) {
   )
 }
 
-export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie }) {
+export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie, onGeste }) {
   const [onglet, setOnglet] = useState('contrat')
   const [echeances, setEcheances] = useState(null)
   const [reduction, setReduction] = useState(null)
-  const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un objet = trouve ; `false` = lu, aucun
   // statut pour cet abonnement. Quatre etats, parce que « pas de statut » et « pas pu lire » ne se
@@ -266,10 +265,10 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           <div className="card-h">
             <h3>Gestes</h3>
             <div className="r">
-              <button className="btn sm" type="button" onClick={() => setGeste('pause')}>
+              <button className="btn sm" type="button" onClick={() => onGeste?.('pause')}>
                 Mettre en pause
               </button>
-              <button className="btn sm" type="button" onClick={() => setGeste('resiliation')}>
+              <button className="btn sm" type="button" onClick={() => onGeste?.('resiliation')}>
                 Résilier
               </button>
             </div>
@@ -363,13 +362,6 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           )}
         </div>
       )}
-
-      <GesteModal
-        geste={geste}
-        abonnement={a}
-        onClose={() => setGeste(null)}
-        onFait={() => { setGeste(null); onModifie?.() }}
-      />
 
       <ReductionModal
         echeance={reduction}
@@ -489,7 +481,10 @@ function ReductionModal({ echeance, onClose, onFait }) {
 // Le patron vient de `ImpayesRecouvrement` : une confirmation dit CE QUI VA SE PASSER, jamais
 // « êtes-vous sûr ». Résilier révoque le mandat quand aucun autre abonnement ne s'en sert ; c'est
 // exactement le genre de conséquence qu'on découvre autrement au relevé bancaire.
-function GesteModal({ geste, abonnement, onClose, onFait }) {
+// Le geste d'un abonnement — un écran de Sport (#sport?geste=…&abonnement=…), plus une modale.
+// La fiche le DEMANDE (`onGeste`) ; c'est la page qui l'affiche, parce que c'est elle qui porte
+// l'adresse.
+export function GesteAbonnement({ geste, abonnement, onClose, onFait }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
   const [motif, setMotif] = useState('')
@@ -543,12 +538,8 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
   }
 
   return (
-    <Modal
-      open={!!geste}
-      onClose={onClose}
-      titre={geste === 'pause' ? 'Mettre l’abonnement en pause' : 'Résilier l’abonnement'}
-      taille="md"
-    >
+    <>
+      <h2>{geste === 'pause' ? 'Mettre l’abonnement en pause' : 'Résilier l’abonnement'}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -665,7 +656,7 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
           )}
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import FicheAbonnement from '../components/FicheAbonnement.jsx'
+import FicheAbonnement, { GesteAbonnement } from '../components/FicheAbonnement.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
@@ -149,7 +149,8 @@ function nomEspace(espace) {
 // ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. On lui en pose un, avec le seul paramètre dont elle a
 // besoin : la souscription ouverte. Tout le reste de l'écran reste en état local, parce que
 // rien d'autre n'a de raison d'être partagé, mis en signet, ni retrouvé après un F5.
-const DEFAUTS_URL = { souscrire: '', rejet: '' }
+// `geste` : `pause` ou `resiliation` ; `abonnement` : celui sur lequel il porte.
+const DEFAUTS_URL = { souscrire: '', rejet: '', geste: '', abonnement: '' }
 
 export default function Sport({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('sport', DEFAUTS_URL)
@@ -364,6 +365,61 @@ export default function Sport({ etabActif, droits = [] }) {
   // ses propres listes (bénéficiaires, clients, produits) et n'a besoin de rien de ce que la page
   // lit pour elle-même — attendre les alertes et les abonnements ne ferait que retarder un écran
   // qui n'en dépend pas.
+  // ── METTRE EN PAUSE OU RÉSILIER, EN ÉCRAN ───────────────────────────────────────────────────
+  //
+  // ⚠ L'ABONNEMENT VIENT DE LA LISTE LUE PAR LA PAGE, et `null` y veut dire « lecture échouée »
+  // (les trois lectures tolérées de cet écran gardent cette distinction). Absent de la liste, on le
+  // dit — on ne suppose pas un abonnement pour ouvrir un formulaire qui résilie.
+  //
+  // Fermer rouvre la fiche d'où l'on venait : la fiche vit dans l'état de la page, qui reste montée.
+  if (params.geste) {
+    const connu = params.geste === 'pause' || params.geste === 'resiliation'
+    const ab = (abonnements || []).find((a) => String(a.id) === String(params.abonnement)) || null
+    const fermerGeste = () => {
+      if (ab) setAbonnementOuvert(ab)
+      majParams({ geste: '', abonnement: '' }, { pousser: true })
+    }
+    let contenu
+    if (!connu) {
+      contenu = <div className="banner banner-warn">Ce geste n’existe pas sur cet écran.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (abonnements === null) {
+      contenu = (
+        <div className="banner banner-error">
+          La liste des abonnements n’a pas pu être lue : on ne sait pas sur quoi porterait ce geste.
+        </div>
+      )
+    } else if (!params.abonnement) {
+      contenu = <div className="banner banner-warn">Aucun abonnement n’est désigné dans l’adresse.</div>
+    } else if (!ab) {
+      contenu = (
+        <div className="banner banner-warn">
+          Cet abonnement n’est pas dans la liste lue pour cet établissement.
+        </div>
+      )
+    } else {
+      contenu = (
+        <GesteAbonnement
+          key={`${params.geste}|${params.abonnement}`}
+          geste={params.geste}
+          abonnement={ab}
+          onClose={fermerGeste}
+          onFait={() => { fermerGeste(); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerGeste}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux abonnements
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   if (params.souscrire === '1') {
     return (
       <div className="view">
@@ -667,6 +723,7 @@ export default function Sport({ etabActif, droits = [] }) {
         {abonnementOuvert && (
           <FicheAbonnement
             abonnement={abonnementOuvert}
+            onGeste={(g) => majParams({ geste: g, abonnement: String(abonnementOuvert.id) }, { pousser: true })}
             nomAdherent={nomAdherent(abonnementOuvert, beneficiaires)}
             nomPayeur={nomPayeur(abonnementOuvert)}
             onFerme={() => setAbonnementOuvert(null)}
