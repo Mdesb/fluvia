@@ -9,7 +9,7 @@ import HistoriqueVentes from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
-import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
+import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
@@ -30,7 +30,7 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
 // `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
 // `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
-const DEFAUTS_URL = { facture: '', historique: '' }
+const DEFAUTS_URL = { facture: '', historique: '', verifier: '' }
 
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [params, majParams] = useEtatUrl('caisse', DEFAUTS_URL)
@@ -42,7 +42,6 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
   // La fenêtre existait et n'était atteignable que depuis l'écran de supervision — que le
   // caissier n'a jamais ouvert. Son propre commentaire le disait déjà.
-  const [verifBillet, setVerifBillet] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
   const [choixOptions, setChoixOptions] = useState(null)
   // ⚠ `null` = PAS LU. << Aucun produit disponible. >> lu par un caissier signifie << il n'y a
@@ -1061,6 +1060,28 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     )
   }
 
+  // ── VÉRIFIER UN BILLET, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // `1` = l'écran vide (on tapera le numéro) ; toute autre valeur EST le numéro à vérifier — c'est
+  // ce que passent le fil des scans et la recherche globale, qui ont le numéro sous la main.
+  if (params.verifier) {
+    const fermerVerif = () => majParams({ verifier: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerVerif}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        <RechercheBillet
+          key={params.verifier}
+          numeroInitial={params.verifier === '1' ? '' : params.verifier}
+          onClose={fermerVerif}
+          droits={droits}
+        />
+      </div>
+    )
+  }
+
   // --- Rendu : pas de session ouverte ---
   if (!chargement && !session) {
     return (
@@ -1073,12 +1094,12 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               vérification et du fil des scans parce qu'aucune caisse n'est ouverte, c'est lui
               retirer la réponse au moment précis où on la lui demande. */}
           <div className="actions">
-            <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+            <button className="btn" onClick={() => majParams({ verifier: '1' }, { pousser: true })}>Vérifier un billet</button>
           </div>
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
-        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
+        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif}
+          onVerifier={(numero) => majParams({ verifier: String(numero || '1') }, { pousser: true })} />
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -1106,7 +1127,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           </p>
         </div>
         <div className="actions">
-          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+          <button className="btn" onClick={() => majParams({ verifier: '1' }, { pousser: true })}>Vérifier un billet</button>
           <button className="btn" onClick={() => majParams({ historique: '1' }, { pousser: true })} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
@@ -1121,7 +1142,6 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
           du nouveau. */}
       <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
 
       {/* Elle s'ouvre seule : `appairageEnAttente` n'est renseigné que par un règlement qui solde
           la vente alors qu'une ligne porte une carte. */}
