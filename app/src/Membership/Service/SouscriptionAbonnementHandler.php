@@ -20,6 +20,7 @@ use App\Membership\Enum\MembershipPeriodicity;
 use App\Membership\Enum\MembershipStatus;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Souscription d'un abonnement fitness (US-SPORT-01, CA-1). Crée l'abonnement, tokenise l'IBAN
@@ -62,8 +63,15 @@ final class SouscriptionAbonnementHandler
         Canal $canal = Canal::Guichet,
         // Le mandat déjà signé, quand il y en a un. Exclusif avec l'IBAN ci-dessus.
         ?MandatSepa $mandatExistant = null,
+        // Mode « caisse → abonnement » (spec-caisse-abonnement CP-1 G-3, plan CP-2 É1/É2) : crée un
+        // mandat EN ATTENTE (sans IBAN), à compléter plus tard par un lien de signature (É5, pas
+        // encore câblé). Exclusif avec ibanClair/titulaireMandat et mandatExistant.
+        bool $mandatEnAttente = false,
+        // La ligne de vente d'origine (App\Vente\Entity\LigneVente), quand l'abonnement naît d'une
+        // vente au comptoir : porte l'idempotence et le lien retour Vente → abonnement.
+        ?Uuid $sourceSaleLineId = null,
     ): Membership {
-        if ($mandatExistant === null && ($ibanClair === null || $titulaireMandat === null)) {
+        if ($mandatExistant === null && !$mandatEnAttente && ($ibanClair === null || $titulaireMandat === null)) {
             throw new UnprocessableEntityHttpException(
                 'Un mandat SEPA est requis : soit un mandat déjà signé, soit un IBAN et son titulaire.',
             );
@@ -159,6 +167,19 @@ final class SouscriptionAbonnementHandler
         //    dirait plus lequel a prélevé.
         if ($mandatExistant instanceof MandatSepa) {
             $mandat = $mandatExistant;
+        } elseif ($mandatEnAttente) {
+            // Placeholder EN ATTENTE (caisse → abonnement, G-3) : pas d'IBAN, non prélevable tant
+            // qu'il n'est pas complété par le lien de signature (É5, pas encore câblé).
+            // `dateSignature` est non-nullable : on la fixe à la date de vente, à corriger à la
+            // complétion.
+            $mandat = new MandatSepa();
+            $mandat->setRum($this->genererRum($abonnement))
+                ->setDateSignature($dateSouscription)
+                ->setStatut(StatutMandatSepa::EnAttente)
+                ->setClient($payeur)
+                ->setEtablissement($etablissement);
+            $this->em->persist($mandat);
+            $this->em->flush();
         } else {
             $token = $this->tokenisation->tokeniser((string) $ibanClair);
             $mandat = new MandatSepa();
@@ -176,6 +197,11 @@ final class SouscriptionAbonnementHandler
         }
 
         $abonnement->setMandatSepa($mandat);
+
+        if ($sourceSaleLineId !== null) {
+            $abonnement->setSourceSaleLineId($sourceSaleLineId);
+        }
+
         $this->em->persist($abonnement);
 
         // ⚠ LE MONTANT COURANT VA SUR L'ABONNEMENT, LE PRORATA N'Y VA PAS. L'abonnement porte ce

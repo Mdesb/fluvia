@@ -157,6 +157,11 @@ services:
     # Recharge de carte multi-entrées (frontière module Accès, US-CQ1, RG-CQ1-09) : implémentation
     # réelle dès ce lot — pas de stub, Accès est propriétaire de DroitAcces/Support/Appairage.
     App\Vente\Port\CardRechargeInterface: '@App\Acces\Service\CardRechargeHandler'
+    # Frontière module Abonnement (spec-caisse-abonnement CP-1 G-1, plan CP-2 É1/É2) : implémentation
+    # réelle dès ce lot — pas de stub, Membership est propriétaire de la souscription. Appelée par
+    # `ValiderVenteProcessor` APRÈS le commit de la vente (jamais dans la transaction de scellement,
+    # cf. docblock de `App\Vente\Port\SaleSubscriptionInterface`).
+    App\Vente\Port\SaleSubscriptionInterface: '@App\Membership\Adapter\SaleSubscriptionAdapter'
 
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
