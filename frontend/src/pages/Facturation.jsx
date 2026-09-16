@@ -7,7 +7,7 @@ import { useEtatUrl } from '../api/url.js'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import DevisModal from '../components/DevisModal.jsx'
-import FactureRendu from '../components/FactureRendu.jsx'
+import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri'
@@ -80,7 +80,7 @@ const STATUT_FACTURE = {
   echue: { libelle: 'Échue', ton: 'crit' },
 }
 
-const DEFAUTS = { tab: 'factures', statut: '', reglement: '' }
+const DEFAUTS = { tab: 'factures', statut: '', reglement: '', document: '' }
 
 function jours(depuis) {
   const d = new Date(depuis)
@@ -115,7 +115,6 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   const [nouvelleFacture, setNouvelleFacture] = useState(false)
   // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
   // le bouton n'apparait donc que sur une facture emise.
-  const [documentPour, setDocumentPour] = useState(null)
   const [reglementsDe, setReglementsDe] = useState(null)
   // Le rapport d'intégrité : `null` tant qu'on n'a pas demandé, jamais un état par défaut.
   const [chaine, setChaine] = useState(null)
@@ -211,6 +210,47 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // solde dû — ET L'ÉCRAN LES REPREND, en disant laquelle manque. Sans elles, un lien copié
   // avant qu'une facture soit réglée ouvrirait un formulaire pré-rempli à zéro, que le serveur
   // refuserait.
+  // ── LE DOCUMENT LÉGAL D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LA CONDITION DU BOUTON ET L'ÉCRAN LA REPREND : « Voir » ne s'affiche pas
+  // sur un brouillon, qui n'a pas de numéro — remettre un document sans numéro serait pire que ne
+  // rien remettre.
+  const lectureDocument = useFactureLue(params.document, etabActif)
+  if (params.document) {
+    const fermerDocument = () => majParams({ document: '' }, { pousser: true })
+    const f = lectureDocument.facture
+    let contenu
+    if (lectureDocument.chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureDocument.echouee
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut === 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          Un brouillon n’a pas encore de document opposable : il n’a pas de numéro. Émettez la facture
+          d’abord.
+        </div>
+      )
+    } else {
+      contenu = <FactureRendu key={params.document} facture={f} onClose={fermerDocument} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerDocument}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux factures
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   if (params.reglement) {
     const fermerReglement = () => majParams({ reglement: '' }, { pousser: true })
     const f = factureReglee
@@ -474,7 +514,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                                 className="btn sm"
                                 type="button"
                                 title="Affiche le document légal, imprimable ou enregistrable en PDF."
-                                onClick={() => setDocumentPour(f)}
+                                onClick={() => majParams({ document: String(f.id) }, { pousser: true })}
                               >
                                 Voir
                               </button>
@@ -612,11 +652,6 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
       />
 
 
-      {/* Montee seulement quand une facture est choisie : le composant lit le document a
-          l'ouverture, et le monter en permanence declencherait une lecture par rendu. */}
-      {documentPour && (
-        <FactureRendu facture={documentPour} onClose={() => setDocumentPour(null)} />
-      )}
 
       {/* ⚠ CE QUE L'API SERVAIT DEPUIS TOUJOURS ET QUE PERSONNE N'AFFICHAIT. `facture:read` sérialise
           `reglements`, `montantRegle` et `soldeDu` ; mesuré le 08/09 sur le build servi :

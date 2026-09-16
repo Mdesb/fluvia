@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
-import FactureRendu from '../components/FactureRendu.jsx'
+import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
 import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
@@ -27,7 +28,14 @@ import {
 // Ordre de présentation préféré des moyens de paiement au guichet.
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
+// `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
+const DEFAUTS_URL = { facture: '' }
+
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
+  const [params, majParams] = useEtatUrl('caisse', DEFAUTS_URL)
+  // Avec les autres crochets, et avant tout retour anticipé : un crochet conditionnel casserait
+  // le rendu dès que l'adresse change.
+  const lectureFacture = useFactureLue(params.facture, etabActif)
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
   // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
@@ -78,7 +86,6 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [moyenSel, setMoyenSel] = useState('especes')
   // La facture justificative qu'on vient d'émettre depuis l'historique, le temps de la montrer
   // et de la télécharger. `null` tant qu'aucune n'a été demandée.
-  const [facturePour, setFacturePour] = useState(null)
   const [montant, setMontant] = useState('')
   const [tpeSimule, setTpeSimule] = useState('accepte')
   const [busy, setBusy] = useState(false)
@@ -973,6 +980,45 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     />
   )
 
+  // ── LE DOCUMENT LÉGAL D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // Posé AVANT la garde de session : regarder un document est une lecture, et la caisse fermée ne
+  // l'empêche pas. La vente en cours vit dans l'état de ce composant, qui reste monté : revenir la
+  // retrouve intacte.
+  if (params.facture) {
+    const fermerFacture = () => majParams({ facture: '' }, { pousser: true })
+    const f = lectureFacture.facture
+    let contenu
+    if (lectureFacture.chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureFacture.echouee
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut === 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          Un brouillon n’a pas encore de document opposable : il n’a pas de numéro.
+        </div>
+      )
+    } else {
+      contenu = <FactureRendu key={params.facture} facture={f} onClose={fermerFacture} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerFacture}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   // --- Rendu : pas de session ouverte ---
   if (!chargement && !session) {
     return (
@@ -1431,15 +1477,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
           setErreur(null)
           setHistorique(false)
-          setFacturePour(f)
+          majParams({ facture: String(f.id) }, { pousser: true })
         }}
       />
 
-      {/* Montée seulement quand une facture existe : le composant LIT le document à l'ouverture, et
-          le monter en permanence déclencherait une lecture par rendu (même raison qu'en Facturation). */}
-      {facturePour && (
-        <FactureRendu facture={facturePour} onClose={() => setFacturePour(null)} />
-      )}
       {modaleSession}
       {modaleClient}
     </div>
