@@ -91,9 +91,13 @@ final class CatalogueCapacites
             // 0 entité, 0 ressource API, 0 écran — cinq fichiers de domaine pur, rien de persisté.
             // Il ne peut pas enregistrer une chambre.
             CapaciteCode::Lodging,
-            // 2 entités, 2 ressources, 0 écran — le serveur existe, personne ne peut s'en servir.
+            // 2 entités, 2 ressources — et un écran depuis le 05/09/2026 (Séjours : ouvrir une note,
+            // la facturer, la clôturer, la régler). ⚠ CE COMMENTAIRE DISAIT « 0 écran » : une mesure
+            // d'absence ne vieillit pas imprécise, elle devient le contraire du vrai. Le module reste
+            // hors vente par décision du 16/09/2026 — pas faute d'écran, mais parce qu'il est encore
+            // en chantier ; la taille gelée du garde-fou a été relevée le même jour.
             CapaciteCode::Stay,
-            // 2 entités, 1 ressource, 0 écran — même situation.
+            // 2 entités, 1 ressource, 0 écran — le serveur existe, personne ne peut s'en servir.
             CapaciteCode::Dining => false,
             default => true,
         };
