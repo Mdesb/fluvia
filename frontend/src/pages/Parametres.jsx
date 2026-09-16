@@ -516,7 +516,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +537,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -677,8 +677,8 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           {/* Au-dessus des régions, parce que la hiérarchie se lit de haut en bas :
               Groupe → Région → Établissement. Les deux du dessous avaient leur section, le sommet
               n'en avait aucune (R18). */}
-          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
-          <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
+          <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
           {/* ⚠ ON NE RETIRE QUE LA GESTION, PAS L'ACCES. Un exploitant multi-sites continue de voir
               ses etablissements et d'en changer : le selecteur vit dans la barre du haut
               (`AppShell`, `aria-label="Etablissement actif"`), sans garde ni permission, et il n'a
@@ -701,7 +701,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               un exploitant. Le selecteur vit dans la barre du haut (`AppShell`,
               `aria-label="Etablissement actif"`), sans garde ni permission. Ce qui partait etait le
               panneau de gestion, pas l'acces. */}
-          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
           {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
               << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
               dans un onglet << apparence >> le ferait chercher ailleurs : c'est un reglage de
@@ -728,11 +728,15 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               lui dit pas. */}
           <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurTypesTarif(api)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurTva(api, profils)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
@@ -757,10 +761,14 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               incertain. Les deux étaient faux — l'axe est une énumération de trois valeurs, et le
               format `AAAA-MM-JJ` est celui qu'utilise la suite de tests du serveur. */}
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurCategories(api)}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurSaisons(api)}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
@@ -770,6 +778,8 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurPointsDeVente(api, etabActif, moyens, regies)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}

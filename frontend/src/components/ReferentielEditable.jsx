@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { membres } from '../api/client.js'
 import Modal from './Modal.jsx'
 import { confirmer } from './Confirmation.jsx'
@@ -44,7 +44,21 @@ function versChampSimple(valeur, champ) {
   return valeur
 }
 
-export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }) {
+// ⚠ `onChange` ET `onEcrit`. Cinq appelants passaient `onChange`, qui n'était pas une prop de ce
+// composant : ils n'étaient jamais prévenus d'une écriture, et leurs listes voisines restaient
+// telles quelles. Les deux noms sont acceptés.
+//
+// L'ADRESSE, QUAND L'HÔTE EN PORTE UNE : `?ref=<référentiel>:<ligne|nouveau>`. Sans `majParams`,
+// le formulaire s'ouvre quand même, en place et sans adresse — plutôt que de ne pas s'ouvrir.
+export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit, onChange, params = {}, majParams }) {
+  const prevenir = () => { onEcrit?.(); onChange?.() }
+  // La clé d'un référentiel dans l'adresse : son titre réduit à des lettres et des tirets.
+  const cleRef = (descripteur?.titre || 'referentiel')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const cibleUrl = String(params.ref || '').startsWith(`${cleRef}:`)
+    ? String(params.ref).slice(cleRef.length + 1)
+    : null
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Ce composant porte la liste et l'etat vide de DOUZE
   // referentiels. Sur une lecture refusee, il affichait `siVide` — un texte ecrit pour « il n'y en
   // a pas » — la ou la reponse honnete est « on n'a pas pu regarder ». Sur les etablissements, ca
@@ -84,6 +98,22 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
     recharger()
   }, [recharger])
 
+  // ── L'ADRESSE OUVRE ET FERME ────────────────────────────────────────────────────────────────
+  //
+  // Une fois par clé : rouvrir à chaque rendu effacerait la saisie en cours.
+  const cleOuverte = useRef('')
+  const demanderCreation = () => (majParams
+    ? majParams({ ref: `${cleRef}:nouveau` }, { pousser: true })
+    : ouvrirCreation())
+  const demanderEdition = (ligne) => (majParams
+    ? majParams({ ref: `${cleRef}:${ligne.id}` }, { pousser: true })
+    : ouvrirEdition(ligne))
+  const fermerEdition = () => {
+    setEdition(null)
+    setErreurEdition(null)
+    if (majParams) majParams({ ref: '' }, { pousser: true })
+  }
+
   function ouvrirCreation() {
     const valeurs = {}
     champs.forEach((c) => {
@@ -116,6 +146,22 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
     setEdition({ ligne, valeurs })
   }
 
+  useEffect(() => {
+    if (!majParams) return
+    if (!cibleUrl) {
+      if (cleOuverte.current) { cleOuverte.current = ''; setEdition(null); setErreurEdition(null) }
+      return
+    }
+    if (cleOuverte.current === cibleUrl || chargement) return
+    cleOuverte.current = cibleUrl
+    if (cibleUrl === 'nouveau') { ouvrirCreation(); return }
+    // ⚠ Pas de paramètre par défaut ici : une ligne absente doit se DIRE, pas ouvrir une création.
+    const ligne = lignes.find((l) => String(l.id) === String(cibleUrl))
+    if (ligne) ouvrirEdition(ligne)
+    else setEdition('introuvable')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cibleUrl, chargement, lignes, majParams])
+
   async function enregistrer(e) {
     e.preventDefault()
     setErreur(null)
@@ -142,8 +188,8 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
       if (edition.ligne) await modifier(edition.ligne.id, corps)
       else await creer(corps)
       setSucces(edition.ligne ? 'Modification enregistrée.' : 'Ajout enregistré.')
-      onEcrit?.()
-      setEdition(null)
+      prevenir()
+      fermerEdition()
       await recharger()
     } catch (err) {
       // LE MESSAGE DU SERVEUR TEL QUEL, ET DANS LA FENÊTRE QUI L'A PROVOQUÉ.
@@ -170,7 +216,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
     try {
       await supprimer(ligne.id)
       setSucces('Suppression effectuée.')
-      onEcrit?.()
+      prevenir()
       await recharger()
     } catch (err) {
       setErreur(err.message || "La suppression n'a pas abouti.")
@@ -179,98 +225,25 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
     }
   }
 
-  return (
-    <section className="card" style={{ marginBottom: 16 }}>
-      <div className="card-h">
-        <h3>{titre}</h3>
-        {peutEcrire && creer && (
-          <div className="r">
-            <button className="btn primary sm" type="button" onClick={ouvrirCreation}>＋ Ajouter</button>
-          </div>
-        )}
-      </div>
-
-      <div className="card-b">
-        {/* À quoi ça sert, avant la liste et non après : quelqu'un qui ne sait pas ce qu'il regarde
-            ne saura pas non plus quoi en faire. */}
-        <p className="hint" style={{ marginTop: 0 }}>{aQuoiCaSert}</p>
-
-        {erreur && <div className="banner banner-error">{erreur}</div>}
-        {succes && <div className="banner banner-ok">{succes}</div>}
-
-        {chargement ? (
-          <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
-        ) : (lignes || []).length === 0 ? (
-          <div className="empty" style={{ padding: 18 }}>
-            <div style={{ marginBottom: 10 }}>
-              {lignesLu === null ? <b>Cette liste n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
+  // ── LE FORMULAIRE, À LA PLACE DE LA LISTE ───────────────────────────────────────────────────
+  //
+  // Dans SA carte, pas à la place de la page : cinq référentiels cohabitent dans un même onglet.
+  if (edition) {
+    return (
+      <section className="card" style={{ marginBottom: 16 }}>
+        <div className="card-h">
+          <h3>{edition === 'introuvable' ? titre : (edition.ligne ? `Modifier — ${titre}` : `Ajouter — ${titre}`)}</h3>
+        </div>
+        <div className="card-b">
+          <button className="btn ghost sm" type="button" onClick={fermerEdition}
+            style={{ marginBottom: 'var(--esp-large)' }}>
+            ← Retour à la liste
+          </button>
+          {edition === 'introuvable' ? (
+            <div className="banner banner-warn">
+              Cette ligne n’existe pas dans « {titre} », ou n’est plus visible depuis cet établissement.
             </div>
-            {/* ⚠ PAS `primary` : l'en-tete du panneau porte deja « ＋ Ajouter », qui appelle le
-                MEME `ouvrirCreation`, et les deux sont visibles ensemble quand la liste est vide —
-                mesures a 141 px l'un de l'autre. Deux controles de meme poids pour un seul geste
-                divisent l'attention sans rien ajouter.
-                C'est celui-ci qu'on attenue et non l'autre : l'en-tete existe dans les deux etats,
-                donc sa position s'apprend ; celui-ci disparait des la premiere ligne creee. */}
-            {peutEcrire && creer && (
-              <button className="btn sm" type="button" onClick={ouvrirCreation}>
-                ＋ Créer le premier
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  {colonnes.map((c) => (
-                    <th key={c.cle} className={c.num ? 'num' : undefined} title={c.aide}>{c.titre}</th>
-                  ))}
-                  {peutEcrire && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {(lignes || []).map((l) => (
-                  <tr key={l.id}>
-                    {colonnes.map((c) => (
-                      <td key={c.cle} className={c.num ? 'num' : undefined}>
-                        {c.rendu ? c.rendu(l) : (l[c.cle] ?? '—')}
-                      </td>
-                    ))}
-                    {peutEcrire && (
-                      <td className="num">
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          {modifier && (
-                            <button className="btn ghost sm" type="button" onClick={() => ouvrirEdition(l)}>
-                              Modifier
-                            </button>
-                          )}
-                          {supprimer && (
-                            <button
-                              className="btn ghost sm"
-                              type="button"
-                              disabled={enCours}
-                              onClick={() => supprimerLigne(l)}
-                            >
-                              Supprimer
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <Modal
-        open={!!edition}
-        onClose={() => { setEdition(null); setErreurEdition(null) }}
-        titre={edition?.ligne ? `Modifier — ${titre}` : `Ajouter — ${titre}`}
-      >
-        {edition && (
+          ) : (
           <form onSubmit={enregistrer}>
             {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
 
@@ -364,14 +337,103 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
             ))}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
+              <button className="btn" type="button" onClick={fermerEdition}>Annuler</button>
               <button className="btn primary" type="submit" disabled={enCours}>
                 {enCours ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </div>
           </form>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h">
+        <h3>{titre}</h3>
+        {peutEcrire && creer && (
+          <div className="r">
+            <button className="btn primary sm" type="button" onClick={demanderCreation}>＋ Ajouter</button>
+          </div>
         )}
-      </Modal>
+      </div>
+
+      <div className="card-b">
+        {/* À quoi ça sert, avant la liste et non après : quelqu'un qui ne sait pas ce qu'il regarde
+            ne saura pas non plus quoi en faire. */}
+        <p className="hint" style={{ marginTop: 0 }}>{aQuoiCaSert}</p>
+
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {succes && <div className="banner banner-ok">{succes}</div>}
+
+        {chargement ? (
+          <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+        ) : (lignes || []).length === 0 ? (
+          <div className="empty" style={{ padding: 18 }}>
+            <div style={{ marginBottom: 10 }}>
+              {lignesLu === null ? <b>Cette liste n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
+            </div>
+            {/* ⚠ PAS `primary` : l'en-tete du panneau porte deja « ＋ Ajouter », qui appelle le
+                MEME `ouvrirCreation`, et les deux sont visibles ensemble quand la liste est vide —
+                mesures a 141 px l'un de l'autre. Deux controles de meme poids pour un seul geste
+                divisent l'attention sans rien ajouter.
+                C'est celui-ci qu'on attenue et non l'autre : l'en-tete existe dans les deux etats,
+                donc sa position s'apprend ; celui-ci disparait des la premiere ligne creee. */}
+            {peutEcrire && creer && (
+              <button className="btn sm" type="button" onClick={demanderCreation}>
+                ＋ Créer le premier
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  {colonnes.map((c) => (
+                    <th key={c.cle} className={c.num ? 'num' : undefined} title={c.aide}>{c.titre}</th>
+                  ))}
+                  {peutEcrire && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {(lignes || []).map((l) => (
+                  <tr key={l.id}>
+                    {colonnes.map((c) => (
+                      <td key={c.cle} className={c.num ? 'num' : undefined}>
+                        {c.rendu ? c.rendu(l) : (l[c.cle] ?? '—')}
+                      </td>
+                    ))}
+                    {peutEcrire && (
+                      <td className="num">
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          {modifier && (
+                            <button className="btn ghost sm" type="button" onClick={() => demanderEdition(l)}>
+                              Modifier
+                            </button>
+                          )}
+                          {supprimer && (
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              disabled={enCours}
+                              onClick={() => supprimerLigne(l)}
+                            >
+                              Supprimer
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
