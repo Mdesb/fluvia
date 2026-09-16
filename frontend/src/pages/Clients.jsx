@@ -146,7 +146,7 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '', consentement: '' }
+const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '', consentement: '', devis: '' }
 
 // Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
 const INCLUABLES = [
@@ -191,7 +191,19 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const [ficheErr, setFicheErr] = useState(null)
   const [fidelite, setFidelite] = useState(null)
   const [echange, setEchange] = useState(null) // client dont on note un échange, depuis la liste
-  const [devisPour, setDevisPour] = useState(null)
+  // ⚠ LE CLIENT DU DEVIS SE LIT PAR SON IDENTIFIANT : la liste est paginée et filtrée, un lien ne
+  // doit pas en dépendre. Seul un 404 dit « il n'existe pas » ; la clé porte l'établissement.
+  const [lectureDevis, setLectureDevis] = useState(null)
+  const cleDevis = params.devis ? `${params.devis}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.devis) { setLectureDevis(null); return undefined }
+    const cle = `${params.devis}|${etabActif}`
+    let vivant = true
+    api.client(params.devis)
+      .then((v) => { if (vivant) setLectureDevis({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureDevis({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.devis, etabActif])
 
   const selId = params.fiche || null
   // ⚠ LA PAGE PORTE LE MESSAGE DU CONSENTEMENT ENREGISTRÉ : la carte qui l'affichait est remontée au
@@ -368,6 +380,37 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   // ⚠ TROIS ÉTATS. « pas encore lu » n'est pas « illisible », et ni l'un ni l'autre n'est
   // « cet identifiant ne désigne personne ». Montés sur une fiche vide, les trois donneraient
   // le même écran — et celui-là propose de fusionner.
+  // ── LE DEVIS D'UN CLIENT, EN ÉCRAN ──────────────────────────────────────────────────────────
+  //
+  // Posé avant la fiche : on l'ouvre depuis la liste comme depuis la fiche, et c'est le même écran.
+  if (params.devis) {
+    const fermerDevis = () => majParams({ devis: '' }, { pousser: true })
+    const lu = lectureDevis?.cle === cleDevis ? lectureDevis : null
+    let contenu
+    if (lu === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!lu.valeur) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lu.echouee
+            ? 'Ce client n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce client n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else {
+      contenu = <DevisModal key={cleDevis} client={lu.valeur} onClose={fermerDevis} onCree={fermerDevis} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerDevis}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux clients
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   if (fusionSur) {
     const retour = (
       <button
@@ -496,6 +539,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             {succesConsentement && <div className="banner banner-ok">{succesConsentement}</div>}
             <FicheContenu
               fiche={fiche}
+              onDevis={() => majParams({ devis: String(fiche.client?.id || selId) }, { pousser: true })}
               onConsentement={() => { setSuccesConsentement(null); majParams({ consentement: 'nouveau' }, { pousser: true }) }}
               mouvements={mouvements}
               mouvementsIllisibles={mouvementsIllisibles}
@@ -682,7 +726,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                             Le garde-fou des boutons nommes ne pouvait pas le voir : il verifie qu'un
                             nom EXISTE, pas qu'il designe. */}
                         {peutFacturer && (
-                          <button className="btn sm" type="button" aria-label={`Devis pour ${nomClient(c)}`} onClick={() => setDevisPour(c)}>Devis</button>
+                          <button className="btn sm" type="button" aria-label={`Devis pour ${nomClient(c)}`} onClick={() => majParams({ devis: String(c.id) }, { pousser: true })}>Devis</button>
                         )}
                         {peutModifier && (
                           <button className="btn sm" type="button" aria-label={`Échange pour ${nomClient(c)}`} onClick={() => setEchange(c)}>Échange</button>
@@ -754,13 +798,6 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
           deux fiches en une sans donner celui de revenir, ce qui est pire que de ne rien livrer. */}
       {peutFusionner && <JournalDesFusions />}
 
-      <DevisModal
-        open={!!devisPour}
-        client={devisPour}
-        onClose={() => setDevisPour(null)}
-        onCree={() => setDevisPour(null)}
-      />
-
       <Modal open={!!echange} onClose={() => setEchange(null)} titre={`Noter un échange — ${nomClient(echange)}`}>
         {echange && (
           <SaisieEchange
@@ -777,10 +814,9 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge, onConsentement }) {
+function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge, onConsentement, onDevis }) {
   const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
-  const [devis, setDevis] = useState(false)
   // `undefined` tant que `PassagesClient` n'a pas repondu ou n'a pas pu lire ;
   // `null` quand il a lu et n'a rien trouve. La tuile distingue les deux.
   const [dernierPassage, setDernierPassage] = useState(undefined)
@@ -830,19 +866,12 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
             </button>
           )}
           {aLeDroit(droits, 'facturation.gerer') && (
-            <button className="btn sm" type="button" onClick={() => setDevis(true)}>
+            <button className="btn sm" type="button" onClick={() => onDevis?.()}>
               Établir un devis
             </button>
           )}
         </div>
       </div>
-
-      <DevisModal
-        open={devis}
-        client={c}
-        onClose={() => setDevis(false)}
-        onCree={() => setDevis(false)}
-      />
 
       <BlocFidelite
         fidelite={fidelite}
