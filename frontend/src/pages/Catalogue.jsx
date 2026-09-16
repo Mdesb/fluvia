@@ -3,7 +3,7 @@ import { useEtatUrl } from '../api/url.js'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
-import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
+import ProduitOptions from '../components/ProduitOptionsModal.jsx'
 import ProduitFiche from '../components/ProduitFiche.jsx'
 import PromotionsCatalogue from '../components/PromotionsCatalogue.jsx'
 import GrillesTarifaires from '../components/GrillesTarifaires.jsx'
@@ -16,7 +16,7 @@ import { confirmer } from '../components/Confirmation.jsx'
 // filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
 // `nouveau` vit dans l'URL comme `fiche` : recharger la page ne doit pas faire perdre le formulaire
 // commence, et le bouton « precedent » du navigateur doit ramener au catalogue.
-const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '' }
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '', options: '' }
 
 /**
  * LA FICHE VIERGE — ce qu'on voit apres « Nouveau produit », avant que le produit n'existe.
@@ -129,7 +129,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
   // ⚠ ET IL EFFACE LES ECRANS DE NIVEAU 2. Un `promo` ou un `fiche` laisse dans l'adresse
   // rouvrirait un formulaire d'un AUTRE onglet des qu'on y revient — un ecran surgi de nulle
   // part, sur des donnees qu'on ne regardait plus.
-  const setTab = (v) => majParams({ tab: v, fiche: '', nouveau: '', promo: '' })
+  const setTab = (v) => majParams({ tab: v, fiche: '', nouveau: '', promo: '', options: '' })
 
   // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
   // avant que la liste ne tente de l'ouvrir.
@@ -161,7 +161,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
   // vierge (`nouveau=1`) gardait le titre et les onglets au-dessus d'elle, et le formulaire
   // d'une promotion aurait fait pareil : le meme defaut que celui decrit ci-dessus, aux memes
   // endroits, pour n'avoir nomme qu'un seul cas.
-  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1'))
+  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1' || !!params.options))
     || (tab === 'promotions' && !!params.promo)
 
   return (
@@ -233,7 +233,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
   const [succes, setSucces] = useState(null)
 
 
-  const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
   const selId = params.fiche || null
 
@@ -320,6 +319,52 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     } finally {
       setActionEnCours(null)
     }
+  }
+
+  // ── LES OPTIONS D'UN PRODUIT, EN ÉCRAN ──────────────────────────────────────────────────────
+  //
+  // Le produit se lit par son identifiant : la liste est filtrée et paginée, un lien ne doit pas en
+  // dépendre. Seul un 404 dit « n'existe pas » ; « pas encore lu » se déduit de la clé, qui porte
+  // l'établissement (#172). Le bouton « Options » n'a pas de condition : l'écran n'en reprend aucune.
+  const [lectureOptions, setLectureOptions] = useState(null)
+  const cleOptions = params.options ? `${params.options}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.options) { setLectureOptions(null); return undefined }
+    const cle = `${params.options}|${etabActif}`
+    let vivant = true
+    api.produit(params.options)
+      .then((v) => { if (vivant) setLectureOptions({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureOptions({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.options, etabActif])
+  const lectureOptionsCourante = lectureOptions?.cle === cleOptions ? lectureOptions : null
+
+  if (params.options) {
+    const fermerOptions = () => majParams({ options: '' }, { pousser: true })
+    const produitLu = lectureOptionsCourante?.valeur ?? null
+    let contenu
+    if (lectureOptionsCourante === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!produitLu) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureOptionsCourante.echouee
+            ? 'Ce produit n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce produit n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else {
+      contenu = <ProduitOptions key={cleOptions} produit={produitLu} />
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerOptions}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au catalogue
+        </button>
+        {contenu}
+      </>
+    )
   }
 
   // La fiche prend la page entiere : on n'affiche ni la liste ni le formulaire de creation derriere.
@@ -500,7 +545,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                           </button>
                           )
                         })}
-                        <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
+                        <button className="btn ghost sm" type="button" onClick={() => majParams({ options: String(p.id) }, { pousser: true })}>
                           Options
                         </button>
                       </div>
@@ -522,11 +567,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         )}
       </div>
 
-      <ProduitOptionsModal
-        open={!!produitOptions}
-        produit={produitOptions}
-        onClose={() => setProduitOptions(null)}
-      />
 
     </>
   )

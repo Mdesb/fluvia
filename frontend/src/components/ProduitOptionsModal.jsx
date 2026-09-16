@@ -1,17 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit } from '../api/produit.js'
-import Modal from './Modal.jsx'
 
-// Rattachement d'options (GroupeOption) à un produit depuis sa fiche (App\OptionProduit, RG-OPT-02).
+// Rattachement d'options (GroupeOption) à un produit (App\OptionProduit, RG-OPT-02) — un écran du
+// Catalogue, #catalogue?options=<id>, plus une modale (le nom du fichier est resté).
 // Liste les rattachements existants (obligatoire / facultatif, détachable) et propose les groupes
 // actifs non encore rattachés.
-export default function ProduitOptionsModal({ open, produit, onClose }) {
+export default function ProduitOptions({ produit }) {
   const [liaisons, setLiaisons] = useState([])
   const [groupes, setGroupes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [busy, setBusy] = useState(false)
+  // ⚠ `false` = LECTURE ÉCHOUÉE. Sur un refus, les deux listes restaient vides et l'écran disait
+  // « Aucune option rattachée » et « Aucun groupe d'options. Créez-en… » à côté de l'erreur.
+  const [lu, setLu] = useState(null)
 
   const produitId = produit?.id
 
@@ -25,7 +28,9 @@ export default function ProduitOptionsModal({ open, produit, onClose }) {
       const liste = membres(opc).filter((op) => String(op.produit || '').endsWith(String(produitId)))
       setLiaisons(liste)
       setGroupes(membres(gc).filter((g) => g.actif !== false))
+      setLu(true)
     } catch (e) {
+      setLu(false)
       setErreur(e.message)
     } finally {
       setChargement(false)
@@ -33,8 +38,8 @@ export default function ProduitOptionsModal({ open, produit, onClose }) {
   }, [produitId])
 
   useEffect(() => {
-    if (open) recharger()
-  }, [open, recharger])
+    recharger()
+  }, [recharger])
 
   const idsRattaches = new Set(
     liaisons.map((op) => (op.groupeOption?.id ? String(op.groupeOption.id) : null)).filter(Boolean),
@@ -86,11 +91,17 @@ export default function ProduitOptionsModal({ open, produit, onClose }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre={`Options — ${produit ? libelleProduit(produit) : ''}`} taille="lg">
+    <>
+      <h2>Options — {produit ? libelleProduit(produit) : ''}</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
+      ) : lu === false ? (
+        <div className="banner banner-warn">
+          Les options de ce produit n’ont pas pu être lues : rien n’est affiché plutôt qu’une liste vide qui
+          dirait qu’il n’y en a pas.
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div>
@@ -176,6 +187,6 @@ export default function ProduitOptionsModal({ open, produit, onClose }) {
           </div>
         </div>
       )}
-    </Modal>
+    </>
   )
 }
