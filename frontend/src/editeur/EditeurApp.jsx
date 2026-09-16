@@ -3,7 +3,9 @@ import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } 
 import Login from '../pages/Login.jsx'
 import { aUnDesDroits } from '../api/droits.js'
 import AppShell from '../components/AppShell.jsx'
-import BasculeSupport from './BasculeSupport.jsx'
+import BasculeSupport, { PanneauBascule } from './BasculeSupport.jsx'
+import { ecrireHash, lireHash } from '../api/url.js'
+import { useEtatUrl } from '../api/url.js'
 import AccesAssistance from './pages/AccesAssistance.jsx'
 import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
@@ -40,7 +42,29 @@ import SiteVitrine from './pages/SiteVitrine.jsx'
 export default function EditeurApp() {
   const [authed, setAuthed] = useState(!!tokenStore.get())
   const [me, setMe] = useState(null)
-  const [onglet, setOnglet] = useState('abonnements')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE. Il vivait dans un état local : F5 ramenait aux abonnements,
+  // aucun écran ne se partageait, et « précédent » sortait de l'application. Même mécanisme que
+  // le back-office — c'est ce qui permet à l'écran de bascule d'avoir une adresse.
+  const [onglet, setOngletBrut] = useState(() => lireHash().onglet || 'abonnements')
+  const setOnglet = (id) => {
+    setOngletBrut(id)
+    ecrireHash(id, {}, { pousser: true })
+  }
+  useEffect(() => {
+    if (!lireHash().onglet) ecrireHash(onglet, {})
+    const surChangement = () => {
+      const cible = lireHash().onglet
+      if (cible) setOngletBrut(cible)
+    }
+    window.addEventListener('hashchange', surChangement)
+    window.addEventListener('popstate', surChangement)
+    return () => {
+      window.removeEventListener('hashchange', surChangement)
+      window.removeEventListener('popstate', surChangement)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const [params, majParams] = useEtatUrl(onglet, { bascule: '' })
   const [refuse, setRefuse] = useState(false)
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
@@ -246,7 +270,9 @@ export default function EditeurApp() {
          ce filtre, un agent qui ne l'a pas voyait le bouton, choisissait un client, ecrivait son
          motif et recevait un 403 a la fin. Un bouton qui refuse au clic fait chercher une panne la
          ou il manque une permission. */
-      actionsBarre={aUnDesDroits(droits, ['editor.support_access']) ? <BasculeSupport /> : null}
+      actionsBarre={aUnDesDroits(droits, ['editor.support_access'])
+        ? <BasculeSupport onOuvrir={() => majParams({ bascule: '1' }, { pousser: true })} />
+        : null}
     >
 
       {/*
@@ -269,7 +295,19 @@ export default function EditeurApp() {
           l'éditeur. On l'explique au lieu d'afficher un tableau vide — un écran vide laisse croire
           qu'il n'y a rien à voir, alors qu'il n'y a rien à voir POUR CE COMPTE.
         */}
-        {refuse ? (
+        {/* ── BASCULER EN MODE SUPPORT, EN ÉCRAN ───────────────────────────────────────────────
+            Dans la page, sous la barre : l'agent garde sous les yeux où il est, et le bandeau qui
+            dit chez quel client il travaille. */}
+        {params.bascule === '1' ? (
+          <>
+            <button className="btn ghost sm" type="button"
+              onClick={() => majParams({ bascule: '' }, { pousser: true })}
+              style={{ marginBottom: 'var(--esp-large)' }}>
+              ← Retour à l’administration
+            </button>
+            <PanneauBascule onClose={() => majParams({ bascule: '' }, { pousser: true })} />
+          </>
+        ) : refuse ? (
           <div className="empty">
             <p>
               Cet écran est réservé à l'établissement éditeur. Le compte connecté n'y est pas
