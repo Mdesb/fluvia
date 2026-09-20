@@ -354,33 +354,23 @@ export default function PublicApp() {
           onNaviguer={onNaviguer}
         />
       ) : route.vue === 'tunnel' ? (
-        panier && (panier.lignes || []).length > 0 ? (
-          <Tunnel
-            panier={panier}
-            vitrineId={vitrineId}
-            metaProduits={metaProduits}
-            metaCreneaux={metaCreneaux}
-            langue={langue}
-            connecte={connecte}
-            onPanierMaj={setPanier}
-            onConnexionClient={() => setConnecte(true)}
-            onCommandeConfirmee={commandeConfirmee}
-            onNaviguer={onNaviguer}
-          />
-        ) : (
-          <Panier
-            panier={panier}
-            metaProduits={metaProduits}
-            metaCreneaux={metaCreneaux}
-            langue={langue}
-            busy={busyPanier}
-            erreur={erreurPanier}
-            onRetirer={retirerLigne}
-            onModifier={modifierQuantite}
-            onVider={viderPanier}
-            onNaviguer={onNaviguer}
-          />
-        )
+        // ⚠ NE PAS conditionner le rendu du Tunnel sur `panier && lignes > 0`. Au paiement réussi,
+        // `commandeConfirmee` fait setPanier(null) : cette condition tomberait et démonterait le
+        // Tunnel AVANT son étape Confirmation, renvoyant le client vers un panier vide au lieu de
+        // son billet. L'étape Confirmation n'a plus besoin du panier (elle lit `infoBillets`), et le
+        // Tunnel se protège lui-même d'une entrée à panier vide (garde `etape < 3` → retour panier).
+        <Tunnel
+          panier={panier}
+          vitrineId={vitrineId}
+          metaProduits={metaProduits}
+          metaCreneaux={metaCreneaux}
+          langue={langue}
+          connecte={connecte}
+          onPanierMaj={setPanier}
+          onConnexionClient={() => setConnecte(true)}
+          onCommandeConfirmee={commandeConfirmee}
+          onNaviguer={onNaviguer}
+        />
       ) : route.vue === 'legal' ? (
         <PageLegale
           etablissementId={catalogue?.etablissement}
