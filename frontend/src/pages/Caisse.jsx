@@ -284,6 +284,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
+  // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
+  // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout). ⚠ DÉCLARÉ ICI, EN AMONT :
+  // `modaleSouscription` plus bas le référence, et une const de la TDZ lue trop tôt casse l'écran.
+  const ligneAbo = panier.find((l) => estAbonnement(l.produit)) || null
+
   // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
   // Les fusionner obligerait a ressaisir pour vendre un adulte et un enfant ensemble, ce qui est la
   // vente courante d'une famille au guichet.
@@ -1199,9 +1204,6 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
   }
 
   const enPaiement = !!vente
-  // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
-  // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout ci-dessus).
-  const ligneAbo = panier.find((l) => estAbonnement(l.produit)) || null
 
   return (
     <div className="view large">
