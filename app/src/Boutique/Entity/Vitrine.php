@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Boutique\State\VitrinePubliqueProvider;
 use App\Boutique\State\EstablishmentStampProcessor;
+use App\Boutique\State\UploadVitrineLogoProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -43,6 +44,15 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
             processor: EstablishmentStampProcessor::class,
         ),
         new Patch(uriTemplate: '/boutique/vitrines/{id}', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
+
+        // LE TÉLÉVERSEMENT DU LOGO — multipart, corps lu à la main (idiome du dépôt, comme les
+        // photos de produit). `deserialize: false` : le processeur lit le fichier lui-même.
+        new Post(
+            uriTemplate: '/boutique/vitrines/{id}/logo',
+            security: "is_granted('PERM', 'boutique.gerer_vitrine')",
+            deserialize: false,
+            processor: UploadVitrineLogoProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['vitrine:read']],
     denormalizationContext: ['groups' => ['vitrine:write']],
