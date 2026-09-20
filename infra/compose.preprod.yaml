@@ -64,6 +64,8 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Scellement des signatures electroniques (mandat SEPA + contrat d'abonnement, App\Signature).
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
       # Autorise le prestataire de paiement en ligne de DEMONSTRATION (bouchon qui signe ses propres
       # recus). 1 en PREPRODUCTION pour tester le tunnel d'achat de bout en bout ; 0 (ou absent) en
       # PRODUCTION, ou un vrai PSP doit etre branche. Sans cette ligne, la variable de .env.preprod
@@ -142,6 +144,8 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Scellement des signatures electroniques (blocs php/scheduler maintenus identiques).
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
       # Meme flag que le service php (blocs maintenus identiques). Voir le commentaire la-haut.
       PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:
