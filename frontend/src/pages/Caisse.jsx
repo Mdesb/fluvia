@@ -312,6 +312,20 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     return retenues
   }
 
+  // UN PRODUIT QUI EXIGE QU'ON NOMME SON BÉNÉFICIAIRE (RG-M2-04).
+  //
+  // ⚠ L'AUTORITÉ RESTE LE SERVEUR. `AjoutLigneHandler::estNominatif()` tranche pour de vrai — et sa
+  // garde, relayée par `demarrerPaiement`, reste le filet. Ceci ne sert qu'à savoir QUAND ouvrir le
+  // sélecteur : à l'ajout au panier plutôt qu'au paiement (demande de Maxime). On réplique donc
+  // exactement la même règle : un type portant la facette « accès », OU le drapeau produit
+  // `champsPerso.beneficiaireRequis`. Les deux champs sont bien servis par `/api/produits`.
+  function exigeBeneficiaire(produit) {
+    const facettes = produit?.type?.facettes
+    const parType = Array.isArray(facettes) && facettes.includes('acces')
+    const parDrapeau = produit?.champsPerso?.beneficiaireRequis === true
+    return parType || parDrapeau
+  }
+
   /**
    * Ajoute au panier — en demandant AU SERVEUR le prix et les options proposables.
    *
@@ -471,6 +485,22 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         },
       ]
     })
+
+    // ── BÉNÉFICIAIRE DÈS L'AJOUT (Lot 2b, demande de Maxime) ────────────────────────────────────
+    //
+    // Un produit nominatif exige qu'on nomme la personne à qui il est destiné. Sans ça, la vente
+    // était refusée AU PAIEMENT et le sélecteur s'ouvrait en catastrophe (`demarrerPaiement`). On
+    // le demande donc ICI, au moment où le produit entre au panier : moins de gestes, et l'erreur
+    // ne surgit plus au pire moment. Le client rattaché à la vente est le bénéficiaire des lignes
+    // (modèle actuel) ; une fois quelqu'un rattaché, on ne redemande plus.
+    //
+    // On ne rouvre pas sur un simple réajustement d'options (`remplace`) : la ligne existait déjà,
+    // et le sélecteur a été proposé à sa création. La garde de `demarrerPaiement` reste le filet si
+    // le caissier ferme sans choisir.
+    if (remplace === null && !client && exigeBeneficiaire(produit)) {
+      setBesoinClient(true)
+      setPickerOuvert(true)
+    }
   }
 
   // Un clic reste un clic quand il n'y a rien a choisir : on ne fait payer le choix qu'a ceux qui en
@@ -1190,7 +1220,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 ) : (
                   <>
                     <span className="cb-info hint" style={{ margin: 0 }}>
-                      Vente au comptoir — aucun client rattaché
+                      {besoinClient
+                        ? 'Ce produit exige un bénéficiaire — rattachez la personne à qui il est destiné.'
+                        : 'Vente au comptoir — aucun client rattaché'}
                     </span>
                     <button
                       className={`btn sm${besoinClient ? ' primary' : ''}`}
