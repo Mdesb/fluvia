@@ -10,11 +10,16 @@ use App\Crm\Service\BeneficiaryResolver;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Membership\Entity\Membership;
 use App\Membership\Service\SouscriptionAbonnementHandler;
+use App\Membership\Service\SubscriptionContractSigner;
+use App\Sepa\Service\SepaMandateSigner;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -37,6 +42,10 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly SouscriptionAbonnementHandler $handler,
         private readonly ContexteEtablissement $contexte,
         private readonly BeneficiaryResolver $beneficiaires,
+        private readonly SepaMandateSigner $mandateSigner,
+        private readonly SubscriptionContractSigner $contractSigner,
+        private readonly Security $security,
+        private readonly RequestStack $requestStack,
     ) {
     }
 
@@ -135,7 +144,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             }
         }
 
-        return $this->handler->souscrire(
+        $abonnement = $this->handler->souscrire(
             $adherent,
             $payeur,
             $formule,
@@ -146,6 +155,34 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             $titulaire,
             $montantPremiereCentimes,
         );
+
+        // ── SIGNATURE DU MANDAT ET DU CONTRAT (avancée, scellée — module App\Signature) ──────────
+        // La souscription ne « marque » plus le mandat Actif sans preuve : elle SIGNE le mandat et
+        // le contrat, et scelle les deux. L'image manuscrite arrive du tunnel (`signatureMandat` /
+        // `signatureContrat`, base64) ; absente, la signature reste un consentement horodaté valide
+        // (opérateur, IP, empreinte du document) — jamais moins qu'aujourd'hui, où rien n'était signé.
+        $operateur = $this->security->getUser();
+        $operateur = $operateur instanceof Utilisateur ? $operateur : null;
+        $requete = $this->requestStack->getCurrentRequest();
+        $ip = $requete?->getClientIp();
+        $userAgent = $requete?->headers->get('User-Agent');
+        $signatureMandat = \is_string($corps['signatureMandat'] ?? null) ? $corps['signatureMandat'] : null;
+        $signatureContrat = \is_string($corps['signatureContrat'] ?? null) ? $corps['signatureContrat'] : null;
+
+        $mandat = $abonnement->getMandatSepa();
+        if ($mandat !== null) {
+            $this->mandateSigner->sign($mandat, $payeur, $operateur, $signatureMandat, $ip, $userAgent);
+            // ⚠ ON FLUSH ENTRE LES DEUX SIGNATURES. La séquence de la chaîne se lit en base
+            // (`lastLink`) : sans ce flush, le contrat interrogerait une chaîne où la signature du
+            // mandat n'est pas encore écrite, prendrait la MÊME séquence, et le second INSERT
+            // violerait `uniq_electronic_signature_seq`. Mesuré : SQLSTATE 23000 sur (etab, 1).
+            $this->em->flush();
+        }
+        $this->contractSigner->sign($abonnement, $payeur, $operateur, $signatureContrat, $ip, $userAgent);
+
+        $this->em->flush();
+
+        return $abonnement;
     }
 
     /** @param class-string $classe */
