@@ -12,6 +12,7 @@ import ScansEnDirect from '../components/ScansEnDirect.jsx'
 import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
+import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
@@ -27,6 +28,14 @@ import {
 
 // Ordre de présentation préféré des moyens de paiement au guichet.
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
+
+// UN PRODUIT D'ABONNEMENT NE SE VEND PAS COMME UN AUTRE (demande de Maxime : « un abonnement se
+// vend de la même manière partout »). Au comptoir, il devient une ligne de panier, mais au moment
+// d'encaisser on ouvre la MODALE de souscription (le même composant que l'onglet Abonnements :
+// mandat SEPA + contrat signés, prorata, encaissement de la 1re échéance) au lieu du pavé de
+// paiement classique. On repère l'abonnement à sa formule prélevée en SEPA — exactement le filtre
+// de l'écran Abonnements.
+const estAbonnement = (produit) => !!produit?.formule?.sepaActif
 
 // `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
 // `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
@@ -68,6 +77,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [client, setClient] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [besoinClient, setBesoinClient] = useState(false)
+  // La modale de souscription s'ouvre au moment d'encaisser un panier qui porte un abonnement.
+  const [souscriptionOuverte, setSouscriptionOuverte] = useState(false)
   // ⚠ LE SOLDE DU PORTE-MONNAIE, QUE CET ECRAN NE LISAIT PAS.
   //
   // `null` = pas de porte-monnaie, ou pas encore lu. La caisse proposait `pmv` comme moyen de
@@ -506,6 +517,20 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Un clic reste un clic quand il n'y a rien a choisir : on ne fait payer le choix qu'a ceux qui en
   // ont un. Une caisse se juge au nombre de gestes par vente.
   function choisirPuisAjouter(produit) {
+    // ⚠ UN ABONNEMENT SE SOUSCRIT SEUL. La souscription est une opération à part (mandat + contrat
+    // signés, échéancier) : la mélanger à des ventes de produits dans le même panier n'aurait pas
+    // de sens d'encaissement. On refuse donc le mélange, plutôt que de laisser un panier qu'on ne
+    // saurait pas conclure.
+    const abo = estAbonnement(produit)
+    if (abo && panier.length > 0) {
+      setErreur('Un abonnement se souscrit seul : videz le panier avant de l’ajouter.')
+      return
+    }
+    if (!abo && panier.some((l) => estAbonnement(l.produit))) {
+      setErreur('Une souscription d’abonnement est dans le panier : concluez-la ou videz le panier avant d’ajouter un autre produit.')
+      return
+    }
+    setErreur(null)
     const grilles = grillesVendables(produit)
     if (grilles.length <= 1) ajouter(produit, grilles[0])
     else setChoixTarif({ produit, grilles })
@@ -1003,6 +1028,41 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     />
   )
 
+  // ── MODALE DE SOUSCRIPTION AU COMPTOIR ──────────────────────────────────────────────────────
+  //
+  // Le MÊME composant que l'onglet Abonnements — donc le même process, la même preuve (mandat SEPA
+  // + contrat signés et scellés), le même prorata, le même encaissement de la 1re échéance. Ici le
+  // produit est IMPOSÉ (la ligne de panier) et le payeur pré-rempli avec le client rattaché à la
+  // vente. Le composant encaisse lui-même la 1re échéance dans la caisse en cours ; à la réussite,
+  // on solde le panier.
+  const modaleSouscription = (
+    <Modal
+      open={souscriptionOuverte}
+      onClose={() => setSouscriptionOuverte(false)}
+      titre={ligneAbo ? `Souscrire — ${libelleProduit(ligneAbo.produit)}` : 'Souscrire un abonnement'}
+      taille="lg"
+    >
+      {ligneAbo && souscriptionOuverte && (
+        <SouscriptionAbonnement
+          enModale
+          produitImpose={ligneAbo.produit}
+          payeurInitial={client}
+          session={session}
+          droits={droits}
+          onAnnuler={() => setSouscriptionOuverte(false)}
+          onCree={() => {
+            // Souscription aboutie (et 1re échéance encaissée par le composant lui-même) : on solde
+            // le panier et on repart propre. On ne rejoue rien.
+            setSouscriptionOuverte(false)
+            setPanier([])
+            setClient(null)
+            setBesoinClient(false)
+          }}
+        />
+      )}
+    </Modal>
+  )
+
   // ── LE DOCUMENT LÉGAL D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────
   //
   // Posé AVANT la garde de session : regarder un document est une lecture, et la caisse fermée ne
@@ -1139,6 +1199,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
   }
 
   const enPaiement = !!vente
+  // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
+  // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout ci-dessus).
+  const ligneAbo = panier.find((l) => estAbonnement(l.produit)) || null
 
   return (
     <div className="view large">
@@ -1314,6 +1377,22 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       Ce compte peut lire la caisse mais pas encaisser&nbsp;: il lui manque le droit
                       <code> vente.encaisser</code>. Ce n’est pas une panne&nbsp;; demandez-le à un
                       administrateur.
+                    </div>
+                  ) : ligneAbo ? (
+                    // UN ABONNEMENT NE SE RÈGLE PAS AU PAVÉ : il se SOUSCRIT. Le clic ouvre la modale
+                    // (mandat SEPA + contrat signés, prorata, encaissement de la 1re échéance ici).
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
+                      <button
+                        className="btn primary lg"
+                        onClick={() => setSouscriptionOuverte(true)}
+                        disabled={busy}
+                      >
+                        Souscrire l’abonnement
+                      </button>
+                      <small className="sub">
+                        Mandat SEPA et contrat signés, prorata éventuel, et encaissement de la
+                        première échéance dans cette caisse — comme en ligne.
+                      </small>
                     </div>
                   ) : (
                     <PanneauPaiement
@@ -1540,6 +1619,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 
       {modaleSession}
       {modaleClient}
+      {modaleSouscription}
     </div>
   )
 }
