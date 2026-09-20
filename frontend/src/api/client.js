@@ -2558,6 +2558,14 @@ export const api = {
   // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
   // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
   majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
+  // Le logo de la boutique — le fichier part en multipart, SANS en-tete Content-Type : le navigateur
+  // pose lui-meme la frontiere du corps, et l'ecrire a la main la casse (meme idiome que les photos
+  // de produit). Le serveur valide les octets et repond la vitrine avec son `logo` (URL /media/...).
+  televerserLogoVitrine: (id, fichier) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    return request(`/api/boutique/vitrines/${id}/logo`, { method: 'POST', formData: corps })
+  },
   // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
   // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
   accepterRemboursement: (id, montant) =>
