@@ -684,8 +684,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setPaiements([])
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
-      // Contexte RENVOYÉ pour un encaissement en un seul geste : `setVente`/`setMontant`
-      // ci-dessus ne sont pas encore lus dans ce tick, donc `encaisserRapide` règle d'après ceci.
+      // Contexte RENVOYÉ pour régler dans la foulée : `setVente`/`setMontant` ci-dessus ne sont pas
+      // encore lus dans ce tick, donc `reglerUnMoyen` (qui ouvre la vente au 1er règlement) règle
+      // d'après ceci plutôt que d'après l'état.
       return {
         vObj: { id: v.id, numero: v.numero ?? null, reste: resteServeur, total: totalServeur },
         resteServeur,
@@ -773,34 +774,26 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   // Le geste classique du pavé : régler le moyen sélectionné, avec l'état courant.
+  // RÉGLER UN MOYEN — et OUVRIR LA VENTE AU PREMIER RÈGLEMENT, PAS AVANT.
+  //
+  // Il n'y a plus de bouton « Encaisser » qui ouvrait la vente en une étape de plus (demande de
+  // Maxime : « laisse juste le paiement multiple scindé »). Le pavé de paiement — moyen, montant,
+  // rendu, paiement scindé — est affiché d'emblée dès qu'il y a un panier. Tant que rien n'est
+  // réglé, aucune vente n'existe et le panier reste modifiable ; le PREMIER « Régler » ouvre la
+  // vente côté serveur (fige le panier), puis chaque règlement suivant s'ajoute à la même vente.
+  //
+  // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses
+  // `setVente`/`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait `null`.
   async function reglerUnMoyen() {
-    await encaisserMoyen(vente, moyenCourant, montant, tpeSimule, paiements)
-  }
-
-  // ENCAISSEMENT EN UN SEUL GESTE (demande de Maxime : « Encaisser puis Régler = une étape en trop »).
-  //
-  // Le pavé sert à CHOISIR le moyen et le montant. Quand le moyen par défaut n'exige pas de
-  // référence (espèces, porte-monnaie) et que le montant dû est exact, il n'y a rien à choisir :
-  // on ouvre la vente ET on la solde d'un coup. Un moyen à référence (CB, chèque) garde le pavé —
-  // sa référence se saisit avant l'encaissement — et « Paiement détaillé » reste là pour le rendu
-  // ou le paiement scindé.
-  //
-  // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses `setVente`
-  // /`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait une vente `null`.
-  async function encaisserRapide(moyenChoisi = null) {
-    // Le moyen CHOISI : le param direct (clic sur une pastille) prime, sinon la selection courante.
-    // Capture AVANT `demarrerPaiement`, qui reinitialise la selection au defaut du point de vente.
-    const choisi = moyenChoisi || moyensDispo.find((m) => m.code === moyenSel) || null
-    const ctx = await demarrerPaiement()
-    if (!ctx) return
-    // On restaure le moyen choisi : `demarrerPaiement` vient de le remettre au defaut, et si le
-    // moyen exige une reference (CB, cheque) c'est lui que le pave doit presenter.
-    if (choisi) setMoyenSel(choisi.code)
-    // Un moyen sans reference et le montant exact : rien a saisir, on solde d'un geste. Un moyen
-    // a reference garde le pave ouvert -- la reference se saisit, puis Regler.
-    if (choisi && !choisi.exigeReference && parseFloat(ctx.resteServeur) > 0) {
-      await encaisserMoyen(ctx.vObj, choisi, ctx.resteServeur, 'accepte', [])
+    let venteObj = vente
+    let paiementsPrec = paiements
+    if (!venteObj) {
+      const ctx = await demarrerPaiement()
+      if (!ctx) return
+      venteObj = ctx.vObj
+      paiementsPrec = []
     }
+    await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
   }
 
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
@@ -1313,54 +1306,15 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                     <span className="num">{euros(enPaiement && vente?.total != null ? vente.total : total)}</span>
                   </div>
 
-                  {!enPaiement ? (
-                    moyensDispo.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                        {/* MOYENS DE PAIEMENT DIRECTS (demande de Maxime). Un clic ouvre la vente ET
-                            l'encaisse dans ce moyen. Un moyen à référence (CB, chèque) ouvre le pavé
-                            pour saisir sa référence. « Paiement détaillé » reste pour le montant
-                            libre, le rendu monnaie et le paiement scindé. Les moyens affichés sont
-                            ceux configurés par l'exploitant (Paramètres › Caisse & moyens de paiement),
-                            filtrés par le point de vente. */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--esp-serre)' }}>
-                          {moyensDispo.map((m) => (
-                            <button
-                              key={m.code}
-                              className="btn primary lg"
-                              onClick={() => encaisserRapide(m)}
-                              disabled={busy || !peutEncaisser}
-                              title={peutEncaisser
-                                ? `Encaisser ${euros(total)} en ${m.libelle}`
-                                : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                            >
-                              {m.libelle}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          className="btn"
-                          onClick={demarrerPaiement}
-                          disabled={busy || !peutEncaisser}
-                        >
-                          Paiement détaillé — montant, rendu ou scindé
-                        </button>
-                        <small className="sub">{busy ? 'Encaissement…' : `Total à encaisser : ${euros(total)}`}</small>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                        <button
-                          className="btn primary lg"
-                          onClick={demarrerPaiement}
-                          disabled={busy || !peutEncaisser}
-                          title={peutEncaisser
-                            ? undefined
-                            : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                        >
-                          {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
-                        </button>
-                        <small className="sub">Aucun moyen de paiement configuré : à définir dans Paramètres › Caisse &amp; moyens de paiement.</small>
-                      </div>
-                    )
+                  {/* PLUS DE BOUTON « ENCAISSER » : le pavé de paiement (moyen, montant, rendu, scindé)
+                      est là d'emblée. La vente s'ouvre au premier « Régler » — jusque-là le panier
+                      reste modifiable. (demande de Maxime : « laisse juste le paiement multiple scindé ».) */}
+                  {!peutEncaisser ? (
+                    <div className="banner">
+                      Ce compte peut lire la caisse mais pas encaisser&nbsp;: il lui manque le droit
+                      <code> vente.encaisser</code>. Ce n’est pas une panne&nbsp;; demandez-le à un
+                      administrateur.
+                    </div>
                   ) : (
                     <PanneauPaiement
                       moyensDispo={moyensDispo}
@@ -1378,6 +1332,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       onRegler={reglerUnMoyen}
                       onValider={validerVente}
                       onAbandon={abandonner}
+                      montrerAbandon={!!vente}
                     />
                   )}
                 </>
@@ -1667,7 +1622,7 @@ function AppairageModal({ etat, onValider, onIgnorer, busy }) {
 
 function PanneauPaiement({
   moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
-  tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon,
+  tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon, montrerAbandon = true,
 }) {
   const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
   const paye = solde <= 0.0001
@@ -1757,9 +1712,13 @@ function PanneauPaiement({
         </button>
       )}
 
-      <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
-        Abandonner la vente
-      </button>
+      {/* « Abandonner » n'a de sens qu'une fois la vente OUVERTE (au 1er règlement). Avant, il n'y a
+          rien à abandonner — on vide le panier par « Vider ». */}
+      {montrerAbandon && (
+        <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
+          Abandonner la vente
+        </button>
+      )}
     </div>
   )
 }
