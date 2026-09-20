@@ -64,6 +64,11 @@ function valeursModifiables(p) {
     couleurCaisse: p?.couleurCaisse || '',
     noteInterne: p?.noteInterne || '',
     description: descriptionFr(p || {}),
+    // Bénéficiaire obligatoire (RG-M2-04) : décoché par défaut. Vit dans `champsPerso`, la
+    // convention du dépôt pour les drapeaux produit ad hoc. Le serveur lit `beneficiaireRequis`
+    // (`AjoutLigneHandler::estNominatif`) ; un produit de type « accès » l'exige de toute façon,
+    // et la case le montrera cochée-verrouillée plutôt que de laisser croire le contraire.
+    beneficiaireRequis: (p?.champsPerso?.beneficiaireRequis ?? false) === true,
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
@@ -489,6 +494,11 @@ export default function ProduitFiche({
   if (!produit) return null
 
   const p = detail || produit
+  // Un produit dont le TYPE porte la facette « accès » exige toujours un bénéficiaire, drapeau
+  // produit ou non (même règle que `AjoutLigneHandler::estNominatif` côté serveur). La case le
+  // montrera alors cochée et verrouillée : la laisser décochable ferait croire qu'on peut lever
+  // une obligation qui ne dépend pas d'elle.
+  const typeExigeBeneficiaire = Array.isArray(p?.type?.facettes) && p.type.facettes.includes('acces')
   const st = statutProduit(p)
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
@@ -518,7 +528,7 @@ export default function ProduitFiche({
     libelle: 'Présentation', description: 'Présentation',
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
-    formule: 'Vente', carte: 'Vente',
+    formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente',
     noteInterne: 'Comptabilité',
   }
   const changements = useMemo(() => {
@@ -610,6 +620,17 @@ export default function ProduitFiche({
             nbPaye: edition.carte.nbPaye === '' ? null : Number(edition.carte.nbPaye),
             nbCredite: edition.carte.nbCredite === '' ? null : Number(edition.carte.nbCredite),
             rechargeValidityMode: edition.carte.rechargeValidityMode,
+          },
+        } : {}),
+        // ⚠ ON N'ENVOIE `champsPerso` QUE SI LE DRAPEAU A CHANGÉ, et on recompose l'objet ENTIER.
+        // `champsPerso` est une colonne JSON qu'un envoi partiel remplace : d'autres écrans y
+        // rangent leurs propres clés (créneaux horaires, visuel…). Écrire à chaque enregistrement
+        // les effacerait ; ne l'écrire que sur un changement réel du drapeau, en repartant des clés
+        // déjà présentes, ne touche que `beneficiaireRequis`.
+        ...(changements.includes('beneficiaireRequis') ? {
+          champsPerso: {
+            ...(p.champsPerso && typeof p.champsPerso === 'object' ? p.champsPerso : {}),
+            beneficiaireRequis: !!edition.beneficiaireRequis,
           },
         } : {}),
       })
@@ -1024,6 +1045,27 @@ export default function ProduitFiche({
         </div>
         <div className="hint">
           Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
+        </div>
+      </div>
+      {/* ⚠ BÉNÉFICIAIRE OBLIGATOIRE — décoché par défaut (demande de Maxime). Coché, la vente exige
+          qu'on nomme la personne à qui le produit est destiné (RG-M2-04) ; au comptoir, le
+          sélecteur de client s'ouvre dès l'ajout au panier, pas au moment de payer. Le serveur lit
+          ce drapeau dans `champsPerso.beneficiaireRequis`. Un produit de type « accès » l'exige
+          déjà par nature : la case est alors cochée et verrouillée. */}
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={typeExigeBeneficiaire || edition.beneficiaireRequis}
+            disabled={typeExigeBeneficiaire}
+            onChange={(ev) => setEdition((s) => ({ ...s, beneficiaireRequis: ev.target.checked }))}
+          />
+          Bénéficiaire obligatoire
+        </label>
+        <div className="hint">
+          {typeExigeBeneficiaire
+            ? 'Ce produit est de type « accès » : il exige toujours un bénéficiaire, cette case ne peut pas être décochée.'
+            : 'Coché, la vente réclame de nommer le bénéficiaire du produit — au guichet, dès l’ajout au panier plutôt qu’au paiement.'}
         </div>
       </div>
       <div className="field">
