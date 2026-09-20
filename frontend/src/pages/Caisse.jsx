@@ -787,10 +787,10 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   //
   // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses `setVente`
   // /`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait une vente `null`.
-  async function encaisserRapide(moyenChoisi = null) {
-    // Le moyen CHOISI : le param direct (clic sur une pastille) prime, sinon la selection courante.
-    // Capture AVANT `demarrerPaiement`, qui reinitialise la selection au defaut du point de vente.
-    const choisi = moyenChoisi || moyensDispo.find((m) => m.code === moyenSel) || null
+  async function encaisserRapide() {
+    // Le moyen CHOISI sur les pastilles (par defaut le premier proposable), capture AVANT
+    // `demarrerPaiement` qui reinitialise la selection au defaut du point de vente.
+    const choisi = moyensDispo.find((m) => m.code === moyenSel) || null
     const ctx = await demarrerPaiement()
     if (!ctx) return
     // On restaure le moyen choisi : `demarrerPaiement` vient de le remettre au defaut, et si le
@@ -1314,53 +1314,21 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   </div>
 
                   {!enPaiement ? (
-                    moyensDispo.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                        {/* MOYENS DE PAIEMENT DIRECTS (demande de Maxime). Un clic ouvre la vente ET
-                            l'encaisse dans ce moyen. Un moyen à référence (CB, chèque) ouvre le pavé
-                            pour saisir sa référence. « Paiement détaillé » reste pour le montant
-                            libre, le rendu monnaie et le paiement scindé. Les moyens affichés sont
-                            ceux configurés par l'exploitant (Paramètres › Caisse & moyens de paiement),
-                            filtrés par le point de vente. */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--esp-serre)' }}>
-                          {moyensDispo.map((m) => (
-                            <button
-                              key={m.code}
-                              className="btn primary lg"
-                              onClick={() => encaisserRapide(m)}
-                              disabled={busy || !peutEncaisser}
-                              title={peutEncaisser
-                                ? `Encaisser ${euros(total)} en ${m.libelle}`
-                                : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                            >
-                              {m.libelle}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          className="btn"
-                          onClick={demarrerPaiement}
-                          disabled={busy || !peutEncaisser}
-                        >
-                          Paiement détaillé — montant, rendu ou scindé
-                        </button>
-                        <small className="sub">{busy ? 'Encaissement…' : `Total à encaisser : ${euros(total)}`}</small>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                        <button
-                          className="btn primary lg"
-                          onClick={demarrerPaiement}
-                          disabled={busy || !peutEncaisser}
-                          title={peutEncaisser
-                            ? undefined
-                            : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                        >
-                          {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
-                        </button>
-                        <small className="sub">Aucun moyen de paiement configuré : à définir dans Paramètres › Caisse &amp; moyens de paiement.</small>
-                      </div>
-                    )
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
+                    {/* Le geste par défaut ouvre le pavé détaillé : moyen, montant, rendu et paiement
+                        scindé s'y choisissent, et rien ne se solde avant « Régler ». */}
+                    <button
+                      className="btn primary lg"
+                      onClick={demarrerPaiement}
+                      disabled={busy || !peutEncaisser}
+                      title={peutEncaisser
+                        ? undefined
+                        : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
+                    >
+                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
+                    </button>
+                    <small className="sub">Moyen de paiement, montant, rendu ou paiement scindé à l’étape suivante.</small>
+                    </div>
                   ) : (
                     <PanneauPaiement
                       moyensDispo={moyensDispo}
