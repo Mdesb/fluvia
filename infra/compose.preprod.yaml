@@ -64,6 +64,12 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Autorise le prestataire de paiement en ligne de DEMONSTRATION (bouchon qui signe ses propres
+      # recus). 1 en PREPRODUCTION pour tester le tunnel d'achat de bout en bout ; 0 (ou absent) en
+      # PRODUCTION, ou un vrai PSP doit etre branche. Sans cette ligne, la variable de .env.preprod
+      # n'atteint pas le conteneur et POST /api/boutique/paniers/{id}/payer repond 500
+      # (StubPaymentReceiptSigner refuse de servir un faux « accepte »).
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:
       db:
         condition: service_healthy
@@ -136,6 +142,8 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Meme flag que le service php (blocs maintenus identiques). Voir le commentaire la-haut.
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:
       db:
         condition: service_healthy
