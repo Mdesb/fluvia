@@ -28,9 +28,13 @@ export default function Tunnel({
 
   const lignes = panier?.lignes || []
 
-  // Panier vidé (ex. expiration) : on renvoie proprement vers le panier.
+  // Panier vidé (ex. expiration) pendant qu'on remplit encore la commande : on renvoie proprement
+  // vers le panier. ⚠ UNIQUEMENT avant l'étape Paiement (etape < 3). Au paiement réussi, le panier
+  // est PURGÉ (transformé en commande), donc `lignes` devient vide : se fier à ce vide aux étapes
+  // Paiement (3) et Confirmation (4) renverrait le client vers un panier vide au lieu de son billet.
+  // L'étape Paiement gère elle-même un panier expiré (erreur d'initiation), pas besoin de rediriger.
   useEffect(() => {
-    if (etape < 4 && lignes.length === 0) onNaviguer({ vue: 'panier' })
+    if (etape < 3 && lignes.length === 0) onNaviguer({ vue: 'panier' })
   }, [lignes.length, etape])
 
   return (
