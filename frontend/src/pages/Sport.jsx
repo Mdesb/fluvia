@@ -448,7 +448,7 @@ export default function Sport({ etabActif, droits = [] }) {
     } else if (e.statut !== 'prelevee') {
       contenu = (
         <div className="banner banner-warn">
-          Cette échéance est « {etatEcheance(e.statut)?.mot || e.statut} » : un rejet bancaire ne se
+          Cette échéance est « {mot(e.statut)} » : un rejet bancaire ne se
           déclare que sur une échéance prélevée. Un prélèvement qui n’est jamais parti ne peut pas
           revenir impayé.
         </div>
