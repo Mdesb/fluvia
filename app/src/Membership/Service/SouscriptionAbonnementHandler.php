@@ -35,6 +35,7 @@ final class SouscriptionAbonnementHandler
         private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
         private readonly SubscriptionPriceResolver $resolveurTarif,
+        private readonly MembershipQrAccessIssuer $qrIssuer,
     ) {
     }
 
@@ -213,6 +214,13 @@ final class SouscriptionAbonnementHandler
         $statutAcces = new StatutAccesFitness();
         $statutAcces->setAbonnement($abonnement)->setActif(true);
         $this->em->persist($statutAcces);
+
+        // ── LE BILLET D'ACCÈS (support QR) EST ÉMIS ICI ──────────────────────────────────────────
+        // Sans lui, l'abonné n'avait pas de support et la porte ne s'ouvrait pas. Le handler crée le
+        // droit d'accès + un support QR signé (zones du produit, D87) et les rattache au statut
+        // d'accès. `appairer()` flushe déjà en interne ; le flush final ci-dessous fige les liens
+        // (droit + code du support) posés sur le statut.
+        $this->qrIssuer->issue($abonnement, $formule, $etablissement, $statutAcces);
 
         $this->em->flush();
 

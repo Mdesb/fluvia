@@ -16,6 +16,7 @@ use App\Membership\Entity\StatutAccesFitness;
 use App\Membership\Entity\SubscriptionContract;
 use App\Signature\Entity\ElectronicSignature;
 use App\Tests\Sport\SportApiTestCase;
+use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -87,6 +88,52 @@ final class SouscriptionTest extends SportApiTestCase
             $contrat->getSignature()?->getDocumentHash(),
             'la preuve du contrat colle à son texte gelé',
         );
+    }
+
+    /**
+     * LA SOUSCRIPTION ÉMET UN BILLET D'ACCÈS (support QR) RATTACHÉ AU STATUT.
+     *
+     * Sans lui, le `StatutAccesFitness` naissait avec `droitAcces = null` : aucun support, et la
+     * porte ne s'ouvrait pas (le terminal lit un support, jamais l'abonnement). Ce témoin prouve
+     * qu'un droit d'accès est créé ET qu'un support QR signé — vérifiable par le terminal
+     * (`GenerateurCodeSupport`) — est émis et dénormalisé sur le statut pour l'affichage/impression.
+     */
+    public function testLaSouscriptionEmetUnBilletDAccesRattacheAuStatut(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $abonnementId = $client->getResponse()->toArray()['id'];
+        $em->clear();
+
+        $abonnement = $em->getRepository(Membership::class)->find($abonnementId);
+        $statut = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnement]);
+        self::assertNotNull($statut, 'un statut d\'accès est créé');
+        self::assertNotNull($statut->getDroitAcces(), 'le droit d\'accès est créé et rattaché : la porte peut s\'ouvrir');
+
+        $code = $statut->getSupportIdentifiant();
+        self::assertNotNull($code, 'un support QR (billet) est émis à la souscription');
+        self::assertNotSame('', $code);
+
+        // ⚠ LE VRAI CRITÈRE : le code est SIGNÉ et VÉRIFIABLE par ce que lit le terminal. Un code
+        // non signé serait refusé à la porte (SignatureInvalide) — un billet qui n'ouvre rien.
+        /** @var GenerateurCodeSupport $generateur */
+        $generateur = static::getContainer()->get(GenerateurCodeSupport::class);
+        self::assertTrue($generateur->estCodeSigne($code), 'le code du billet est un code signé');
+        self::assertTrue($generateur->verifier($code), 'le terminal accepterait la signature du billet');
     }
 
     public function testCa1SouscriptionCreeAbonnementActifMandatEtEcheancier(): void
