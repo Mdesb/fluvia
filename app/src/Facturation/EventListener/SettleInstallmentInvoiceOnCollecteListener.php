@@ -31,13 +31,12 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
  * sens de dépendance et même patron que `SettleInvoiceOnIncidentResolvedListener`, qui solde sur la
  * résolution d'un impayé. On réutilise `ReglementFactureHandler` : aucun second moteur d'écritures.
  *
- * ── PAS ENCORE DE MOYEN « PRÉLÈVEMENT » AU RÉFÉRENTIEL ─────────────────────────────────────────
+ * ── LE MOYEN « PRÉLÈVEMENT », DÉDIÉ ────────────────────────────────────────────────────────────
  *
- * Le référentiel comptable (`MoyenPaiement`) ne porte pas de code « prélèvement » ; un prélèvement
- * SEPA encaisse sur le MÊME compte de trésorerie que le virement (512). On enregistre donc le
- * règlement sous `virement` : l'écriture est comptablement JUSTE (512 / 411), seul le libellé du moyen
- * est une simplification. Un moyen dédié « prélèvement » (référentiel + mapping trésorerie par
- * exploitant) est le raffinement propre, à venir.
+ * On enregistre le règlement sous le moyen `prelevement` (référentiel comptable, compte de
+ * trésorerie 512 par exploitant — voir `Version20260921120000`). C'est un moyen SYSTÈME, INACTIF :
+ * l'encaissement d'un prélèvement est automatique, il ne se choisit pas à un pavé — mais on le
+ * retrouve ici par son code (une recherche par code ne filtre pas l'actif).
  */
 #[AsEventListener]
 final class SettleInstallmentInvoiceOnCollecteListener
@@ -45,8 +44,8 @@ final class SettleInstallmentInvoiceOnCollecteListener
     /** Un compte système dédié, créé paresseusement : la trace dit QUI a soldé (pas « système » tout court). */
     private const EMAIL_SYSTEME = 'systeme+sepa-encaissement@fluvia.local';
 
-    /** Voir le docblock : un prélèvement SEPA encaisse sur le compte banque, comme un virement (512). */
-    private const MOYEN = 'virement';
+    /** Le prélèvement SEPA : moyen dédié au référentiel (compte banque 512), inactif car système. */
+    private const MOYEN = 'prelevement';
 
     public function __construct(
         private readonly EntityManagerInterface $em,

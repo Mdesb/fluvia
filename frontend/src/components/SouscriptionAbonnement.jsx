@@ -138,7 +138,9 @@ export default function SouscriptionAbonnement({
     Promise.all([api.moyensPaiement(), api.pointDeVentes()])
       .then(([m, p]) => {
         if (!vivant) return
-        setMoyens(membres(m))
+        // Les moyens INACTIFS ne se proposent nulle part (mêmes règles que la caisse) : c'est ce qui
+        // écarte le « prélèvement » système du choix d'encaissement au comptoir.
+        setMoyens(membres(m).filter((x) => x.actif !== false))
         setPdvs(membres(p))
       })
       .catch(() => {
