@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
+import Qr from './Qr.jsx'
 import { jourLocal } from './Liste.jsx'
 import { libelleProduit } from '../api/produit.js'
 import { euros } from '../api/produit.js'
@@ -741,6 +742,23 @@ function OngletAcces({ acces }) {
           <div className="st-lbl">Dernière mise à jour du badge</div>
         </div>
       </div>
+
+      {/* LE BILLET D'ACCÈS — le QR émis à la souscription, réaffichable et réimprimable ici. C'est
+          le support que le terminal lit. `doc-imprimer` l'isole à l'impression (comme le ticket de
+          caisse) ; le bouton, lui, ne s'imprime pas (`noprint`). */}
+      {acces.supportIdentifiant && (
+        <div
+          className="card doc-imprimer"
+          style={{ display: 'grid', gap: 'var(--esp-normal)', justifyItems: 'center', padding: 'var(--esp-bloc)' }}
+        >
+          <b>Billet d’accès de l’adhérent</b>
+          <Qr value={acces.supportIdentifiant} size={120} title="QR du billet d’abonnement" />
+          <span className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{acces.supportIdentifiant}</span>
+          <button type="button" className="btn ghost sm noprint" onClick={() => window.print()}>
+            Imprimer le billet
+          </button>
+        </div>
+      )}
 
       {!rattache && (
         <div className="banner banner-warn">

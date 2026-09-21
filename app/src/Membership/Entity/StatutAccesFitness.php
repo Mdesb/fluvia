@@ -49,6 +49,16 @@ class StatutAccesFitness
     #[Groups(['statut_acces:read'])]
     private ?DroitAcces $droitAcces = null;
 
+    /**
+     * Le code SIGNÉ du support QR émis à la souscription (le billet de l'adhérent). Dénormalisé ici
+     * — la source de vérité reste `Acces\Support` — pour l'afficher et le réimprimer depuis la fiche
+     * abonnement sans traverser la chaîne Droit→Appairage→Support (que `statut_acces:read` n'atteint
+     * pas ; `droitAcces` n'y est qu'un IRI nu). Un identifiant de support est immuable : pas de dérive.
+     */
+    #[ORM\Column(length: 128, nullable: true)]
+    #[Groups(['statut_acces:read'])]
+    private ?string $supportIdentifiant = null;
+
     #[ORM\Column(options: ['default' => true])]
     #[Groups(['statut_acces:read'])]
     private bool $actif = true;
@@ -91,6 +101,18 @@ class StatutAccesFitness
     public function setDroitAcces(?DroitAcces $droitAcces): self
     {
         $this->droitAcces = $droitAcces;
+
+        return $this;
+    }
+
+    public function getSupportIdentifiant(): ?string
+    {
+        return $this->supportIdentifiant;
+    }
+
+    public function setSupportIdentifiant(?string $supportIdentifiant): self
+    {
+        $this->supportIdentifiant = $supportIdentifiant;
 
         return $this;
     }
