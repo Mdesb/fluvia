@@ -7051,3 +7051,40 @@ Arbitrage Maxime « absorption complète » exécuté (commit `62f772d8`) :
 - **Tests** : `GratuiteScolaireTest` retiré ; CA-5/CA-6 sont couverts côté Groupes.
 
 Vert : Musée 22/156, Groupes 20/167, garde-fous 54/54 (écart 524→518, entités exposées 279→276). **Reste B4** : retirer les entités/tables dépréciées après une période de validation — non urgent, les tables ne gênent personne. Je le ferai sur ton feu, ou la session musée peut le prendre.
+
+## 2026-09-21 — Abonnement : billet d'accès QR émis à la souscription (livré)
+PR #242 (squash 682e402f) mergée + déployée (double-boucle OK sur 682e402f). Corrige
+« pas de billet généré » : la souscription ouvrait un StatutAccesFitness SANS support
+(droitAcces = null) => aucun QR et la porte fermée (le terminal lit un SUPPORT, jamais
+l'abonnement). Nouveau MembershipQrAccessIssuer (nom EN, D5) : à la souscription, crée un
+Acces\DroitAcces (sourceType=Abonnement) et lui appaire un support QR SIGNÉ, en réutilisant
+AppairageHandler + GenerateurCodeSupport (le même que le terminal vérifie) SANS toucher
+App\Acces. Même patron que Personnel\EmissionBadgeStaffHandler. Zones du produit (D87)
+appliquées (ProductAccessZoneResolver) — un droit d'abonnement N'EST PAS exempté de zone :
+si le produit ne déclare aucune zone, le support existe mais n'ouvre AUCUNE porte (donnée
+à renseigner sur la fiche produit). Colonne StatutAccesFitness.support_identifiant
+(migration Version20260921130000, appliquée en préprod, colonne interrogeable) : code du
+billet dénormalisé pour l'afficher/réimprimer. Fiche abonnement (onglet Accès) : QR + code
++ bouton imprimer. Effets induits GRATUITS : (1) l'appairage d'une CARTE physique marche
+via « Badges & terminaux » (le droit apparaît dans les droits libres) ; (2) pause/résiliation
+coupent réellement l'accès (PropagationAccesFitnessHandler ne faisait rien tant que droitAcces
+était null). Création client à la volée : DÉJÀ en place (onglet « Créer un client » du
+sélecteur, payeur ET adhérent, seul le nom requis) — rien à ajouter. Vérifié EN EXÉCUTANT :
+SouscriptionTest 4/4 (80 assertions) dont le nouveau témoin filtré par nom (souscription =>
+droit rattaché + support QR signé ET vérifiable par GenerateurCodeSupport). Reste (noté, hors
+ce lot) : affichage immédiat du QR en fin de modale de souscription comptoir ; action
+d'appairage carte directe depuis la fiche abonnement ; renseigner les zones d'accès sur les
+produits d'abonnement (sinon QR muet aux portes, D87).
+
+## 2026-09-21 — Front : appel mort etatEcheance() sur la bannière de rejet (corrigé)
+PR #243 (squash 15cfdcdb) mergée + déployée (double-boucle OK sur 15cfdcdb). Trouvé en
+voulant commiter le journal ci-dessus : le garde-fou n40 « Portée des identifiants » a refusé
+le commit sur Sport.jsx:451 — etatEcheance(e.statut)?.mot appelait une fonction qui n'existe
+NULLE PART (grep : une seule occurrence, ce site, aucune déclaration ni import). La bannière
+s'affiche sur toute échéance NON prélevée (e.statut !== 'prelevee') => ce chemin plantait en
+Reference: etatEcheance is not defined (écran blanc). Vite ne le voit pas (pas d'analyse de
+portée JSX). Remplacé par mot() — le helper déjà importé (ligne 9) et déjà employé pour le
+statut d'échéance aux lignes 689/1005, qui renvoie une chaîne avec repli. Latent depuis #77
+(5006849f) : n40 ne tourne que sur le checkout principal, pas sur les worktrees — d'où
+l'échappée, et pourquoi les commits de fonctionnalité passaient en worktree. Vérifié EN
+EXÉCUTANT : n40 repassé ✗->✓ sur main (55 garde-fous OK), déploiement OK.
