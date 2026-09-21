@@ -9,15 +9,18 @@ use App\Compta\Entity\TauxTva;
 use App\DataFixtures\SocleFixtures;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\InstallmentInvoice;
+use App\Facturation\Entity\ReglementFacture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Service\InstallmentInvoicer;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Sepa\Dto\EcheanceSepaDue;
 use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Event\EcheancesCollecteesEvent;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * G-1 / G-1bis (chaine-encaissement) — la facture d'une échéance d'abonnement.
@@ -47,6 +50,51 @@ final class InstallmentInvoicerTest extends SportApiTestCase
         //    lequel croire.
         self::assertSame('120.00', $facture->getTotalTTC(), 'Le total TTC doit égaler ce que la banque prélève.');
         self::assertSame('100.00', $facture->getTotalHT());
+    }
+
+    /**
+     * LA COLLECTE SOLDE LA FACTURE ET FAIT ENTRER L'ARGENT AU GRAND LIVRE (chaîne-encaissement).
+     *
+     * ⚠ LE TROU QUE CE TÉMOIN FERME. La facture d'échéance naît « en attente de paiement » (créance
+     * 411 débitée au journal FAC). Jusqu'ici, un prélèvement réussi ne produisait NI règlement NI
+     * écriture d'encaissement : la créance restait débitrice alors que l'argent était rentré. On
+     * simule ici la collecte par l'événement que `GenerationRemiseHandler` émet en vrai après une
+     * remise transmise, et on prouve que la facture passe à `Payee`, solde nul, avec un règlement
+     * portant son écriture d'encaissement (journal ENC).
+     */
+    public function testUneEcheanceCollecteeSoldeSaFactureEtEcritLEncaissement(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 12000);
+        $reservation = $invoicer->facturer($echeance, $etab, $auteur);
+        $factureId = $reservation->getInvoiceId();
+        self::assertNotNull($factureId);
+        self::assertSame(StatutFacture::EnAttentePaiement, $em->getRepository(Facture::class)->find($factureId)?->getStatut());
+
+        // La collecte réussit : on émet l'événement (mêmes arguments que le handler réel).
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = static::getContainer()->get(EventDispatcherInterface::class);
+        $dispatcher->dispatch(new EcheancesCollecteesEvent([$echeance->referenceOrigine], 'SIMULATION-TEST'));
+
+        $em->clear();
+        $facture = $em->getRepository(Facture::class)->find($factureId);
+        self::assertInstanceOf(Facture::class, $facture);
+        self::assertSame(StatutFacture::Payee, $facture->getStatut(), 'La collecte doit solder la facture.');
+        self::assertSame('0.00', $facture->getSoldeDu(), 'La créance doit revenir à zéro au grand livre.');
+
+        $reglements = $em->getRepository(ReglementFacture::class)->findBy(['facture' => $factureId]);
+        self::assertCount(1, $reglements, 'Un règlement, et un seul, pour la collecte.');
+        self::assertNotNull($reglements[0]->getEcritureEncaissement(), 'L\'écriture d\'encaissement (journal ENC) doit exister.');
+
+        // ⚠ IDEMPOTENCE : une collecte rejouée ne double NI le règlement NI l'écriture, et ne lève
+        // pas (la facture n'est plus « en attente », on la saute avant d'appeler le handler).
+        $dispatcher->dispatch(new EcheancesCollecteesEvent([$echeance->referenceOrigine], 'SIMULATION-TEST'));
+        self::assertCount(
+            1,
+            $em->getRepository(ReglementFacture::class)->findBy(['facture' => $factureId]),
+            'Un rejeu de collecte reste un no-op : toujours un seul règlement.',
+        );
     }
 
     /** Rejouer la tâche ne fabrique pas un second document scellé — c'est la contrainte qui le garantit. */
