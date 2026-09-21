@@ -7088,3 +7088,17 @@ statut d'échéance aux lignes 689/1005, qui renvoie une chaîne avec repli. Lat
 (5006849f) : n40 ne tourne que sur le checkout principal, pas sur les worktrees — d'où
 l'échappée, et pourquoi les commits de fonctionnalité passaient en worktree. Vérifié EN
 EXÉCUTANT : n40 repassé ✗->✓ sur main (55 garde-fous OK), déploiement OK.
+
+## 2026-09-21 — Abonnement : souscription au comptoir en assistant 3 étapes (livré)
+PR #244 (squash 1faa0395) mergée + déployée (double-boucle OK sur 1faa0395). Refonte de
+SouscriptionAbonnement.jsx (composant PARTAGÉ Caisse/Abonnements/FicheProduit) en assistant
+3 étapes, à la demande de Maxime — avant, tout sur un écran et « IBAN requis » à la FIN.
+Découpage retenu (son choix) : 1) Formule (produit + durée + prorata) ; 2) Client & mandat
+(payeur + adhérent + IBAN + titulaire) ; 3) Validation (récapitulatif + signatures + encaissement
++ Souscrire). Frise de progression, validation PAR étape (l'erreur IBAN bloque l'étape 2, pas la
+fin), Précédent/Suivant. AUCUNE logique changée : mêmes états, même corps api.souscrireAbonnement,
+même ordonnancement encaissement (annulation 1re échéance EN DERNIER). Props inchangées, les 3
+appelants ne bougent pas. Vérifié EN EXÉCUTANT : build frontend OK ; garde-fous 55/55 (n40 portée
++ contrastes) ; parcours live sur préprod (validation étape 1 démontrée, passage étape 1->2 avec ✓).
+Contexte : fait après une souscription Gold de test réelle bout-en-bout (client créé à la volée,
+billet QR signé QRC-RSWYJGGZBS0R4YTN-F851C539A8, zone « Entrée salle fitness » rattachée au droit).
