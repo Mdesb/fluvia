@@ -67,6 +67,16 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                 continue;
             }
 
+            // ── OPT-OUT « VENDU COMME PRODUIT SIMPLE » (sauf paramétrage contraire) ─────────────
+            // Un abonnement se souscrit (mandat + contrat) partout — SAUF si la fiche produit
+            // demande de le vendre comme produit SIMPLE. Alors la ligne est encaissée telle quelle
+            // et n'ouvre AUCUN abonnement ni mandat. Le drapeau vit dans `champsPerso`, comme
+            // « bénéficiaire obligatoire ». (Au comptoir, un tel produit n'ouvre d'ailleurs pas la
+            // modale de souscription : il passe par la vente normale, qui atterrit ici.)
+            if ((($produit->getChampsPerso() ?? [])['venteSansSouscription'] ?? false) === true) {
+                continue;
+            }
+
             // ── IDEMPOTENCE (G-5) ──────────────────────────────────────────────────────────────
             // Une ligne ne crée qu'UN abonnement. `sourceSaleLineId` est UNIQUE en base (filet
             // ultime) ; court-circuit ici pour ne pas relancer une souscription complète si cette

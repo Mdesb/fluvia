@@ -37,6 +37,12 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 // de l'écran Abonnements.
 const estAbonnement = (produit) => !!produit?.formule?.sepaActif
 
+// …SAUF si la fiche produit demande de le vendre comme PRODUIT SIMPLE (`venteSansSouscription`).
+// Alors il redevient un produit ordinaire : pas de modale de souscription, pas d'abonnement ni de
+// mandat (l'adaptateur serveur le saute aussi). C'est le « sauf paramétrage contraire ».
+const souscriptionRequise = (produit) =>
+  estAbonnement(produit) && produit?.champsPerso?.venteSansSouscription !== true
+
 // `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
 // `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
 const DEFAUTS_URL = { facture: '', historique: '', verifier: '' }
@@ -287,7 +293,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
   // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout). ⚠ DÉCLARÉ ICI, EN AMONT :
   // `modaleSouscription` plus bas le référence, et une const de la TDZ lue trop tôt casse l'écran.
-  const ligneAbo = panier.find((l) => estAbonnement(l.produit)) || null
+  const ligneAbo = panier.find((l) => souscriptionRequise(l.produit)) || null
 
   // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
   // Les fusionner obligerait a ressaisir pour vendre un adulte et un enfant ensemble, ce qui est la
@@ -526,12 +532,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     // signés, échéancier) : la mélanger à des ventes de produits dans le même panier n'aurait pas
     // de sens d'encaissement. On refuse donc le mélange, plutôt que de laisser un panier qu'on ne
     // saurait pas conclure.
-    const abo = estAbonnement(produit)
+    const abo = souscriptionRequise(produit)
     if (abo && panier.length > 0) {
       setErreur('Un abonnement se souscrit seul : videz le panier avant de l’ajouter.')
       return
     }
-    if (!abo && panier.some((l) => estAbonnement(l.produit))) {
+    if (!abo && panier.some((l) => souscriptionRequise(l.produit))) {
       setErreur('Une souscription d’abonnement est dans le panier : concluez-la ou videz le panier avant d’ajouter un autre produit.')
       return
     }
