@@ -69,6 +69,9 @@ function valeursModifiables(p) {
     // (`AjoutLigneHandler::estNominatif`) ; un produit de type « accès » l'exige de toute façon,
     // et la case le montrera cochée-verrouillée plutôt que de laisser croire le contraire.
     beneficiaireRequis: (p?.champsPerso?.beneficiaireRequis ?? false) === true,
+    // Abonnement vendu comme produit simple (sans souscription) : décoché par défaut. Ne concerne
+    // que les produits à formule ; ailleurs il est sans effet.
+    venteSansSouscription: (p?.champsPerso?.venteSansSouscription ?? false) === true,
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
@@ -499,6 +502,9 @@ export default function ProduitFiche({
   // montrera alors cochée et verrouillée : la laisser décochable ferait croire qu'on peut lever
   // une obligation qui ne dépend pas d'elle.
   const typeExigeBeneficiaire = Array.isArray(p?.type?.facettes) && p.type.facettes.includes('acces')
+  // Un produit d'abonnement (porteur d'une formule) : seul cas où « vendre comme produit simple »
+  // a un sens (ailleurs le drapeau ne changerait rien).
+  const estAbo = !!p?.formule
   const st = statutProduit(p)
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
@@ -528,7 +534,7 @@ export default function ProduitFiche({
     libelle: 'Présentation', description: 'Présentation',
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
-    formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente',
+    formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
     noteInterne: 'Comptabilité',
   }
   const changements = useMemo(() => {
@@ -627,10 +633,11 @@ export default function ProduitFiche({
         // rangent leurs propres clés (créneaux horaires, visuel…). Écrire à chaque enregistrement
         // les effacerait ; ne l'écrire que sur un changement réel du drapeau, en repartant des clés
         // déjà présentes, ne touche que `beneficiaireRequis`.
-        ...(changements.includes('beneficiaireRequis') ? {
+        ...((changements.includes('beneficiaireRequis') || changements.includes('venteSansSouscription')) ? {
           champsPerso: {
             ...(p.champsPerso && typeof p.champsPerso === 'object' ? p.champsPerso : {}),
             beneficiaireRequis: !!edition.beneficiaireRequis,
+            venteSansSouscription: !!edition.venteSansSouscription,
           },
         } : {}),
       })
@@ -1068,6 +1075,28 @@ export default function ProduitFiche({
             : 'Coché, la vente réclame de nommer le bénéficiaire du produit — au guichet, dès l’ajout au panier plutôt qu’au paiement.'}
         </div>
       </div>
+      {/* ⚠ VENDRE UN ABONNEMENT COMME PRODUIT SIMPLE (sauf paramétrage contraire). Par défaut un
+          abonnement se souscrit partout de la même façon (mandat SEPA + contrat signés, échéancier).
+          Coché, ce produit se vend comme un article ordinaire : au comptoir il n'ouvre plus la modale
+          de souscription, et il ne crée ni abonnement ni mandat. N'a de sens que pour un produit à
+          formule — masqué ailleurs. */}
+      {estAbo && (
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={edition.venteSansSouscription}
+            onChange={(ev) => setEdition((s) => ({ ...s, venteSansSouscription: ev.target.checked }))}
+          />
+          Vendre comme produit simple (sans souscription)
+        </label>
+        <div className="hint">
+          Par défaut, cet abonnement se souscrit (mandat SEPA + contrat signés, échéancier). Coché,
+          il se vend comme un article ordinaire — aucune souscription, aucun mandat, ni au comptoir
+          ni en ligne.
+        </div>
+      </div>
+      )}
       <div className="field">
         <label htmlFor="pr-etabs">Sites de commercialisation</label>
         <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
