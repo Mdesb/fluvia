@@ -11,6 +11,15 @@ import { idDe } from '../api/iri.js'
 // signatures scellées (mandat + contrat), même prorata, même encaissement au comptoir — donc UNE
 // seule source. L'écran Abonnements le rend en pleine page ; la caisse le rend en modale, produit
 // imposé (la ligne de panier) et payeur pré-rempli (le client rattaché à la vente).
+//
+// ── POURQUOI UN ASSISTANT EN TROIS ÉTAPES (demande de Maxime) ──────────────────────────────────
+// Tout sur un écran, l'agent de caisse recevait « IBAN requis » À LA FIN, après avoir tout saisi.
+// On découpe donc le geste : 1) la Formule, 2) le Client & son mandat, 3) la Validation. Chaque
+// étape valide ce qui la concerne — l'erreur IBAN bloque l'étape « client & mandat », pas la
+// dernière — et l'étape 3 récapitule avant d'engager. Aucune logique de souscription ne change :
+// mêmes états, même corps envoyé, même encaissement ; seul l'agencement à l'écran est repensé.
+
+const ETAPES = ['Formule', 'Client & mandat', 'Validation']
 
 const LABEL_PERIODICITE = {
   mensuel: 'Mensuel',
@@ -21,6 +30,62 @@ const LABEL_PERIODICITE = {
 function labelPeriodicite(v) {
   if (!v) return '—'
   return LABEL_PERIODICITE[v] || v.charAt(0).toUpperCase() + v.slice(1)
+}
+
+// La frise des trois étapes : pastille numérotée (✓ une fois franchie), libellé sous l'active en
+// gras. Non cliquable — on avance par « Suivant » pour que chaque étape valide la précédente.
+function FriseEtapes({ etape }) {
+  return (
+    <div
+      className="row"
+      style={{ gap: 'var(--esp-normal)', marginBottom: 'var(--esp-normal)', flexWrap: 'wrap' }}
+    >
+      {ETAPES.map((libelle, i) => {
+        const n = i + 1
+        const actif = n === etape
+        const franchie = n < etape
+        return (
+          <div key={libelle} className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center' }}>
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 26,
+                height: 26,
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 600,
+                background: actif || franchie ? 'var(--accent)' : 'var(--line)',
+                color: actif || franchie ? 'var(--sur-accent)' : 'var(--ink-soft)',
+              }}
+            >
+              {franchie ? '✓' : n}
+            </span>
+            <span
+              style={{
+                color: actif ? 'var(--ink)' : 'var(--ink-soft)',
+                fontWeight: actif ? 600 : 400,
+              }}
+            >
+              {libelle}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Une ligne de récapitulatif : libellé discret à gauche, valeur à droite.
+function LigneRecap({ label, children }) {
+  return (
+    <div className="row" style={{ gap: 'var(--esp-normal)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <span className="sub">{label}</span>
+      <span style={{ textAlign: 'right' }}>{children}</span>
+    </div>
+  )
 }
 
 // Détails du produit choisi : prix indicatif, cadence, jour de prélèvement. Rendus depuis l'objet
@@ -92,6 +157,7 @@ export default function SouscriptionAbonnement({
   session,
   droits,
 }) {
+  const [etape, setEtape] = useState(1)
   const [produitId, setProduitId] = useState(produitImpose ? idDe(produitImpose) : '')
   const [payeur, setPayeur] = useState(payeurInitial || null)
   const [adherent, setAdherent] = useState(null)
@@ -364,6 +430,38 @@ export default function SouscriptionAbonnement({
     encaisserComptant,
   ])
 
+  // Passage à l'étape suivante : on ne valide QUE ce que l'étape courante porte, pour que l'agent
+  // voie le manque là où il le saisit (et pas un mur d'erreurs à la fin).
+  const allerSuivant = () => {
+    if (etape === 1) {
+      if (!produit) {
+        setErreur("Choisissez un produit d'abonnement pour continuer.")
+        return
+      }
+      if (prorataInvalide) {
+        setErreur('Le prorata doit être un montant positif, ou vide.')
+        return
+      }
+    }
+    if (etape === 2) {
+      if (!payeur) {
+        setErreur('Choisissez un payeur pour continuer.')
+        return
+      }
+      if (!iban.trim() || !titulaire.trim()) {
+        setErreur('IBAN et titulaire du mandat sont requis.')
+        return
+      }
+    }
+    setErreur(null)
+    setEtape((n) => Math.min(3, n + 1))
+  }
+
+  const allerPrecedent = () => {
+    setErreur(null)
+    setEtape((n) => Math.max(1, n - 1))
+  }
+
   return (
     <div className={enModale ? '' : 'view large'}>
       {!enModale && (
@@ -378,223 +476,268 @@ export default function SouscriptionAbonnement({
               ← Retour aux abonnements
             </button>
             <h2>Nouvel abonnement</h2>
-            <p className="sub">Souscription au guichet : produit, payeur, adhérent, mandat SEPA, signature.</p>
+            <p className="sub">Souscription au guichet, en trois étapes : formule, client &amp; mandat, validation.</p>
           </div>
         </div>
       )}
 
       <div className="card">
         <div className="card-b" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
-          {!produitImpose && (
-          <label className="field" style={{ margin: 0 }}>
-            <span className="sub">Produit d'abonnement</span>
-            <select className="select" value={produitId} onChange={(e) => setProduitId(e.target.value)}>
-              <option value="">Sélectionner…</option>
-              {produitsAbo.map((p) => (
-                <option key={idDe(p)} value={idDe(p)}>
-                  {libelleProduit(p)}
-                </option>
-              ))}
-            </select>
-            {produits === undefined && <small className="crit">Produits non lisibles.</small>}
-            {Array.isArray(produits) && produitsAbo.length === 0 && (
-              <small className="sub">Aucun produit d'abonnement prélevé en SEPA dans le catalogue.</small>
-            )}
-            <small className="sub">Le prix et la cadence viennent de la formule du produit.</small>
-          </label>
+          <FriseEtapes etape={etape} />
+
+          {/* ── ÉTAPE 1 — FORMULE ──────────────────────────────────────────────────────────────── */}
+          {etape === 1 && (
+            <>
+              {!produitImpose && (
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="sub">Produit d'abonnement</span>
+                  <select className="select" value={produitId} onChange={(e) => setProduitId(e.target.value)}>
+                    <option value="">Sélectionner…</option>
+                    {produitsAbo.map((p) => (
+                      <option key={idDe(p)} value={idDe(p)}>
+                        {libelleProduit(p)}
+                      </option>
+                    ))}
+                  </select>
+                  {produits === undefined && <small className="crit">Produits non lisibles.</small>}
+                  {Array.isArray(produits) && produitsAbo.length === 0 && (
+                    <small className="sub">Aucun produit d'abonnement prélevé en SEPA dans le catalogue.</small>
+                  )}
+                  <small className="sub">Le prix et la cadence viennent de la formule du produit.</small>
+                </label>
+              )}
+
+              {produit && <DetailsProduit produit={produit} />}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="sub">Durée d'engagement (mois)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={dureeMois}
+                    onChange={(e) => setDureeMois(e.target.value)}
+                  />
+                </label>
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="sub">Première échéance — prorata (€, facultatif)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prorata}
+                    onChange={(e) => setProrata(e.target.value)}
+                    placeholder={tarifEuros != null ? `Par défaut ${euros(tarifEuros)}` : 'Par défaut, le tarif'}
+                  />
+                  {prorataInvalide ? (
+                    <small className="crit">Montant positif, ou vide.</small>
+                  ) : (
+                    <small className="sub">
+                      Demi-mois d'entrée, mois offert (0 €). Un prorata retranche : il ne peut pas dépasser
+                      le tarif, et c'est le serveur qui tranche.
+                    </small>
+                  )}
+                </label>
+              </div>
+            </>
           )}
 
-          {produit && <DetailsProduit produit={produit} />}
+          {/* ── ÉTAPE 2 — CLIENT & MANDAT ──────────────────────────────────────────────────────── */}
+          {etape === 2 && (
+            <>
+              <div className="field" style={{ margin: 0 }}>
+                <span className="sub">Payeur</span>
+                <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn" onClick={() => setPicker('payeur')}>
+                    {payeur ? 'Modifier le payeur' : 'Choisir un payeur'}
+                  </button>
+                  <span>{payeur ? nomClient(payeur) : <span className="sub">Aucun payeur choisi</span>}</span>
+                </div>
+              </div>
 
-          <div className="field" style={{ margin: 0 }}>
-            <span className="sub">Payeur</span>
-            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn" onClick={() => setPicker('payeur')}>
-                {payeur ? 'Modifier le payeur' : 'Choisir un payeur'}
-              </button>
-              <span>{payeur ? nomClient(payeur) : <span className="sub">Aucun payeur choisi</span>}</span>
-            </div>
-          </div>
-
-          <div className="field" style={{ margin: 0 }}>
-            <span className="sub">Adhérent (facultatif)</span>
-            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn" onClick={() => setPicker('adherent')}>
-                {adherent ? "Modifier l'adhérent" : 'Choisir un adhérent'}
-              </button>
-              <span>
-                {adherent ? (
-                  nomClient(adherent)
-                ) : (
-                  <span className="sub">Par défaut, le payeur est l'adhérent</span>
-                )}
-              </span>
-              {adherent && (
-                <button type="button" className="btn ghost sm" onClick={() => setAdherent(null)}>
-                  Retirer
-                </button>
-              )}
-            </div>
-            <small className="sub">Recherche ou création d'un client, comme en caisse.</small>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">IBAN (mandat SEPA)</span>
-              <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 …" />
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">Titulaire du mandat</span>
-              <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
-            </label>
-          </div>
-          <small className="sub" style={{ display: 'block' }}>
-            Le « mandat SEPA » est l'autorisation de prélèvement signée par le titulaire du compte : on
-            prélèvera ensuite automatiquement le montant, à la cadence du produit.
-          </small>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">Durée d'engagement (mois)</span>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={dureeMois}
-                onChange={(e) => setDureeMois(e.target.value)}
-              />
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">Première échéance — prorata (€, facultatif)</span>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={prorata}
-                onChange={(e) => setProrata(e.target.value)}
-                placeholder={tarifEuros != null ? `Par défaut ${euros(tarifEuros)}` : 'Par défaut, le tarif'}
-              />
-              {prorataInvalide ? (
-                <small className="crit">Montant positif, ou vide.</small>
-              ) : (
-                <small className="sub">
-                  Demi-mois d'entrée, mois offert (0 €). Un prorata retranche : il ne peut pas dépasser
-                  le tarif, et c'est le serveur qui tranche.
-                </small>
-              )}
-            </label>
-          </div>
-
-          {/* ── SIGNATURE ────────────────────────────────────────────────────────────────────── */}
-          <div
-            style={{
-              border: '1px solid var(--line)',
-              borderRadius: 10,
-              padding: 'var(--esp-normal)',
-              display: 'grid',
-              gap: 'var(--esp-normal)',
-            }}
-          >
-            <div>
-              <b>Signature</b>
-              <p className="sub" style={{ margin: 'var(--esp-serre) 0 0' }}>
-                Le mandat et le contrat sont composés, signés et <b>scellés</b> par le serveur
-                (empreinte du document, opérateur, horodatage, adresse IP). Le texte réglementaire
-                exact du mandat SEPA et les clauses du contrat sont en cours de validation : les
-                documents signés aujourd'hui portent une mention factuelle et un marqueur
-                « à finaliser ».
-              </p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
-              <SignaturePad label="Signature du mandat SEPA" onChange={setSignatureMandat} />
-              <SignaturePad label="Signature du contrat d'abonnement" onChange={setSignatureContrat} />
-            </div>
-            {(!signatureMandat || !signatureContrat) && (
-              <small className="sub">
-                Sans signature manuscrite, la souscription reste possible : le serveur enregistre un
-                consentement horodaté. Faire signer reste préférable — c'est ce qui lie la signature
-                au geste de l'adhérent.
-              </small>
-            )}
-          </div>
-
-          {/* ── ENCAISSEMENT AU COMPTOIR ─────────────────────────────────────────────────────── */}
-          <div
-            style={{
-              border: '1px solid var(--line)',
-              borderRadius: 10,
-              padding: 'var(--esp-normal)',
-              display: 'grid',
-              gap: 'var(--esp-serre)',
-            }}
-          >
-            <b>Encaissement de la première échéance</b>
-            {!session?.id ? (
-              <small className="sub">
-                Aucune caisse ouverte : la première échéance sera prélevée avec les suivantes. Ouvrez
-                une caisse pour pouvoir l'encaisser au comptoir.
-              </small>
-            ) : moyens === undefined ? (
-              <small className="crit">
-                Les moyens de paiement n'ont pas pu être lus : l'encaissement au comptoir est
-                indisponible. La première échéance sera prélevée.
-              </small>
-            ) : moyens === null ? (
-              <small className="sub">Lecture des moyens de paiement…</small>
-            ) : (
-              <>
-                <label className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={comptant}
-                    disabled={!comptantPossible}
-                    onChange={(e) => setComptant(e.target.checked)}
-                  />
+              <div className="field" style={{ margin: 0 }}>
+                <span className="sub">Adhérent (facultatif)</span>
+                <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn" onClick={() => setPicker('adherent')}>
+                    {adherent ? "Modifier l'adhérent" : 'Choisir un adhérent'}
+                  </button>
                   <span>
-                    Encaisser maintenant
-                    {montantComptant != null ? ` ${euros(montantComptant)}` : ''} au comptoir, et ne pas
-                    prélever la première échéance
+                    {adherent ? (
+                      nomClient(adherent)
+                    ) : (
+                      <span className="sub">Par défaut, le payeur est l'adhérent</span>
+                    )}
                   </span>
+                  {adherent && (
+                    <button type="button" className="btn ghost sm" onClick={() => setAdherent(null)}>
+                      Retirer
+                    </button>
+                  )}
+                </div>
+                <small className="sub">Recherche ou création d'un client, comme en caisse.</small>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="sub">IBAN (mandat SEPA)</span>
+                  <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 …" />
                 </label>
-                {comptant && (
-                  <label className="field" style={{ margin: 0, maxWidth: 260 }}>
-                    <span className="sub">Moyen de paiement</span>
-                    <select className="select" value={moyenSel} onChange={(e) => setMoyenSel(e.target.value)}>
-                      {moyensDispo.map((m) => (
-                        <option key={m.code} value={m.code}>
-                          {m.libelle || m.code}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {Array.isArray(moyensDispo) && moyensDispo.length === 0 && (
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="sub">Titulaire du mandat</span>
+                  <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
+                </label>
+              </div>
+              <small className="sub" style={{ display: 'block' }}>
+                Le « mandat SEPA » est l'autorisation de prélèvement signée par le titulaire du compte : on
+                prélèvera ensuite automatiquement le montant, à la cadence du produit.
+              </small>
+            </>
+          )}
+
+          {/* ── ÉTAPE 3 — VALIDATION (signature, encaissement, récapitulatif) ──────────────────── */}
+          {etape === 3 && (
+            <>
+              {/* Récapitulatif : ce qu'on s'apprête à engager, relu d'un coup d'œil avant de valider. */}
+              <div
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  padding: 'var(--esp-normal)',
+                  display: 'grid',
+                  gap: 'var(--esp-serre)',
+                }}
+              >
+                <b>Récapitulatif</b>
+                <LigneRecap label="Produit">{produit ? libelleProduit(produit) : '—'}</LigneRecap>
+                <LigneRecap label="Prix">{tarifEuros != null ? euros(tarifEuros) : '—'}</LigneRecap>
+                <LigneRecap label="Payeur">{payeur ? nomClient(payeur) : '—'}</LigneRecap>
+                <LigneRecap label="Adhérent">{adherent ? nomClient(adherent) : 'Le payeur'}</LigneRecap>
+                <LigneRecap label="Engagement">{`${Number(dureeMois) || 12} mois`}</LigneRecap>
+                <LigneRecap label="Titulaire du mandat">{titulaire || '—'}</LigneRecap>
+                <LigneRecap label="IBAN"><span className="mono">{iban || '—'}</span></LigneRecap>
+                <LigneRecap label="Première échéance">
+                  {prorataEuros !== null && !prorataInvalide ? `${euros(prorataEuros)} (prorata)` : 'Tarif plein'}
+                </LigneRecap>
+                <LigneRecap label="Encaissement">
+                  {comptant && comptantPossible
+                    ? `Au comptoir${montantComptant != null ? ` (${euros(montantComptant)})` : ''}`
+                    : 'Prélèvement de la première échéance'}
+                </LigneRecap>
+              </div>
+
+              {/* ── SIGNATURE ────────────────────────────────────────────────────────────────────── */}
+              <div
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  padding: 'var(--esp-normal)',
+                  display: 'grid',
+                  gap: 'var(--esp-normal)',
+                }}
+              >
+                <div>
+                  <b>Signature</b>
+                  <p className="sub" style={{ margin: 'var(--esp-serre) 0 0' }}>
+                    Le mandat et le contrat sont composés, signés et <b>scellés</b> par le serveur
+                    (empreinte du document, opérateur, horodatage, adresse IP). Le texte réglementaire
+                    exact du mandat SEPA et les clauses du contrat sont en cours de validation : les
+                    documents signés aujourd'hui portent une mention factuelle et un marqueur
+                    « à finaliser ».
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
+                  <SignaturePad label="Signature du mandat SEPA" onChange={setSignatureMandat} />
+                  <SignaturePad label="Signature du contrat d'abonnement" onChange={setSignatureContrat} />
+                </div>
+                {(!signatureMandat || !signatureContrat) && (
                   <small className="sub">
-                    Aucun moyen encaissable ici. La carte et le chèque référencé passent par le
-                    terminal, donc par l'écran Caisse.
+                    Sans signature manuscrite, la souscription reste possible : le serveur enregistre un
+                    consentement horodaté. Faire signer reste préférable — c'est ce qui lie la signature
+                    au geste de l'adhérent.
                   </small>
                 )}
-                {comptantExigeForcage && !peutForcerPrix && (
+              </div>
+
+              {/* ── ENCAISSEMENT AU COMPTOIR ─────────────────────────────────────────────────────── */}
+              <div
+                style={{
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  padding: 'var(--esp-normal)',
+                  display: 'grid',
+                  gap: 'var(--esp-serre)',
+                }}
+              >
+                <b>Encaissement de la première échéance</b>
+                {!session?.id ? (
                   <small className="sub">
-                    Le montant à encaisser diffère du tarif du produit (prorata) : l'encaisser exige le
-                    droit « forcer un prix » en caisse. Sans lui, la première échéance sera prélevée.
+                    Aucune caisse ouverte : la première échéance sera prélevée avec les suivantes. Ouvrez
+                    une caisse pour pouvoir l'encaisser au comptoir.
                   </small>
-                )}
-                {comptant && comptantExigeForcage && peutForcerPrix && (
-                  <small className="sub">
-                    Le prix sera <b>forcé</b> sur la ligne de vente pour coller au prorata : la caisse
-                    en garde la trace.
+                ) : moyens === undefined ? (
+                  <small className="crit">
+                    Les moyens de paiement n'ont pas pu être lus : l'encaissement au comptoir est
+                    indisponible. La première échéance sera prélevée.
                   </small>
+                ) : moyens === null ? (
+                  <small className="sub">Lecture des moyens de paiement…</small>
+                ) : (
+                  <>
+                    <label className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={comptant}
+                        disabled={!comptantPossible}
+                        onChange={(e) => setComptant(e.target.checked)}
+                      />
+                      <span>
+                        Encaisser maintenant
+                        {montantComptant != null ? ` ${euros(montantComptant)}` : ''} au comptoir, et ne pas
+                        prélever la première échéance
+                      </span>
+                    </label>
+                    {comptant && (
+                      <label className="field" style={{ margin: 0, maxWidth: 260 }}>
+                        <span className="sub">Moyen de paiement</span>
+                        <select className="select" value={moyenSel} onChange={(e) => setMoyenSel(e.target.value)}>
+                          {moyensDispo.map((m) => (
+                            <option key={m.code} value={m.code}>
+                              {m.libelle || m.code}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {Array.isArray(moyensDispo) && moyensDispo.length === 0 && (
+                      <small className="sub">
+                        Aucun moyen encaissable ici. La carte et le chèque référencé passent par le
+                        terminal, donc par l'écran Caisse.
+                      </small>
+                    )}
+                    {comptantExigeForcage && !peutForcerPrix && (
+                      <small className="sub">
+                        Le montant à encaisser diffère du tarif du produit (prorata) : l'encaisser exige le
+                        droit « forcer un prix » en caisse. Sans lui, la première échéance sera prélevée.
+                      </small>
+                    )}
+                    {comptant && comptantExigeForcage && peutForcerPrix && (
+                      <small className="sub">
+                        Le prix sera <b>forcé</b> sur la ligne de vente pour coller au prorata : la caisse
+                        en garde la trace.
+                      </small>
+                    )}
+                    <small className="sub">
+                      La vente est ouverte dans la caisse en cours, réglée, validée — puis la première
+                      échéance est annulée avec ce motif. Dans cet ordre : rien n'est annulé avant que
+                      l'argent soit encaissé.
+                    </small>
+                  </>
                 )}
-                <small className="sub">
-                  La vente est ouverte dans la caisse en cours, réglée, validée — puis la première
-                  échéance est annulée avec ce motif. Dans cet ordre : rien n'est annulé avant que
-                  l'argent soit encaissé.
-                </small>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
 
           {erreur && <div className="banner banner-error">{erreur}</div>}
           {avis && (
@@ -608,13 +751,27 @@ export default function SouscriptionAbonnement({
             </div>
           )}
 
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-serre)' }}>
+          {/* ── NAVIGATION ─────────────────────────────────────────────────────────────────────── */}
+          <div className="row" style={{ justifyContent: 'space-between', gap: 'var(--esp-serre)', flexWrap: 'wrap' }}>
             <button type="button" className="btn" onClick={onAnnuler} disabled={envoi}>
               Annuler
             </button>
-            <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
-              {envoi ? 'Souscription…' : "Souscrire l'abonnement"}
-            </button>
+            <div className="row" style={{ gap: 'var(--esp-serre)' }}>
+              {etape > 1 && (
+                <button type="button" className="btn" onClick={allerPrecedent} disabled={envoi}>
+                  ← Précédent
+                </button>
+              )}
+              {etape < 3 ? (
+                <button type="button" className="btn primary" onClick={allerSuivant}>
+                  Suivant →
+                </button>
+              ) : (
+                <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
+                  {envoi ? 'Souscription…' : "Souscrire l'abonnement"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
