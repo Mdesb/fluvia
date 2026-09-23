@@ -274,4 +274,5 @@ export const boutique = {
   deposerDemandeRemboursement: (corps) =>
     request('/api/boutique/demandes-remboursement', { method: 'POST', body: corps, auth: true }),
   mesBillets: () => request('/api/boutique/comptes/me/billets', { auth: true }),
+  mesAbonnements: () => request('/api/boutique/comptes/me/abonnements', { auth: true }),
 }
