@@ -10,6 +10,7 @@ use App\Boutique\Entity\Vitrine;
 use App\Boutique\Entity\LigneCommandeMeta;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
+use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Crm\Service\BeneficiaryResolver;
@@ -29,6 +30,7 @@ use App\Vente\Service\PanierCalculateur;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -49,6 +51,7 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly SubscriptionPriceResolver $resolveurAbonnement,
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SouscriptionAbonnementHandler $souscription,
+        private readonly VitrineAccessibleGuard $vitrineGuard,
     ) {
     }
 
@@ -86,6 +89,22 @@ final class SouscriptionAbonnementEnLigneHandler
         $formule = $produit->getFormule();
         if ($formule === null || !$formule->isSepaActif()) {
             throw new UnprocessableEntityHttpException('Ce produit ne porte pas la facette SEPA (RG-M3-17).');
+        }
+
+        // ── LE PRODUIT DOIT ÊTRE PROPOSÉ EN LIGNE (revue sécurité) ────────────────────────────────
+        // `isSepaActif()` ne dit RIEN du canal : un produit GUICHET-ONLY avec un tarif visible partout
+        // devenait souscriptible en ligne, car `SubscriptionPriceResolver` résout sur la visibilité du
+        // `TypeTarif`, pas sur `Produit.canaux`. Le catalogue et le tunnel billet imposent déjà
+        // `Canal::EnLigne` ; ce chemin l'oubliait. 404 (D3) : un produit hors ligne n'existe pas ici.
+        if (!$produit->aCanal(Canal::EnLigne)) {
+            throw new NotFoundHttpException('Ce produit n\'est pas proposé en ligne.');
+        }
+
+        // La vitrine où l'achat a lieu doit être publiquement accessible (établissement actif + canal
+        // en_ligne ouvert), comme tout point d'entrée public (`VitrineAccessibleGuard`). `null` =
+        // appelant historique sans vitrine : rien à vérifier, on garde le repli.
+        if ($vitrineAchat instanceof Vitrine) {
+            $this->vitrineGuard->verifier($vitrineAchat);
         }
 
         $client = $compteClient->getClient();
