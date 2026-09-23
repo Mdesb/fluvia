@@ -7130,3 +7130,17 @@ Reste (revue, non retenu par Maxime dans ce lot « 3 critiques ») : idempotence
 comptoir ; garde canal en_ligne + VitrineAccessibleGuard sur l'endpoint de souscription en ligne
 (un produit guichet-only devient souscriptible en ligne) ; visibilité abonnement/échéance/mandat
 dans MonCompte ; périmètre de commercialisation de la formule ; validation format IBAN (mod-97).
+
+## 2026-09-23 — Boutique : garde canal en_ligne sur la souscription en ligne (sécurité, suite revue)
+PR #248 (squash 1c8990c6) mergée + déployée. SouscriptionAbonnementEnLigneHandler ne vérifiait que
+formule->isSepaActif(), jamais produit->aCanal(EnLigne) ni l'accessibilité de la vitrine. Or
+SubscriptionPriceResolver résout sur la visibilité du TypeTarif, pas sur canaux : un produit
+GUICHET-ONLY à tarif visible devenait souscriptible en ligne (recette/mandat à un établissement dont
+la vente en ligne pouvait être fermée). Ajout : aCanal(EnLigne) requis (404, D3) +
+VitrineAccessibleGuard->verifier(vitrineAchat) quand une vitrine est fournie ; null = repli
+historique. Vérifié EN EXÉCUTANT AVANT FUSION (tree principal) : AbonnementSepaTest 2/2 dont le
+nouveau témoin (produit sans en_ligne → 404, titulaire de compte inclus) ; garde-fous OK ;
+double-boucle OK.
+Reste de la revue (hors périmètre demandé jusqu'ici) : idempotence double-submit comptoir ;
+visibilité abonnement/échéance/mandat dans MonCompte ; périmètre de commercialisation de la formule
+au comptoir ; validation format IBAN (mod-97).
