@@ -14,6 +14,7 @@ use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
+use App\Sepa\Service\IbanFormatValidator;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -40,6 +41,7 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         private readonly ContexteEtablissement $contexte,
         private readonly EstablishmentScopeAsserter $scope,
         private readonly CustomerReachability $customers,
+        private readonly IbanFormatValidator $ibanValidator,
     ) {
     }
 
@@ -70,6 +72,8 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         if (trim($iban) === '' || trim($nom) === '') {
             throw new UnprocessableEntityHttpException('« iban » et « debiteurNom » sont requis pour signer le mandat SEPA.');
         }
+        // Format de l'IBAN (structure pays + clé mod-97) avant tokenisation/chiffrement.
+        $this->ibanValidator->valider($iban);
 
         $dateSignature = isset($corps['dateSignature']) && \is_string($corps['dateSignature'])
             ? new \DateTimeImmutable($corps['dateSignature'])

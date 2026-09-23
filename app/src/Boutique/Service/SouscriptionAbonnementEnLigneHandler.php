@@ -20,6 +20,7 @@ use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
+use App\Sepa\Service\IbanFormatValidator;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Paiement;
@@ -52,6 +53,7 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SouscriptionAbonnementHandler $souscription,
         private readonly VitrineAccessibleGuard $vitrineGuard,
+        private readonly IbanFormatValidator $ibanValidator,
     ) {
     }
 
@@ -118,6 +120,9 @@ final class SouscriptionAbonnementEnLigneHandler
         if (trim($iban) === '' || trim($nomDebiteur) === '') {
             throw new UnprocessableEntityHttpException('« iban » et « debiteurNom » sont requis pour signer le mandat SEPA.');
         }
+        // Format de l'IBAN (structure pays + clé mod-97) avant tokenisation/chiffrement — mêmes règles
+        // qu'au guichet : un IBAN mal saisi ne doit pas n'échouer qu'au rejet bancaire.
+        $this->ibanValidator->valider($iban);
         $dateSignature = isset($donnees['dateSignature']) && \is_string($donnees['dateSignature'])
             ? new \DateTimeImmutable($donnees['dateSignature'])
             : new \DateTimeImmutable('today');
