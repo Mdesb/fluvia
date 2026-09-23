@@ -438,4 +438,40 @@ final class SouscriptionTest extends SportApiTestCase
 
         self::assertSame($premier, $second, 'un double-POST renvoie le même abonnement (aucun doublon créé)');
     }
+
+    /**
+     * UNE FORMULE HORS PÉRIMÈTRE DE COMMERCIALISATION EST REFUSÉE (revue #5).
+     *
+     * `formule` était résolue par find() sans vérifier que son produit soit commercialisé sur
+     * l'établissement actif — le seul chemin qui court-circuitait PerimetreProduitExtension. On assigne
+     * le produit Gold au SEUL établissement C (groupe B) et on prouve le refus (404) pour un admin de A.
+     * Convention socle : un produit SANS établissement resterait, lui, vendu partout.
+     */
+    public function testLaSouscriptionRefuseUneFormuleHorsPerimetre(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $etabC = $em->getRepository(Etablissement::class)->findOneBy(['nom' => CrmFixtures::ETAB_C_NOM]);
+        self::assertNotNull($etabC);
+        // Gold commercialisé UNIQUEMENT sur C (liste non vide, sans A) → hors périmètre de l'admin de A.
+        foreach ($produitGold->getEtablissements()->toArray() as $e) {
+            $produitGold->removeEtablissement($e);
+        }
+        $produitGold->addEtablissement($etabC);
+        $em->flush();
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(404, 'une formule non commercialisée sur l\'établissement actif est refusée');
+    }
 }
