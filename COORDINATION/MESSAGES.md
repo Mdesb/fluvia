@@ -7177,3 +7177,22 @@ garde-fous 55/55 (dont C19) ; SouscriptionTest 9/9 (dont le témoin : Gold réas
 REVUE ABONNEMENT CLOSE — tous les points livrés : #245 (3 critiques : cloisonnement payeur, atomicité,
 révocation QR), #248 (garde canal en ligne), #249 (idempotence + validation IBAN), #250 (Mes
 abonnements dans MonCompte), #251 (périmètre formule). Préprod = 7eb6e6bf.
+
+## 2026-09-23 — Refonte gestion des sites, P1 : rôle « équipe plateforme » (livré)
+PR #252 (squash 7caa1534) mergée + déployée (migration plateforme appliquée, colonne présente,
+préprod saine — 401 sur les routes authentifiées). Niveau plateforme, déploiement MONO-PROPRIÉTAIRE
+(arbitrage Maxime : tous les sites lui appartiennent → exception assumée à RG-ED-07).
+Utilisateur.plateforme (NOT NULL DEFAULT 0) + PlatformScope::isGlobal (seul lecteur) + 3 coutures
+early-return : EstablishmentReachability (atteint tout site), PerimetreEtablissementExtension (voit
+tous les sites), CalculateurDroits (*.*). ~30 autres extensions inchangées → accès PAR SITE (P1).
+AUCUN compte marqué plateforme (défaut sûr) — à poser sur les comptes de l'équipe. Vérifié AVANT
+FUSION : Securite + Subscription 161/161.
+⚠ INCIDENT préprod pendant le dev : avoir stagé le mapping de la nouvelle colonne dans l'arbre du
+checkout PRINCIPAL (pour test-stack) a cassé la préprod (« Unknown column t0.plateforme ») — FPM sert
+l'arbre principal contre la VRAIE base, qui n'avait pas encore la colonne ; aggravé par un
+cache:clear lancé en root (permissions var/cache). Corrigé par revert + deploy. LEÇON : ne jamais
+stager dans le principal un changement d'ENTITÉ qui modifie le schéma pour le tester ; tester depuis
+un worktree, ou fusionner-puis-migrer.
+Reste refonte sites : P2 vues agrégées multi-sites ; niveau réseau/groupe (affectation Groupe/Région,
+inexistante) ; consolidation identité légale UNIQUE par site (aujourd'hui éclatée LegalIdentity +
+ProfilExploitant + ConfigCreancierSepa, avec SIRET/raison sociale/TVA en double).
