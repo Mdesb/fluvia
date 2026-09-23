@@ -6,6 +6,8 @@ namespace App\Tests\Sport\Api;
 
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Enum\StatutProjectionDroit;
+use App\Acces\Enum\TypeDroitAcces;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
@@ -339,8 +341,21 @@ final class SouscriptionTest extends SportApiTestCase
             'le billet QR a un appairage actif avant rattachement',
         );
 
-        // 2. Rattacher un nouveau droit libre.
-        $nouveauDroitId = $this->idDroitAccesDemo();
+        // 2. Créer un droit d'accès NEUF (distinct du billet QR) et le rattacher — c'est le geste
+        //    « on appaire un badge physique ». On le crée explicitement : un droit arbitraire
+        //    (`findOneBy([])`, PK UUID → ordre non déterministe) pourrait être le QR lui-même, et le
+        //    rattacher à son propre statut serait un no-op qui ne prouverait rien.
+        $nouveau = (new DroitAcces())
+            ->setSourceType(TypeDroitAcces::Abonnement)
+            ->setEtablissement($ancienDroit->getEtablissement())
+            ->setStatutProjection(StatutProjectionDroit::Valide)
+            ->setSynchroniseLe(new \DateTimeImmutable());
+        $em->persist($nouveau);
+        $em->flush();
+        $nouveauDroitId = (string) $nouveau->getId();
+        self::assertNotSame($ancienDroitId, $nouveauDroitId, 'le nouveau droit doit être distinct du billet QR');
+        $em->clear();
+
         $client->request('POST', '/api/sport/abonnements/' . $abonnementId . '/rattacher-droit-acces', $entete + [
             'json' => ['droitAcces' => '/api/droit_acces/' . $nouveauDroitId],
         ]);
