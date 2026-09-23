@@ -7164,3 +7164,16 @@ au comptoir ; validation format IBAN (mod-97).
   zones d'accès sont déjà scopées à l'établissement).
 Bilan revue : 3 critiques (#245) + idempotence + IBAN (#249) + visibilité MonCompte (#250) livrés et
 déployés. Seul le périmètre formule (#5) reste, sur décision de Maxime.
+
+## 2026-09-23 — Périmètre de commercialisation de la formule au comptoir (livré, #5)
+PR #251 (squash 7eb6e6bf) mergée + déployée. Dernier point de la revue, sur ARBITRAGE de Maxime
+(« un produit est assigné à un site, il ne doit pas être vendable partout »). SouscrireAbonnementProcessor
+résolvait la formule par find() → court-circuitait PerimetreProduitExtension. Nouveau
+ProductSaleScopeGuard::assertSoldAt() : convention socle (liste d'établissements VIDE = vendu partout ;
+non vide = uniquement ces sites), 404 sinon — même règle que catalogue/caisse/créneaux. Nommé « Guard »
+pour que le garde-fou C19 reconnaisse le contrôle sur l'entité résolue. Vérifié AVANT FUSION :
+garde-fous 55/55 (dont C19) ; SouscriptionTest 9/9 (dont le témoin : Gold réassigné au seul
+établissement C → 404 pour un admin de A ; Gold-sur-A reste vert).
+REVUE ABONNEMENT CLOSE — tous les points livrés : #245 (3 critiques : cloisonnement payeur, atomicité,
+révocation QR), #248 (garde canal en ligne), #249 (idempotence + validation IBAN), #250 (Mes
+abonnements dans MonCompte), #251 (périmètre formule). Préprod = 7eb6e6bf.
