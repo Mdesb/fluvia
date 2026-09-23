@@ -7144,3 +7144,23 @@ double-boucle OK.
 Reste de la revue (hors périmètre demandé jusqu'ici) : idempotence double-submit comptoir ;
 visibilité abonnement/échéance/mandat dans MonCompte ; périmètre de commercialisation de la formule
 au comptoir ; validation format IBAN (mod-97).
+
+## 2026-09-23 — Suite revue abonnement : idempotence, validation IBAN, visibilité MonCompte
+- PR #249 (8af70a54) — durcissement souscription : IDEMPOTENCE comptoir (double-POST → même abo
+  renvoyé, aucun doublon ; cloisonnement porté sur l'entité résolue) ; VALIDATION IBAN (nouveau
+  IbanFormatValidator, délègue à la contrainte Iban de Symfony) aux 3 voies mandat : souscription
+  guichet, souscription en ligne, CreerMandatSepaProcessor. Au passage MandatSepaTest corrigé (il
+  utilisait un IBAN aux chiffres de contrôle faux). Vérifié AVANT FUSION : suites
+  souscription/abo-en-ligne/mandats 20/20 (test-stack).
+- PR #250 (cafb2ce7) — « Mes abonnements » dans MonCompte (boutique en ligne) : MySubscriptionsProvider
+  + GET /boutique/comptes/me/abonnements (cloisonné par payeur DÉRIVÉ du compte connecté, pas d'un
+  paramètre ; IBAN jamais exposé, 4 derniers chiffres) + onglet front. Vérifié AVANT FUSION :
+  AbonnementSepaTest 4/4 (dont le témoin me/abonnements).
+- NON FAIT — périmètre de commercialisation de la formule au comptoir (revue #5) : PARQUÉ, à arbitrer
+  par Maxime. (a) C'est une règle métier : une formule doit-elle lister l'établissement actif parmi
+  les établissements de son produit pour y être souscriptible ? (b) le contrôle se heurte au garde-fou
+  de cloisonnement, qui ne reconnaît que `->getEtablissement()` SINGULIER comme contrôle sur l'entité
+  résolue, or un Produit a PLUSIEURS établissements. Faible sévérité (le prix vient du TypeTarif, les
+  zones d'accès sont déjà scopées à l'établissement).
+Bilan revue : 3 critiques (#245) + idempotence + IBAN (#249) + visibilité MonCompte (#250) livrés et
+déployés. Seul le périmètre formule (#5) reste, sur décision de Maxime.
