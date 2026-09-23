@@ -10,6 +10,8 @@ use App\Crm\Security\CustomerReachability;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
+use App\Offre\Entity\Produit;
+use App\Offre\Service\ProductSaleScopeGuard;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
@@ -47,6 +49,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly CustomerReachability $customers,
         private readonly IbanFormatValidator $ibanValidator,
+        private readonly ProductSaleScopeGuard $saleScopeGuard,
         private readonly SepaMandateSigner $mandateSigner,
         private readonly SubscriptionContractSigner $contractSigner,
         private readonly Security $security,
@@ -96,6 +99,15 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         $etablissement = $this->contexte->etablissementActif();
         if (!$etablissement instanceof Etablissement) {
             throw new UnprocessableEntityHttpException('Établissement actif requis (en-tête X-Etablissement).');
+        }
+
+        $produitFormule = $this->em->getRepository(Produit::class)->findOneBy(['formule' => $formule]);
+        // Cloisonnement de commercialisation : le produit qui porte la formule doit être vendu sur
+        // l'établissement actif (convention socle : liste vide = partout), comme le catalogue, la
+        // caisse et les créneaux. `find()` sort de PerimetreProduitExtension, d'où ce garde explicite
+        // sur l'entité résolue.
+        if ($produitFormule instanceof Produit) {
+            $this->saleScopeGuard->assertSoldAt($produitFormule, $etablissement);
         }
 
         // ⚠ `periodicite` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
