@@ -7102,3 +7102,31 @@ appelants ne bougent pas. Vérifié EN EXÉCUTANT : build frontend OK ; garde-fo
 + contrastes) ; parcours live sur préprod (validation étape 1 démontrée, passage étape 1->2 avec ✓).
 Contexte : fait après une souscription Gold de test réelle bout-en-bout (client créé à la volée,
 billet QR signé QRC-RSWYJGGZBS0R4YTN-F851C539A8, zone « Entrée salle fitness » rattachée au droit).
+
+## 2026-09-23 — Revue feature abonnement + durcissement (3 critiques livrés)
+Revue complète (comptoir + en ligne). Correction d'un faux que j'avais dit : la vente
+d'abonnement EN LIGNE fonctionne bien (SouscriptionAbonnementEnLigneHandler appelle le
+souscrire() canonique ; échéancier collecté par SportEcheanceSepaSource) — le commentaire de
+FicheProduit.jsx était périmé. Corrigés + déployés (09d95b16) :
+- PR #245 (0c9b5750) — durcissement souscription : (1) CLOISONNEMENT payeur (constat 5) :
+  SouscrireAbonnementProcessor résolvait le payeur par find() sans assertReachable → un groupe A
+  souscrivait au nom du client d'un groupe B (écriture cross-tenant + fuite PII). Ajout de
+  CustomerReachability->assertReachable(payeur), 404 (D3). (2) ATOMICITÉ : souscrire() écrivait en
+  ~5 flushes sans transaction ; appairer() flushe en interne → QR committé avec statutAcces.droitAcces
+  = null possible → résiliation ne coupait pas. Enveloppé dans wrapInTransaction. (3) RÉVOCATION :
+  RattacherDroitAccesProcessor écrasait droitAcces sans révoquer l'ancien → après appairage badge,
+  l'ancien QR ouvrait toujours, même résilié. Dévalidation + révocation des appairages actifs avant
+  remplacement.
+- PR #246 (60ffbe92) — témoin de révocation rendu déterministe (idDroitAccesDemo = findOneBy([])
+  sur PK UUID pouvait tirer le QR lui-même → no-op).
+- PR #247 (09d95b16) — message de souscription EN LIGNE honnête : disait « commande enregistrée »
+  alors qu'un abonnement + prélèvements sont réellement créés. Dit désormais « Abonnement souscrit »
+  + prélèvements à venir.
+Vérifié EN EXÉCUTANT : SouscriptionTest 6/6 (dont 2 nouveaux témoins : payeur hors périmètre → 404
+sans rien créer ; rattachement → ancien QR dévalidé + appairage révoqué) + suites
+abonnement/en-ligne/cloisonnement/hors-ligne/collecte 13/13 ; build frontend + garde-fous 55/55 ;
+double-boucle OK.
+Reste (revue, non retenu par Maxime dans ce lot « 3 critiques ») : idempotence double-submit au
+comptoir ; garde canal en_ligne + VitrineAccessibleGuard sur l'endpoint de souscription en ligne
+(un produit guichet-only devient souscriptible en ligne) ; visibilité abonnement/échéance/mandat
+dans MonCompte ; périmètre de commercialisation de la formule ; validation format IBAN (mod-97).
