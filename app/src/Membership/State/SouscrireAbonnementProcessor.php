@@ -6,6 +6,7 @@ namespace App\Membership\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Crm\Security\CustomerReachability;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
@@ -42,6 +43,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly SouscriptionAbonnementHandler $handler,
         private readonly ContexteEtablissement $contexte,
         private readonly BeneficiaryResolver $beneficiaires,
+        private readonly CustomerReachability $customers,
         private readonly SepaMandateSigner $mandateSigner,
         private readonly SubscriptionContractSigner $contractSigner,
         private readonly Security $security,
@@ -58,6 +60,14 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         if (!$payeur instanceof Client || !$formule instanceof Formule) {
             throw new UnprocessableEntityHttpException('« payeur » et « formule » sont requis et doivent référencer des ressources existantes.');
         }
+
+        // ── CLOISONNEMENT DU PAYEUR (constat 5, même règle que CreerMandatSepaProcessor) ─────────
+        // `payeur` est résolu par `find()` : `CustomerScope` (filtre de requête) ne protège pas un
+        // processeur qui tient l'entité en main. Sans ce contrôle, un utilisateur souscrivait un
+        // abonnement — mandat, échéancier, accès, billet QR — au nom du client d'un AUTRE groupe, et
+        // la réponse 201 fuyait sa PII. 404 et non 403 (D3). L'adhérent désigné, lui, reste borné au
+        // groupe du payeur juste en dessous : payeur atteignable + même groupe ⇒ adhérent atteignable.
+        $this->customers->assertReachable($payeur);
 
         // ── L'ADHÉRENT EST UN CLIENT, RÉSOLU EN BÉNÉFICIAIRE — MÊME MODÈLE QUE LA CAISSE ──────
         // On ne fait plus choisir un `Beneficiaire` dans une liste (« adhérent » ne parlait à
