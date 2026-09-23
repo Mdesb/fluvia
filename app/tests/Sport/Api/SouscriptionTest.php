@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
+use App\Acces\Entity\Appairage;
+use App\Acces\Entity\DroitAcces;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
+use App\Crm\Enum\TypeClient;
+use App\Organisation\Entity\Etablissement;
+use App\Organisation\Entity\Groupe;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
 use App\Sepa\Entity\MandatSepa;
@@ -242,5 +247,119 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertNotNull($statutAcces);
         self::assertNotNull($statutAcces->getDroitAcces());
         self::assertSame('valide', $statutAcces->getDroitAcces()->getStatutProjection()->value);
+    }
+
+    /**
+     * LE PAYEUR HORS PÉRIMÈTRE EST INTROUVABLE (cloisonnement, constat 5).
+     *
+     * `payeur` était résolu par `find()` sans contrôle : un admin du groupe A souscrivait un
+     * abonnement — mandat, échéancier, accès, billet QR — au nom du client d'un AUTRE groupe, et la
+     * 201 fuyait sa PII. Ce témoin prouve le refus (404, D3) et l'absence de toute création.
+     */
+    public function testLaSouscriptionRefuseUnPayeurHorsPerimetre(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $formuleId = (string) $produitGold->getFormule()->getId();
+
+        // Un client d'un AUTRE groupe (Groupe B), hors du périmètre de l'admin de A.
+        $groupeB = $em->getRepository(Groupe::class)->findOneBy(['nom' => CrmFixtures::GROUPE_B_NOM]);
+        $etabC = $em->getRepository(Etablissement::class)->findOneBy(['nom' => CrmFixtures::ETAB_C_NOM]);
+        self::assertNotNull($groupeB);
+        $payeurB = (new Client())
+            ->setType(TypeClient::Physique)
+            ->setGroupe($groupeB)
+            ->setEtablissementCreation($etabC)
+            ->setNom('Concurrent')
+            ->setPrenom('Client');
+        $em->persist($payeurB);
+        $em->flush();
+        $payeurBId = (string) $payeurB->getId();
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeurBId,
+                'formule' => '/api/formules/' . $formuleId,
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Client Concurrent',
+            ],
+        ]);
+        // 404 et non 403 (D3) : hors périmètre = introuvable.
+        self::assertResponseStatusCodeSame(404);
+
+        // Et RIEN n'a été créé pour ce client hors périmètre.
+        $em->clear();
+        $payeurBApres = $em->getRepository(Client::class)->find($payeurBId);
+        self::assertNull(
+            $em->getRepository(Membership::class)->findOneBy(['payeur' => $payeurBApres]),
+            'aucun abonnement ne doit exister pour le client hors périmètre',
+        );
+    }
+
+    /**
+     * RATTACHER UN NOUVEAU DROIT RÉVOQUE L'ANCIEN BILLET QR.
+     *
+     * Depuis l'émission du QR à la souscription, `droitAcces` porte un support avec un appairage
+     * ACTIF. L'écraser sans révoquer laissait ce QR ouvrir la porte à jamais — même résilié. Ce
+     * témoin prouve qu'au rattachement d'un nouveau droit, l'ancien est dévalidé et son appairage
+     * coupé.
+     */
+    public function testLeRattachementRevoqueLAncienBilletQr(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+
+        // 1. Souscrire → un statut avec un droit QR + un appairage actif.
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $abonnementId = $client->getResponse()->toArray()['id'];
+        $em->clear();
+
+        $statut = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnementId]);
+        self::assertNotNull($statut);
+        $ancienDroit = $statut->getDroitAcces();
+        self::assertNotNull($ancienDroit, 'la souscription a posé un droit QR');
+        $ancienDroitId = (string) $ancienDroit->getId();
+        self::assertNotNull(
+            $em->getRepository(Appairage::class)->findOneBy(['droit' => $ancienDroit, 'actif' => true]),
+            'le billet QR a un appairage actif avant rattachement',
+        );
+
+        // 2. Rattacher un nouveau droit libre.
+        $nouveauDroitId = $this->idDroitAccesDemo();
+        $client->request('POST', '/api/sport/abonnements/' . $abonnementId . '/rattacher-droit-acces', $entete + [
+            'json' => ['droitAcces' => '/api/droit_acces/' . $nouveauDroitId],
+        ]);
+        self::assertResponseIsSuccessful();
+        $em->clear();
+
+        // 3. L'ancien droit QR est dévalidé et son appairage ne peut plus ouvrir.
+        $ancien = $em->getRepository(DroitAcces::class)->find($ancienDroitId);
+        self::assertNotNull($ancien);
+        self::assertSame('devalide', $ancien->getStatutProjection()->value, 'l\'ancien billet QR est dévalidé');
+        self::assertNull(
+            $em->getRepository(Appairage::class)->findOneBy(['droit' => $ancien, 'actif' => true]),
+            'l\'appairage de l\'ancien billet QR est révoqué : il n\'ouvre plus',
+        );
+
+        // Le statut pointe désormais le nouveau droit, valide.
+        $statut2 = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnementId]);
+        self::assertNotNull($statut2->getDroitAcces());
+        self::assertSame((string) $nouveauDroitId, (string) $statut2->getDroitAcces()->getId());
+        self::assertSame('valide', $statut2->getDroitAcces()->getStatutProjection()->value);
     }
 }
