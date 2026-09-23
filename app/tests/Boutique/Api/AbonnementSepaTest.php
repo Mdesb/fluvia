@@ -78,4 +78,24 @@ final class AbonnementSepaTest extends BoutiqueApiTestCase
         ]);
         self::assertResponseStatusCodeSame(404, 'un produit guichet-only n\'est pas souscriptible en ligne');
     }
+
+    /**
+     * UN IBAN AU FORMAT INVALIDE EST REFUSÉ EN LIGNE AUSSI (revue #6).
+     */
+    public function testLaSouscriptionEnLigneRefuseUnIbanInvalide(): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+        $client->request('POST', '/api/boutique/abonnements/souscrire', [
+            'auth_bearer' => $token,
+            'json' => [
+                'produit' => (string) $produit->getId(),
+                'iban' => 'FR76-PAS-UN-IBAN',
+                'bicDebiteur' => 'AGRIFRPP',
+                'debiteurNom' => 'Camille Martin',
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(422, 'un IBAN au format invalide est refusé en ligne');
+    }
 }

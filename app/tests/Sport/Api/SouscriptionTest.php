@@ -377,4 +377,65 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertSame((string) $nouveauDroitId, (string) $statut2->getDroitAcces()->getId());
         self::assertSame('valide', $statut2->getDroitAcces()->getStatutProjection()->value);
     }
+
+    /**
+     * UN IBAN AU FORMAT INVALIDE EST REFUSÉ AVANT TOKENISATION (revue #6).
+     *
+     * Sans contrôle, un IBAN mal saisi était tokenisé, chiffré, stocké, et n'échouait qu'au pain.008
+     * ou au rejet bancaire — loin de la saisie. Ce témoin prouve le refus immédiat (422).
+     */
+    public function testLaSouscriptionRefuseUnIbanInvalide(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR76-PAS-UN-IBAN',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(422, 'un IBAN au format invalide est refusé avant tokenisation');
+    }
+
+    /**
+     * UN DOUBLE-POST NE CRÉE PAS DEUX ABONNEMENTS (revue #2, idempotence).
+     *
+     * Un double-clic / rejeu réseau créait deux abonnements, deux mandats, deux échéanciers → double
+     * prélèvement. Ce témoin rejoue à l'identique et prouve que le MÊME abonnement est renvoyé (donc
+     * aucun second n'a été créé : un doublon rendrait un id différent).
+     */
+    public function testLaSouscriptionEstIdempotenteSurUnDoublePost(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produitGold = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $payeur = $em->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $requete = $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ];
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $requete);
+        self::assertResponseIsSuccessful();
+        $premier = $client->getResponse()->toArray()['id'];
+
+        $client->request('POST', '/api/sport/abonnements/souscrire', $requete);
+        self::assertResponseIsSuccessful();
+        $second = $client->getResponse()->toArray()['id'];
+
+        self::assertSame($premier, $second, 'un double-POST renvoie le même abonnement (aucun doublon créé)');
+    }
 }

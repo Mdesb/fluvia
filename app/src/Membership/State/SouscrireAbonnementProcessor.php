@@ -14,8 +14,10 @@ use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipStatus;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Membership\Service\SubscriptionContractSigner;
+use App\Sepa\Service\IbanFormatValidator;
 use App\Sepa\Service\SepaMandateSigner;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,6 +46,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly ContexteEtablissement $contexte,
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly CustomerReachability $customers,
+        private readonly IbanFormatValidator $ibanValidator,
         private readonly SepaMandateSigner $mandateSigner,
         private readonly SubscriptionContractSigner $contractSigner,
         private readonly Security $security,
@@ -116,6 +119,9 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         if (trim($iban) === '' || trim($titulaire) === '') {
             throw new UnprocessableEntityHttpException('« iban » et « titulaireMandat » sont requis pour signer le mandat SEPA.');
         }
+        // Format de l'IBAN (structure pays + clé mod-97) : un IBAN mal saisi était tokenisé, chiffré et
+        // stocké, pour n'échouer qu'au pain.008 / rejet bancaire, loin de la saisie. On refuse ici.
+        $this->ibanValidator->valider($iban);
 
         $dateSouscription = isset($corps['dateSouscription']) && \is_string($corps['dateSouscription'])
             ? new \DateTimeImmutable($corps['dateSouscription'])
@@ -152,6 +158,27 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             if ($montantPremiereCentimes < 0) {
                 throw new UnprocessableEntityHttpException('« montantPremiereEcheanceCentimes » ne peut pas être négatif.');
             }
+        }
+
+        $existant = $this->em->getRepository(Membership::class)->findOneBy([
+            'payeur' => $payeur,
+            'adherent' => $adherent,
+            'formule' => $formule,
+            'etablissement' => $etablissement,
+            'statut' => MembershipStatus::Actif,
+            'dateSouscription' => $dateSouscription,
+        ]);
+        // ── IDEMPOTENCE : UN DOUBLE-POST NE CRÉE PAS DEUX ABONNEMENTS ─────────────────────────────
+        // Sans clé d'idempotence, un double-clic ou un rejeu réseau créait deux abonnements, deux
+        // mandats (RUM distincts), deux échéanciers → double prélèvement. On renvoie l'abonnement ACTIF
+        // déjà créé le même jour pour le même (payeur, adhérent, formule, établissement) : on ne
+        // souscrit pas deux fois la même offre pour la même personne le même jour ; un abonnement
+        // résilié n'étant pas actif, une vraie re-souscription reste possible.
+        // ⚠ LE CLOISONNEMENT PORTE SUR L'ENTITÉ RÉSOLUE : `$existant->getEtablissement()` la confronte à
+        // l'établissement actif (le critère l'a déjà bornée ; on le confirme sur l'objet, pas seulement
+        // dans la requête — même exigence que l'IDOR d'appairage du 22/08).
+        if ($existant instanceof Membership && $existant->getEtablissement() === $etablissement) {
+            return $existant;
         }
 
         $abonnement = $this->handler->souscrire(
