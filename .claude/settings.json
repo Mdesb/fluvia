@@ -58,7 +58,12 @@
       "Bash(git commit -am:*)",
       "Bash(git commit --all:*)",
       "Bash(git commit -n:*)",
-      "Bash(git push --no-verify:*)"
+      "Bash(git push --no-verify:*)",
+      "Bash(git fetch *--upl*)",
+      "Bash(git fetch --upl*)",
+      "Bash(git log *--output*)",
+      "Bash(git diff *--output*)",
+      "Bash(git show *--output*)"
     ],
     "allow": [
       "Bash(git status:*)",
