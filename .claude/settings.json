@@ -20,7 +20,19 @@
       "Read(**/*.pem)",
       "Read(**/id_rsa*)",
       "Bash(git commit -a:*)",
-      "Bash(git commit --no-verify:*)"
+      "Bash(git commit --no-verify:*)",
+      "Bash(git add --all:*)",
+      "Bash(git add -u:*)",
+      "Bash(git add --update:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git branch -d:*)",
+      "Bash(git branch --delete:*)",
+      "Bash(git branch -f:*)",
+      "Bash(git branch --force:*)",
+      "Bash(git branch -M:*)",
+      "Bash(git switch --discard-changes:*)",
+      "Bash(git switch -f:*)",
+      "Bash(git checkout -f:*)"
     ],
     "allow": [
       "Bash(git status:*)",
