@@ -124,12 +124,12 @@
 
   "_garde_fous_projet": "Rétrospective du 14/09 : le pre-commit a refusé trois fois un commit relu et testé. Le développeur lance les 54 garde-fous avant de rendre ; le harnais ne clôt pas un tour où du code a changé sans ça.",
   "garde_fous_projet": { "commande": "./bin/garde-fous.sh", "obligatoire": true },
-  "_budget_diff": "Lignes de code ajoutées au commit, hors doc, tests, verrous, lignes de base, migrations : avertissement puis refus sauf justification écrite (dossier par défaut du kit).",
+  "_budget_diff": "Lignes de code ajoutées au commit, hors doc, tests, verrous, lignes de base, migrations, catalogues de traduction (motifs génériques du kit, repris : une liste du projet remplace celle du kit) : avertissement puis refus sauf justification écrite (dossier par défaut du kit).",
   "budget_diff": {
     "actif": true,
     "avertir": 150,
     "refuser": 400,
-    "exclure": ["**/*.lock", "**/*.ligne-de-base.json", "docs/**", "features/**", "specs/**", "**/*.md", "**/tests/**", "**/*Test.php", "**/*.test.*", "app/migrations/**", "COORDINATION/**", "analyse-existant/**"]
+    "exclure": ["**/*.lock", "**/*.ligne-de-base.json", "docs/**", "features/**", "specs/**", "**/*.md", "**/tests/**", "**/*Test.php", "**/*.test.*", "**/translations/**", "**/i18n/**", "app/migrations/**", "COORDINATION/**", "analyse-existant/**"]
   },
 
   "_i18n": "Désactivé : main n'a aucun catalogue de traduction. COORDINATION/CONTRACT/i18n-traduction.md les prévoit (statut « à implémenter », langue source en). À réactiver avec les vrais chemins quand ils existeront.",
