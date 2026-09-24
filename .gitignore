@@ -33,3 +33,6 @@ node_modules/
 
 # Claude Code : reglages propres a chaque poste, jamais versionnes.
 /.claude/settings.local.json
+
+# Kit SDD : revues, justifications de budget et liste blanche, locales a chaque worktree.
+/.kit-sdd/

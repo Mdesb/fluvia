@@ -1,0 +1,168 @@
+{
+  "_commentaire": "Garde-fous du kit SDD 3.0.1 (plugin garde-fous-sdd) pour Fluvia. Suivi par git à la racine du dépôt : le changer, c'est une PR comme une autre. Ce qu'il couvre et ne couvre pas : CLAUDE.md, section « Garde-fous du harnais ».",
+
+  "projet": "fluvia",
+  "branche_principale": "main",
+  "racine_worktrees": "/home/debian/wt",
+  "clone_deploiement": "/home/debian/billetterie",
+
+  "identite": {
+    "env": ["KIT_IDENTITE", "GIT_AUTHOR_NAME", "USER"],
+    "defaut": null
+  },
+
+  "git": {
+    "interdire_add_global": true,
+    "interdire_commit_sur_principale": true,
+    "interdire_push_force": true,
+    "interdire_push_principale": true,
+    "identites_autorisees_sur_principale": []
+  },
+
+  "piles_test": {
+    "script": "infra/test-stack.sh",
+    "jetons_interdits": ["test", "tests", "claude", "default", "demo", "dev", "local", "tmp", "monjeton", "jeton"],
+    "jeton_doit_contenir_identite": true,
+    "suffixe_reseau_docker": "-net",
+    "suite_complete_interdite_dans_clone_deploiement": true
+  },
+
+  "commandes_interdites": [
+    { "motif": "doctrine:migrations:diff", "raison": "CLAUDE.md : les migrations s'écrivent à la main d'après `doctrine:schema:update --dump-sql` ; un diff brut ratisse la dérive des autres." },
+    { "motif": "git\\s+worktree\\s+add[^\\n;&|]*billetterie\\.git", "raison": "un worktree créé depuis le dépôt nu n'a pas d'origin et contourne pre-receive. Crée-le depuis /home/debian/billetterie (en-tête de infra/test-stack.sh)." },
+    { "motif": "composer\\s+install\\s+--no-dev[^\\n;&|]*\\s*$", "raison": "`composer install --no-dev` dans un arbre où une suite tourne la rend muette (mesure du 01/09). Réservé à infra/deploy-preprod.sh." }
+  ],
+
+  "zones_sensibles": [
+    "app/src/Securite/**",
+    "app/src/Autorisation/**",
+    "app/src/Organisation/**",
+    "app/src/Platform/**",
+    "app/src/Caisse/**",
+    "app/src/Vente/**",
+    "app/src/Acces/**",
+    "app/src/Compta/**",
+    "app/src/Facturation/**",
+    "app/src/Recouvrement/**",
+    "app/src/Finance/**",
+    "app/src/RevenueRecovery/**",
+    "app/src/Caution/**",
+    "app/src/Membership/**",
+    "app/src/Integrations/**",
+    "app/src/PublicApi/**",
+    "app/migrations/**",
+    "app/config/packages/security.yaml",
+    "app/config/packages/api_platform.yaml",
+    "app/config/packages/lexik_jwt_authentication.yaml",
+    "infra/**",
+    "hooks/**",
+    "bin/garde-fou*",
+    "bin/*.ligne-de-base.json",
+    ".github/workflows/**",
+    ".claude/**",
+    "kit-sdd.json"
+  ],
+  "revue_sensible": { "mode": "refuser" },
+
+  "secrets": {
+    "mode": "refuser",
+    "chemins_ignores": ["**/*.lock", "**/vendor/**", "**/node_modules/**", "**/*.min.js", "**/*.map", "**/*.ligne-de-base.json", "analyse-existant/**"]
+  },
+
+  "ecriture": {
+    "confiner_au_projet": true
+  },
+
+  "tests": {
+    "dossier_src": "app/src",
+    "dossier_tests": "app/tests",
+    "commande_module": "./infra/test-stack.sh run {jeton} app/tests/{module}",
+    "auto": false,
+    "delai_max_s": 900,
+    "indice_module": true
+  },
+
+  "_dependances": "app/compose.yaml n'a pas de service php : l'audit composer tourne dans un conteneur jetable de l'image préprod, sur le verrou du worktree monté en lecture seule.",
+  "dependances": {
+    "manifestes": ["app/composer.json", "frontend/package.json"],
+    "audit": [
+      "docker run --rm -v \"$PWD/app:/app:ro\" -w /app billetterie-preprod-php composer audit --locked --no-interaction --format=plain",
+      "cd frontend && npm audit --audit-level=high"
+    ]
+  },
+
+  "journal": { "actif": true, "dossier": "~/.kit-sdd/journal" },
+  "couts": { "actif": true, "dossier": "~/.kit-sdd/couts" },
+  "decisions": { "fichier": "COORDINATION/DECISIONS.md", "prefixe": "D" },
+  "_aiguillage": "CLAUDE.md impose /aiguiller : il reste dans la liste. Aucun hook de la 3.0 ne lit `commandes` ; la règle vit dans CLAUDE.md.",
+  "aiguillage": { "rappel": true, "commandes": ["/aiguiller", "/correctif-rapide", "/nouvelle-fonctionnalite"] },
+  "_aiguillage_mots": "v3 : ces mots étaient codés en dur dans le plugin ; ils sont maintenant propres à Fluvia. Les autres projets ont les mots génériques du plugin.",
+  "aiguillage_mots": {
+    "sensible": ["paiement", "caisse", "encaiss", "factur", "compta", "tva", "sepa", "prélèvement", "prelevement", "rembours", "tarif", "prix",
+                 "abonnement", "cloisonn", "établissement", "etablissement", "tenant", "droit", "permission", "rôle", "role", "auth",
+                 "mot de passe", "jwt", "token", "migration", "schéma", "schema", "base de donn", "rgpd", "donnée perso", "données perso",
+                 "nf525", "clôture", "cloture", "caution", "recouvrement", "régie", "regie", "factur-x", "webhook"],
+    "gros": ["nouveau module", "nouvelle fonctionnalit", "refonte", "réécri", "reecri", "architecture", "remplace", "tous les", "toutes les",
+             "partout", "à la place de", "intégration", "integration", "api publique", "export", "import", "nouvelle verticale"]
+  },
+  "_contexte_metier": "null : pas de fichier de contexte métier dans ce dépôt déclaré public. Le kit retombe alors sur son chemin par défaut, absent : le démarrage affiche un ⚠, c'est attendu.",
+  "contexte_metier": null,
+  "demarrage": { "prs_ouvertes": true, "piles_test": true },
+
+  "_facon_de_faire": "Désactivé : le dépôt est déclaré public, et ce fichier décrirait une personne.",
+  "facon_de_faire": { "actif": false },
+  "_qcm": "CLAUDE.md : questions à choix multiple. Le hook Stop renvoie reformuler une question ouverte posée après une analyse.",
+  "qcm": { "actif": true, "min_caracteres": 200, "max_rappels_par_session": 5 },
+  "_documentation": "Toujours à jour : du code changé dans la session sans doc touchée, et le tour ne se clôt pas. Fiches support désactivées : main n'a pas de dossier de fiches support, et CLAUDE.md limite les surfaces de documentation.",
+  "documentation": {
+    "actif": true,
+    "surfaces_code": ["app/src/**", "frontend/src/**", "app/config/**", "app/migrations/**"],
+    "surfaces_doc": ["docs/**", "features/*/impl/**", "features/*/specs/**", "README.md", "CLAUDE.md", "COORDINATION/**", "app/docs/**"],
+    "support": { "actif": false },
+    "max_rappels_par_session": 2
+  },
+
+  "_garde_fous_projet": "Rétrospective du 14/09 : le pre-commit a refusé trois fois un commit relu et testé. Le développeur lance les 54 garde-fous avant de rendre ; le harnais ne clôt pas un tour où du code a changé sans ça.",
+  "garde_fous_projet": { "commande": "./bin/garde-fous.sh", "obligatoire": true },
+  "_budget_diff": "Lignes de code ajoutées au commit, hors doc, tests, verrous, lignes de base, migrations : avertissement puis refus sauf justification écrite (dossier par défaut du kit).",
+  "budget_diff": {
+    "actif": true,
+    "avertir": 150,
+    "refuser": 400,
+    "exclure": ["**/*.lock", "**/*.ligne-de-base.json", "docs/**", "features/**", "specs/**", "**/*.md", "**/tests/**", "**/*Test.php", "**/*.test.*", "app/migrations/**", "COORDINATION/**", "analyse-existant/**"]
+  },
+
+  "_i18n": "Désactivé : main n'a aucun catalogue de traduction. COORDINATION/CONTRACT/i18n-traduction.md les prévoit (statut « à implémenter », langue source en). À réactiver avec les vrais chemins quand ils existeront.",
+  "i18n": { "actif": false },
+
+  "_contradicteur": "Avocat du diable + perspectives métier, une passe chacun, plafonnés par le harnais. Les perspectives sont convoquées par mots clés (demande ou spec), quatre au plus par objet.",
+  "contradicteur": {
+    "actif": true,
+    "max_par_session": 6,
+    "max_perspectives_par_objet": 4,
+    "_liberte": "0 observer · 1 proposer (livrable) · 2 décider (décision DÉLÉGUÉE, contestable 7 jours par l'humain qui décide) · 3 saisir (Issue). Jamais coder. Le harnais refuse une délégation sans contradicteur, sans perspective croisée ou sous le niveau 2.",
+    "liberte": {
+      "perspective-juridique": 1,
+      "perspective-finance": 1,
+      "perspective-marketing": 2,
+      "perspective-direction": 2,
+      "simplificateur": 3,
+      "perspective-signature": 2,
+      "perspective-commerciale": 1,
+      "perspective-exploitation": 1
+    },
+    "delai_contestation_jours": 7,
+    "marqueur_delegation": "DÉLÉGUÉE",
+    "fichiers": ["COORDINATION/DECISIONS.md", "features/*/specs/*.md", "features/*/plans/*.md", "specs/**/spec-*.md", "specs/**/plan-*.md"],
+    "perspectives": {
+      "perspective-juridique": ["rgpd", "donnée perso", "données perso", "cgv", "cgu", "contrat", "résiliation", "resiliation", "rétractation", "consentement", "facture", "tva", "nf525", "factur-x", "marché public", "marche public", "régie", "regie", "dsp", "mention légale", "archivage"],
+      "perspective-finance": ["prix", "tarif", "marge", "coût", "cout", "trésorerie", "tresorerie", "abonnement", "remboursement", "caution", "impayé", "impaye", "sepa", "prélèvement", "prelevement", "remise", "facturation", "clôture", "cloture", "ticket z", "rapport z", "encaissement", "payfip", "psp"],
+      "perspective-marketing": ["vitrine", "offre", "client", "prospect", "positionnement", "verticale", "module", "option", "boutique", "site", "landing", "inscription", "onboarding", "piscine", "padel", "musée", "musee", "patinoire", "camping"],
+      "perspective-direction": ["priorité", "priorite", "roadmap", "nouveau module", "refonte", "architecture", "partenaire", "intégrateur", "integrateur", "stratég", "strateg", "abandon", "remplace", "bloquant", "commercialis"],
+      "simplificateur": ["écran", "ecran", "formulaire", "parcours", "bouton", "page", "modale", "guichet", "caisse", "utilisateur", "régisseur", "regisseur", "saisie", "clic", "étape", "etape", "menu", "hors-ligne", "hors ligne"],
+      "perspective-signature": ["écran", "ecran", "vitrine", "page", "design", "maquette", "landing", "site", "composant", "style", "couleur", "typo", "identité", "identite", "charte", "marque blanche"],
+      "perspective-commerciale": ["devis", "appel d'offres", "appel d offres", "mémoire technique", "memoire technique", "démo", "demo", "revendeur", "intégrateur", "integrateur", "grille tarifaire", "commercial"],
+      "perspective-exploitation": ["déploi", "deploi", "preprod", "préprod", "vps", "sauvegarde", "supervision", "scheduler", "tâche planifiée", "tache planifiee", "cron", "hors-ligne", "hors ligne", "synchronisation", "tpe", "borne", "incident", "montée en charge"]
+    }
+  }
+}
