@@ -18,6 +18,7 @@ final class JournalAudit
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly AuditEstablishmentResolver $rattachement,
     ) {
     }
 
@@ -32,7 +33,9 @@ final class JournalAudit
         $entree->setAction($action);
         $entree->setCibleType($cibleType);
         $entree->setCibleId($cibleId);
-        $entree->setEtablissement($etablissement);
+        // Sans établissement explicite, celui que l'auteur atteint depuis son établissement actif ; sinon
+        // aucun, et l'entrée n'est lue que par l'éditeur (voir AuditEstablishmentResolver).
+        $entree->setEtablissement($etablissement ?? $this->rattachement->actorEstablishment());
         $entree->setAuteur($auteur ?? $this->auteurCourant());
 
         $this->em->persist($entree);
