@@ -26,7 +26,12 @@ export default function PartnerAccessSettings({ droits, etabActif }) {
       .then((r) => {
         const lignes = membres(r)
         setAcces(lignes)
-        setChoix(Object.fromEntries(lignes.map((l) => [l.id, l.grant?.scopes ?? []])))
+        // Seules les portées proposées par le serveur se cochent : une portée d'un ancien accord qui
+        // n'est plus accordable serait refusée (422) à l'enregistrement.
+        setChoix(Object.fromEntries(lignes.map((l) => [
+          l.id,
+          (l.grant?.scopes ?? []).filter((s) => l.availableScopes.some((a) => a.value === s)),
+        ])))
       })
       .catch(() => setAcces(undefined))
   }

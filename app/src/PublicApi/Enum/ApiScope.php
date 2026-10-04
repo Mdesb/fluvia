@@ -40,4 +40,25 @@ enum ApiScope: string
             self::EventsSubscribe => 'Recevoir les événements en temps réel',
         };
     }
+
+    /**
+     * Les portees qu'un etablissement peut ACCORDER aujourd'hui : celles dont la ressource est livree
+     * par le lot 1 (`access:read` : PR b ; `events:subscribe` : PR c).
+     *
+     * ⚠ **LISTE BLANCHE, ET C'EST UNE REGLE RGPD, PAS UNE COMMODITE D'ECRAN.** Un accord donne sur une
+     * portee sans ressource (`customers:read`, `bookings:read`, `sales:read`) ne lirait rien
+     * aujourd'hui — et ouvrirait la donnee le jour ou la ressource serait livree, sans nouvel accord de
+     * l'etablissement ni analyse RGPD. Une portee entre dans cette liste avec sa ressource, pas avant.
+     *
+     * @return list<self>
+     */
+    public static function grantable(): array
+    {
+        return [self::AccessRead, self::EventsSubscribe];
+    }
+
+    public function isGrantable(): bool
+    {
+        return \in_array($this, self::grantable(), true);
+    }
 }

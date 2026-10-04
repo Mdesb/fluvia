@@ -99,7 +99,7 @@ final class PartnerAccessProvider implements ProviderInterface
         ];
         $view->availableScopes = array_map(
             static fn (ApiScope $s): array => ['value' => $s->value, 'label' => $s->label()],
-            ApiScope::cases(),
+            ApiScope::grantable(),
         );
 
         return $view;

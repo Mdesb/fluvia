@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\PublicApi\Api;
 
+use App\Audit\Entity\EntreeAudit;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\PublicApi\Entity\ApiGrant;
@@ -108,6 +109,60 @@ final class PartnerAccessApiTest extends PublicApiTestCase
         ]);
         self::assertSame(422, $refused->getStatusCode());
         self::assertCount(0, $this->em()->getRepository(ApiGrant::class)->findAll());
+    }
+
+    /**
+     * Seules les portées LIVRÉES s'accordent (RGPD) : un accord sur `customers:read`, sans ressource
+     * aujourd'hui, ouvrirait plus tard la fiche client sans nouvel accord ni analyse. Témoin :
+     * `access:read`, livrée, s'accorde avec la même requête.
+     */
+    public function testUnePorteeSansRessourceNeSAccordePas(): void
+    {
+        $application = $this->createApplication();
+        [$client, $headers] = $this->admin();
+
+        $offered = $client->request('GET', '/api/partner-accesses', $headers)->toArray()['member'][0]['availableScopes'];
+        self::assertSame(['access:read', 'events:subscribe'], array_column($offered, 'value'));
+
+        foreach (['customers:read', 'bookings:read', 'sales:read'] as $scope) {
+            $refused = $client->request('POST', '/api/partner-accesses/'.$application['id'].'/grant', $headers + [
+                'json' => ['scopes' => [$scope]],
+            ]);
+            self::assertSame(422, $refused->getStatusCode(), $scope);
+        }
+        self::assertCount(0, $this->em()->getRepository(ApiGrant::class)->findAll());
+
+        $client->request('POST', '/api/partner-accesses/'.$application['id'].'/grant', $headers + [
+            'json' => ['scopes' => ['access:read']],
+        ]);
+        self::assertResponseIsSuccessful('témoin : une portée livrée s’accorde');
+    }
+
+    /** Modifier les portées ferme l'accord en cours ET le dit : exactement un retrait et un accord. */
+    public function testModifierLesPorteesEcritUnRetraitEtUnAccord(): void
+    {
+        $application = $this->createApplication();
+        [$client, $headers] = $this->admin();
+        $uri = '/api/partner-accesses/'.$application['id'].'/grant';
+        $client->request('POST', $uri, $headers + ['json' => ['scopes' => ['access:read']]]);
+        self::assertResponseIsSuccessful();
+        $client->request('POST', $uri, $headers + ['json' => ['scopes' => ['access:read', 'events:subscribe']]]);
+        self::assertResponseIsSuccessful();
+
+        $this->em()->clear();
+        $partner = $this->em()->getRepository(PartnerApplication::class)->find($application['id']);
+        $old = $this->em()->getRepository(ApiGrant::class)->findOneBy(['application' => $partner, 'status' => GrantStatus::Revoked]);
+        $new = $this->em()->getRepository(ApiGrant::class)->findOneBy(['application' => $partner, 'status' => GrantStatus::Active]);
+        self::assertNotNull($old);
+        self::assertNotNull($new);
+
+        $a = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
+        self::assertSame($a, $this->auditEstablishment(PartnerAccessManager::ACTION_GRANT_WITHDRAWN, (string) $old->getId()));
+        self::assertSame($a, $this->auditEstablishment(PartnerAccessManager::ACTION_GRANT_GRANTED, (string) $new->getId()));
+
+        $withdrawn = $this->em()->getRepository(EntreeAudit::class)->findOneBy(['action' => PartnerAccessManager::ACTION_GRANT_WITHDRAWN]);
+        self::assertSame(['access:read'], $withdrawn?->getValeurApres()['scopes'] ?? null, 'le retrait garde les anciennes portées');
+        self::assertCount(1, $this->em()->getRepository(EntreeAudit::class)->findBy(['action' => PartnerAccessManager::ACTION_GRANT_WITHDRAWN]));
     }
 
     /** Sans `api.gerer`, ni la liste ni le geste. Témoin : l'administratrice, qui le porte, passe. */

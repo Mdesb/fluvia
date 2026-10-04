@@ -123,7 +123,7 @@ final class PartnerAccessManager
     /**
      * Accorder des portées sur un établissement.
      *
-     * ⚠ **MODIFIER LES PORTÉES = RETIRER L'ACCORD EN COURS, PUIS EN CRÉER UN NEUF.** Le retrait est
+     * ⚠ **MODIFIER LES PORTÉES = RETIRER L'ACCORD EN COURS (tracé `withdrawn`), PUIS EN CRÉER UN NEUF.** Le retrait est
      * absorbant ({@see GrantStatus}) : on ne réécrit jamais les portées d'un consentement, on en date un
      * nouveau. L'historique dit ainsi, ligne par ligne, ce qui a été ouvert et quand.
      *
@@ -134,11 +134,21 @@ final class PartnerAccessManager
         if ([] === $scopes) {
             throw new UnprocessableEntityHttpException('Cochez au moins une portée. Pour couper l’accès, retirez l’accord.');
         }
+        foreach ($scopes as $scope) {
+            if (!$scope->isGrantable()) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'La portée « %s » ne s’accorde pas encore : aucune ressource ne la sert, et un accord donné aujourd’hui ouvrirait la donnée plus tard sans nouvel accord.',
+                    $scope->value,
+                ));
+            }
+        }
         if (!$application->isActive()) {
             throw new UnprocessableEntityHttpException('Cette application est désactivée par l’éditeur.');
         }
 
-        $this->closeActiveGrants($application, $establishment);
+        // L'accord remplacé est RETIRÉ, et le journal le dit avec ses anciennes portées : sans cette
+        // trace, une réduction de portées ne se lirait que par différence entre deux accords.
+        $this->auditWithdrawn($application, $establishment, $this->closeActiveGrants($application, $establishment));
 
         $grant = (new ApiGrant())
             ->setApplication($application)
@@ -156,12 +166,17 @@ final class PartnerAccessManager
     /** Retirer l'accord d'un établissement. Sans accord en cours, rien n'est écrit — ni geste, ni trace. */
     public function withdraw(PartnerApplication $application, Etablissement $establishment): void
     {
-        foreach ($this->closeActiveGrants($application, $establishment) as $grant) {
+        $this->auditWithdrawn($application, $establishment, $this->closeActiveGrants($application, $establishment));
+        $this->em->flush();
+    }
+
+    /** @param list<ApiGrant> $grants */
+    private function auditWithdrawn(PartnerApplication $application, Etablissement $establishment, array $grants): void
+    {
+        foreach ($grants as $grant) {
             $this->audit->enregistrer(self::ACTION_GRANT_WITHDRAWN, 'ApiGrant', (string) $grant->getId(), $establishment->getId())
                 ->setValeurApres(['application' => (string) $application->getId(), 'scopes' => $grant->getScopes()]);
         }
-
-        $this->em->flush();
     }
 
     /** @return list<ApiGrant> les accords qui viennent d'être fermés */
