@@ -58,6 +58,9 @@ le même partenaire sans grant → rien ; témoin : avec grant sur B, il voit B.
   (traces de lieu horodatées) : fenêtre servie limitée à 90 jours, mention dans le document d'intégration
   (l'établissement, responsable de traitement, consent l'accès par portée).
 - Filtres : `establishment`, `updatedSince` (synchronisation incrémentale) ; pagination par curseur.
+- **Personnel exclu par défaut** (relecture du 04/10) : les badges et passages des droits de type
+  `Personnel` ne sont servis par aucune ressource — un tiers ne trace pas les horaires des employés sans
+  décision explicite de l'établissement (choix prudent, réversible).
 - `bookings:write` est retiré de `ApiScope` tant qu'aucune ressource ne le porte (règle écrite dans l'enum).
 
 ### 3.3 Webhooks partenaire (portée `events:subscribe`)
