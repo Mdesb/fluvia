@@ -3160,6 +3160,14 @@ export const api = {
   // part est un accès que personne ne referme.
   editorSupportAccesses: () => request('/api/editor/support-accesses'),
 
+  // ── ACCÈS PARTENAIRES, CÔTÉ EXPLOITANT (`api.gerer`) ────────────────────────────────────────
+  // Toujours pour l'établissement ACTIF (en-tête) : l'identifiant est celui de l'application.
+  accesPartenaires: () => request('/api/partner-accesses'),
+  accorderAccesPartenaire: (id, scopes) =>
+    request(`/api/partner-accesses/${id}/grant`, { method: 'POST', body: { scopes } }),
+  retirerAccesPartenaire: (id) =>
+    request(`/api/partner-accesses/${id}/withdraw`, { method: 'POST', body: {} }),
+
   // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
   //
   // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
@@ -3174,6 +3182,22 @@ export const api = {
   // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
   revoquerAccesAssistance: (id) =>
     request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
+
+  // ── API PARTENAIRE, CÔTÉ ÉDITEUR (spec API partenaire v1, §3.1) ─────────────────────────────
+  //
+  // Corps JSON simple (`input: false` côté serveur, comme les accès d'assistance). Le secret d'une
+  // clé n'arrive QUE dans la réponse d'`emettreClePartenaire` (`issuedSecret`) : la liste ne le rend
+  // jamais, le serveur n'en garde que l'empreinte.
+  editorPartnerApplications: () => request('/api/editor/partner-applications'),
+  creerApplicationPartenaire: (corps) =>
+    request('/api/editor/partner-applications', { method: 'POST', body: corps }),
+  desactiverApplicationPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/deactivate`, { method: 'POST', body: {} }),
+  // Corps : { expiresAt? } (AAAA-MM-JJ). Sans date, la clé n'expire pas : on la révoque.
+  emettreClePartenaire: (id, corps = {}) =>
+    request(`/api/editor/partner-applications/${id}/credentials`, { method: 'POST', body: corps }),
+  revoquerClePartenaire: (id) =>
+    request(`/api/editor/partner-credentials/${id}/revoke`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :

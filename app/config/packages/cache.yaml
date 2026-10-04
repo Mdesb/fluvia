@@ -15,5 +15,8 @@ framework:
         #app: cache.adapter.apcu
 
         # Namespaced pools use the above "app" backend by default
-        #pools:
-            #my.dedicated.cache: null
+        pools:
+            # Les fenêtres de la limite de débit `/v1`, EN BASE (table `cache_items`, créée par
+            # migration) : partagées par tous les processus php-fpm. Voir `PublicApiRateLimiter`.
+            cache.public_api_rate_limit:
+                adapter: cache.adapter.doctrine_dbal
