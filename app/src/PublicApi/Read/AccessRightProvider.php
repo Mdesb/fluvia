@@ -10,6 +10,7 @@ use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
+use App\Acces\Enum\TypeDroitAcces;
 use App\PublicApi\Security\PartnerUser;
 use App\PublicApi\Service\SupportReferenceSigner;
 use Doctrine\DBAL\ArrayParameterType;
@@ -29,6 +30,14 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  *
  * Zones (D87, `DroitAcces::ouvre()`) : les zones déclarées ; aucune zone = AUCUNE porte, sauf pour les
  * types exemptés (personnel, réservation), qui ouvrent tout — `allZones: true`.
+ *
+ * ⚠ **LE DROIT ET SES ZONES SONT BORNÉS À L'ÉTABLISSEMENT DU SUPPORT.** `AppairageHandler` retrouve un
+ * support par identifiant sur toute la base : un support de A peut être réappairé à un droit de B. Le
+ * partenaire de A ne doit voir ni ce droit ni les zones de B — le support y est servi `revoked`.
+ *
+ * ⚠ **LE PERSONNEL N'EST PAS SERVI** (choix prudent, réversible, spec §3.2) : un support appairé à un
+ * droit `Personnel` n'apparaît pas — un tiers ne trace pas les horaires des employés sans décision
+ * explicite de l'établissement.
  *
  * ⚠ `updatedSince` N'EST PAS SERVI ICI (400) : aucune date de modification fiable n'existe sur les droits
  * (voir le rapport de la PR) ; un filtre qui manquerait des changements serait pire qu'un refus.
@@ -54,6 +63,11 @@ final class AccessRightProvider
         $qb = $this->em->createQueryBuilder()->select('s')->from(Support::class, 's')
             ->andWhere('IDENTITY(s.etablissement) IN (:establishments)')
             ->setParameter('establishments', array_map(static fn ($id) => $id->toBinary(), $query->establishments), ArrayParameterType::BINARY)
+            ->andWhere(sprintf(
+                'NOT EXISTS (SELECT 1 FROM %s ps JOIN ps.droit dp WHERE ps.support = s AND ps.actif = true AND dp.sourceType = :staff)',
+                Appairage::class,
+            ))
+            ->setParameter('staff', TypeDroitAcces::Personnel->value)
             ->orderBy('s.id', 'ASC')
             ->setMaxResults($query->limit + 1);
         if (null !== $query->cursor) {
@@ -86,9 +100,10 @@ final class AccessRightProvider
         }
 
         /** @var list<Appairage> $pairings */
-        $pairings = $this->em->createQueryBuilder()->select('a', 'd', 'z')->from(Appairage::class, 'a')
-            ->join('a.droit', 'd')->leftJoin('d.authorisedSpaces', 'z')
+        $pairings = $this->em->createQueryBuilder()->select('a', 'd')->from(Appairage::class, 'a')
+            ->join('a.droit', 'd')->join('a.support', 'sa')
             ->andWhere('IDENTITY(a.support) IN (:supports)')->andWhere('a.actif = true')
+            ->andWhere('IDENTITY(d.etablissement) = IDENTITY(sa.etablissement)')
             ->setParameter('supports', array_map(static fn (Support $s) => $s->getId()->toBinary(), $supports), ArrayParameterType::BINARY)
             ->getQuery()->getResult();
 
@@ -110,10 +125,15 @@ final class AccessRightProvider
             null !== $until && $until < $now => 'expired',
             default => 'active',
         };
-        $zones = null === $right ? [] : array_map(
+        // Les zones d'un AUTRE établissement ne sont jamais servies, même si elles figurent sur le droit.
+        $establishment = (string) $support->getEtablissement()?->getId();
+        $zones = null === $right ? [] : array_values(array_map(
             static fn (EspaceAcces $z): array => ['id' => (string) $z->getId(), 'name' => $z->getLibelle()],
-            array_values($right->getAuthorisedSpaces()->toArray()),
-        );
+            array_filter(
+                $right->getAuthorisedSpaces()->toArray(),
+                static fn (EspaceAcces $z): bool => (string) $z->getEtablissement()?->getId() === $establishment,
+            ),
+        ));
 
         return [
             'reference' => $this->signer->reference($partner->application->getId(), $support->getId()),

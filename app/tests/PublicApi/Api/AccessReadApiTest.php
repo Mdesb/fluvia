@@ -123,7 +123,7 @@ final class AccessReadApiTest extends PublicApiTestCase
         $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-BLOQUE', support: StatutSupport::Bloque);
         $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-EXPIRE', until: new \DateTimeImmutable('-1 day'));
         $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-SANS-ZONE', withZone: false);
-        $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-PERSONNEL', withZone: false, type: TypeDroitAcces::Personnel);
+        $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-RESERVATION', withZone: false, type: TypeDroitAcces::Booking);
         $onA = $this->partner([SocleFixtures::ETAB_A_NOM => ['access:read']]);
 
         $rows = $this->call($onA, 'access-rights')[1]['data'];
@@ -133,7 +133,7 @@ final class AccessReadApiTest extends PublicApiTestCase
 
         $doors = array_map(static fn (array $r): string => \count($r['zones']).($r['allZones'] ? '+tout' : ''), $rows);
         sort($doors);
-        self::assertSame(['0', '0+tout', '1', '1', '1', '1'], $doors, 'sans zone : aucune porte, sauf le personnel qui ouvre tout');
+        self::assertSame(['0', '0+tout', '1', '1', '1', '1'], $doors, 'sans zone : aucune porte, sauf la réservation (exemptée) qui ouvre tout');
     }
 
     /** 90 jours au plus ; `updatedSince` porte sur l'enregistrement ; il n'est pas servi sur les droits. */
@@ -145,10 +145,67 @@ final class AccessReadApiTest extends PublicApiTestCase
 
         self::assertCount(1, $this->call($onA, 'access-events')[1]['data'], 'le passage de plus de 90 jours n’est pas servi');
         $before = (new \DateTimeImmutable('-1 minute'))->format(\DATE_ATOM);
-        $after = (new \DateTimeImmutable('+1 minute'))->format(\DATE_ATOM);
+        $after = (new \DateTimeImmutable('+6 minutes'))->format(\DATE_ATOM);
         self::assertCount(1, $this->call($onA, 'access-events', ['updatedSince' => $before])[1]['data']);
         self::assertCount(0, $this->call($onA, 'access-events', ['updatedSince' => $after])[1]['data']);
+
+        // Recouvrement de 5 minutes : un passage dont l'identifiant a été posé AVANT `since` mais commité
+        // après doit encore être servi. Un passage tout juste enregistré, demandé depuis +3 min, l'est.
+        $within = (new \DateTimeImmutable('+3 minutes'))->format(\DATE_ATOM);
+        self::assertCount(1, $this->call($onA, 'access-events', ['updatedSince' => $within])[1]['data'], 'recouvrement de 5 minutes');
         self::assertSame(400, $this->call($onA, 'access-rights', ['updatedSince' => $before])[0]);
+    }
+
+    /**
+     * Un support de A réappairé à un droit de B (`AppairageHandler` retrouve un support par identifiant
+     * sur toute la base) : le partenaire de A ne voit ni le droit ni les zones de B. Témoin : le support
+     * propre de A, lui, garde son droit et sa zone.
+     */
+    public function testUnDroitDUnAutreEtablissementAppaireAUnSupportDeANestPasServi(): void
+    {
+        $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-A-TEMOIN');
+        $em = $this->em();
+        $a = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+        $b = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertInstanceOf(Etablissement::class, $a);
+        self::assertInstanceOf(Etablissement::class, $b);
+
+        $siteB = (new Espace())->setNom('Site de B')->setEtablissement($b)->setType('salle');
+        $zoneB = (new EspaceAcces())->setLibelle('Zone secrète de B')->setEspaceSocle($siteB)->setEtablissement($b);
+        $rightB = (new DroitAcces())->setSourceType(TypeDroitAcces::Abonnement)->setEtablissement($b)
+            ->setFenetreFin(new \DateTimeImmutable('+30 days'))->addAuthorisedSpace($zoneB);
+        $cardA = (new Support())->setIdentifiant('QR-A-REAPPAIRE')->setType(TypeSupport::Qr)->setEtablissement($a);
+        $pairing = (new Appairage())->setSupport($cardA)->setDroit($rightB)->setActif(true)->setEtablissement($b);
+        $passage = (new Passage())->setSupport($cardA)->setDroit($rightB)->setEspace($zoneB)->setResultat(ResultatPassage::Valide)->setEtablissement($a);
+        foreach ([$siteB, $zoneB, $rightB, $cardA, $pairing, $passage] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        $onA = $this->partner([SocleFixtures::ETAB_A_NOM => ['access:read']]);
+        [, , $rights] = $this->call($onA, 'access-rights');
+        [, , $events] = $this->call($onA, 'access-events');
+        self::assertStringContainsString('Zone Bassin', $rights, 'témoin : la zone du support propre de A est servie');
+        self::assertStringNotContainsString('Zone secr', $rights, 'access-rights : zone de B servie au partenaire de A');
+        self::assertStringNotContainsString('Zone secr', $events, 'access-events : zone de B servie au partenaire de A');
+        $statuses = array_column(json_decode($rights, true)['data'], 'status');
+        sort($statuses);
+        self::assertSame(['active', 'revoked'], $statuses, 'access-rights : le droit de B ne vaut pas droit à A');
+    }
+
+    /**
+     * Les badges et passages du PERSONNEL ne sont pas servis : un tiers ne trace pas les horaires des
+     * employés sans décision explicite. Témoin : l'abonné du même établissement l'est.
+     */
+    public function testLesBadgesEtPassagesDuPersonnelNeSontPasServis(): void
+    {
+        $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-ABONNE');
+        $this->seed(SocleFixtures::ETAB_A_NOM, 'QR-SALARIE', type: TypeDroitAcces::Personnel);
+        $onA = $this->partner([SocleFixtures::ETAB_A_NOM => ['access:read']]);
+
+        foreach (self::RESOURCES as $resource) {
+            self::assertCount(1, $this->call($onA, $resource)[1]['data'], "/v1/$resource : seul l'abonné est servi, pas le salarié");
+        }
     }
 
     // ---------------------------------------------------------------- montage
