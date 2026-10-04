@@ -14,11 +14,14 @@ namespace App\PublicApi\Enum;
  *
  * ⚠ **ON N'AJOUTE PAS UNE PORTEE PARCE QU'ELLE EXISTERAIT « AU CAS OU ».** Une portee sans
  * ressource derriere est une promesse qu'un integrateur lit, demande, et n'obtient pas.
+ *
+ * ⚠ **REGLE : UNE PORTEE D'ECRITURE N'ENTRE ICI QU'AVEC LA RESSOURCE QUI LA PORTE.** `bookings:write`
+ * a ete retiree le 04/10 (spec API partenaire v1, §3.2) : depuis que les exploitants accordent eux-memes
+ * les portees, la proposer revenait a leur faire consentir a une ecriture que rien n'execute.
  */
 enum ApiScope: string
 {
     case BookingsRead = 'bookings:read';
-    case BookingsWrite = 'bookings:write';
     case SalesRead = 'sales:read';
     case CustomersRead = 'customers:read';
     case AccessRead = 'access:read';
@@ -31,7 +34,6 @@ enum ApiScope: string
     {
         return match ($this) {
             self::BookingsRead => 'Lire les réservations',
-            self::BookingsWrite => 'Créer et annuler des réservations',
             self::SalesRead => 'Lire les ventes',
             self::CustomersRead => 'Lire la fiche des clients',
             self::AccessRead => 'Lire les passages de contrôle d\'accès',
