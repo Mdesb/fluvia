@@ -358,7 +358,8 @@ export default function PublicApp() {
         // `commandeConfirmee` fait setPanier(null) : cette condition tomberait et démonterait le
         // Tunnel AVANT son étape Confirmation, renvoyant le client vers un panier vide au lieu de
         // son billet. L'étape Confirmation n'a plus besoin du panier (elle lit `infoBillets`), et le
-        // Tunnel se protège lui-même d'une entrée à panier vide (garde `etape < 3` → retour panier).
+        // Tunnel se protège lui-même d'une entrée à panier vide (garde `etape < 1`, c.-à-d. l'écran
+        // « Vos billets », → retour panier).
         <Tunnel
           panier={panier}
           vitrineId={vitrineId}

@@ -78,6 +78,7 @@ export default function Tunnel({
           panier={panier}
           resultat={resultatPaiement}
           setResultat={setResultatPaiement}
+          onRetour={() => setEtape(0)}
           onConfirme={() => {
             // On capture id + jeton AVANT la purge du panier, pour les billets invité.
             setInfoBillets({ panierId: panier?.id, panierToken: panierStore.getToken() })
@@ -415,7 +416,7 @@ function EtapeVosBillets({
 }
 
 /* ----------------------------- Étape 2 : paiement (PSP simulé) ----------------------------- */
-function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
+function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) {
   const [phase, setPhase] = useState('init') // init | pret | traitement | echec
   const [erreur, setErreur] = useState(null)
 
@@ -478,8 +479,15 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
         <div className="card-b">
           <Erreur message={erreur} />
           <p className="empty" style={{ textAlign: 'left', padding: 0 }}>
-            Le paiement n'a pas pu être initié. Vérifiez votre panier et réessayez.
+            Le paiement n'a pas pu être initié. Vérifiez vos billets et réessayez.
           </p>
+          {/* Un refus ici (422 : autorisation manquante, information non enregistrée…) se corrige
+              sur l'écran 1 : sans ce bouton, le client restait bloqué sur un message. */}
+          <div className="bq-etape-actions">
+            <button type="button" className="btn primary" onClick={onRetour}>
+              Revenir à vos billets
+            </button>
+          </div>
         </div>
       </div>
     )
