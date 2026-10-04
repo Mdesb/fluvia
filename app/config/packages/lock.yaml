@@ -1,0 +1,8 @@
+framework:
+    lock:
+        # Le verrou par défaut reste local au conteneur : c'est celui que prennent les limiteurs des
+        # portes publiques (`rate_limiter`, `lock_factory: auto`), qui comptent déjà par conteneur.
+        default: flock
+        # La limite de débit de `/v1` (`PublicApiRateLimiter`) : un verrou EN BASE (DoctrineDbalStore,
+        # table `lock_keys`, créée par migration), seul commun à tous les processus php-fpm.
+        public_api: 'doctrine.dbal.default_connection'

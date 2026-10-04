@@ -26,6 +26,17 @@ framework:
             policy: sliding_window
             limit: 5
             interval: '1 hour'
+        # L'API partenaire `/v1`, PAR CLÉ (`PublicApiRateLimiter`, spec API partenaire v1 §3.1).
+        # ⚠ STOCKAGE PARTAGÉ ET ATOMIQUE, OU LA LIMITE EST FAUSSE. Le pool est en base (adaptateur
+        #   DBAL, `cache.yaml`) et la lecture-écriture passe sous un verrou DoctrineDbalStore
+        #   (`lock.yaml`) : en APCu ou en fichier, chaque processus php-fpm compterait pour lui, et
+        #   « 120 par minute » vaudrait 120 × le nombre de processus.
+        public_api:
+            policy: sliding_window
+            limit: 120
+            interval: '1 minute'
+            cache_pool: cache.public_api_rate_limit
+            lock_factory: lock.public_api.factory
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true
