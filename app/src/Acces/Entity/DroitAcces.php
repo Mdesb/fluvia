@@ -25,6 +25,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'acces_droit_acces')]
+#[ORM\Index(columns: ['updated_at'], name: 'idx_droit_acces_updated_at')]
 #[ApiResource(
     shortName: 'DroitAcces',
     operations: [
@@ -164,6 +165,20 @@ class DroitAcces
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
     private ?Uuid $importBatchRef = null;
 
+    /**
+     * Dernière modification de ce que ce droit fait décider à une porte (statut, fenêtre, crédit,
+     * zones, sous-réseau, type, marges), en UTC.
+     *
+     * Tenue par `AccessProjectionVersionListener` pour les écritures ORM, et par l'`UPDATE` lui-même
+     * pour les chemins en SQL direct (crédit, échéance). Elle n'avance NI sur une lecture, NI sur un
+     * rejeu à l'identique, NI sur `synchroniseLe` : c'est ce qui la rend utilisable comme
+     * `updatedSince` par l'API partenaire (décision de Maxime du 04/10, « date fiable sur les droits »).
+     * Sur les droits antérieurs à la colonne, elle vaut l'heure de la migration : un partenaire les
+     * voit tous une fois, ce qui est le sens sûr de l'erreur.
+     */
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
+
     public function getExternalRef(): ?string
     {
         return $this->externalRef;
@@ -193,6 +208,19 @@ class DroitAcces
     {
         $this->authorisedSpaces = new ArrayCollection();
         $this->id = Uuid::v4();
+        $this->updatedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    }
+
+    public function getUpdatedAt(): \DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
+
+    public function setUpdatedAt(\DateTimeImmutable $updatedAt): self
+    {
+        $this->updatedAt = $updatedAt;
+
+        return $this;
     }
 
     public function getId(): Uuid
