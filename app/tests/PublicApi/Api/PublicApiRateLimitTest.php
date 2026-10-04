@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\PublicApi\Api;
 
+use App\PublicApi\Security\PublicApiRateLimiter;
+use App\Securite\Security\PublicEndpointRateLimiter;
 use App\Tests\PublicApi\PublicApiTestCase;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\DoctrineDbalStore;
 
 /**
  * 120 requêtes par minute et par clé ; la 121ᵉ reçoit 429 — y compris quand les 120 premières viennent
@@ -67,5 +71,31 @@ final class PublicApiRateLimitTest extends PublicApiTestCase
 
         $response = static::createClient()->request('GET', '/v1/me', ['headers' => ['Authorization' => 'Bearer '.$secret]]);
         self::assertSame(429, $response->getStatusCode(), 'la 121ᵉ requête, venue d’un troisième processus');
+    }
+    /**
+     * Seul `public_api` prend un verrou, et c'est le verrou EN BASE. Les limiteurs des portes publiques
+     * restent sans verrou, comme avant l'arrivée de `symfony/lock` : un FlockStore y créerait un
+     * fichier par adresse IP dans /tmp, jamais purgé.
+     */
+    public function testSeulLeLimiteurDeLApiPartenairePrendUnVerrou(): void
+    {
+        $container = static::getContainer();
+        $lockOf = static function (object $factory): ?LockFactory {
+            $lock = (new \ReflectionProperty($factory, 'lockFactory'))->getValue($factory);
+
+            return $lock instanceof LockFactory ? $lock : null;
+        };
+        $storeOf = static fn (LockFactory $lock): object => (new \ReflectionProperty($lock, 'store'))->getValue($lock);
+
+        $endpoints = $container->get(PublicEndpointRateLimiter::class);
+        foreach (['accountCreation', 'passwordResetRequest'] as $property) {
+            $factory = (new \ReflectionProperty($endpoints, $property))->getValue($endpoints);
+            self::assertNull($lockOf($factory), $property.' ne doit prendre aucun verrou');
+        }
+
+        $partner = $container->get(PublicApiRateLimiter::class);
+        $lock = $lockOf((new \ReflectionProperty($partner, 'limiter'))->getValue($partner));
+        self::assertNotNull($lock, 'témoin : le limiteur /v1 a bien un verrou');
+        self::assertInstanceOf(DoctrineDbalStore::class, $storeOf($lock));
     }
 }

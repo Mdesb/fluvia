@@ -1,7 +1,8 @@
 framework:
     lock:
-        # Le verrou par défaut reste local au conteneur : c'est celui que prennent les limiteurs des
-        # portes publiques (`rate_limiter`, `lock_factory: auto`), qui comptent déjà par conteneur.
+        # Un verrou par défaut doit exister dès qu'une ressource est déclarée (`lock.factory`). Personne
+        # ne l'emploie aujourd'hui : les limiteurs des portes publiques sont en `lock_factory: null`
+        # (framework.yaml), parce qu'un flock y laisserait un fichier par adresse IP dans /tmp.
         default: flock
         # La limite de débit de `/v1` (`PublicApiRateLimiter`) : un verrou EN BASE (DoctrineDbalStore,
         # table `lock_keys`, créée par migration), seul commun à tous les processus php-fpm.

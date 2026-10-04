@@ -18,14 +18,19 @@ framework:
     # Les limiteurs des portes publiques (`PublicEndpointRateLimiter`). Fenêtre glissante : un compteur
     # remis à zéro à heure fixe autorise deux fois la limite à cheval sur la bascule.
     rate_limiter:
+        # ⚠ `lock_factory: null` EXPLICITE : c'était leur comportement avant l'arrivée de `symfony/lock`
+        #   (04/10). Laissées à `auto`, elles prendraient le verrou par défaut (flock), qui crée un
+        #   fichier par clé — donc par adresse IP — dans /tmp, jamais purgé.
         public_account_creation:
             policy: sliding_window
             limit: 5
             interval: '1 hour'
+            lock_factory: null
         password_reset_request:
             policy: sliding_window
             limit: 5
             interval: '1 hour'
+            lock_factory: null
         # L'API partenaire `/v1`, PAR CLÉ (`PublicApiRateLimiter`, spec API partenaire v1 §3.1).
         # ⚠ STOCKAGE PARTAGÉ ET ATOMIQUE, OU LA LIMITE EST FAUSSE. Le pool est en base (adaptateur
         #   DBAL, `cache.yaml`) et la lecture-écriture passe sous un verrou DoctrineDbalStore
