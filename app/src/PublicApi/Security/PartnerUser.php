@@ -22,10 +22,15 @@ use Symfony\Component\Uid\Uuid;
  */
 final class PartnerUser implements UserInterface
 {
-    /** @param list<ApiGrant> $grants les consentements ACTIFS, resolus a l'authentification */
+    /**
+     * @param list<ApiGrant> $grants        les consentements ACTIFS, resolus a l'authentification
+     * @param string         $credentialId  la cle presentee : c'est elle, et non l'application, que la
+     *                                      limite de debit compte (une application peut en porter trois)
+     */
     public function __construct(
         public readonly PartnerApplication $application,
         public readonly array $grants,
+        public readonly string $credentialId,
     ) {
     }
 
