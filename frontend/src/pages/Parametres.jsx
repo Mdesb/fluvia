@@ -15,6 +15,7 @@ import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
 import ConnecteursSortants from '../components/ConnecteursSortants.jsx'
+import PartnerAccessSettings from '../components/PartnerAccessSettings.jsx'
 import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
@@ -51,6 +52,9 @@ const SOUS = [
   // une fois, puis on n'y revient que le jour ou un canal se tait. Leur place est ici, a cote des
   // modules en service -- c'est le meme geste, activer et brancher.
   ['connecteurs', 'Connecteurs sortants'],
+  // Ce que l'établissement ouvre aux applications tierces par l'API — un réglage de branchement,
+  // voisin des connecteurs : on l'ouvre une fois, on n'y revient que pour le retirer.
+  ['partenaires', 'Accès partenaires'],
 ]
 
 // Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
@@ -638,6 +642,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
       {sousOnglet === 'connecteurs'
         && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
+      {sousOnglet === 'partenaires' && <PartnerAccessSettings droits={droits} etabActif={etabActif} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
       {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique params={params} majParams={majParams} />}

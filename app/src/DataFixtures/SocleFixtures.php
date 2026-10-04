@@ -112,15 +112,24 @@ final class SocleFixtures extends Fixture
         $permAccesSupport = $this->permissionNommee($manager, 'editor', 'support_access');
         // ED-10 : administrer le site public de l'editeur — sa page d'accueil et son blog.
         $permGererSite = $this->permissionNommee($manager, 'editor', 'manage_website');
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
+        // API partenaire (04/10) : creer les applications, emettre et revoquer leurs cles. A part,
+        // parce qu'emettre une cle ouvre une porte sur le reseau : l'assistance ne le porte pas.
+        $permGererApi = $this->permissionNommee($manager, 'editor', 'manage_partner_api');
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite, $permGererApi] as $perm) {
             $manager->persist($perm);
         }
+        // Cote exploitant : accorder ou retirer l'acces d'une application a SON etablissement
+        // (`api.gerer`, nom fixe par la spec API partenaire v1). Hors du joker `*.lire` : ouvrir ses
+        // donnees a un tiers n'est pas une lecture.
+        $permAccesApi = $this->permissionNommee($manager, 'api', 'gerer');
+        $manager->persist($permAccesApi);
+        $roleAdmin->addPermission($permAccesApi);
 
         // ⚠ L'ARGENT EST UN RÔLE À PART, et c'est le seul découpage qui permet de recruter un agent
         // d'assistance sans lui montrer ce que gagne l'entreprise. `editor.read_billing` n'est
         // porté que par la direction et l'administratif.
         $roleEditeurDirection = $this->roleNomme($manager, 'Éditeur — Direction');
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite, $permGererApi] as $perm) {
             $roleEditeurDirection->addPermission($perm);
         }
         $manager->persist($roleEditeurDirection);
@@ -141,7 +150,7 @@ final class SocleFixtures extends Fixture
         // `read_customer` ne s'écrit pas `lire`. On les lui donne explicitement plutôt que de
         // renommer les permissions pour les faire entrer dans le joker — un droit accordé par
         // coïncidence de vocabulaire est un droit que personne n'a décidé.
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite, $permGererApi] as $perm) {
             $roleAdmin->addPermission($perm);
         }
 
