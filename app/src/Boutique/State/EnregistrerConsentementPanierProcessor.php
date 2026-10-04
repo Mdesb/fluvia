@@ -9,20 +9,28 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
-use App\Boutique\Service\ConfirmerCommandeHandler;
-use App\Crm\Entity\Consentement;
-use App\Crm\Enum\CanalConsentement;
-use App\Crm\Enum\EtatConsentement;
 use App\Vente\Service\LecteurCorps;
 use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * POST /boutique/paniers/{id}/consentement — étape 3 du tunnel (US-L8-06, RG-M3-07/13, CA-6/CA-8).
- * Le consentement RGPD (horodaté, `App\Crm\Entity\Consentement`, canal `boutique` via `source`,
- * réutilisé sans redéfinition) est requis avant paiement ; résout/crée le `Client` du payeur (§0
- * décision n°4 du plan). Corps : { "rgpd": bool, "autorisationsParentales"?: {ligneId: bool} }.
+ * POST /boutique/paniers/{id}/consentement — dernier appel de l'écran « Vos billets » (#101, après
+ * `identifier` et `beneficiaires`). Corps :
+ * { "mentionVersion": string, "marketing"?: bool, "marketingVersion"?: string,
+ *   "autorisationsParentales"?: {ligneId: bool} }.
+ *
+ * ⚠ LA GESTION DE LA COMMANDE N'EST PAS UN CONSENTEMENT (#101, avis juridique du 04/10). Cet appel
+ * créait un `Consentement(Email, Accordé)` à chaque commande, depuis une case OBLIGATOIRE « j'accepte
+ * que mes données soient traitées pour la gestion de ma commande ». Le moteur de campagnes le lisait
+ * comme un accord marketing : tout acheteur recevait les campagnes. Or une case qu'on ne peut pas
+ * décocher n'est pas un consentement libre (RGPD art. 7.4), et la commande se traite sur la base de
+ * l'exécution du contrat (art. 6.1.b) — sans rien demander. Désormais :
+ * - la MENTION d'information est horodatée sur le panier, avec sa version (preuve de l'information) ;
+ * - seule la case FACULTATIVE « recevoir les nouveautés » crée un `Consentement(Email, Accordé)`,
+ *   avec la version de son texte — au PAIEMENT CONFIRMÉ, d'après l'état final de la case gardé sur le
+ *   panier (relecture, D2) : l'écran se renvoie autant de fois qu'il faut, la case peut changer.
  *
  * @implements ProcessorInterface<PanierEnLigne, PanierEnLigne>
  */
@@ -33,7 +41,6 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
         private readonly PanierTarificationHandler $tarification,
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
-        private readonly ConfirmerCommandeHandler $confirmerCommande,
     ) {
     }
 
@@ -43,30 +50,33 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
         $this->guard->verifier($data);
 
         $corps = $this->lecteur->corps();
-        $rgpd = ($corps['rgpd'] ?? false) === true;
+        $mentionVersion = self::version($corps['mentionVersion'] ?? null);
+        if ($mentionVersion === null) {
+            throw new UnprocessableEntityHttpException('« mentionVersion » est requis : la version de la mention d\'information affichée.');
+        }
+        $marketing = ($corps['marketing'] ?? false) === true;
+        $marketingVersion = self::version($corps['marketingVersion'] ?? null);
+        if ($marketing && $marketingVersion === null) {
+            // Un accord dont on ne sait pas quel texte il approuvait ne se prouve pas : on refuse de
+            // l'enregistrer plutôt que d'en garder une moitié.
+            throw new UnprocessableEntityHttpException('« marketingVersion » est requis quand la case marketing est cochée.');
+        }
         /** @var array<string, mixed> $autorisations */
         $autorisations = \is_array($corps['autorisationsParentales'] ?? null) ? $corps['autorisationsParentales'] : [];
 
-        if ($rgpd) {
-            $client = $this->confirmerCommande->resoudreClient($data);
-            $consentement = new Consentement(CanalConsentement::Email, EtatConsentement::Accorde);
-            $consentement->setClient($client)->setSource('boutique');
-            $this->em->persist($consentement);
-            $data->setConsentementRgpdHorodatage(new \DateTimeImmutable());
+        $data->recordPrivacyNotice($mentionVersion);
 
-            // ON ENREGISTRE CE QUI A ETE ACCEPTE, PAS SEULEMENT QU'IL L'A ETE.
-            //
-            // Le consentement RGPD etait horodate, et `LegalDocument` conserve chaque version publiee
-            // des CGV -- mais rien ne reliait les deux. On savait QUAND le client avait accepte, pas
-            // CE QU'IL AVAIT ACCEPTE.
-            //
-            // Des CGV ne sont opposables que dans la version que le client a pu lire au moment ou il a
-            // paye. Sans ce lien, l'exploitant ne peut meme pas montrer laquelle s'appliquait.
-            $cgv = $this->cgvPubliees($data);
-            if ($cgv !== null) {
-                $data->accepterCgv($cgv['id'], $cgv['version']);
-            }
+        // ON ENREGISTRE CE QUI A ETE ACCEPTE, PAS SEULEMENT QU'IL L'A ETE.
+        //
+        // `LegalDocument` conserve chaque version publiee des CGV ; le panier garde laquelle
+        // s'appliquait au moment ou le client a valide sa commande. Des CGV ne sont opposables que
+        // dans la version que le client a pu lire au moment ou il a paye.
+        $cgv = $this->cgvPubliees($data);
+        if ($cgv !== null) {
+            $data->accepterCgv($cgv['id'], $cgv['version']);
         }
+
+        $data->setMarketingOptInVersion($marketing ? $marketingVersion : null);
 
         foreach ($data->getLignes() as $ligne) {
             \assert($ligne instanceof LignePanierEnLigne);
@@ -91,6 +101,17 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
         $this->tarification->calculer($data);
 
         return $data;
+    }
+
+    /** Une version de texte : chaîne non vide, 40 caractères au plus (la colonne qui la garde). */
+    private static function version(mixed $valeur): ?string
+    {
+        if (!\is_string($valeur)) {
+            return null;
+        }
+        $valeur = trim($valeur);
+
+        return $valeur === '' || mb_strlen($valeur) > 40 ? null : $valeur;
     }
 
     /**

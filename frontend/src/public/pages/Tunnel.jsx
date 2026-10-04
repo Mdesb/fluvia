@@ -2,12 +2,22 @@ import { useEffect, useState } from 'react'
 import { boutique, clientTokenStore, panierStore } from '../api/boutiqueClient.js'
 import { libelleProduit, libelleCreneau, iriId, eurosCentimes, euros } from '../lib/format.js'
 import { Etapes, Erreur, Chargement } from '../components/Etats.jsx'
+import Markdown from '../components/Markdown.jsx'
 import Qr from '../../components/Qr.jsx'
 
-const ETAPES = ['Identification', 'Bénéficiaires', 'Consentement', 'Paiement', 'Confirmation']
+const ETAPES = ['Vos billets', 'Paiement', 'Confirmation']
 
-// Tunnel d'achat : identification → bénéficiaires → consentement RGPD → paiement (PSP simulé) →
-// confirmation. Chaque étape appelle un processor dédié du back et rafraîchit le panier.
+// LES VERSIONS DES DEUX TEXTES DE L'ÉCRAN 1, envoyées au serveur qui les garde comme preuve (#101) :
+// la mention d'information sur le panier, la case marketing sur le consentement. Changer l'un de ces
+// textes, c'est changer sa version — sinon la preuve désignerait un texte que personne n'a lu.
+const VERSION_MENTION = 'mention-2026-10-04'
+const VERSION_MARKETING = 'marketing-2026-10-04'
+const COURRIEL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// Tunnel d'achat en 3 étapes (#101) : « Vos billets » (qui, pour qui, information) → paiement
+// (prestataire simulé) → confirmation. L'écran 1 enchaîne trois appels du back — identifier,
+// bénéficiaires, consentement — dans cet ordre, parce que le consentement n'horodate une autorisation
+// parentale que sur les lignes que l'enregistrement des bénéficiaires a marquées « mineur ».
 export default function Tunnel({
   panier,
   vitrineId,
@@ -15,8 +25,10 @@ export default function Tunnel({
   metaCreneaux,
   langue,
   connecte,
+  etablissementId,
+  nomEtablissement,
   onPanierMaj,
-  onConnexionClient,
+  onDeconnexionClient,
   onCommandeConfirmee,
   onNaviguer,
 }) {
@@ -29,12 +41,12 @@ export default function Tunnel({
   const lignes = panier?.lignes || []
 
   // Panier vidé (ex. expiration) pendant qu'on remplit encore la commande : on renvoie proprement
-  // vers le panier. ⚠ UNIQUEMENT avant l'étape Paiement (etape < 3). Au paiement réussi, le panier
+  // vers le panier. ⚠ UNIQUEMENT avant l'étape Paiement (etape < 1). Au paiement réussi, le panier
   // est PURGÉ (transformé en commande), donc `lignes` devient vide : se fier à ce vide aux étapes
-  // Paiement (3) et Confirmation (4) renverrait le client vers un panier vide au lieu de son billet.
+  // Paiement (1) et Confirmation (2) renverrait le client vers un panier vide au lieu de son billet.
   // L'étape Paiement gère elle-même un panier expiré (erreur d'initiation), pas besoin de rediriger.
   useEffect(() => {
-    if (etape < 3 && lignes.length === 0) onNaviguer({ vue: 'panier' })
+    if (etape < 1 && lignes.length === 0) onNaviguer({ vue: 'panier' })
   }, [lignes.length, etape])
 
   return (
@@ -45,9 +57,16 @@ export default function Tunnel({
       <Etapes etapes={ETAPES} courant={etape} />
 
       {etape === 0 && (
-        <EtapeIdentification
+        <EtapeVosBillets
           panier={panier}
-          onConnexionClient={onConnexionClient}
+          metaProduits={metaProduits}
+          metaCreneaux={metaCreneaux}
+          langue={langue}
+          connecte={connecte}
+          etablissementId={etablissementId}
+          nomEtablissement={nomEtablissement}
+          onDeconnexionClient={onDeconnexionClient}
+          onNaviguer={onNaviguer}
           onOk={(p) => {
             onPanierMaj(p)
             setEtape(1)
@@ -55,44 +74,20 @@ export default function Tunnel({
         />
       )}
       {etape === 1 && (
-        <EtapeBeneficiaires
+        <EtapePaiement
           panier={panier}
-          metaProduits={metaProduits}
-          metaCreneaux={metaCreneaux}
-          langue={langue}
+          resultat={resultatPaiement}
+          setResultat={setResultatPaiement}
           onRetour={() => setEtape(0)}
-          onOk={(p) => {
-            onPanierMaj(p)
+          onConfirme={() => {
+            // On capture id + jeton AVANT la purge du panier, pour les billets invité.
+            setInfoBillets({ panierId: panier?.id, panierToken: panierStore.getToken() })
+            onCommandeConfirmee()
             setEtape(2)
           }}
         />
       )}
       {etape === 2 && (
-        <EtapeConsentement
-          panier={panier}
-          metaProduits={metaProduits}
-          langue={langue}
-          onRetour={() => setEtape(1)}
-          onOk={(p) => {
-            onPanierMaj(p)
-            setEtape(3)
-          }}
-        />
-      )}
-      {etape === 3 && (
-        <EtapePaiement
-          panier={panier}
-          resultat={resultatPaiement}
-          setResultat={setResultatPaiement}
-          onConfirme={() => {
-            // On capture id + jeton AVANT la purge du panier, pour les billets invité.
-            setInfoBillets({ panierId: panier?.id, panierToken: panierStore.getToken() })
-            onCommandeConfirmee()
-            setEtape(4)
-          }}
-        />
-      )}
-      {etape === 4 && (
         <EtapeConfirmation
           resultat={resultatPaiement}
           infoBillets={infoBillets}
@@ -104,152 +99,49 @@ export default function Tunnel({
   )
 }
 
-/* ----------------------------- Étape 1 : identification ----------------------------- */
-function EtapeIdentification({ panier, onConnexionClient, onOk }) {
-  const [mode, setMode] = useState('invite')
-  const [email, setEmail] = useState(panier?.contactConnu || '')
-  const [motDePasse, setMotDePasse] = useState('')
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [erreur, setErreur] = useState(null)
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setErreur(null)
-    setBusy(true)
-    try {
-      const corps =
-        mode === 'compte'
-          ? { mode, email: email.trim(), motDePasse }
-          : mode === 'franceconnect'
-            ? { mode, franceConnectCode: code.trim() }
-            : { mode: 'invite', email: email.trim() || undefined }
-      const p = await boutique.identifier(panier.id, corps)
-      // Compte existant : on ouvre aussi une session client (JWT) pour que les billets QR
-      // soient consultables dès la confirmation et dans « Mon compte ».
-      if (mode === 'compte') {
-        try {
-          const auth = await boutique.login(email.trim(), motDePasse)
-          if (auth?.token) {
-            clientTokenStore.set(auth.token)
-            onConnexionClient?.()
-          }
-        } catch {
-          /* l'identification du panier a réussi ; la session JWT est un bonus non bloquant. */
-        }
-      }
-      onOk(p)
-    } catch (err) {
-      setErreur(err?.status === 401 ? 'Identifiants invalides.' : err?.message || 'Identification impossible.')
-    } finally {
-      setBusy(false)
-    }
+// L'adresse du client connecté, lue dans son jeton (revendication `username` = l'e-mail). Rien n'est
+// vérifié ici — c'est le serveur qui authentifie ; on ne fait qu'afficher qui est connecté.
+function courrielConnecte() {
+  try {
+    const charge = clientTokenStore.get()?.split('.')[1]
+    if (!charge) return null
+    const json = JSON.parse(atob(charge.replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof json?.username === 'string' ? json.username : null
+  } catch {
+    return null
   }
-
-  return (
-    <form className="card bq-etape" onSubmit={soumettre}>
-      <div className="card-h">
-        <h2>Comment souhaitez-vous continuer ?</h2>
-      </div>
-      <div className="card-b">
-        <div className="seg bq-modes" role="tablist" aria-label="Mode d'identification">
-          {[
-            ['invite', 'Achat rapide'],
-            ['compte', 'J\'ai un compte'],
-            ['franceconnect', 'FranceConnect'],
-          ].map(([cle, lib]) => (
-            <button
-              key={cle}
-              type="button"
-              role="tab"
-              aria-selected={mode === cle}
-              className={mode === cle ? 'on' : ''}
-              onClick={() => {
-                setMode(cle)
-                setErreur(null)
-              }}
-            >
-              {lib}
-            </button>
-          ))}
-        </div>
-
-        <Erreur message={erreur} id="bq-id-err" />
-
-        {mode === 'invite' && (
-          <div className="field">
-            {/* ⚠ CETTE ETIQUETTE PROMETTAIT « pour recevoir vos billets ». Aucun courriel ne part de
-                cette instance et aucun n'a jamais pu partir : MAILER_DSN vaut le transport nul, qui
-                accepte tout, jette tout, et rend un succes. On annonce la contrepartie qu'on rend
-                vraiment -- l'adresse identifie l'invite et permet de retrouver la commande. */}
-            <label htmlFor="bq-id-email">Adresse e-mail (pour retrouver votre commande)</label>
-            <input
-              id="bq-id-email"
-              className="input"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              aria-describedby={erreur ? 'bq-id-err' : undefined}
-            />
-          </div>
-        )}
-
-        {mode === 'compte' && (
-          <>
-            <div className="field">
-              <label htmlFor="bq-id-email2">Adresse e-mail</label>
-              <input
-                id="bq-id-email2"
-                className="input"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="bq-id-mdp">Mot de passe</label>
-              <input
-                id="bq-id-mdp"
-                className="input"
-                type="password"
-                autoComplete="current-password"
-                value={motDePasse}
-                onChange={(e) => setMotDePasse(e.target.value)}
-                required
-              />
-            </div>
-          </>
-        )}
-
-        {mode === 'franceconnect' && (
-          <div className="field">
-            <label htmlFor="bq-id-fc">Code FranceConnect (simulation)</label>
-            <input
-              id="bq-id-fc"
-              className="input"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="code-demo"
-            />
-            <p className="hint">FranceConnect est simulé côté serveur pour cette démo.</p>
-          </div>
-        )}
-
-        <button type="submit" className="btn primary lg" disabled={busy}>
-          {busy ? 'Validation…' : 'Continuer'}
-        </button>
-      </div>
-    </form>
-  )
 }
 
-/* ----------------------------- Étape 2 : bénéficiaires ----------------------------- */
-function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onRetour, onOk }) {
+// Même règle que le serveur (`AjouterBeneficiairesPanierProcessor`) : mineur = né après aujourd'hui
+// moins 18 ans. Le serveur reste l'autorité ; l'écran ne fait que poser la question au bon moment.
+function estMineur(dateNaissance) {
+  if (!dateNaissance) return false
+  const naissance = new Date(`${dateNaissance}T00:00:00`)
+  if (Number.isNaN(naissance.getTime())) return false
+  const seuil = new Date()
+  seuil.setFullYear(seuil.getFullYear() - 18)
+  return naissance > seuil
+}
+
+/* ----------------------------- Étape 1 : vos billets ----------------------------- */
+function EtapeVosBillets({
+  panier,
+  metaProduits,
+  metaCreneaux,
+  langue,
+  connecte,
+  etablissementId,
+  nomEtablissement,
+  onDeconnexionClient,
+  onNaviguer,
+  onOk,
+}) {
   const lignes = panier?.lignes || []
+  // Un compte refusé par cette boutique (autre groupe : 404) achète comme un invité, sans être
+  // déconnecté de son compte ailleurs.
+  const [compteRefuse, setCompteRefuse] = useState(false)
+  const parCompte = connecte && !compteRefuse
+  const [email, setEmail] = useState(panier?.contactConnu || '')
   const [valeurs, setValeurs] = useState(() =>
     Object.fromEntries(
       lignes.map((l) => [
@@ -262,6 +154,9 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
       ]),
     ),
   )
+  const [parentales, setParentales] = useState({})
+  const [marketing, setMarketing] = useState(false)
+  const [politique, setPolitique] = useState(null) // null = fermée ; { chargement | texte | erreur }
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -269,57 +164,158 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
     setValeurs((v) => ({ ...v, [id]: { ...v[id], [champ]: val } }))
   }
 
+  // La case parentale ne se pose que si LE PRODUIT l'exige et que le bénéficiaire est mineur.
+  function autorisationDemandee(l) {
+    const meta = metaProduits?.[iriId(l.produit)]
+    return meta?.parentalConsentRequired === true && estMineur(valeurs[l.id]?.dateNaissance)
+  }
+
+  async function ouvrirPolitique() {
+    if (politique) {
+      setPolitique(null)
+      return
+    }
+    setPolitique({ chargement: true })
+    try {
+      const r = await boutique.documentsLegaux(etablissementId)
+      const page = (r?.documents || []).find((d) => d.slug === 'confidentialite')
+      setPolitique(page ? { texte: page.contenu } : { erreur: 'La politique de confidentialité est indisponible.' })
+    } catch (e) {
+      setPolitique({ erreur: e?.message || 'La politique de confidentialité est indisponible.' })
+    }
+  }
+
   async function soumettre(e) {
     e.preventDefault()
     setErreur(null)
-    // Chaque article doit porter un bénéficiaire (RG-M4-02 / CA-7).
+    if (!parCompte && !COURRIEL_VALIDE.test(email.trim())) {
+      setErreur('Merci de saisir une adresse e-mail valide : c’est par elle que vous recevrez vos billets.')
+      return
+    }
     for (const l of lignes) {
       const v = valeurs[l.id]
       if (!v?.nom?.trim() || !v?.prenom?.trim()) {
-        setErreur('Merci de renseigner le nom et le prénom de chaque bénéficiaire.')
+        setErreur('Merci de renseigner le prénom et le nom de chaque bénéficiaire.')
+        return
+      }
+      if (autorisationDemandee(l) && !parentales[l.id]) {
+        setErreur(`L’autorisation est requise pour ${v.prenom.trim()} (bénéficiaire mineur).`)
         return
       }
     }
+
     setBusy(true)
+    // Trois appels, dans l'ordre. Si l'un échoue, on reste ici et le client renvoie l'ensemble :
+    // aucun ne change d'état de façon irréversible (spec #101 §4).
     try {
-      const payload = lignes.map((l) => ({
-        ligneId: l.id,
-        beneficiaireSimple: {
-          nom: valeurs[l.id].nom.trim(),
-          prenom: valeurs[l.id].prenom.trim(),
-          dateNaissance: valeurs[l.id].dateNaissance || undefined,
-        },
-      }))
-      const p = await boutique.beneficiaires(panier.id, payload)
+      try {
+        await boutique.identifier(panier.id, parCompte ? { mode: 'session' } : { mode: 'invite', email: email.trim() })
+      } catch (err) {
+        if (parCompte && err?.status === 401) {
+          clientTokenStore.clear()
+          onDeconnexionClient?.()
+          throw new Error('Votre session a expiré. Saisissez votre e-mail, ou reconnectez-vous.')
+        }
+        if (parCompte && err?.status === 404) {
+          setCompteRefuse(true)
+          throw new Error('Votre compte n’est pas valable sur cette boutique. Continuez avec votre adresse e-mail.')
+        }
+        throw err
+      }
+      await boutique.beneficiaires(
+        panier.id,
+        lignes.map((l) => ({
+          ligneId: l.id,
+          beneficiaireSimple: {
+            nom: valeurs[l.id].nom.trim(),
+            prenom: valeurs[l.id].prenom.trim(),
+            dateNaissance: valeurs[l.id].dateNaissance || undefined,
+          },
+        })),
+      )
+      const p = await boutique.consentement(panier.id, {
+        mentionVersion: VERSION_MENTION,
+        marketing,
+        marketingVersion: marketing ? VERSION_MARKETING : undefined,
+        autorisationsParentales: Object.fromEntries(lignes.filter(autorisationDemandee).map((l) => [l.id, !!parentales[l.id]])),
+      })
       onOk(p)
     } catch (err) {
-      setErreur(err?.message || "L'enregistrement des bénéficiaires a échoué.")
+      setErreur(err?.message || 'L’enregistrement a échoué. Vérifiez vos informations et réessayez.')
     } finally {
       setBusy(false)
     }
   }
 
+  const etablissement = nomEtablissement || 'cet établissement'
+
   return (
-    <form className="card bq-etape" onSubmit={soumettre}>
+    <form className="card bq-etape" onSubmit={soumettre} noValidate>
       <div className="card-h">
-        <h2>À qui sont destinés les billets ?</h2>
+        <h2>Vos billets</h2>
       </div>
       <div className="card-b">
-        <Erreur message={erreur} id="bq-benef-err" />
+        <Erreur message={erreur} id="bq-vb-err" />
+
+        {parCompte ? (
+          <p className="bq-sub">
+            Connecté en tant que <strong>{courrielConnecte() || 'votre compte'}</strong>.{' '}
+            <button
+              type="button"
+              className="btn ghost sm"
+              onClick={() => {
+                clientTokenStore.clear()
+                setEmail('')
+                onDeconnexionClient?.()
+              }}
+            >
+              Ce n’est pas moi
+            </button>
+          </p>
+        ) : (
+          <div className="field">
+            <label htmlFor="bq-vb-email">Adresse e-mail</label>
+            <input
+              id="bq-vb-email"
+              className="input"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-describedby="bq-vb-email-aide"
+              required
+            />
+            <p className="hint" id="bq-vb-email-aide">
+              Pour recevoir vos billets.
+              {!connecte && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    onClick={() => onNaviguer({ vue: 'compte', retour: 'tunnel' })}
+                  >
+                    J’ai déjà un compte
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        )}
+
         <ul className="bq-benef-list">
           {lignes.map((l, i) => {
             const meta = metaProduits?.[iriId(l.produit)]
             const nom = meta ? libelleProduit(meta, langue) : 'Billet'
             const cr = l.creneau ? metaCreneaux?.[iriId(l.creneau)] : null
+            const prenom = valeurs[l.id]?.prenom?.trim()
             return (
               <li key={l.id}>
                 <p className="bq-benef-t">
                   {nom}
                   {(l.quantite || 1) > 1 ? ` ×${l.quantite}` : ''}
                   {cr && <span className="bq-benef-cr"> · {libelleCreneau(cr.debut, cr.fin)}</span>}
-                  {l.montantLigne != null && (
-                    <span className="bq-benef-montant"> · {euros(l.montantLigne)}</span>
-                  )}
+                  {l.montantLigne != null && <span className="bq-benef-montant"> · {euros(l.montantLigne)}</span>}
                 </p>
                 <div className="bq-benef-grid">
                   <div className="field">
@@ -354,120 +350,64 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
                       onChange={(e) => maj(l.id, 'dateNaissance', e.target.value)}
                       autoComplete="bday"
                     />
-                    <p className="hint">Requise pour les mineurs (autorisation parentale à l'étape suivante).</p>
                   </div>
                 </div>
+                {autorisationDemandee(l) && (
+                  <label className="bq-consent">
+                    <input
+                      type="checkbox"
+                      checked={!!parentales[l.id]}
+                      onChange={(e) => setParentales((p) => ({ ...p, [l.id]: e.target.checked }))}
+                    />
+                    <span>
+                      J’autorise cet achat pour <strong>{prenom || 'ce bénéficiaire'}</strong> (je suis son parent ou
+                      j’agis avec l’accord de ses parents).
+                    </span>
+                  </label>
+                )}
               </li>
             )
           })}
         </ul>
+
         {panier?.total != null && (
-          <div className="bq-recap-row bq-recap-total" style={{ marginTop: 12 }}>
+          <div className="bq-recap-row bq-recap-total" style={{ marginTop: 'var(--esp-large)' }}>
             <span>Total</span>
             <strong>{euros(panier.total)}</strong>
           </div>
         )}
-        <div className="bq-etape-actions">
-          <button type="button" className="btn" onClick={onRetour}>
-            Retour
+
+        {/* Une MENTION, pas une case : la commande se traite sur la base du contrat, on informe. */}
+        <p className="hint" style={{ marginTop: 'var(--esp-bloc)' }}>
+          Vos données servent à traiter votre commande et à vous envoyer vos billets.{' '}
+          <button type="button" className="btn ghost sm" aria-expanded={!!politique} onClick={ouvrirPolitique}>
+            Politique de confidentialité
           </button>
-          <button type="submit" className="btn primary" disabled={busy}>
-            {busy ? 'Enregistrement…' : 'Continuer'}
-          </button>
-        </div>
-      </div>
-    </form>
-  )
-}
-
-/* ----------------------------- Étape 3 : consentement ----------------------------- */
-function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
-  const lignes = panier?.lignes || []
-  const lignesMineurs = lignes.filter((l) => l.autorisationParentaleRequise)
-  const [rgpd, setRgpd] = useState(false)
-  const [parentales, setParentales] = useState({})
-  const [busy, setBusy] = useState(false)
-  const [erreur, setErreur] = useState(null)
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setErreur(null)
-    if (!rgpd) {
-      setErreur('Vous devez accepter le traitement de vos données pour continuer.')
-      return
-    }
-    for (const l of lignesMineurs) {
-      if (!parentales[l.id]) {
-        setErreur('Une autorisation parentale est requise pour chaque bénéficiaire mineur.')
-        return
-      }
-    }
-    setBusy(true)
-    try {
-      const p = await boutique.consentement(panier.id, {
-        rgpd: true,
-        autorisationsParentales: Object.fromEntries(lignesMineurs.map((l) => [l.id, !!parentales[l.id]])),
-      })
-      onOk(p)
-    } catch (err) {
-      setErreur(err?.message || "L'enregistrement du consentement a échoué.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <form className="card bq-etape" onSubmit={soumettre}>
-      <div className="card-h">
-        <h2>Consentement</h2>
-      </div>
-      <div className="card-b">
-        <Erreur message={erreur} id="bq-cons-err" />
-
-        <label className="bq-consent">
-          <input
-            type="checkbox"
-            checked={rgpd}
-            onChange={(e) => setRgpd(e.target.checked)}
-            aria-describedby={erreur ? 'bq-cons-err' : undefined}
-            required
-          />
-          <span>
-            J'accepte que mes données personnelles soient traitées pour la gestion de ma commande,
-            conformément au RGPD.
-          </span>
-        </label>
-
-        {lignesMineurs.length > 0 && (
-          <fieldset className="bq-fieldset">
-            <legend>Autorisation parentale (bénéficiaires mineurs)</legend>
-            {lignesMineurs.map((l) => {
-              const meta = metaProduits?.[iriId(l.produit)]
-              const nom = meta ? libelleProduit(meta, langue) : 'Billet'
-              const b = l.beneficiaireSimple
-              const qui = b ? `${b.prenom || ''} ${b.nom || ''}`.trim() : nom
-              return (
-                <label key={l.id} className="bq-consent">
-                  <input
-                    type="checkbox"
-                    checked={!!parentales[l.id]}
-                    onChange={(e) => setParentales((p) => ({ ...p, [l.id]: e.target.checked }))}
-                  />
-                  <span>
-                    J'autorise la participation de <strong>{qui || 'ce mineur'}</strong> ({nom}).
-                  </span>
-                </label>
-              )
-            })}
-          </fieldset>
+        </p>
+        {politique && (
+          <div className="bq-legal" style={{ marginBottom: 'var(--esp-bloc)' }}>
+            {politique.chargement ? (
+              <Chargement texte="Chargement de la politique de confidentialité…" />
+            ) : politique.erreur ? (
+              <Erreur message={politique.erreur} />
+            ) : (
+              <Markdown texte={politique.texte} />
+            )}
+          </div>
         )}
 
+        {/* La seule case de consentement : facultative, décochée par défaut. */}
+        <label className="bq-consent">
+          <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+          <span>Recevoir les nouveautés et offres de {etablissement} par e-mail.</span>
+        </label>
+
         <div className="bq-etape-actions">
-          <button type="button" className="btn" onClick={onRetour}>
-            Retour
+          <button type="button" className="btn" onClick={() => onNaviguer({ vue: 'panier' })}>
+            Retour au panier
           </button>
           <button type="submit" className="btn primary" disabled={busy}>
-            {busy ? 'Validation…' : 'Aller au paiement'}
+            {busy ? 'Enregistrement…' : 'Continuer vers le paiement'}
           </button>
         </div>
       </div>
@@ -475,8 +415,8 @@ function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
   )
 }
 
-/* ----------------------------- Étape 4 : paiement (PSP simulé) ----------------------------- */
-function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
+/* ----------------------------- Étape 2 : paiement (PSP simulé) ----------------------------- */
+function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) {
   const [phase, setPhase] = useState('init') // init | pret | traitement | echec
   const [erreur, setErreur] = useState(null)
 
@@ -539,8 +479,15 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
         <div className="card-b">
           <Erreur message={erreur} />
           <p className="empty" style={{ textAlign: 'left', padding: 0 }}>
-            Le paiement n'a pas pu être initié. Vérifiez votre panier et réessayez.
+            Le paiement n'a pas pu être initié. Vérifiez vos billets et réessayez.
           </p>
+          {/* Un refus ici (422 : autorisation manquante, information non enregistrée…) se corrige
+              sur l'écran 1 : sans ce bouton, le client restait bloqué sur un message. */}
+          <div className="bq-etape-actions">
+            <button type="button" className="btn primary" onClick={onRetour}>
+              Revenir à vos billets
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -591,7 +538,7 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
   )
 }
 
-/* ----------------------------- Étape 5 : confirmation ----------------------------- */
+/* ----------------------------- Étape 3 : confirmation ----------------------------- */
 function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
   const [billets, setBillets] = useState(null)
   const [chargement, setChargement] = useState(!!infoBillets?.panierId)
@@ -659,6 +606,14 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
                   <div>
                     <p className="bq-billet-id mono">{b.identifiantSupport}</p>
                     {b.passWalletDisponible && <span className="badge info">Wallet disponible</span>}
+                    {/* Le code de retrait click & collect, À L'ÉCRAN (#101) : il n'était que dans le
+                        PDF envoyé par e-mail — et l'envoi n'est pas garanti (#190). */}
+                    {b.codeRetrait && (
+                      <p className="bq-sub" style={{ marginTop: 'var(--esp-normal)' }}>
+                        Code de retrait : <strong className="mono">{b.codeRetrait}</strong>
+                        <br />À présenter au guichet pour retirer votre support.
+                      </p>
+                    )}
                   </div>
                 </div>
               </li>

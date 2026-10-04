@@ -73,7 +73,7 @@ final class OrderAndOtaOccupancyTest extends BoutiqueApiTestCase
             'headers' => $entete,
             'json' => ['mode' => 'invite', 'email' => 'invite.jauge@example.test'],
         ]);
-        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['headers' => $entete, 'json' => ['rgpd' => true]]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['headers' => $entete, 'json' => ['mentionVersion' => 'mention-test']]);
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/beneficiaires', [
             'headers' => $entete,
             'json' => ['lignes' => [['ligneId' => $ligneId, 'beneficiaireSimple' => ['nom' => 'Durand', 'prenom' => 'Sam', 'dateNaissance' => '1990-01-01']]]],

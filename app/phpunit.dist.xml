@@ -20,6 +20,8 @@
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
+        <!-- Bouchon FranceConnect (#101) : ferme partout par defaut, ouvert pour les tests seulement. -->
+        <server name="FRANCECONNECT_BOUCHON_AUTORISE" value="1" force="true" />
     </php>
 
     <testsuites>

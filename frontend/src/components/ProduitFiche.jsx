@@ -72,6 +72,9 @@ function valeursModifiables(p) {
     // Abonnement vendu comme produit simple (sans souscription) : décoché par défaut. Ne concerne
     // que les produits à formule ; ailleurs il est sans effet.
     venteSansSouscription: (p?.champsPerso?.venteSansSouscription ?? false) === true,
+    // Autorisation parentale pour les mineurs, à l'achat en ligne (#101) : décochée par défaut.
+    // Un vrai champ du produit (`parentalConsentRequired`), pas un drapeau de `champsPerso`.
+    parentalConsentRequired: p?.parentalConsentRequired === true,
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
@@ -535,6 +538,7 @@ export default function ProduitFiche({
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
     formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
+    parentalConsentRequired: 'Vente',
     noteInterne: 'Comptabilité',
   }
   const changements = useMemo(() => {
@@ -584,6 +588,7 @@ export default function ProduitFiche({
         // traduction existante disparaitrait sans que personne ne l'ait demande.
         libelle: { ...(p.libelle && typeof p.libelle === 'object' ? p.libelle : {}), fr: edition.libelle.trim() },
         canaux: edition.canaux,
+        parentalConsentRequired: !!edition.parentalConsentRequired,
         couleurCaisse: edition.couleurCaisse || null,
         noteInterne: edition.noteInterne.trim() || null,
         // Multilingue comme le libellé : on ne remplace que le français, sinon une traduction
@@ -1073,6 +1078,24 @@ export default function ProduitFiche({
           {typeExigeBeneficiaire
             ? 'Ce produit est de type « accès » : il exige toujours un bénéficiaire, cette case ne peut pas être décochée.'
             : 'Coché, la vente réclame de nommer le bénéficiaire du produit — au guichet, dès l’ajout au panier plutôt qu’au paiement.'}
+        </div>
+      </div>
+      {/* AUTORISATION PARENTALE (#101) — un choix de l'établissement (règlement intérieur, mineur non
+          accompagné), pas une exigence du RGPD : décochée par défaut. Cochée, la boutique en ligne
+          demande, pour chaque bénéficiaire mineur, « J'autorise cet achat pour … », et le serveur
+          refuse le paiement sans elle. */}
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={edition.parentalConsentRequired}
+            onChange={(ev) => setEdition((s) => ({ ...s, parentalConsentRequired: ev.target.checked }))}
+          />
+          Autorisation parentale pour les mineurs
+        </label>
+        <div className="hint">
+          Cochée, l’achat en ligne pour un bénéficiaire mineur demande l’autorisation d’un parent (ou
+          d’une personne agissant avec son accord).
         </div>
       </div>
       {/* ⚠ VENDRE UN ABONNEMENT COMME PRODUIT SIMPLE (sauf paramétrage contraire). Par défaut un

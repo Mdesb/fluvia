@@ -46,10 +46,18 @@ export default function PageLegale({ etablissementId, slug, onNaviguer }) {
     <article className="bq-legal">
       <Markdown texte={page.contenu} />
       <p className="bq-sub" style={{ marginTop: 26 }}>
-        Version {page.version}
-        {page.publieLe
-          ? ` · publiee le ${new Date(page.publieLe).toLocaleDateString('fr-FR')}`
-          : ''}
+        {/* Politique TYPE (#101) : servie quand l'établissement n'a rien publié. Elle n'a ni version
+            ni date — « Version » suivi de rien ferait croire à un document publié. */}
+        {page.parDefaut ? (
+          "Modèle par défaut, en attendant la politique de l'établissement."
+        ) : (
+          <>
+            Version {page.version}
+            {page.publieLe
+              ? ` · publiee le ${new Date(page.publieLe).toLocaleDateString('fr-FR')}`
+              : ''}
+          </>
+        )}
       </p>
     </article>
   )
