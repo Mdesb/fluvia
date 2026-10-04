@@ -97,7 +97,7 @@ final class ConfirmerCommandeHandler
         }
 
         $email = $panier->getContactConnu();
-        $id = $this->clientAdapter->creerRapide(['email' => $email, 'nom' => 'Client boutique']);
+        $id = $this->clientAdapter->creerRapide(['email' => $email, 'nom' => 'Client boutique'], $panier->getEtablissement());
         $panier->setClientResolu($id);
         $client = $this->em->getRepository(Client::class)->find($id);
         \assert($client instanceof Client);

@@ -115,7 +115,7 @@ final class PorteMonnaieVirtuelAdapter implements PorteMonnaieVirtuelInterface
         $mouvement->setSoldeApres($pmv->getSolde());
         $mouvement->setRefVenteM2($venteId);
         $mouvement->setMotif($motif);
-        $mouvement->setEtablissement($this->contexte->etablissementActif() ?? $pmv->getClient()?->getEtablissementCreation() ?? $this->etablissementRepli());
+        $mouvement->setEtablissement($this->contexte->etablissementActif() ?? $this->etablissementDuClient($pmv));
 
         $utilisateur = $this->security->getUser();
         $mouvement->setUtilisateur($utilisateur instanceof Utilisateur ? $utilisateur : null);
@@ -126,8 +126,17 @@ final class PorteMonnaieVirtuelAdapter implements PorteMonnaieVirtuelInterface
         $this->em->persist($mouvement);
     }
 
-    private function etablissementRepli(): ?Etablissement
+    /**
+     * L'établissement du client, jamais « le premier venu » : `findOneBy([])` rattachait le mouvement
+     * à un établissement quelconque, donc peut-être chez un autre client de la plateforme (04/10/2026).
+     */
+    private function etablissementDuClient(PorteMonnaieVirtuel $pmv): Etablissement
     {
-        return $this->em->getRepository(Etablissement::class)->findOneBy([]);
+        $etablissement = $pmv->getClient()?->getEtablissementCreation();
+        if (!$etablissement instanceof Etablissement) {
+            throw new \LogicException('Mouvement de porte-monnaie refusé : le client n’a pas d’établissement.');
+        }
+
+        return $etablissement;
     }
 }
