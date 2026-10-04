@@ -8,7 +8,6 @@ use App\Crm\Entity\Client;
 use App\Crm\Enum\StatutClient;
 use App\Crm\Enum\TypeClient;
 use App\Organisation\Entity\Etablissement;
-use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Port\ClientM4Interface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -21,7 +20,6 @@ final class ClientM4Adapter implements ClientM4Interface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -53,9 +51,20 @@ final class ClientM4Adapter implements ClientM4Interface
     /**
      * @param array<string, mixed> $donnees
      */
-    public function creerRapide(array $donnees): Uuid
+    /**
+     * L'établissement du client est celui qu'on lui DONNE — jamais « le premier venu ».
+     *
+     * Le repli `findOneBy([])` rattachait un client sans établissement actif à un établissement
+     * quelconque : en préprod, les 8 clients nés de paniers de « Piscine A » étaient chez « Musée C »,
+     * un autre groupe, donc lisibles par un autre client de la plateforme. Et l'établissement actif
+     * vient d'un en-tête que personne ne valide pour un visiteur anonyme de la boutique : il n'est
+     * donc PAS un repli. L'appelant passe l'établissement, sinon la création est refusée.
+     */
+    public function creerRapide(array $donnees, ?Etablissement $etablissement = null): Uuid
     {
-        $etablissement = $this->contexte->etablissementActif() ?? $this->em->getRepository(Etablissement::class)->findOneBy([]);
+        if (!$etablissement instanceof Etablissement) {
+            throw new \LogicException('Création de client refusée : aucun établissement connu pour la rattacher.');
+        }
 
         $client = new Client();
         $client->setType(TypeClient::Physique);
@@ -64,10 +73,8 @@ final class ClientM4Adapter implements ClientM4Interface
         $client->setEmail(\is_string($donnees['email'] ?? null) ? $donnees['email'] : null);
         $client->setTelephone(\is_string($donnees['telephone'] ?? null) ? $donnees['telephone'] : null);
         $client->setStatut(StatutClient::Actif);
-        if ($etablissement instanceof Etablissement) {
-            $client->setEtablissementCreation($etablissement);
-            $client->setGroupe($etablissement->getRegion()?->getGroupe());
-        }
+        $client->setEtablissementCreation($etablissement);
+        $client->setGroupe($etablissement->getRegion()?->getGroupe());
 
         $this->em->persist($client);
         $this->em->flush();
