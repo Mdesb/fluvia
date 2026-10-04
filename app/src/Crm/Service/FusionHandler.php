@@ -16,7 +16,6 @@ use App\Crm\Enum\StatutFamille;
 use App\Crm\Enum\StatutJournalFusion;
 use App\Crm\Enum\StatutPmv;
 use App\Crm\Enum\TypeMouvementPmv;
-use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -345,7 +344,12 @@ final class FusionHandler
         $mouvement->setMontant($montant);
         $mouvement->setSoldeApres($pmv->getSolde());
         $mouvement->setMotif($motif);
-        $mouvement->setEtablissement($this->em->getRepository(Etablissement::class)->findOneBy([]));
+        // L'établissement du client, jamais « le premier venu » (04/10/2026).
+        $etablissement = $pmv->getClient()?->getEtablissementCreation();
+        if ($etablissement === null) {
+            throw new \LogicException('Mouvement de porte-monnaie refusé : le client n’a pas d’établissement.');
+        }
+        $mouvement->setEtablissement($etablissement);
         $this->em->persist($mouvement);
     }
 
