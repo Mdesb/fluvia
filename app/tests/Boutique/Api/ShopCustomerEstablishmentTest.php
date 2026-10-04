@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Boutique\Api;
 
+use App\Boutique\DataFixtures\BoutiqueFixtures;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Crm\Adapter\ClientM4Adapter;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
+use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Boutique\BoutiqueApiTestCase;
@@ -56,29 +58,47 @@ final class ShopCustomerEstablishmentTest extends BoutiqueApiTestCase
         $adapter->creerRapide(['nom' => 'Sans établissement']);
     }
 
-    /** @param array<string, string> $entetesEnPlus */
+    /**
+     * Le parcours de l'écran « Vos billets » jusqu'à `payer`, qui résout (ou crée) le client payeur — l'en-tête
+     * en plus posé sur CHAQUE requête. Depuis le tunnel en 3 étapes (#101), l'appel `consentement` ne crée plus
+     * de fiche client : c'est `payer` qui le fait.
+     *
+     * @param array<string, string> $entetesEnPlus
+     */
     private function clientNeDuPanier(array $entetesEnPlus): Client
     {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_SIMPLE_CODE]);
         [$http, $panierId, $jeton] = $this->ouvrirPanierInviteA();
         $entete = [PanierProprietaireGuard::HEADER => $jeton] + $entetesEnPlus;
 
-        // Le consentement résout (ou crée) le Client payeur du panier.
+        $panier = $http->request('POST', '/api/boutique/paniers/' . $panierId . '/lignes', [
+            'headers' => $entete,
+            'json' => ['produit' => (string) $produit->getId(), 'quantite' => 1],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
         $http->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', [
             'headers' => $entete,
             'json' => ['mode' => 'invite', 'email' => 'rattachement.' . bin2hex(random_bytes(3)) . '@example.test'],
         ]);
         self::assertResponseIsSuccessful();
+        $http->request('POST', '/api/boutique/paniers/' . $panierId . '/beneficiaires', [
+            'headers' => $entete,
+            'json' => ['lignes' => [['ligneId' => (string) $panier['lignes'][0]['id'], 'beneficiaireSimple' => ['nom' => 'Martin', 'prenom' => 'Lou', 'dateNaissance' => '1990-01-01']]]],
+        ]);
+        self::assertResponseIsSuccessful();
         $http->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', [
             'headers' => $entete,
-            'json' => ['rgpd' => true],
+            'json' => ['mentionVersion' => 'mention-2026-10-04'],
         ]);
+        self::assertResponseIsSuccessful();
+        $http->request('POST', '/api/boutique/paniers/' . $panierId . '/payer', ['headers' => $entete]);
         self::assertResponseIsSuccessful();
 
         $this->em()->clear();
-        $panier = $this->em()->getRepository(PanierEnLigne::class)->find($panierId);
-        self::assertInstanceOf(PanierEnLigne::class, $panier);
-        self::assertNotNull($panier->getClientResolu(), 'Le consentement doit avoir résolu un client.');
-        $client = $this->em()->getRepository(Client::class)->find($panier->getClientResolu());
+        $panierEnBase = $this->em()->getRepository(PanierEnLigne::class)->find($panierId);
+        self::assertInstanceOf(PanierEnLigne::class, $panierEnBase);
+        self::assertNotNull($panierEnBase->getClientResolu(), '`payer` doit avoir résolu le client payeur.');
+        $client = $this->em()->getRepository(Client::class)->find($panierEnBase->getClientResolu());
         self::assertInstanceOf(Client::class, $client);
 
         return $client;

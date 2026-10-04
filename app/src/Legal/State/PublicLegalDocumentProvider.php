@@ -7,6 +7,9 @@ namespace App\Legal\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Legal\Entity\LegalDocument;
+use App\Legal\Entity\LegalIdentity;
+use App\Legal\Enum\LegalDocumentType;
+use App\Legal\Service\LegalDocumentGenerator;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,6 +27,9 @@ use Symfony\Component\Uid\Uuid;
  * **Seul le publié sort.** Les brouillons portent l'avertissement de relecture et souvent des champs
  * non renseignés ; les versions remplacées ont cessé d'engager. Rendre l'un ou l'autre publierait un
  * texte que personne n'a validé — et sur ce sujet, publier trop est aussi fautif que ne rien publier.
+ * Une seule exception, marquée `parDefaut` : la politique de confidentialité TYPE (#101), servie à un
+ * établissement qui a une vitrine publiée et aucune politique publiée. Sans vitrine publiée et sans
+ * document publié : 404.
  *
  * **Aucun cloisonnement à appliquer, et il faut le dire.** L'identifiant d'établissement est fourni par
  * l'URL, sans utilisateur ni en-tête `X-Etablissement` : c'est voulu, ces documents sont destinés au
@@ -44,6 +50,7 @@ final class PublicLegalDocumentProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RequestStack $requestStack,
+        private readonly LegalDocumentGenerator $generator,
     ) {
     }
 
@@ -62,7 +69,9 @@ final class PublicLegalDocumentProvider implements ProviderInterface
         );
 
         $charge = [];
+        $politiquePubliee = false;
         foreach ($documents as $document) {
+            $politiquePubliee = $politiquePubliee || $document->getType() === LegalDocumentType::PrivacyPolicy;
             $charge[] = [
                 'type' => $document->getType()->value,
                 'slug' => $document->getType()->slug(),
@@ -73,7 +82,76 @@ final class PublicLegalDocumentProvider implements ProviderInterface
             ];
         }
 
+        // La politique TYPE ne se sert qu'à une boutique ouverte au public (relecture #101, D4). Servie
+        // pour tout identifiant d'établissement, elle aurait publié le nom de n'importe quel site — y
+        // compris d'un site sans boutique, dont personne n'a rien à lire.
+        $vitrinePubliee = $this->aUneVitrinePubliee($etablissement);
+        if (!$politiquePubliee && $vitrinePubliee) {
+            $charge[] = $this->politiqueParDefaut($etablissement);
+        }
+        if ($charge === [] && !$vitrinePubliee) {
+            // Rien de publié, et pas de boutique : rien de public à son sujet. 404 plutôt qu'une liste
+            // vide, qui confirmerait qu'un établissement existe derrière cet identifiant.
+            throw new NotFoundHttpException('Établissement introuvable.');
+        }
+
         return new JsonResponse(['etablissement' => (string) $etablissement->getId(), 'documents' => $charge]);
+    }
+
+    /**
+     * Même règle que `App\Boutique\Security\VitrineAccessibleGuard` : établissement actif ET canal
+     * `en_ligne` ouvert. Lue en SQL, comme les CGV côté boutique : `Legal` et `Boutique` doivent vivre
+     * séparément (D2), sans relation Doctrine de l'un vers l'autre.
+     */
+    private function aUneVitrinePubliee(Etablissement $etablissement): bool
+    {
+        if (!$etablissement->isActif()) {
+            return false;
+        }
+        $canaux = $this->em->getConnection()->fetchFirstColumn(
+            'SELECT canaux_actifs FROM bou_vitrine WHERE etablissement_id = ?',
+            [$etablissement->getId()->toBinary()],
+        );
+        foreach ($canaux as $json) {
+            $liste = json_decode((string) $json, true);
+            if (\is_array($liste) && \in_array('en_ligne', $liste, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * UNE POLITIQUE TYPE QUAND L'ÉTABLISSEMENT N'EN A PUBLIÉ AUCUNE (#101, décision CP-1).
+     *
+     * La mention du tunnel d'achat renvoie à « la politique de confidentialité de l'établissement ».
+     * Sans elle, le lien menait à « ce document n'est pas publié » — l'information promise n'existait
+     * pas. Bloquer la vitrine aurait puni l'acheteur pour un oubli de l'exploitant ; on sert donc, pour
+     * un établissement qui a une vitrine publiée (et pour lui seul), un
+     * modèle établi à son nom et avec les coordonnées de sa fiche légale si elle existe, marqué
+     * `parDefaut`, et qui dit lui-même qu'il reste à compléter. Rien n'est écrit en base : dès qu'une
+     * politique est publiée, c'est elle qui sort.
+     *
+     * @return array<string, mixed>
+     */
+    private function politiqueParDefaut(Etablissement $etablissement): array
+    {
+        $identite = $this->em->getRepository(LegalIdentity::class)->findOneBy(['establishment' => $etablissement]);
+        if (!$identite instanceof LegalIdentity) {
+            $identite = (new LegalIdentity())->setEstablishment($etablissement)->setLegalName($etablissement->getNom());
+        }
+        [$titre, $contenu] = $this->generator->defaultPrivacyPolicy($identite, $etablissement->getNom());
+
+        return [
+            'type' => LegalDocumentType::PrivacyPolicy->value,
+            'slug' => LegalDocumentType::PrivacyPolicy->slug(),
+            'titre' => $titre,
+            'contenu' => $contenu,
+            'version' => null,
+            'publieLe' => null,
+            'parDefaut' => true,
+        ];
     }
 
     /**

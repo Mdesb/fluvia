@@ -135,6 +135,10 @@ final class CatalogueVitrineProvider implements ProviderInterface
                 // apparaîtrait sur tout et refuserait au clic, ce qui fait chercher une panne là
                 // où il n'y a qu'un produit qui ne s'abonne pas.
                 'abonnement' => $produit->getFormule()?->isSepaActif() === true,
+
+                // L'écran ne pose la case d'autorisation parentale que pour un produit qui l'exige
+                // (#101) ; le serveur reste l'autorité (refus 422 au paiement).
+                'parentalConsentRequired' => $produit->isParentalConsentRequired(),
             ];
         }
 

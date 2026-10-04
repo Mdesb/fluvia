@@ -20,7 +20,10 @@ use App\Boutique\Security\ProduitEtablissementGuard;
 use App\Crm\Adapter\ClientM4Adapter;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
+use App\Crm\Entity\Consentement;
 use App\Crm\Entity\Famille;
+use App\Crm\Enum\CanalConsentement;
+use App\Crm\Enum\EtatConsentement;
 use App\Crm\Enum\RoleBeneficiaire;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Entity\Produit;
@@ -286,6 +289,15 @@ final class ConfirmerCommandeHandler
         $suivi = $this->em->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['vente' => $vente]);
         if ($suivi instanceof SuiviCommandeEnLigne) {
             $suivi->setStatutTunnel(StatutTunnel::Confirme);
+        }
+
+        // L'accord marketing, s'il a été donné (#101, D2) : UNE ligne, au nom du payeur, d'après l'état
+        // FINAL de la case — pas une par envoi de l'écran, et rien si elle a été décochée entre-temps.
+        $versionMarketing = $panier->getMarketingOptInVersion();
+        if ($versionMarketing !== null) {
+            $accord = new Consentement(CanalConsentement::Email, EtatConsentement::Accorde);
+            $accord->setClient($payeur)->setSource('boutique')->setTextVersion($versionMarketing);
+            $this->em->persist($accord);
         }
         $panier->setStatut(StatutPanier::TransformeEnCommande);
         $this->em->flush();
