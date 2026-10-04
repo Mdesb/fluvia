@@ -51,7 +51,7 @@ final class ValidationPassageHandler
          * « ce billet est-il valide » finissent toujours par se contredire devant une porte.
          */
         private readonly VerdictBilletHandler $verdict,
-        private readonly VersionSnapshotSequencer $sequencer,
+        private readonly SnapshotVersionBumper $bumper,
         /**
          * Le planning d'ouverture du site. Injecté ici plutôt que consulté à la volée : une
          * dépendance explicite se voit dans la signature, et le jour où quelqu'un se demandera
@@ -254,18 +254,17 @@ final class ValidationPassageHandler
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée.');
                     }
                     $affectees = (int) $this->connection->executeStatement(
-                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1 WHERE id = UNHEX(:hex) AND credit_restant > :plancher',
+                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant > :plancher',
                         ['hex' => bin2hex($droit->getId()->toBinary()), 'plancher' => $plancher],
                     );
                     if ($affectees === 0) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée (course concurrente).');
                     }
                     $droit->setCreditRestant(($droit->getCreditRestant() ?? 1) - 1);
-                    if ($support instanceof Support) {
-                        // Curseur delta snapshot (US-TERM-03/04, §1.4 du plan) : le compostagesRestants
-                        // remonté au prochain snapshot doit refléter le solde réel.
-                        $support->setVersionMaj($this->sequencer->suivant());
-                    }
+                    // Curseur delta snapshot (US-TERM-03/04, §1.4 du plan) : le compostagesRestants
+                    // remonté au prochain snapshot doit refléter le solde réel — sur TOUS les supports
+                    // du droit, pas seulement celui qu'on vient de scanner (`SnapshotVersionBumper`).
+                    $this->bumper->bumpPairedSupports($droit->getId());
                     if ($evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) < 0) {
                         $enConflitCredit = true;
                     }

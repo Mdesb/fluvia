@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Reservation\Service;
 
-use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
-use App\Acces\Entity\Support;
-use App\Acces\Service\VersionSnapshotSequencer;
+use App\Acces\Service\SnapshotVersionBumper;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\IssueCreditNoShow;
 use Doctrine\DBAL\Connection;
@@ -33,7 +31,7 @@ final class ApplyNoShowCreditIssueHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
-        private readonly VersionSnapshotSequencer $sequencer,
+        private readonly SnapshotVersionBumper $bumper,
     ) {
     }
 
@@ -85,7 +83,7 @@ final class ApplyNoShowCreditIssueHandler
 
         $this->connection->transactional(function () use ($droit, $droitId, &$restitue, &$coursePerdue): void {
             $affectees = (int) $this->connection->executeStatement(
-                'UPDATE acces_droit_acces SET credit_restant = credit_restant + 1 WHERE id = UNHEX(:hex) AND credit_restant IS NOT NULL',
+                'UPDATE acces_droit_acces SET credit_restant = credit_restant + 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant IS NOT NULL',
                 ['hex' => bin2hex($droitId->toBinary())],
             );
             if ($affectees === 0) {
@@ -105,19 +103,10 @@ final class ApplyNoShowCreditIssueHandler
             $this->em->refresh($droit);
             $restitue = true;
 
-            // RG-CQ5-05 dernier alinéa — si un Appairage actif existe pour ce droit, un terminal
-            // hors-ligne doit voir le nouveau solde (même règle que D23).
-            $appairage = $this->em->getRepository(Appairage::class)
-                ->findOneBy(['droit' => $droit, 'actif' => true]);
-            $support = $appairage?->getSupport();
-            if ($support instanceof Support) {
-                $version = $this->sequencer->suivant();
-                $this->connection->executeStatement(
-                    'UPDATE acces_support SET version_maj = :v WHERE id = UNHEX(:hex)',
-                    ['v' => $version, 'hex' => bin2hex($support->getId()->toBinary())],
-                );
-                $support->setVersionMaj($version);
-            }
+            // RG-CQ5-05 dernier alinéa — chaque support appairé actif à ce droit doit montrer le
+            // nouveau solde à un terminal hors-ligne (même règle que D23). TOUS, pas celui que
+            // rendait un `findOneBy()` sans ordre (`SnapshotVersionBumper`).
+            $this->bumper->bumpPairedSupports($droitId);
 
             $this->em->flush();
         });
