@@ -32,11 +32,13 @@ require_once \dirname(__DIR__, 3) . '/migrations/Version20261004001923.php';
  * commande », et ne touche pas un accord marketing réel. On joue le SQL de la migration elle-même
  * (ses `INSERT`/`DELETE` ; le schéma du harnais porte déjà les colonnes, bâties depuis le mapping).
  *
- * Quatre clients, un seul visé :
+ * Cinq clients, un seul visé :
  * - A : accord boutique + panier dont l'horodatage est, à la seconde, la date de recueil → invalidé ;
  * - B : accord boutique SANS tel panier (la case marketing d'aujourd'hui) → intact ;
  * - C : accord boutique + panier décalé d'une seconde → intact (le ciblage est exact) ;
- * - D : même panier que A, mais source `crm` → intact (la source compte).
+ * - D : même panier que A, mais source `crm` → intact (la source compte) ;
+ * - E : comme A, mais un accord plus récent a été donné ailleurs depuis → intact (on ne recouvre
+ *   jamais une ligne plus récente : l'invalidation deviendrait l'état courant à sa place).
  */
 final class ConsentCorrectionMigrationTest extends BoutiqueApiTestCase
 {
@@ -49,6 +51,7 @@ final class ConsentCorrectionMigrationTest extends BoutiqueApiTestCase
         $b = $this->client('B');
         $c = $this->client('C');
         $d = $this->client('D');
+        $e = $this->client('E');
         $recueil = new \DateTimeImmutable(self::RECUEIL);
 
         $this->accord($a, 'boutique', $recueil);
@@ -58,10 +61,13 @@ final class ConsentCorrectionMigrationTest extends BoutiqueApiTestCase
         $this->panier($c, $recueil->modify('+1 second'));
         $this->accord($d, 'crm', $recueil);
         $this->panier($d, $recueil);
+        $this->accord($e, 'boutique', $recueil);
+        $this->panier($e, $recueil);
+        $this->accord($e, 'crm', $recueil->modify('+1 day'));
         $em->flush();
 
         // Témoin positif AVANT : les quatre sont joignables par campagne.
-        foreach ([$a, $b, $c, $d] as $client) {
+        foreach ([$a, $b, $c, $d, $e] as $client) {
             self::assertSame(NotificationOutcome::Journalisee, $this->campagne($client));
         }
         $total = $this->compter('SELECT COUNT(*) FROM crm_consentement');
@@ -82,6 +88,7 @@ final class ConsentCorrectionMigrationTest extends BoutiqueApiTestCase
         self::assertSame(NotificationOutcome::Journalisee, $this->campagne($b));
         self::assertSame(NotificationOutcome::Journalisee, $this->campagne($c));
         self::assertSame(NotificationOutcome::Journalisee, $this->campagne($d));
+        self::assertSame(NotificationOutcome::Journalisee, $this->campagne($e), 'Un accord donné plus tard ailleurs reste l\'état courant.');
 
         // Une case marketing cochée APRÈS la reprise rend le client joignable : la ligne la plus
         // récente l'emporte.

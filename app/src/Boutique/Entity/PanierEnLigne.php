@@ -223,6 +223,17 @@ class PanierEnLigne
     #[Groups(['panier:read'])]
     private ?string $privacyNoticeVersion = null;
 
+    /**
+     * L'ÉTAT DE LA CASE MARKETING, PAS ENCORE UN CONSENTEMENT (relecture #101, D2). La version du texte
+     * si la case est cochée au dernier envoi de l'écran, `null` sinon. Le `Consentement` ne s'écrit
+     * qu'au paiement confirmé (`ConfirmerCommandeHandler`), une fois, avec l'état FINAL de la case :
+     * écrit à chaque envoi, un renvoi case décochée ne retirait rien, et chaque renvoi case cochée
+     * ajoutait un accord de plus.
+     */
+    #[ORM\Column(length: 40, nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?string $marketingOptInVersion = null;
+
     /** Réf. logique Client (M4) résolu au plus tard à l'étape consentement (§0 décision n°4 du plan). */
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
     private ?Uuid $clientResolu = null;
@@ -408,6 +419,18 @@ class PanierEnLigne
     {
         $this->privacyNoticeVersion = $version;
         $this->privacyNoticeShownAt = $shownAt;
+
+        return $this;
+    }
+
+    public function getMarketingOptInVersion(): ?string
+    {
+        return $this->marketingOptInVersion;
+    }
+
+    public function setMarketingOptInVersion(?string $marketingOptInVersion): self
+    {
+        $this->marketingOptInVersion = $marketingOptInVersion;
 
         return $this;
     }

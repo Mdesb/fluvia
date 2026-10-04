@@ -9,10 +9,6 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
-use App\Boutique\Service\ConfirmerCommandeHandler;
-use App\Crm\Entity\Consentement;
-use App\Crm\Enum\CanalConsentement;
-use App\Crm\Enum\EtatConsentement;
 use App\Vente\Service\LecteurCorps;
 use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,7 +29,8 @@ use Symfony\Component\Uid\Uuid;
  * l'exécution du contrat (art. 6.1.b) — sans rien demander. Désormais :
  * - la MENTION d'information est horodatée sur le panier, avec sa version (preuve de l'information) ;
  * - seule la case FACULTATIVE « recevoir les nouveautés » crée un `Consentement(Email, Accordé)`,
- *   avec la version de son texte.
+ *   avec la version de son texte — au PAIEMENT CONFIRMÉ, d'après l'état final de la case gardé sur le
+ *   panier (relecture, D2) : l'écran se renvoie autant de fois qu'il faut, la case peut changer.
  *
  * @implements ProcessorInterface<PanierEnLigne, PanierEnLigne>
  */
@@ -44,7 +41,6 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
         private readonly PanierTarificationHandler $tarification,
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
-        private readonly ConfirmerCommandeHandler $confirmerCommande,
     ) {
     }
 
@@ -80,12 +76,7 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
             $data->accepterCgv($cgv['id'], $cgv['version']);
         }
 
-        if ($marketing) {
-            $client = $this->confirmerCommande->resoudreClient($data);
-            $consentement = new Consentement(CanalConsentement::Email, EtatConsentement::Accorde);
-            $consentement->setClient($client)->setSource('boutique')->setTextVersion($marketingVersion);
-            $this->em->persist($consentement);
-        }
+        $data->setMarketingOptInVersion($marketing ? $marketingVersion : null);
 
         foreach ($data->getLignes() as $ligne) {
             \assert($ligne instanceof LignePanierEnLigne);

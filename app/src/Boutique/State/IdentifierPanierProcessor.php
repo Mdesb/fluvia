@@ -96,7 +96,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         }
 
         $this->limiter->reinitialiser($email);
-        $panier->setCompteClient($compte)->setContactConnu($email);
+        $this->rattacher($panier, $this->compteDuGroupeDeLaVitrine($panier, $compte), $email);
     }
 
     /**
@@ -117,13 +117,44 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         }
 
         $compte = $this->em->getRepository(CompteClient::class)->findOneBy(['utilisateur' => $utilisateur]);
+        $this->rattacher($panier, $this->compteDuGroupeDeLaVitrine($panier, $compte), $utilisateur->getEmail());
+    }
+
+    /**
+     * Le compte, s'il est du groupe de la vitrine ; sinon 404 — pour les TROIS voies qui rattachent un
+     * compte (session, mot de passe, FranceConnect). Le contrôle n'existait que pour `session` : les
+     * deux autres rattachaient n'importe quel compte, de n'importe quel groupe.
+     */
+    private function compteDuGroupeDeLaVitrine(PanierEnLigne $panier, ?CompteClient $compte): CompteClient
+    {
         $groupeCompte = $compte?->getEtablissement()?->getRegion()?->getGroupe()?->getId();
         $groupeVitrine = $panier->getVitrine()?->getEtablissement()?->getRegion()?->getGroupe()?->getId();
         if (!$compte instanceof CompteClient || $groupeCompte === null || $groupeVitrine === null || !$groupeCompte->equals($groupeVitrine)) {
             throw new NotFoundHttpException('Aucun compte client pour cette boutique.');
         }
 
-        $panier->setCompteClient($compte)->setContactConnu($utilisateur->getEmail());
+        return $compte;
+    }
+
+    /**
+     * Pose QUI achète : le compte (ou aucun, pour un invité) et l'adresse de contact.
+     *
+     * ⚠ ET OUBLIE LE CLIENT DÉJÀ RÉSOLU QUAND QUI ACHÈTE CHANGE (relecture #101, D1). Le panier garde
+     * le `Client` résolu (`clientResolu`) et son compte d'une identification à l'autre. Sans cette
+     * remise à zéro, « Ce n'est pas moi » après une session réussie laissait le compte de A sur le
+     * panier : la commande, les bénéficiaires et l'accord marketing de B partaient chez A. Et un invité
+     * qui corrigeait une adresse mal tapée gardait la fiche client créée avec la mauvaise.
+     */
+    private function rattacher(PanierEnLigne $panier, ?CompteClient $compte, string $email): void
+    {
+        $compteAvant = $panier->getCompteClient();
+        $memeCompte = $compteAvant === null ? $compte === null : ($compte !== null && $compteAvant->getId()->equals($compte->getId()));
+        $memeAdresse = mb_strtolower(trim((string) $panier->getContactConnu())) === mb_strtolower(trim($email));
+        if (!$memeCompte || !$memeAdresse) {
+            $panier->setClientResolu(null);
+        }
+
+        $panier->setCompteClient($compte)->setContactConnu($email);
     }
 
     /**
@@ -139,7 +170,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Une adresse e-mail valide est requise pour recevoir vos billets.');
         }
 
-        $panier->setContactConnu($email);
+        $this->rattacher($panier, null, $email);
         $session = $panier->getSessionClient();
         $session?->setContactEmail($email);
     }
@@ -152,14 +183,14 @@ final class IdentifierPanierProcessor implements ProcessorInterface
 
         $compte = $this->em->getRepository(CompteClient::class)->findOneBy(['franceConnectId' => $identite->sub]);
         if ($compte instanceof CompteClient) {
-            $panier->setCompteClient($compte)->setContactConnu($identite->email);
+            $this->rattacher($panier, $this->compteDuGroupeDeLaVitrine($panier, $compte), $identite->email);
 
             return;
         }
 
         // RG-M3-06 : identifié sans compte imposé — session FranceConnect en cours, aucun CompteClient
         // créé tant que l'achat ne requiert pas explicitement un compte (RG-M3-12/17, §4.9).
-        $panier->setContactConnu($identite->email);
+        $this->rattacher($panier, null, $identite->email);
         $session = $panier->getSessionClient();
         if ($session !== null) {
             $session->setType(TypeSessionClient::FranceconnectEnCours)->setContactEmail($identite->email);

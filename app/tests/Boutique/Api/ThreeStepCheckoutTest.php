@@ -9,6 +9,7 @@ use App\Boutique\DataFixtures\BoutiqueFixtures;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Entity\RetraitClickCollect;
+use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Crm\Entity\Consentement;
 use App\Crm\Enum\CanalConsentement;
@@ -231,6 +232,149 @@ final class ThreeStepCheckoutTest extends BoutiqueApiTestCase
         self::assertCount(1, $politiques);
         self::assertTrue($politiques[0]['parDefaut']);
         self::assertStringContainsString(SocleFixtures::ETAB_A_NOM, $politiques[0]['contenu']);
+    }
+
+    /**
+     * D1 (relecture) : « Ce n'est pas moi ». Le panier rattaché au compte connecté A repasse en invité
+     * B : la commande, ses bénéficiaires et son accord marketing ne doivent PAS aller chez A.
+     */
+    public function testGuestAfterSessionDetachesTheAccount(): void
+    {
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $jwt = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', ['auth_bearer' => $jwt, 'headers' => $entete, 'json' => ['mode' => 'session']]);
+        self::assertResponseIsSuccessful();
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => false], identifier: false);
+
+        // B prend la main, sans compte.
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', ['headers' => $entete, 'json' => ['mode' => 'invite', 'email' => 'b.invite@example.test']]);
+        self::assertResponseIsSuccessful();
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING], identifier: false);
+        $venteId = $this->payer($client, $panierId, $entete);
+
+        $panier = $this->em()->getRepository(PanierEnLigne::class)->find($panierId);
+        self::assertNull($panier->getCompteClient(), 'Le compte de A est détaché.');
+        self::assertSame('b.invite@example.test', $this->courrielDuClientDeLaVente($venteId), 'La vente est au nom de B.');
+
+        // « Mes billets » lit `SuiviCommandeEnLigne::compteClient` : c'est lui qui doit être vide.
+        $suivi = $this->em()->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['vente' => $this->em()->getRepository(Vente::class)->find($venteId)]);
+        self::assertInstanceOf(SuiviCommandeEnLigne::class, $suivi);
+        self::assertNull($suivi->getCompteClient(), 'La commande de B n\'entre pas dans « Mes billets » de A.');
+        $accordsDeA = $this->em()->getRepository(Consentement::class)->findBy(['client' => $this->entite(CompteClient::class, ['utilisateur' => $this->entite(Utilisateur::class, ['email' => BoutiqueFixtures::CLIENT_EMAIL])])->getClient()]);
+        self::assertSame([], $accordsDeA, 'L\'accord marketing de B ne va pas chez A.');
+    }
+
+    /** D1, variante : l'invité corrige une adresse mal tapée après avoir coché la case marketing. */
+    public function testCorrectedGuestEmailIsTheOneThatBuys(): void
+    {
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', ['headers' => $entete, 'json' => ['mode' => 'invite', 'email' => 'mal.tapee@example.test']]);
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING], identifier: false);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', ['headers' => $entete, 'json' => ['mode' => 'invite', 'email' => 'bien.tapee@example.test']]);
+        self::assertResponseIsSuccessful();
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING], identifier: false);
+        $venteId = $this->payer($client, $panierId, $entete);
+
+        self::assertSame('bien.tapee@example.test', $this->courrielDuClientDeLaVente($venteId));
+        $accords = $this->em()->getRepository(Consentement::class)->findBy(['source' => 'boutique']);
+        self::assertSame(['bien.tapee@example.test'], array_map(static fn (Consentement $c): ?string => $c->getClient()?->getEmail(), $accords), 'Un seul accord, au nom de l\'adresse corrigée.');
+    }
+
+    /** D2 : décocher la case au renvoi ne laisse aucun accord. */
+    public function testUncheckingMarketingOnResendLeavesNoConsent(): void
+    {
+        $avant = $this->nombreConsentements();
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING]);
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => false]);
+        $this->payer($client, $panierId, $entete);
+
+        self::assertSame($avant, $this->nombreConsentements());
+    }
+
+    /** D2 : renvoyer l'écran deux fois, case cochée, ne crée pas deux accords. */
+    public function testResendingWithMarketingCreatesASingleConsent(): void
+    {
+        $avant = $this->nombreConsentements();
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING]);
+        $this->ecranVosBillets($client, $panierId, $entete, ['dateNaissance' => '1990-01-01'], ['marketing' => true, 'marketingVersion' => self::MARKETING]);
+        self::assertSame($avant, $this->nombreConsentements(), 'Rien n\'est écrit avant le paiement confirmé.');
+        $this->payer($client, $panierId, $entete);
+
+        self::assertSame($avant + 1, $this->nombreConsentements());
+    }
+
+    /** D3 : le mode `compte` (mot de passe) applique le même contrôle de groupe que `session`. */
+    public function testPasswordModeFromAnotherGroupGets404(): void
+    {
+        $this->deplacerLeCompteDemoDansUnAutreGroupe();
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', [
+            'headers' => $entete,
+            'json' => ['mode' => 'compte', 'email' => BoutiqueFixtures::CLIENT_EMAIL, 'motDePasse' => BoutiqueFixtures::CLIENT_MDP],
+        ]);
+        self::assertResponseStatusCodeSame(404);
+        $this->em()->clear();
+        self::assertNull($this->em()->getRepository(PanierEnLigne::class)->find($panierId)?->getCompteClient());
+    }
+
+    /** D3 : et le mode `franceconnect` aussi, quand l'identité désigne un compte d'un autre groupe. */
+    public function testFranceConnectAccountFromAnotherGroupGets404(): void
+    {
+        $compte = $this->deplacerLeCompteDemoDansUnAutreGroupe();
+        $compte->setFranceConnectId('fc-etranger');
+        $this->em()->flush();
+
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', [
+            'headers' => $entete,
+            'json' => ['mode' => 'franceconnect', 'franceConnectCode' => 'fc-etranger|' . BoutiqueFixtures::CLIENT_EMAIL . '|Martin|Camille'],
+        ]);
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    /** Témoin de D3 : dans le bon groupe, le mode `compte` rattache bien. */
+    public function testPasswordModeInTheSameGroupAttaches(): void
+    {
+        [$client, $panierId, $entete] = $this->panierAvecUnBillet(BoutiqueFixtures::PRODUIT_SIMPLE_CODE);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', [
+            'headers' => $entete,
+            'json' => ['mode' => 'compte', 'email' => BoutiqueFixtures::CLIENT_EMAIL, 'motDePasse' => BoutiqueFixtures::CLIENT_MDP],
+        ]);
+        self::assertResponseIsSuccessful();
+        $this->em()->clear();
+        self::assertNotNull($this->em()->getRepository(PanierEnLigne::class)->find($panierId)?->getCompteClient());
+    }
+
+    /** D4 : pas de politique type pour un établissement sans vitrine publiée — 404. */
+    public function testNoDefaultPrivacyPolicyWithoutAPublishedStorefront(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/legal/publics/' . $this->idEtablissement(SocleFixtures::ETAB_EDITEUR_NOM));
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    private function deplacerLeCompteDemoDansUnAutreGroupe(): CompteClient
+    {
+        $groupe = (new Groupe())->setNom('Groupe étranger');
+        $region = (new Region())->setNom('Région étrangère')->setGroupe($groupe);
+        $etabB = $this->entite(Etablissement::class, ['nom' => SocleFixtures::ETAB_B_NOM]);
+        $etabB->setRegion($region);
+        $utilisateur = $this->entite(Utilisateur::class, ['email' => BoutiqueFixtures::CLIENT_EMAIL]);
+        $compte = $this->entite(CompteClient::class, ['utilisateur' => $utilisateur])->setEtablissement($etabB);
+        $this->em()->persist($groupe);
+        $this->em()->persist($region);
+        $this->em()->flush();
+
+        return $compte;
+    }
+
+    private function courrielDuClientDeLaVente(string $venteId): ?string
+    {
+        $vente = $this->em()->getRepository(Vente::class)->find($venteId);
+
+        return $this->em()->getRepository(\App\Crm\Entity\Client::class)->find($vente->getClient())?->getEmail();
     }
 
     /** @return array{0: Client, 1: string, 2: array<string, string>, 3: string} */
