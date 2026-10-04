@@ -38,7 +38,7 @@ final class ConflitInventaireTest extends BoutiqueApiTestCase
         $session = (new SessionClient())->setToken(PanierProprietaireGuard::hacher('t'))->setType(TypeSessionClient::Invite)->setEtablissement($vitrine->getEtablissement());
         $em->persist($session);
         $panier = (new PanierEnLigne())->setVitrine($vitrine)->setSessionClient($session)->setEtablissement($vitrine->getEtablissement())
-            ->setContactConnu('conflit@example.test')->setConsentementRgpdHorodatage(new \DateTimeImmutable());
+            ->setContactConnu('conflit@example.test')->recordPrivacyNotice('mention-test');
         $em->persist($panier);
         $ligne = (new LignePanierEnLigne())->setProduit($produit)->setQuantite(1)->setExpirationA($panier->getDateExpiration());
         $panier->addLigne($ligne);

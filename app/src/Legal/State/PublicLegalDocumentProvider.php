@@ -7,6 +7,9 @@ namespace App\Legal\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Legal\Entity\LegalDocument;
+use App\Legal\Entity\LegalIdentity;
+use App\Legal\Enum\LegalDocumentType;
+use App\Legal\Service\LegalDocumentGenerator;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -44,6 +47,7 @@ final class PublicLegalDocumentProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RequestStack $requestStack,
+        private readonly LegalDocumentGenerator $generator,
     ) {
     }
 
@@ -62,7 +66,9 @@ final class PublicLegalDocumentProvider implements ProviderInterface
         );
 
         $charge = [];
+        $politiquePubliee = false;
         foreach ($documents as $document) {
+            $politiquePubliee = $politiquePubliee || $document->getType() === LegalDocumentType::PrivacyPolicy;
             $charge[] = [
                 'type' => $document->getType()->value,
                 'slug' => $document->getType()->slug(),
@@ -73,7 +79,42 @@ final class PublicLegalDocumentProvider implements ProviderInterface
             ];
         }
 
+        if (!$politiquePubliee) {
+            $charge[] = $this->politiqueParDefaut($etablissement);
+        }
+
         return new JsonResponse(['etablissement' => (string) $etablissement->getId(), 'documents' => $charge]);
+    }
+
+    /**
+     * UNE POLITIQUE TYPE QUAND L'ÉTABLISSEMENT N'EN A PUBLIÉ AUCUNE (#101, décision CP-1).
+     *
+     * La mention du tunnel d'achat renvoie à « la politique de confidentialité de l'établissement ».
+     * Sans elle, le lien menait à « ce document n'est pas publié » — l'information promise n'existait
+     * pas. Bloquer la vitrine aurait puni l'acheteur pour un oubli de l'exploitant ; on sert donc un
+     * modèle établi à son nom et avec les coordonnées de sa fiche légale si elle existe, marqué
+     * `parDefaut`, et qui dit lui-même qu'il reste à compléter. Rien n'est écrit en base : dès qu'une
+     * politique est publiée, c'est elle qui sort.
+     *
+     * @return array<string, mixed>
+     */
+    private function politiqueParDefaut(Etablissement $etablissement): array
+    {
+        $identite = $this->em->getRepository(LegalIdentity::class)->findOneBy(['establishment' => $etablissement]);
+        if (!$identite instanceof LegalIdentity) {
+            $identite = (new LegalIdentity())->setEstablishment($etablissement)->setLegalName($etablissement->getNom());
+        }
+        [$titre, $contenu] = $this->generator->defaultPrivacyPolicy($identite, $etablissement->getNom());
+
+        return [
+            'type' => LegalDocumentType::PrivacyPolicy->value,
+            'slug' => LegalDocumentType::PrivacyPolicy->slug(),
+            'titre' => $titre,
+            'contenu' => $contenu,
+            'version' => null,
+            'publieLe' => null,
+            'parDefaut' => true,
+        ];
     }
 
     /**

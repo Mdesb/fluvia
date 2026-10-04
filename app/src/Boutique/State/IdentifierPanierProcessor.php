@@ -16,15 +16,18 @@ use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
- * POST /boutique/paniers/{id}/identifier — étape 1 du tunnel (US-L8-04, RG-M3-06, CA-4). Trois
- * voies : compte existant (e-mail + mot de passe), invité (achat simple sans compte), FranceConnect
- * (stub, identifie sans imposer de compte). Corps :
- * { "mode": "compte"|"invite"|"franceconnect", "email"?, "motDePasse"?, "franceConnectCode"? }.
+ * POST /boutique/paniers/{id}/identifier — étape 1 du tunnel (US-L8-04, RG-M3-06, CA-4). Quatre
+ * voies : client déjà connecté (`session`, #101), compte existant (e-mail + mot de passe), invité
+ * (achat simple sans compte, e-mail obligatoire depuis #101), FranceConnect (bouchon, derrière
+ * `FRANCECONNECT_BOUCHON_AUTORISE`). Corps :
+ * { "mode": "session"|"compte"|"invite"|"franceconnect", "email"?, "motDePasse"?, "franceConnectCode"? }.
  *
  * @implements ProcessorInterface<PanierEnLigne, PanierEnLigne>
  */
@@ -38,6 +41,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         private readonly UserPasswordHasherInterface $hasher,
         private readonly FournisseurIdentiteInterface $fournisseurIdentite,
         private readonly TentativeIdentificationLimiter $limiter,
+        private readonly Security $security,
     ) {
     }
 
@@ -50,6 +54,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         $mode = \is_string($corps['mode'] ?? null) ? $corps['mode'] : 'invite';
 
         match ($mode) {
+            'session' => $this->identifierParSession($data),
             'compte' => $this->identifierParCompte($data, $corps),
             'franceconnect' => $this->identifierParFranceConnect($data, $corps),
             default => $this->identifierInvite($data, $corps),
@@ -94,15 +99,49 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         $panier->setCompteClient($compte)->setContactConnu($email);
     }
 
-    /** @param array<string, mixed> $corps */
+    /**
+     * Le client est déjà connecté (JWT client) : on rattache le panier à SON compte, sans lui
+     * redemander ni e-mail ni mot de passe (#101). Sans ce mode, un client connecté passait en
+     * invité, et sa commande n'apparaissait jamais dans « Mes billets ».
+     *
+     * ⚠ SEULEMENT DANS LE GROUPE DE LA VITRINE. Un compte d'un autre groupe qui rattache un panier
+     * d'ici ferait entrer chez lui la commande d'un exploitant étranger. On rend 404, pas 403 : « ce
+     * compte n'existe pas pour cette boutique » est la vérité vue d'ici, et un 403 confirmerait à un
+     * tiers que le compte existe ailleurs.
+     */
+    private function identifierParSession(PanierEnLigne $panier): void
+    {
+        $utilisateur = $this->security->getUser();
+        if (!$utilisateur instanceof Utilisateur) {
+            throw new UnauthorizedHttpException('Bearer', 'Connectez-vous pour acheter avec votre compte.');
+        }
+
+        $compte = $this->em->getRepository(CompteClient::class)->findOneBy(['utilisateur' => $utilisateur]);
+        $groupeCompte = $compte?->getEtablissement()?->getRegion()?->getGroupe()?->getId();
+        $groupeVitrine = $panier->getVitrine()?->getEtablissement()?->getRegion()?->getGroupe()?->getId();
+        if (!$compte instanceof CompteClient || $groupeCompte === null || $groupeVitrine === null || !$groupeCompte->equals($groupeVitrine)) {
+            throw new NotFoundHttpException('Aucun compte client pour cette boutique.');
+        }
+
+        $panier->setCompteClient($compte)->setContactConnu($utilisateur->getEmail());
+    }
+
+    /**
+     * Sans compte, l'e-mail est OBLIGATOIRE (#101, décision du 04/10) : c'est par lui qu'on envoie
+     * les billets et qu'on retrouve la commande. Refus 422, comme l'écran.
+     *
+     * @param array<string, mixed> $corps
+     */
     private function identifierInvite(PanierEnLigne $panier, array $corps): void
     {
-        $email = \is_string($corps['email'] ?? null) ? $corps['email'] : null;
-        if ($email !== null) {
-            $panier->setContactConnu($email);
-            $session = $panier->getSessionClient();
-            $session?->setContactEmail($email);
+        $email = \is_string($corps['email'] ?? null) ? trim($corps['email']) : '';
+        if (filter_var($email, \FILTER_VALIDATE_EMAIL) === false) {
+            throw new UnprocessableEntityHttpException('Une adresse e-mail valide est requise pour recevoir vos billets.');
         }
+
+        $panier->setContactConnu($email);
+        $session = $panier->getSessionClient();
+        $session?->setContactEmail($email);
     }
 
     /** @param array<string, mixed> $corps */

@@ -41,6 +41,11 @@ final class EnregistrerConsentementProcessor implements ProcessorInterface
         if ($canal === null || $etat === null) {
             throw new UnprocessableEntityHttpException('« canal » et « etat » sont requis et doivent être valides.');
         }
+        if ($etat === EtatConsentement::Invalide) {
+            // Une invalidation porte un motif et un lot, posés par une reprise (#101). Saisie à la main,
+            // elle n'aurait ni l'un ni l'autre : ce serait un « refusé » qui ne dit pas son nom.
+            throw new UnprocessableEntityHttpException('L\'état « invalide » est réservé aux reprises ; saisissez « refuse » pour un refus.');
+        }
 
         $recueilliParRepresentant = ($corps['recueilliParRepresentant'] ?? false) === true;
         if ($data->estMineur() && $etat === EtatConsentement::Accorde && !$recueilliParRepresentant) {
