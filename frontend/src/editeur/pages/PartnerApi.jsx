@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, membres } from '../../api/client.js'
 import Modal from '../../components/Modal.jsx'
 import { confirmer } from '../../components/Confirmation.jsx'
+import PartnerWebhook from './PartnerWebhook.jsx'
 
 // L'API PARTENAIRE, CÔTÉ ÉDITEUR — les applications tierces et leurs clés (spec API partenaire v1, §3.1).
 //
@@ -146,6 +147,7 @@ export default function PartnerApi({ onRefus }) {
                   </tbody>
                 </table>
               )}
+              <PartnerWebhook application={a} onChange={charger} />
             </div>
           </section>
         ))}
