@@ -13,37 +13,43 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * connecteurs d'un exploitant ne doit pas donner les secrets des partenaires.
  *
  * ⚠ `app/.env` en porte un MARQUEUR versionné, donc public : il est refusé hors environnement de test,
- * à la première utilisation. La vraie clé est générée par installation (`infra/deploy-preprod.sh`) et
+ * à la première utilisation — pas à la construction, que déclenchent aussi des écouteurs instanciés à
+ * la fin de n'importe quelle commande (voir `SupportReferenceSigner::reference()`). La vraie clé est générée par installation (`infra/deploy-preprod.sh`) et
  * exigée par `compose.preprod.yaml`.
  */
 final class PartnerWebhookCipher
 {
     private const MARKER_PREFIX = 'A_GENERER';
 
-    private readonly ChiffreurSecret $cipher;
-
     public function __construct(
-        #[Autowire(env: 'PARTNER_WEBHOOK_KEY')] string $keyBase64,
-        #[Autowire(param: 'kernel.environment')] string $environment,
+        #[Autowire(env: 'PARTNER_WEBHOOK_KEY')] private readonly string $keyBase64,
+        #[Autowire(param: 'kernel.environment')] private readonly string $environment,
     ) {
-        if ('test' !== $environment && ('' === $keyBase64 || str_starts_with($keyBase64, self::MARKER_PREFIX))) {
-            throw new \LogicException('PARTNER_WEBHOOK_KEY n’est pas définie : app/.env n’en porte qu’un marqueur public. Générez une clé par installation (infra/deploy-preprod.sh).');
-        }
-        $this->cipher = new ChiffreurSecret($keyBase64);
     }
 
     public function encrypt(string $plain): string
     {
-        return $this->cipher->chiffrer($plain);
+        return $this->cipher()->chiffrer($plain);
     }
 
     /** `null` si illisible (clé changée) : l'appelant le consigne au lieu de planter. */
     public function decrypt(string $encrypted): ?string
     {
         try {
-            return '' === $encrypted ? null : $this->cipher->dechiffrer($encrypted);
+            return '' === $encrypted ? null : $this->cipher()->dechiffrer($encrypted);
+        } catch (\LogicException $e) {
+            throw $e;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function cipher(): ChiffreurSecret
+    {
+        if ('test' !== $this->environment && ('' === $this->keyBase64 || str_starts_with($this->keyBase64, self::MARKER_PREFIX))) {
+            throw new \LogicException('PARTNER_WEBHOOK_KEY n’est pas définie : app/.env n’en porte qu’un marqueur public. Générez une clé par installation (infra/deploy-preprod.sh).');
+        }
+
+        return new ChiffreurSecret($this->keyBase64);
     }
 }

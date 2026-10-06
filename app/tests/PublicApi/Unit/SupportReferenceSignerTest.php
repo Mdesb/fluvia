@@ -21,7 +21,7 @@ final class SupportReferenceSignerTest extends TestCase
     {
         foreach (['prod', 'dev'] as $environment) {
             try {
-                new SupportReferenceSigner(self::MARKER, $environment);
+                (new SupportReferenceSigner(self::MARKER, $environment))->reference(Uuid::v7(), Uuid::v4());
                 self::fail(sprintf('Le marqueur a été accepté comme clé en environnement « %s ».', $environment));
             } catch (\LogicException $e) {
                 self::assertStringContainsString('PUBLIC_API_SUPPORT_REF_KEY', $e->getMessage());

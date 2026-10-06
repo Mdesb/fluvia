@@ -85,7 +85,7 @@ final class PartnerWebhookSubscriptionTest extends PublicApiTestCase
     public function testLeMarqueurDeCleEstRefuseHorsDuTest(): void
     {
         $this->expectException(\LogicException::class);
-        new PartnerWebhookCipher('A_GENERER_PAR_LE_DEPLOIEMENT_VOIR_infra_env.preprod.example', 'prod');
+        (new PartnerWebhookCipher('A_GENERER_PAR_LE_DEPLOIEMENT_VOIR_infra_env.preprod.example', 'prod'))->encrypt('https://x.example');
     }
 
     /**
