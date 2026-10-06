@@ -18,6 +18,7 @@ use App\Vente\Entity\Vente;
 use App\Vente\Enum\RemiseType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -63,7 +64,8 @@ final class AjoutLigneHandler
      *
      * ⚠ SAUF LE SITE. Un produit d'un autre site n'a jamais pu être dans le catalogue local de cette
      * caisse (l'API ne lui sert que son site et le socle) : l'accepter ferait seulement écrire, sur un
-     * ticket de ce site, le libellé et le prix d'un autre catalogue. Celui-là reste refusé.
+     * ticket de ce site, le libellé et le prix d'un autre catalogue. Celui-là reste refusé (404,
+     * comme un produit inconnu) : la vente part en quarantaine.
      * Toutes les autres gardes (prix, stock, bénéficiaire, options) restent bloquantes, comme avant.
      *
      * @param array<string, mixed> $donnees
@@ -86,16 +88,10 @@ final class AjoutLigneHandler
             throw new ConflictHttpException('Vente validée : le panier est figé (NF525).');
         }
 
-        $produit = $this->resoudre(Produit::class, $donnees['produit'] ?? null, 'produit');
-        \assert($produit instanceof Produit);
+        $produit = $this->produitDuSite($donnees['produit'] ?? null, $vente);
 
-        // Sur le site de la vente (D92 : aucun site = socle), publié, au guichet. Le `find()` ci-dessus
-        // ne regarde rien de tout ça : c'est ici que la caisse refuse ce qu'elle ne doit pas vendre.
-        // Le site est une frontière de cloisonnement : refusé AUSSI en synchro hors ligne.
-        $horsSite = $this->sellability->siteRefusal($produit, $vente->getEtablissement());
-        if ($horsSite !== null) {
-            throw new UnprocessableEntityHttpException($horsSite);
-        }
+        // Publié, au guichet. Le site est déjà réglé par `produitDuSite()` (404, synchro comprise) ;
+        // ce qui reste est l'état commercial, que la synchro hors ligne trace au lieu de refuser.
         $invendable = $this->sellability->offerRefusal($produit);
         if ($invendable !== null && !$venteDejaEncaissee) {
             throw new UnprocessableEntityHttpException($invendable);
@@ -280,6 +276,28 @@ final class AjoutLigneHandler
         }
 
         return [$snapshot, $impactTotal];
+    }
+
+    /**
+     * Le produit, s'il existe ET s'il est au catalogue du site de la vente (D92 : aucun site = socle).
+     *
+     * ⚠ UN SEUL `throw` POUR LES DEUX CAS, ET C'EST LA GARANTIE (D3). Un produit d'un autre site
+     * n'existe pas ici : la réponse doit être indiscernable de celle d'un UUID inconnu — même statut,
+     * même message, même ligne levée. Deux `throw` au texte identique divergeraient au premier
+     * reformulé ; et un 422 « pas vendu sur ce site » confirmait l'existence du produit ailleurs.
+     */
+    private function produitDuSite(mixed $reference, Vente $vente): Produit
+    {
+        $uuid = $this->uuidOuNull($reference);
+        if ($uuid === null) {
+            throw new UnprocessableEntityHttpException('Référence « produit » obligatoire (UUID ou IRI).');
+        }
+        $produit = $this->em->getRepository(Produit::class)->find($uuid);
+        if (!$produit instanceof Produit || !$this->sellability->isSoldAtSite($produit, $vente->getEtablissement())) {
+            throw new NotFoundHttpException('Produit introuvable.');
+        }
+
+        return $produit;
     }
 
     /**

@@ -22,9 +22,10 @@ use App\Organisation\Entity\Etablissement;
  *
  * ── DEUX QUESTIONS, PAS UNE ─────────────────────────────────────────────────────────────────────
  *
- * - `siteRefusal()` : le produit appartient-il au catalogue de ce site ? C'est une frontière de
+ * - `isSoldAtSite()` : le produit appartient-il au catalogue de ce site ? C'est une frontière de
  *   CLOISONNEMENT. Elle est demandée à `ProductSaleScopeGuard`, qui porte la convention socle de
- *   D92 (aucun site = socle, vendu partout) — la règle n'est pas réécrite ici.
+ *   D92 (aucun site = socle, vendu partout) — la règle n'est pas réécrite ici. Hors de son site, le
+ *   produit n'existe pas ici (D3) : l'appelant rend la MÊME réponse 404 que pour un produit inconnu.
  * - `offerRefusal()` : le produit est-il en vente au guichet AUJOURD'HUI (publié, canal guichet) ?
  *   C'est un état COMMERCIAL, qui change dans le temps.
  *
@@ -34,8 +35,8 @@ use App\Organisation\Entity\Etablissement;
  * l'accepter ferait écrire, sur un ticket de ce site, le libellé et le prix d'un autre catalogue.
  * Voir `AjoutLigneHandler::replayOfflineLine()`.
  *
- * Le site est contrôlé EN PREMIER : pour un produit d'un autre site, on ne dit rien de plus que
- * « pas vendu ici » — ni son statut, ni ses canaux, qui décrivent le catalogue d'un autre.
+ * Le site est contrôlé EN PREMIER : pour un produit d'un autre site, on ne dit rien — ni son
+ * existence, ni son statut, ni ses canaux, qui décrivent le catalogue d'un autre.
  */
 final readonly class CounterSellability
 {
@@ -44,15 +45,13 @@ final readonly class CounterSellability
     ) {
     }
 
-    /** Le motif du refus si ce produit n'est pas au catalogue de ce site ; `null` sinon. */
-    public function siteRefusal(Produit $produit, ?Etablissement $site): ?string
+    /** Ce produit est-il au catalogue de ce site (D92 : aucun site = socle, vendu partout) ? */
+    public function isSoldAtSite(Produit $produit, ?Etablissement $site): bool
     {
         // Une vente sans site ne peut vendre que le socle : fermeture par défaut.
-        $soldHere = $site !== null
+        return $site !== null
             ? $this->scopeGuard->isSoldAt($produit, $site)
             : $produit->getEtablissements()->isEmpty();
-
-        return $soldHere ? null : 'Ce produit n\'est pas vendu sur ce site.';
     }
 
     /** Le motif du refus si ce produit n'est pas en vente au guichet ; `null` sinon. */

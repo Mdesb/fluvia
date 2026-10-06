@@ -65,15 +65,25 @@ final class CounterSellableProductTest extends VenteApiTestCase
         self::assertStringContainsString('plus en vente', $message);
     }
 
-    public function testProductOfAnotherSiteOnlyIsRefused(): void
+    /**
+     * D3 — hors de son site, le produit n'existe pas ici : 404, et une réponse INDISCERNABLE de celle
+     * d'un UUID inconnu (le témoin). Un 422 « pas vendu sur ce site » confirmait son existence ailleurs.
+     */
+    public function testProductOfAnotherSiteOnlyIsNotFoundLikeAnUnknownProduct(): void
     {
         $produit = $this->creerProduit('CSP-SITE-B', StatutProduit::Publie, ['guichet'], [SocleFixtures::ETAB_B_NOM]);
 
-        [$code, $lignes, $message] = $this->ajouterSurCaisseA($produit);
+        // Les deux demandes sur la MÊME vente : seule la référence du produit diffère.
+        [$code, $lignes, , $corps, $codeInconnu, $corpsInconnu] = $this->ajouterSurCaisseA($produit, (string) Uuid::v4());
 
-        self::assertSame(422, $code);
+        self::assertSame(404, $codeInconnu, 'Témoin : un produit inconnu rend 404.');
+        self::assertSame(404, $code);
         self::assertSame(0, $lignes, 'Aucune ligne ne doit être écrite pour un produit d\'un autre site.');
-        self::assertStringContainsString('pas vendu sur ce site', $message);
+        self::assertSame(
+            $this->sansIdentifiant($corpsInconnu),
+            $this->sansIdentifiant($corps),
+            'La réponse doit être identique à celle d\'un produit inexistant (D3).',
+        );
     }
 
     /** D92 — aucun site = socle partagé : vendu partout. Le cas qui démasque un contrôle trop large. */
@@ -168,14 +178,36 @@ final class CounterSellableProductTest extends VenteApiTestCase
         self::assertSame([], $reponse['inseres']);
         self::assertCount(1, $reponse['quarantaine']);
         self::assertSame($cle, $reponse['quarantaine'][0]['cle']);
-        self::assertStringContainsString('pas vendu sur ce site', $reponse['quarantaine'][0]['raison']);
+        // Même motif qu'un produit inconnu : la quarantaine ne révèle pas non plus le catalogue de B.
+        self::assertSame('Produit introuvable.', $reponse['quarantaine'][0]['raison']);
         self::assertSame(0, $this->lignesDuProduit($produit));
     }
 
     /**
-     * @return array{0: int, 1: int, 2: string} statut HTTP, lignes du produit en base, message d'erreur
+     * Le corps d'erreur, sans ce qui varie d'une requête à l'autre par construction :
+     * - l'identifiant demandé (absent du corps aujourd'hui ; retiré quand même, pour comparer la FORME) ;
+     * - `trace`, servie seulement en mode debug : ses frames CÔTÉ SERVEUR sont identiques (même ligne
+     *   levée), seules diffèrent les lignes du fichier de test qui a émis la requête. La production
+     *   ne la sert pas ; la garder ferait échouer le test sur une différence qu'aucun client ne voit.
      */
-    private function ajouterSurCaisseA(string $produitId): array
+    private function sansIdentifiant(string $corps): string
+    {
+        $json = json_decode($corps, true);
+        self::assertIsArray($json, 'Le corps d\'erreur doit être du JSON.');
+        unset($json['trace']);
+
+        return (string) preg_replace(
+            '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/',
+            '<uuid>',
+            (string) json_encode($json, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: string, 3: string, 4?: int, 5?: string} statut HTTP, lignes du
+     *         produit en base, message d'erreur, corps brut ; puis statut et corps du témoin éventuel
+     */
+    private function ajouterSurCaisseA(string $produitId, ?string $temoinId = null): array
     {
         [$client, $entete] = $this->adminSurA();
         $session = $this->ouvrirSession($client, $entete);
@@ -189,9 +221,23 @@ final class CounterSellableProductTest extends VenteApiTestCase
             ],
         ]);
         $code = $reponse->getStatusCode();
+        $brut = $reponse->getContent(false);
         $corps = $reponse->toArray(false);
+        $resultat = [$code, $this->lignesDuProduit($produitId), (string) ($corps['detail'] ?? $corps['hydra:description'] ?? ''), $brut];
 
-        return [$code, $this->lignesDuProduit($produitId), (string) ($corps['detail'] ?? $corps['hydra:description'] ?? '')];
+        if ($temoinId !== null) {
+            $temoin = $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
+                'json' => [
+                    'produit' => '/api/produits/' . $temoinId,
+                    'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
+                    'quantite' => 1,
+                ],
+            ]);
+            $resultat[] = $temoin->getStatusCode();
+            $resultat[] = $temoin->getContent(false);
+        }
+
+        return $resultat;
     }
 
     private function lignesDuProduit(string $produitId): int
