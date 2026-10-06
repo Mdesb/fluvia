@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\PublicApi\State\EditorPartnerApplicationProcessor;
 use App\PublicApi\State\EditorPartnerApplicationProvider;
+use App\PublicApi\State\EditorPartnerWebhookProcessor;
 
 /**
  * Les applications partenaires et leurs clés, vues de l'administration éditeur (spec API partenaire v1, §3.1).
@@ -55,6 +56,29 @@ use App\PublicApi\State\EditorPartnerApplicationProvider;
             input: false,
             processor: EditorPartnerApplicationProcessor::class,
         ),
+        // Webhooks (spec §3.3) : l'URL et le secret sont chiffrés au repos, le secret n'est rendu
+        // qu'une fois (`issuedWebhookSecret`). Mêmes gardes : `EditorOnly` dans le processeur.
+        new Post(
+            uriTemplate: '/editor/partner-applications/{id}/webhook',
+            name: EditorPartnerWebhookProcessor::CONFIGURE,
+            read: false,
+            input: false,
+            processor: EditorPartnerWebhookProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/editor/partner-applications/{id}/webhook/rotate-secret',
+            name: EditorPartnerWebhookProcessor::ROTATE,
+            read: false,
+            input: false,
+            processor: EditorPartnerWebhookProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/editor/partner-applications/{id}/webhook/disable',
+            name: EditorPartnerWebhookProcessor::DISABLE,
+            read: false,
+            input: false,
+            processor: EditorPartnerWebhookProcessor::class,
+        ),
         new Post(
             uriTemplate: '/editor/partner-credentials/{id}/revoke',
             name: EditorPartnerApplicationProcessor::REVOKE,
@@ -90,4 +114,18 @@ final class EditorPartnerApplication
     public ?string $issuedSecret = null;
 
     public ?string $issuedCredentialId = null;
+
+    /**
+     * L'abonnement aux webhooks : `host`, `events`, `active`, `secretRotatedAt`, `pendingOver15Minutes`,
+     * `failedDeliveries` (échecs définitifs récents) — ou `null` s'il n'y en a pas.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $webhook = null;
+
+    /** @var list<string> le catalogue fermé des événements partenaires (`PartnerEventCatalog::EVENTS`) */
+    public array $webhookEvents = [];
+
+    /** Le secret de signature, dans la seule réponse qui le crée ou le régénère ; `null` partout ailleurs. */
+    public ?string $issuedWebhookSecret = null;
 }

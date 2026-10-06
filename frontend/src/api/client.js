@@ -3198,6 +3198,14 @@ export const api = {
     request(`/api/editor/partner-applications/${id}/credentials`, { method: 'POST', body: corps }),
   revoquerClePartenaire: (id) =>
     request(`/api/editor/partner-credentials/${id}/revoke`, { method: 'POST', body: {} }),
+  // Webhooks d'une application. Corps : { url (https), events: [noms du catalogue fermé] }. Le secret
+  // de signature n'arrive que dans la réponse qui le crée ou le régénère (`issuedWebhookSecret`).
+  configurerWebhookPartenaire: (id, corps) =>
+    request(`/api/editor/partner-applications/${id}/webhook`, { method: 'POST', body: corps }),
+  regenererSecretWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/rotate-secret`, { method: 'POST', body: {} }),
+  couperWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/disable`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :
