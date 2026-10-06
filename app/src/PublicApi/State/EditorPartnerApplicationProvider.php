@@ -10,6 +10,8 @@ use App\PublicApi\ApiResource\EditorPartnerApplication;
 use App\PublicApi\Entity\ApiCredential;
 use App\PublicApi\Entity\PartnerApplication;
 use App\PublicApi\Enum\CredentialStatus;
+use App\PublicApi\Webhook\PartnerEventCatalog;
+use App\PublicApi\Webhook\PartnerWebhookOverview;
 use App\Subscription\Security\EditorOnly;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -27,6 +29,7 @@ final class EditorPartnerApplicationProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EditorOnly $editorOnly,
+        private readonly PartnerWebhookOverview $webhooks,
     ) {
     }
 
@@ -56,6 +59,8 @@ final class EditorPartnerApplicationProvider implements ProviderInterface
         $view->contactEmail = $application->getContactEmail();
         $view->active = $application->isActive();
         $view->createdAt = $application->getCreatedAt()->format(\DATE_ATOM);
+        $view->webhook = $this->webhooks->of($application);
+        $view->webhookEvents = PartnerEventCatalog::EVENTS;
 
         /** @var list<ApiCredential> $credentials */
         $credentials = $this->em->getRepository(ApiCredential::class)->findBy(['application' => $application], ['issuedAt' => 'DESC']);
