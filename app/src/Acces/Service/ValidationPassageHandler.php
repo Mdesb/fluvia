@@ -260,7 +260,13 @@ final class ValidationPassageHandler
                     if ($affectees === 0) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée (course concurrente).');
                     }
-                    $droit->setCreditRestant(($droit->getCreditRestant() ?? 1) - 1);
+                    // RECHARGER, JAMAIS RECALCULER (même garde que `CardRechargeHandler`, CA-7). Recopier
+                    // `valeur_en_mémoire - 1` sur l'objet faisait réécrire au `flush()` final une valeur
+                    // ABSOLUE : si un autre passage avait décompté entre la lecture du droit et l'UPDATE
+                    // ci-dessus, son décompte était effacé — deux passages sur 5 laissaient 4, une
+                    // entrée gratuite. `refresh()` relit la base (nos propres écritures comprises) et
+                    // remet l'instantané Doctrine à jour : le flush n'a plus rien à écrire sur ce droit.
+                    $this->em->refresh($droit);
                     // Curseur delta snapshot (US-TERM-03/04, §1.4 du plan) : le compostagesRestants
                     // remonté au prochain snapshot doit refléter le solde réel — sur TOUS les supports
                     // du droit, pas seulement celui qu'on vient de scanner (`SnapshotVersionBumper`).
