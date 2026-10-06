@@ -116,6 +116,23 @@ final class SnapshotTerminalProvider implements ProviderInterface
         return $max !== null ? (int) $max : 0;
     }
 
+    /**
+     * Le droit ouvre-t-il cette porte ? Oui s'il ouvre l'un des espaces que son contrôleur dessert
+     * (`Controleur::espacesOuverts()`, le principal et les desservis) — exactement la boucle du
+     * contrôle en ligne. Un équipement sans contrôleur n'ouvre rien : en ligne, il est refusé
+     * comme topologie incohérente.
+     */
+    private function ouvreLaPorte(DroitAcces $droit, Equipement $equipement): bool
+    {
+        foreach ($equipement->getControleur()?->espacesOuverts() ?? [] as $desservi) {
+            if ($droit->ouvre($desservi)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @param array<string, Equipement> $equipementsPortee */
     private function projeter(Support $support, array $equipementsPortee): EntreeSnapshotDto
     {
@@ -133,6 +150,13 @@ final class SnapshotTerminalProvider implements ProviderInterface
 
         $portesEligibles = [];
         foreach ($equipementsPortee as $equipement) {
+            // Zones autorisées (D87) : MÊME règle que le contrôle en ligne (`ValidationPassageHandler`,
+            // étape des zones). Sans ce filtre, un droit limité à une zone ouvrait HORS LIGNE toutes
+            // les portes de la borne, alors que la même porte le refusait en ligne. Le format ne
+            // change pas : une porte non ouverte est simplement absente de `portesEligibles`.
+            if (!$this->ouvreLaPorte($droit, $equipement)) {
+                continue;
+            }
             if ($droit->getSousReseau() !== null) {
                 $sousReseauEspace = $equipement->getControleur()?->getEspace()?->getSousReseau();
                 if ($sousReseauEspace === null || !$sousReseauEspace->getId()->equals($droit->getSousReseau()->getId())) {

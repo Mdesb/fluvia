@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace App\Reservation\Service;
 
-use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
-use App\Acces\Entity\Support;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\TypeDroitAcces;
-use App\Acces\Service\VersionSnapshotSequencer;
+use App\Acces\Service\SnapshotVersionBumper;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -40,7 +38,7 @@ final class StockCardCreditHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
-        private readonly VersionSnapshotSequencer $sequencer,
+        private readonly SnapshotVersionBumper $bumper,
     ) {
     }
 
@@ -89,7 +87,7 @@ final class StockCardCreditHandler
 
         $this->connection->transactional(function () use ($droit, $droitId, &$debite): void {
             $affectees = (int) $this->connection->executeStatement(
-                'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1 WHERE id = UNHEX(:hex) AND credit_restant > 0',
+                'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant > 0',
                 ['hex' => bin2hex($droitId->toBinary())],
             );
             if ($affectees === 0) {
@@ -129,7 +127,7 @@ final class StockCardCreditHandler
 
         $this->connection->transactional(function () use ($droit, $droitId): void {
             $affectees = (int) $this->connection->executeStatement(
-                'UPDATE acces_droit_acces SET credit_restant = credit_restant + 1 WHERE id = UNHEX(:hex) AND credit_restant IS NOT NULL',
+                'UPDATE acces_droit_acces SET credit_restant = credit_restant + 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant IS NOT NULL',
                 ['hex' => bin2hex($droitId->toBinary())],
             );
             if ($affectees === 0) {
@@ -150,17 +148,7 @@ final class StockCardCreditHandler
      */
     private function bousculerSnapshot(DroitAcces $droit): void
     {
-        $appairage = $this->em->getRepository(Appairage::class)->findOneBy(['droit' => $droit, 'actif' => true]);
-        $support = $appairage?->getSupport();
-        if (!$support instanceof Support) {
-            return;
-        }
-
-        $version = $this->sequencer->suivant();
-        $this->connection->executeStatement(
-            'UPDATE acces_support SET version_maj = :v WHERE id = UNHEX(:hex)',
-            ['v' => $version, 'hex' => bin2hex($support->getId()->toBinary())],
-        );
-        $support->setVersionMaj($version);
+        // TOUS les supports du droit : l'ancien `findOneBy()` sans ordre en rendait un au hasard.
+        $this->bumper->bumpPairedSupports($droit->getId());
     }
 }
