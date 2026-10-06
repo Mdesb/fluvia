@@ -1137,8 +1137,8 @@ export default function ProduitFiche({
             « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
             geste correspondant : on constatait, on ne pouvait pas agir. */}
         <div className="hint">
-          Cochez les sites où ce produit se vend. <b>Sans site coché, il ne peut pas être mis
-          en vente.</b>
+          Cochez les sites où ce produit se vend. <b>Sans site coché, il ne peut pas être
+          publié.</b>
         </div>
         {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
             Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
