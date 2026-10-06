@@ -20,6 +20,7 @@ import {
   grillesVendables,
   libelleTarif,
   typeTarifId,
+  estAuGuichet,
   estVendable,
   raisonNonVendable,
   expliqueNonVendable,
@@ -123,10 +124,17 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setClient(null)
     setPmvClient(null)
     setBesoinClient(false)
-    Promise.all([api.produits(), api.moyensPaiement(), api.pointDeVentes()])
+    // ⚠ LA CAISSE NE DEMANDE QUE CE QU'ELLE PEUT VENDRE (06/10/2026). Elle affichait les brouillons
+    // et les archivés, et le serveur les vendait : les deux défauts se couvraient l'un l'autre.
+    // - statut : filtré par l'API (`statut=publie`) ;
+    // - site : déjà restreint par l'API à l'établissement actif + le socle (PerimetreProduitExtension) ;
+    // - canal : l'API n'a pas de filtre sur `canaux` (liste JSON), on écarte donc ici ce qui n'est pas
+    //   au guichet, AVANT le compte des masqués — ce n'est pas un problème de tarif.
+    // Le serveur refuse les trois cas en 422 (CounterSellability) : ce filtre ne remplace pas la garde.
+    Promise.all([api.produits({ statut: 'publie' }), api.moyensPaiement(), api.pointDeVentes()])
       .then(([pc, mc, dc]) => {
         if (annule) return
-        setProduits(membres(pc))
+        setProduits(membres(pc).filter(estAuGuichet))
         setMoyens(membres(mc).filter((m) => m.actif !== false))
         setPdvs(membres(dc))
       })
@@ -1455,7 +1463,13 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 cette liste n’a pas été obtenue. Rechargez avant d’ouvrir la caisse.
               </div>
             ) : produits.length === 0 ? (
-              <div className="empty">Aucun produit disponible.</div>
+              /* ⚠ LA CAISSE NE LIT PLUS QUE LES PRODUITS PUBLIÉS AU GUICHET : une liste vide ne veut
+                 donc pas dire « catalogue vide ». Dire où regarder, sinon le caissier conclut à une
+                 panne — ou qu'un brouillon existant n'existe pas. */
+              <div className="empty">
+                Aucun produit publié et vendu au guichet sur ce site. Un produit en brouillon, archivé
+                ou réservé à la vente en ligne ne s’affiche pas ici&nbsp;: cela se règle dans Catalogue.
+              </div>
             ) : produitsAffiches.length === 0 ? (
               /* ⚠ « AUCUN PRODUIT » ET « AUCUN PRODUIT VENDABLE » NE SE DISENT PAS PAREIL. Le
                  catalogue existe, il est lu, et rien n'y est vendable a ce comptoir : c'est un

@@ -51,6 +51,18 @@ export function typeTarifId(p) {
 // `grillesVendables` dit deja « typeTarif ET prix ». Les deux fonctions s'appuient dessus, donc
 // elles ne peuvent plus se contredire. `premiereGrille` et `prixIndicatif` gardent leur repli :
 // il sert a afficher « — » plutot que rien, et ils ont d'autres appelants.
+/**
+ * Le produit porte-t-il le canal GUICHET ?
+ *
+ * Un produit vendu seulement en ligne n'est pas « masqué faute de tarif » à la caisse : il n'y a
+ * jamais été destiné. Il sort donc de la liste AVANT le compte des masqués, pour que la caisse
+ * n'annonce pas un problème de tarif à propos d'un choix de canal. Le serveur refuse de toute façon
+ * de le vendre (`CounterSellability`, 422) ; ce filtre évite seulement la tuile qui mène au refus.
+ */
+export function estAuGuichet(p) {
+  return Array.isArray(p?.canaux) && p.canaux.includes('guichet')
+}
+
 export function estVendable(p) {
   if (grillesVendables(p).length === 0) return false
   const stock = p?.stock
