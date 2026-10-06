@@ -498,6 +498,15 @@ final class ScheduleCatalog
                 // estampiller : c'est par la que se regarde le premier passage.
                 safeOnFirstRun: false,
             ),
+            new ScheduledTask(
+                'public-api:webhooks:alerter',
+                15,
+                "Un webhook partenaire qui ne part plus ne fait aucun bruit : le worker s'est arrêté, "
+                . "l'interrupteur est resté fermé, ou l'abonné refuse tout — et le partenaire croit "
+                . "qu'il ne se passe rien.",
+                // SÛR AU PREMIER PASSAGE : elle ne fait que compter et rendre un code d'échec.
+                safeOnFirstRun: true,
+            ),
         ];
     }
 
