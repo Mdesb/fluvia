@@ -60,6 +60,8 @@ services:
       SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
       # Référence opaque des supports servie à l’API partenaire /v1. Meme regle : absente, refus de demarrer.
       PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.preprod}
+      # Coffre des webhooks partenaires (URL + secret). Meme regle : absente, refus de demarrer.
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
@@ -142,6 +144,8 @@ services:
       SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
       # Référence opaque des supports servie à l’API partenaire /v1. Meme regle : absente, refus de demarrer.
       PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.preprod}
+      # Coffre des webhooks partenaires (URL + secret). Meme regle : absente, refus de demarrer.
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
