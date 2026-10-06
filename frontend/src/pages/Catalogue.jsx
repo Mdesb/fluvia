@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useEtatUrl } from '../api/url.js'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
+import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut, CANAUX_PRODUIT } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptions from '../components/ProduitOptionsModal.jsx'
 import ProduitFiche from '../components/ProduitFiche.jsx'
@@ -35,10 +35,12 @@ const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouve
 function NouveauProduit({ types = [], onAnnule, onCree }) {
   const [libelle, setLibelle] = useState('')
   const [typeId, setTypeId] = useState('')
+  // Le guichet est coché d'office, mais visible et décochable : il était imposé sans le dire.
+  const [canaux, setCanaux] = useState(['guichet'])
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
-  const pret = libelle.trim() !== '' && typeId !== ''
+  const pret = libelle.trim() !== '' && typeId !== '' && canaux.length > 0
 
   async function creer() {
     setEnCours(true)
@@ -47,7 +49,7 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
       await onCree({
         libelle: { fr: libelle.trim() },
         type: `/api/type_produits/${typeId}`,
-        canaux: ['guichet'],
+        canaux,
       })
     } catch (e) {
       setErreur(e?.message || 'La création n’a pas abouti.')
@@ -91,6 +93,23 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
         </div>
         <span className="badge mut">Nouveau</span>
       </div>
+
+      <fieldset className="field" style={{ marginTop: 'var(--esp-normal)', border: 0, padding: 0 }}>
+        <legend>Où ce produit sera vendu *</legend>
+        <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          {CANAUX_PRODUIT.map((c) => (
+            <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={canaux.includes(c.valeur)}
+                onChange={(ev) => setCanaux((l) => (ev.target.checked ? [...l, c.valeur] : l.filter((x) => x !== c.valeur)))}
+              />
+              {c.libelle}
+            </label>
+          ))}
+        </div>
+        {canaux.length === 0 && <p className="hint">Cochez au moins un endroit où le vendre.</p>}
+      </fieldset>
 
       <div className="banner" style={{ marginTop: 'var(--esp-normal)' }}>
         Donnez-lui un nom et un type : le produit sera créé, et tout le reste de cette fiche

@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
+import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 // Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
@@ -24,12 +24,6 @@ import { confirmer } from './Confirmation.jsx'
 // options — on affiche donc immédiatement ce qu'on sait, et on complète. Une modale qui tourne une
 // seconde sur un fond vide alors qu'on avait déjà 80 % de la réponse est une seconde perdue à chaque
 // ouverture.
-
-const CANAUX_PRODUIT = [
-  { valeur: 'guichet', libelle: 'Au guichet' },
-  { valeur: 'en_ligne', libelle: 'En ligne' },
-  { valeur: 'borne', libelle: 'Sur borne' },
-]
 
 // Les trois règles de produit constaté d'avance du socle (`Offre\Enum\ReglePca`), dites en clair :
 // le code brut « etalement » ne dit pas ce qui est étalé ni pourquoi.
@@ -982,7 +976,7 @@ export default function ProduitFiche({
       <>
       <Section
         titre="Zones d'accès"
-        aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
+        aide="Les portes que ce produit ouvre aux tourniquets. Sans zone choisie, il n’ouvre aucune porte."
       >
         <ZonesAccesProduit produitId={produitId} droits={droits} />
       </Section>
@@ -1143,10 +1137,8 @@ export default function ProduitFiche({
             « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
             geste correspondant : on constatait, on ne pouvait pas agir. */}
         <div className="hint">
-          Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
-          signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
-          l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
-          se corrige.
+          Cochez les sites où ce produit se vend. <b>Sans site coché, il ne peut pas être mis
+          en vente.</b>
         </div>
         {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
             Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
@@ -1477,7 +1469,7 @@ export default function ProduitFiche({
                   </select>
                   <p className="hint">
                     {tauxTva.length > 0
-                      ? 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'
+                      ? 'Ce taux sert aux factures des échéances d’abonnement. Pour les ventes, la comptabilité prend le taux de la catégorie choisie dans « Axe comptable » (onglet Vente).'
                       : tvaRefusee
                         ? 'Les taux déclarés n’ont pas pu être lus : ce compte peut régler la comptabilité d’un produit, mais pas lire le référentiel de TVA (droit compta.lire). Il en existe peut-être — n’en déclarez pas un double ; le taux saisi ici reste enregistré.'
                         : 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'}
