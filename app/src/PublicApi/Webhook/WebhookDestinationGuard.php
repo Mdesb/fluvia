@@ -37,6 +37,16 @@ final class WebhookDestinationGuard
         }
 
         $host = strtolower(trim($parts['host'], '[]'));
+
+        // ⚠ LA SAISIE REFUSE CE QU'UN RÉSOLVEUR LIRAIT COMME UNE ADRESSE : `2130706433`, `0x7f000001`,
+        // `127.1` ou `0177.0.0.1` désignent 127.0.0.1 pour certains clients et passeraient ici pour des
+        // noms. Une forme numérique n'est admise que sous sa forme canonique ; une zone IPv6 (`%eth0`)
+        // jamais. La saisie et l'envoi jugent ainsi la même chose.
+        $numeric = 1 === preg_match('/^(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-9]+))*\.?$/i', $host);
+        if (str_contains($host, '%') || ($numeric && false === filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4))) {
+            throw new UnprocessableEntityHttpException('L’adresse du webhook doit désigner un nom d’hôte ou une adresse IP sous sa forme canonique.');
+        }
+
         if (false !== filter_var($host, \FILTER_VALIDATE_IP) && !self::isPublicIp($host)) {
             throw new UnprocessableEntityHttpException('L’adresse du webhook vise un réseau privé, local ou réservé.');
         }
@@ -78,6 +88,15 @@ final class WebhookDestinationGuard
         }
 
         if (16 === \strlen($packed)) {
+            // Plages que FILTER_FLAG_GLOBAL_RANGE laisse passer (mesuré le 06/10) et qui ne sont pas
+            // joignables publiquement : NAT64 local 64:ff9b:1::/48 (RFC 8215), site local obsolète
+            // fec0::/10, et SIIT ::ffff:0:0:0/96 (RFC 6052 §2.1) — elles désignent l'intérieur.
+            if (str_starts_with($packed, "\x00\x64\xff\x9b\x00\x01")
+                || ("\xfe" === $packed[0] && 0xC0 === (\ord($packed[1]) & 0xC0))
+                || str_starts_with($packed, str_repeat("\0", 8)."\xff\xff\x00\x00")) {
+                return false;
+            }
+
             $embedded = match (true) {
                 str_starts_with($packed, str_repeat("\0", 10)."\xff\xff") => substr($packed, 12, 4), // ::ffff:a.b.c.d
                 str_starts_with($packed, "\x00\x64\xff\x9b".str_repeat("\0", 8)) => substr($packed, 12, 4), // 64:ff9b::/96

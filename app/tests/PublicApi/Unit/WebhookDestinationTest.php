@@ -30,6 +30,9 @@ final class WebhookDestinationTest extends TestCase
         yield 'NAT64 vers une privée' => ['https://[64:ff9b::a00:1]/hook'];
         yield '6to4 vers une privée' => ['https://[2002:a00:1::1]/hook'];
         yield 'lien local IPv6' => ['https://[fe80::1]/hook'];
+        yield 'NAT64 local 64:ff9b:1::/48' => ['https://[64:ff9b:1::808:808]/hook'];
+        yield 'site local obsolète fec0::/10' => ['https://[fec0::1]/hook'];
+        yield 'SIIT ::ffff:0:0:0/96' => ['https://[::ffff:0:808:808]/hook'];
     }
 
     #[DataProvider('internalAddresses')]
@@ -52,6 +55,23 @@ final class WebhookDestinationTest extends TestCase
         }
 
         self::assertSame('93.184.216.34', $this->guard(['93.184.216.34'])->pin('https://partenaire.example/hook'), 'témoin : une adresse publique passe');
+    }
+
+    /**
+     * La SAISIE refuse ce que l'envoi refuserait : les formes numériques qu'un résolveur lit comme une
+     * adresse (`2130706433` = 127.0.0.1) et les zones IPv6. Témoin : un nom ordinaire passe.
+     */
+    public function testLaSaisieRefuseLesFormesNumeriquesEtLesZones(): void
+    {
+        foreach (['https://2130706433/hook', 'https://0x7f000001/hook', 'https://127.1/hook', 'https://0177.0.0.1/hook', 'https://[fe80::1%25eth0]/hook'] as $url) {
+            try {
+                $this->guard(['93.184.216.34'])->assertAcceptableUrl($url);
+                self::fail('Saisie acceptée : '.$url);
+            } catch (\Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException) {
+                self::addToAssertionCount(1);
+            }
+        }
+        self::assertSame('partenaire.example', $this->guard(['93.184.216.34'])->assertAcceptableUrl('https://partenaire.example/hook'));
     }
 
     public function testSeulHttpsSansIdentifiantsEstAccepte(): void
