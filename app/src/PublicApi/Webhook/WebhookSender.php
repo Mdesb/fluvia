@@ -41,16 +41,36 @@ final class WebhookSender
             return ['ok' => false, 'error' => 'Destination refusée : '.$e->getMessage()];
         }
 
+        $host = (string) parse_url($url, \PHP_URL_HOST);
         try {
-            $response = $this->http->request('POST', $url, self::options((string) parse_url($url, \PHP_URL_HOST), $ip, $secret, $body, $eventId, time()));
+            $response = $this->http->request('POST', $url, self::options($host, $ip, $secret, $body, $eventId, time()));
             $status = $response->getStatusCode();
         } catch (\Throwable $e) {
-            return ['ok' => false, 'error' => 'Injoignable : '.$e->getMessage()];
+            return ['ok' => false, 'error' => sprintf('Injoignable (%s) — hôte %s.', self::classify($e), $host)];
         }
 
         return $status >= 200 && $status < 300
             ? ['ok' => true, 'error' => null]
             : ['ok' => false, 'error' => sprintf('Réponse HTTP %d%s.', $status, $status >= 300 && $status < 400 ? ' (redirection non suivie)' : '')];
+    }
+
+    /**
+     * ⚠ LA CLASSE DE L'ERREUR, JAMAIS SON MESSAGE. Les exceptions de transport du client HTTP contiennent
+     * l'URL COMPLÈTE (« Idle timeout reached for "https://…?token=…" ») : recopiée, elle finissait en base,
+     * dans la fiche éditeur, dans le journal du worker et dans l'ErrorDetailsStamp de Messenger. On ne garde
+     * qu'une catégorie, et l'hôte.
+     */
+    public static function classify(\Throwable $e): string
+    {
+        $text = strtolower($e->getMessage());
+
+        return match (true) {
+            str_contains($text, 'timeout') || str_contains($text, 'timed out') => 'délai dépassé',
+            str_contains($text, 'resolve') => 'résolution DNS',
+            str_contains($text, 'ssl') || str_contains($text, 'tls') || str_contains($text, 'certificate') => 'TLS',
+            str_contains($text, 'refused') || str_contains($text, 'connect') => 'connexion refusée',
+            default => 'erreur de transport',
+        };
     }
 
     public static function signature(string $secret, int $timestamp, string $body): string

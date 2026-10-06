@@ -210,7 +210,12 @@ set -eu
 #                                     sur 24 h : code d'echec, donc « ECHEC » dans ce journal et dans
 #                                     `--status`. SURE AU PREMIER PASSAGE : elle ne fait que LIRE.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation public-api:webhooks:alerter"
+# public-api:webhooks:requeue        Remet en file les livraisons « pending » qu'aucun message ne porte
+#                                     depuis 30 min (mise en file perdue, reessais Messenger epuises).
+#                                     SURE AU PREMIER PASSAGE : le handler revérifie interrupteur et
+#                                     consentement ; le partenaire deduplique par Idempotency-Key.
+#
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation public-api:webhooks:alerter public-api:webhooks:requeue"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 

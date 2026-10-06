@@ -28,6 +28,11 @@ use Symfony\Component\Uid\Uuid;
  * `ForwardDomainEvents` : un événement est souvent publié au milieu de la transaction de l'émetteur, et
  * un `flush()` ici écrirait ses changements à moitié faits. Une panne ici ne casse jamais l'émetteur :
  * elle est journalisée.
+ *
+ * ⚠ **CHAQUE ÉVÉNEMENT EST ISOLÉ** : une enveloppe qui ne se compose pas (donnée invalide) ne fait pas
+ * perdre les événements des autres établissements. Et une livraison écrite dont la mise en file échoue
+ * (ou dont le processus meurt entre les deux) reste `pending` sans date de mise en file :
+ * `public-api:webhooks:requeue` la reprend.
  */
 final class PartnerWebhookFanOut implements EventSubscriberInterface
 {
@@ -69,30 +74,55 @@ final class PartnerWebhookFanOut implements EventSubscriberInterface
         try {
             /** @var list<PartnerWebhookSubscription> $subscriptions */
             $subscriptions = $this->em->getRepository(PartnerWebhookSubscription::class)->findBy(['active' => true]);
-            $created = [];
-            foreach ($events as $event) {
-                $establishment = $this->em->find(Etablissement::class, $event->tenant->establishmentId);
-                if (!$establishment instanceof Etablissement) {
-                    continue;
-                }
-                $eventId = Uuid::v7();
-                foreach ($subscriptions as $subscription) {
-                    if (!$subscription->listensTo($event->name->value) || !$this->consent->allows($subscription, $establishment)) {
-                        continue;
-                    }
-                    $delivery = new PartnerWebhookDelivery($subscription, $establishment, $eventId, $event->name->value, $this->envelope($event, $eventId, $subscription));
-                    $this->em->persist($delivery);
-                    $created[] = $delivery;
-                }
-            }
-            $this->em->flush();
-
-            foreach ($created as $delivery) {
-                $this->bus->dispatch(new DeliverPartnerWebhook((string) $delivery->getId()));
-            }
         } catch (\Throwable $e) {
             $this->logger->error('public_api.webhook.fan_out_failed', ['exception' => $e]);
+
+            return;
         }
+
+        foreach ($events as $event) {
+            try {
+                $this->fanOut($event, $subscriptions);
+            } catch (\Throwable $e) {
+                // Le nom de l'événement et son établissement, pas sa charge : elle n'a rien à faire au journal.
+                $this->logger->error('public_api.webhook.fan_out_failed', [
+                    'event' => $event->name->value,
+                    'establishment' => $event->tenant->establishmentId->toRfc4122(),
+                    'error' => $e::class,
+                ]);
+            }
+        }
+    }
+
+    /** @param list<PartnerWebhookSubscription> $subscriptions */
+    private function fanOut(DomainEvent $event, array $subscriptions): void
+    {
+        $establishment = $this->em->find(Etablissement::class, $event->tenant->establishmentId);
+        if (!$establishment instanceof Etablissement) {
+            return;
+        }
+
+        // Toutes les enveloppes de l'événement d'abord : si l'une ne se compose pas, rien n'est écrit pour lui.
+        $eventId = Uuid::v7();
+        $created = [];
+        foreach ($subscriptions as $subscription) {
+            if ($subscription->listensTo($event->name->value) && $this->consent->allows($subscription, $establishment)) {
+                $created[] = new PartnerWebhookDelivery($subscription, $establishment, $eventId, $event->name->value, $this->envelope($event, $eventId, $subscription));
+            }
+        }
+        if ([] === $created) {
+            return;
+        }
+        foreach ($created as $delivery) {
+            $this->em->persist($delivery);
+        }
+        $this->em->flush();
+
+        foreach ($created as $delivery) {
+            $this->bus->dispatch(new DeliverPartnerWebhook((string) $delivery->getId()));
+            $delivery->markQueued();
+        }
+        $this->em->flush();
     }
 
     private function envelope(DomainEvent $event, Uuid $eventId, PartnerWebhookSubscription $subscription): string

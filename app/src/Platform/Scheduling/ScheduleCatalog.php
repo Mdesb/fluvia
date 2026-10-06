@@ -507,6 +507,16 @@ final class ScheduleCatalog
                 // SÛR AU PREMIER PASSAGE : elle ne fait que compter et rendre un code d'échec.
                 safeOnFirstRun: true,
             ),
+            new ScheduledTask(
+                'public-api:webhooks:requeue',
+                15,
+                "Une livraison de webhook écrite mais jamais mise en file (processus mort, file "
+                . "indisponible, réessais Messenger épuisés) reste « en attente » pour toujours : le "
+                . "partenaire ne la reçoit jamais.",
+                // SÛR AU PREMIER PASSAGE : elle ne fait que remettre en file ce qui attend ; le handler
+                // revérifie l'interrupteur et le consentement, et le partenaire déduplique par id.
+                safeOnFirstRun: true,
+            ),
         ];
     }
 

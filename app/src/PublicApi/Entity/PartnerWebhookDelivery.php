@@ -60,6 +60,13 @@ class PartnerWebhookDelivery
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * La dernière fois qu'un message a été mis (ou remis) en file pour cette livraison. `null` = jamais :
+     * l'écriture a réussi, la mise en file non. `public-api:webhooks:requeue` reprend ce qui dort.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $queuedAt = null;
+
     public function __construct(PartnerWebhookSubscription $subscription, Etablissement $etablissement, Uuid $eventId, string $eventType, string $body)
     {
         $this->id = Uuid::v7();
@@ -124,6 +131,16 @@ class PartnerWebhookDelivery
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getQueuedAt(): ?\DateTimeImmutable
+    {
+        return $this->queuedAt;
+    }
+
+    public function markQueued(): void
+    {
+        $this->queuedAt = new \DateTimeImmutable();
     }
 
     /** Une tentative de plus, et ce qu'elle a donné. */

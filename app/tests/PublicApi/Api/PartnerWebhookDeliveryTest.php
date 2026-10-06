@@ -172,6 +172,106 @@ final class PartnerWebhookDeliveryTest extends PublicApiTestCase
         }
     }
 
+    /**
+     * ⚠ LE JETON DE L'URL NE FUIT NULLE PART. Un VRAI échec de transport (client curl réel, port fermé)
+     * vers une URL qui porte `?token=` : le jeton n'apparaît ni en base, ni dans la fiche éditeur, ni
+     * dans le message de l'exception que Messenger journalise.
+     */
+    public function testLeJetonDeLUrlNeFuitPasDansLesErreurs(): void
+    {
+        ['id' => $app] = $this->subscribed([SocleFixtures::ETAB_A_NOM => ['events:subscribe']], 'https://partenaire.example:9/hook?token=SECRET-TOKEN-42');
+        $this->publish('booking.no_show', SocleFixtures::ETAB_A_NOM, ['amountAtRisk' => '0.00']);
+        $delivery = $this->deliveries()[0];
+        // Dernière tentative : l'échec devient définitif et remonte dans la fiche éditeur.
+        $this->em()->getConnection()->executeStatement('UPDATE public_api_webhook_delivery SET attempts = :n', ['n' => DeliverPartnerWebhookHandler::MAX_ATTEMPTS - 1]);
+        $this->em()->clear();
+
+        $message = '';
+        try {
+            $this->handler(true, real: true)(new DeliverPartnerWebhook((string) $delivery->getId()));
+        } catch (\Throwable $e) {
+            $message = $e->getMessage();
+        }
+
+        $stored = (string) $this->reload($delivery)->getLastError();
+        self::assertNotSame('', $stored, 'sinon l’absence ci-dessous ne prouverait rien');
+        self::assertStringNotContainsString('SECRET-TOKEN-42', $stored, 'en base');
+        self::assertStringNotContainsString('SECRET-TOKEN-42', $message, 'dans l’exception');
+        [$client, $headers] = $this->admin();
+        $raw = $client->request('GET', '/api/editor/partner-applications', $headers)->getContent();
+        self::assertStringContainsString('"attempts":6', $raw, 'l’échec définitif est bien dans la fiche — sinon l’absence ne prouverait rien');
+        self::assertStringNotContainsString('SECRET-TOKEN-42', $raw, 'dans la fiche éditeur');
+        self::assertNotNull($app);
+    }
+
+    /** Une erreur AVANT l'envoi compte quand même la tentative (sinon la livraison réessaie sans fin, muette). */
+    public function testUneErreurAvantLEnvoiCompteLaTentative(): void
+    {
+        $this->subscribed([SocleFixtures::ETAB_A_NOM => ['events:subscribe']]);
+        $this->publish('booking.no_show', SocleFixtures::ETAB_A_NOM, ['amountAtRisk' => '0.00']);
+        $delivery = $this->deliveries()[0];
+
+        try {
+            $this->handler(true, brokenCipher: true)(new DeliverPartnerWebhook((string) $delivery->getId()));
+            self::fail('Le coffre illisible aurait dû lever.');
+        } catch (\Throwable) {
+        }
+        $reloaded = $this->reload($delivery);
+        self::assertSame(1, $reloaded->getAttempts());
+        self::assertNotNull($reloaded->getLastError());
+    }
+
+    /** Un événement qui casse ne fait pas perdre ceux des autres établissements. */
+    public function testUnEvenementEnErreurNeFaitPasPerdreLesAutres(): void
+    {
+        $this->subscribed([SocleFixtures::ETAB_A_NOM => ['events:subscribe'], SocleFixtures::ETAB_B_NOM => ['events:subscribe']]);
+        $fanOut = static::getContainer()->get(PartnerWebhookFanOut::class);
+        // UTF-8 invalide : l'enveloppe de cet événement ne se sérialise pas.
+        $fanOut->collect($this->event('booking.cancelled', SocleFixtures::ETAB_A_NOM, ['slotId' => "\xB1\x31"]));
+        $fanOut->collect($this->event('booking.cancelled', SocleFixtures::ETAB_B_NOM, ['slotId' => 'creneau-b']));
+        $fanOut->flush();
+
+        $types = array_map(static fn (PartnerWebhookDelivery $d): string => (string) $d->getEtablissement()->getId(), $this->deliveries());
+        self::assertSame([$this->idEtablissement(SocleFixtures::ETAB_B_NOM)], $types, 'l’événement de B est livré malgré celui de A');
+    }
+
+    /** Interrupteur fermé depuis plus de 24 h : la livraison expire au lieu de tourner sans fin. */
+    public function testInterrupteurFermeUneLivraisonDePlusDe24HeuresExpire(): void
+    {
+        $this->subscribed([SocleFixtures::ETAB_A_NOM => ['events:subscribe']]);
+        $this->publish('booking.no_show', SocleFixtures::ETAB_A_NOM, ['amountAtRisk' => '0.00']);
+        $delivery = $this->deliveries()[0];
+        $this->em()->getConnection()->executeStatement('UPDATE public_api_webhook_delivery SET created_at = :old', ['old' => (new \DateTimeImmutable('-25 hours'))->format('Y-m-d H:i:s')]);
+        $this->em()->clear();
+
+        $this->handler(false)(new DeliverPartnerWebhook((string) $delivery->getId()));
+
+        self::assertCount(0, $this->requeued, 'plus remise en file');
+        $reloaded = $this->reload($delivery);
+        self::assertSame(DeliveryStatus::Abandoned, $reloaded->getStatus());
+        self::assertStringContainsString('expirée', (string) $reloaded->getLastError());
+    }
+
+    /** Une livraison `pending` sans message en file (mise en file perdue) est remise en file par la relance. */
+    public function testLaRelanceRemetEnFileUneLivraisonOubliee(): void
+    {
+        $this->subscribed([SocleFixtures::ETAB_A_NOM => ['events:subscribe']]);
+        $this->publish('booking.no_show', SocleFixtures::ETAB_A_NOM, ['amountAtRisk' => '0.00']);
+        $delivery = $this->deliveries()[0];
+        $transport = static::getContainer()->get('messenger.transport.async');
+        $transport->reset();
+        $this->em()->getConnection()->executeStatement('UPDATE public_api_webhook_delivery SET created_at = :old, queued_at = NULL', ['old' => (new \DateTimeImmutable('-2 hours'))->format('Y-m-d H:i:s')]);
+
+        $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('public-api:webhooks:requeue'));
+        self::assertSame(0, $tester->execute([]));
+
+        $sent = $transport->getSent();
+        self::assertCount(1, $sent);
+        self::assertSame((string) $delivery->getId(), $sent[0]->getMessage()->deliveryId);
+        self::assertSame(0, (new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('public-api:webhooks:requeue')))->execute([]), 'témoin');
+        self::assertCount(1, $transport->getSent(), 'remise en file une fois, pas à chaque passage');
+    }
+
     // ---------------------------------------------------------------- montage
 
     /**
@@ -181,12 +281,12 @@ final class PartnerWebhookDeliveryTest extends PublicApiTestCase
      *
      * @return array{id: string, secret: string}
      */
-    private function subscribed(array $grants): array
+    private function subscribed(array $grants, string $url = self::URL): array
     {
         $application = $this->createApplication();
         [$client, $headers] = $this->admin();
         $secret = $client->request('POST', '/api/editor/partner-applications/'.$application['id'].'/webhook', $headers + [
-            'json' => ['url' => self::URL, 'events' => ['access.card_recharged', 'booking.cancelled', 'booking.no_show', 'payment.failed', 'payment.succeeded']],
+            'json' => ['url' => $url, 'events' => ['access.card_recharged', 'booking.cancelled', 'booking.no_show', 'payment.failed', 'payment.succeeded']],
         ])->toArray()['issuedWebhookSecret'];
         foreach ($grants as $establishment => $scopes) {
             [$client, $headers] = $this->admin($establishment);
@@ -204,13 +304,19 @@ final class PartnerWebhookDeliveryTest extends PublicApiTestCase
         // (Smart Flow, notifications…) le traiteraient aussi, avec des références inventées. Le
         // branchement sur le bus est prouvé à part (`testLeCollecteurEstBrancheSurLeBus`).
         $fanOut = static::getContainer()->get(PartnerWebhookFanOut::class);
-        $fanOut->collect(new DomainEvent(
+        $fanOut->collect($this->event($name, $establishment, $payload));
+        $fanOut->flush();
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function event(string $name, string $establishment, array $payload): DomainEvent
+    {
+        return new DomainEvent(
             $name,
             new EventTenant(Uuid::fromString($this->idEtablissement($establishment))),
             new EventSubject('Reservation', (string) Uuid::v4()),
             $payload,
-        ));
-        $fanOut->flush();
+        );
     }
 
     /** @return list<PartnerWebhookDelivery> */
@@ -229,10 +335,10 @@ final class PartnerWebhookDeliveryTest extends PublicApiTestCase
     }
 
     /** Le handler réel, avec un client HTTP simulé et un bus espion (pour voir la remise en file). */
-    private function handler(bool $enabled): DeliverPartnerWebhookHandler
+    private function handler(bool $enabled, bool $real = false, bool $brokenCipher = false): DeliverPartnerWebhookHandler
     {
         $container = static::getContainer();
-        $http = new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
+        $http = $real ? \Symfony\Component\HttpClient\HttpClient::create() : new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
             $this->sent[] = ['body' => $options['body'], 'headers' => $options['headers']];
 
             return new MockResponse('', ['http_code' => $this->status]);
@@ -255,8 +361,13 @@ final class PartnerWebhookDeliveryTest extends PublicApiTestCase
         return new DeliverPartnerWebhookHandler(
             $this->em(),
             $container->get(PartnerConsent::class),
-            $container->get(PartnerWebhookCipher::class),
-            new WebhookSender($http, $container->get(WebhookDestinationGuard::class)),
+            $brokenCipher ? new PartnerWebhookCipher('A_GENERER_PAR_LE_DEPLOIEMENT', 'prod') : $container->get(PartnerWebhookCipher::class),
+            new WebhookSender($http, $real ? new WebhookDestinationGuard(new class implements \App\PublicApi\Webhook\HostResolver {
+                public function resolve(string $host): array
+                {
+                    return ['93.184.216.34'];
+                }
+            }) : $container->get(WebhookDestinationGuard::class)),
             $bus,
             $enabled,
         );

@@ -216,6 +216,10 @@ log "Contenus du site (blocs editables)"
 
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug
+# Le worker des webhooks partenaires garde l'ANCIEN code en memoire tant qu'il tourne : on lui demande
+# de s'arreter apres son message en cours (signal partage par le cache de `var/`, volume commun), et
+# `restart: always` le relance sur le nouveau code. Sans worker demarre, la commande ne fait rien.
+"${COMPOSE[@]}" exec -T php php bin/console messenger:stop-workers --env=prod --no-debug
 "${COMPOSE[@]}" exec -T php php bin/console cache:warmup --env=prod --no-debug
 
 # Composer et cache:warmup tournent en root dans le conteneur, alors que les
