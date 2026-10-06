@@ -39,13 +39,48 @@ final class AjoutLigneHandler
         // l estimation a les reecrire, et deux implementations des memes regles ne divergent pas au
         // moment ou on les ecrit : elles divergent au premier correctif applique a une seule des deux.
         private readonly PriceQuoter $tarif,
+        private readonly CounterSellability $sellability,
     ) {
     }
 
     /**
+     * Caisse en ligne : un produit que cette caisse ne peut pas vendre (non publié, hors canal
+     * guichet, hors du site de la vente) est refusé en 422, avant toute écriture.
+     *
      * @param array<string, mixed> $donnees
      */
     public function ajouter(Vente $vente, array $donnees, bool $autoriseForcage): LigneVente
+    {
+        return $this->composerLigne($vente, $donnees, $autoriseForcage, false)[0];
+    }
+
+    /**
+     * Synchro hors ligne : la vente a DÉJÀ eu lieu et l'argent est dans le tiroir. Un produit devenu
+     * invendable (brouillon, archivé, retiré du guichet depuis que le catalogue local a été lu) ne la
+     * fait donc pas refuser — un refus l'enverrait en quarantaine, que rien ne persiste : la recette
+     * disparaîtrait des comptes alors qu'elle est dans la caisse. La ligne est composée, et le motif
+     * est rendu pour que l'appelant trace l'écart.
+     *
+     * ⚠ SAUF LE SITE. Un produit d'un autre site n'a jamais pu être dans le catalogue local de cette
+     * caisse (l'API ne lui sert que son site et le socle) : l'accepter ferait seulement écrire, sur un
+     * ticket de ce site, le libellé et le prix d'un autre catalogue. Celui-là reste refusé.
+     * Toutes les autres gardes (prix, stock, bénéficiaire, options) restent bloquantes, comme avant.
+     *
+     * @param array<string, mixed> $donnees
+     *
+     * @return array{0: LigneVente, 1: string|null} la ligne, et le motif d'invendabilité éventuel
+     */
+    public function replayOfflineLine(Vente $vente, array $donnees): array
+    {
+        return $this->composerLigne($vente, $donnees, false, true);
+    }
+
+    /**
+     * @param array<string, mixed> $donnees
+     *
+     * @return array{0: LigneVente, 1: string|null}
+     */
+    private function composerLigne(Vente $vente, array $donnees, bool $autoriseForcage, bool $venteDejaEncaissee): array
     {
         if ($vente->estScellee()) {
             throw new ConflictHttpException('Vente validée : le panier est figé (NF525).');
@@ -53,6 +88,18 @@ final class AjoutLigneHandler
 
         $produit = $this->resoudre(Produit::class, $donnees['produit'] ?? null, 'produit');
         \assert($produit instanceof Produit);
+
+        // Sur le site de la vente (D92 : aucun site = socle), publié, au guichet. Le `find()` ci-dessus
+        // ne regarde rien de tout ça : c'est ici que la caisse refuse ce qu'elle ne doit pas vendre.
+        // Le site est une frontière de cloisonnement : refusé AUSSI en synchro hors ligne.
+        $horsSite = $this->sellability->siteRefusal($produit, $vente->getEtablissement());
+        if ($horsSite !== null) {
+            throw new UnprocessableEntityHttpException($horsSite);
+        }
+        $invendable = $this->sellability->offerRefusal($produit);
+        if ($invendable !== null && !$venteDejaEncaissee) {
+            throw new UnprocessableEntityHttpException($invendable);
+        }
         $typeTarif = $this->resoudre(TypeTarif::class, $donnees['typeTarif'] ?? null, 'typeTarif');
         \assert($typeTarif instanceof TypeTarif);
 
@@ -124,7 +171,7 @@ final class AjoutLigneHandler
         $this->calculateur->recalculerLigne($ligne);
         $this->calculateur->recalculerVente($vente);
 
-        return $ligne;
+        return [$ligne, $invendable];
     }
 
     private function estNominatif(Produit $produit): bool

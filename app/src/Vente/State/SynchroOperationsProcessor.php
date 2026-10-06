@@ -6,6 +6,7 @@ namespace App\Vente\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Audit\Service\JournalAudit;
 use App\Caisse\Entity\SessionCaisse;
 use App\Vente\Entity\Vente;
 use App\Vente\Nf525\ScellementHandler;
@@ -48,6 +49,7 @@ final class SynchroOperationsProcessor implements ProcessorInterface
         private readonly ScellementHandler $scellement,
         private readonly SignataireOperation $signataire,
         private readonly ContexteEtablissement $contexte,
+        private readonly JournalAudit $journal,
     ) {
     }
 
@@ -79,6 +81,9 @@ final class SynchroOperationsProcessor implements ProcessorInterface
         $inseres = [];
         $doublons = [];
         $quarantaine = [];
+        // Ventes ENREGISTRÉES malgré un produit que la caisse n'aurait pas dû vendre : rendues ici et
+        // tracées au journal d'audit, pour qu'un responsable les voie sans que la recette se perde.
+        $anomalies = [];
 
         foreach ($operations as $op) {
             $cle = $this->uuid($op['cleIdempotence'] ?? null);
@@ -92,9 +97,12 @@ final class SynchroOperationsProcessor implements ProcessorInterface
             }
 
             try {
-                $vente = $this->composer($session, $cle, $op);
+                [$vente, $ecarts] = $this->composer($session, $cle, $op);
                 $this->em->flush();
                 $inseres[] = (string) $vente->getId();
+                foreach ($ecarts as $ecart) {
+                    $anomalies[] = ['cle' => (string) $cle, 'vente' => (string) $vente->getId(), 'raison' => $ecart];
+                }
             } catch (\Throwable $e) {
                 $this->em->clear();
                 $session = $this->resoudreSession((string) $session->getId());
@@ -108,13 +116,16 @@ final class SynchroOperationsProcessor implements ProcessorInterface
             'inseres' => $inseres,
             'doublons' => $doublons,
             'quarantaine' => $quarantaine,
+            'anomalies' => $anomalies,
         ], JsonResponse::HTTP_OK);
     }
 
     /**
      * @param array<string, mixed> $op
+     *
+     * @return array{0: Vente, 1: list<string>} la vente, et les motifs d'invendabilité tracés
      */
-    private function composer(SessionCaisse $session, Uuid $cle, array $op): Vente
+    private function composer(SessionCaisse $session, Uuid $cle, array $op): array
     {
         $vente = new Vente();
         if (($id = $this->uuid($op['id'] ?? null)) !== null) {
@@ -127,9 +138,15 @@ final class SynchroOperationsProcessor implements ProcessorInterface
             ->setOrigineHorsLigne(true);
         $this->em->persist($vente);
 
+        // La vente a déjà eu lieu : un produit devenu invendable ne la fait pas refuser (voir
+        // `AjoutLigneHandler::replayOfflineLine`). L'écart est tracé plus bas, dans le même flush.
+        $ecarts = [];
         foreach ($op['lignes'] ?? [] as $ligne) {
             if (\is_array($ligne)) {
-                $this->ajout->ajouter($vente, $ligne, false);
+                [, $ecart] = $this->ajout->replayOfflineLine($vente, $ligne);
+                if ($ecart !== null) {
+                    $ecarts[] = $ecart;
+                }
             }
         }
         foreach ($op['paiements'] ?? [] as $paiement) {
@@ -140,7 +157,14 @@ final class SynchroOperationsProcessor implements ProcessorInterface
 
         $this->valider->valider($vente);
 
-        return $vente;
+        // Tracé APRÈS la validation : une vente qui échoue part en quarantaine, et `clear()` emporte
+        // alors l'entrée avec elle — on ne trace pas l'écart d'une vente qui n'existe pas.
+        foreach ($ecarts as $ecart) {
+            $this->journal->enregistrer('vente.hors_ligne.produit_non_vendable', 'Vente', (string) $vente->getId(), $vente->getEtablissement()?->getId())
+                ->setValeurApres(['raison' => $ecart, 'cleIdempotence' => (string) $cle]);
+        }
+
+        return [$vente, $ecarts];
     }
 
     /**

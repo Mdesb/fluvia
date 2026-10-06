@@ -65,8 +65,9 @@ final class DernierPrixDUnProduitPublieTest extends OffreApiTestCase
     }
 
     /**
-     * Les fixtures ne publient rien — un produit publiable n'est pas un produit publié. On pose donc
-     * le statut par l'ORM : ce qu'on éprouve ici est la SECONDE porte, pas la première.
+     * Pose le statut publié par l'ORM : ce qu'on éprouve ici est la SECONDE porte, pas la première.
+     * Les fixtures publient ces produits depuis le 06/10/2026 ; l'appel reste, pour que le test ne
+     * dépende pas de l'état de départ des fixtures.
      */
     private function publier(string $libelleRecherche): Produit
     {
@@ -205,6 +206,8 @@ final class DernierPrixDUnProduitPublieTest extends OffreApiTestCase
     public function testViderLeSeulPrixDUnBrouillonEstPermis(): void
     {
         [$client, $token, $idA] = $this->adminSurA();
+
+        $this->remettreEnBrouillon(OffreFixtures::PRODUIT_CARTE);
 
         /** @var Produit $carte */
         $carte = $this->entite(Produit::class, ['libelleRecherche' => OffreFixtures::PRODUIT_CARTE]);
