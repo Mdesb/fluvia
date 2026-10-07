@@ -1,6 +1,6 @@
 # Spec — ticket-opposable
 
-**Statut :** en revue — **CP-1 en attente de Maxime** (10 questions, §Questions CP-1) <!-- brouillon → en revue → validée (CP-1) -->
+**Statut :** **validée (CP-1) — Maxime, 07/10/2026** (§CP-1), Q-C4 comprise <!-- brouillon → en revue → validée (CP-1) -->
 **Auteur :** session de maintenance du 07/10 (Claude) ; contradiction par un agent séparé, qui n'a pas écrit la spec
 **Date :** 2026-10-07
 **Origine :** reprise propre de #50 (`feat/caisse-materiel`) et #59 (`feat/caisse-ticket-route`), décision de Maxime du 07/10 (QCM) : fermer les deux PR, repartir de `main`, reprendre leurs commits avec des migrations renumérotées, en cycle SDD complet. Inventaire morceau par morceau : `features/ticket-opposable/refs/inventaire-pr50-pr59.md`.
@@ -43,7 +43,7 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 - `Vente::$date` est l'ouverture de la vente (`Vente.php:267`) ; c'est elle qui est scellée (`ValiderVenteService.php:412`). PHP tourne en UTC et les dates sont stockées en UTC : la dernière vente validée en préprod est du 20/09 à 23:02 UTC, soit **le 21/09 à 01:02 à Paris**. `Etablissement::$fuseauHoraire` existe (déjà lu par la clôture journalière).
 - L'identité du vendeur existe : `ProfilExploitant` porte raison sociale, SIREN, SIRET, n° de TVA intracommunautaire, adresse (`app/src/Compta/Entity/ProfilExploitant.php:78-148`). `Etablissement` ne porte pas de langue.
 - Outillage présent : `dompdf/dompdf` ^3.1 (`app/composer.json:16`), `App\Platform\Pdf\PoliceDeclaree`. nginx route `/api` vers le serveur (`billetterie-preprod.conf:135`). L'authentification passe par les en-têtes `Authorization: Bearer` et `X-Etablissement` (`client.js:222-227`). `PerimetreVenteExtension` ne filtre que les fournisseurs API Platform et laisse passer un utilisateur qui n'est pas un `Utilisateur` (l.115-118) — `PartnerUser` et `TerminalUtilisateur` existent.
-- Un avoir ne porte qu'un montant (`app/src/Vente/Entity/Avoir.php`) ; l'annulation passe la vente en `annulee`, le remboursement (partiel possible) en `avoir_emis` (`ContrePassationHandler.php:39-73`). L'annulation n'invalide les billets émis que si `imprime` est vrai (l.44-50) ; le remboursement ne les invalide jamais.
+- Un avoir ne porte qu'un montant (`app/src/Vente/Entity/Avoir.php`) ; l'annulation passe la vente en `annulee`, le remboursement (partiel possible) en `avoir_emis` (`ContrePassationHandler.php:39-73`). L'annulation n'invalide les billets émis que si `imprime` est vrai (l.44-50) ; le remboursement ne les invalide jamais. `rembourser()` (l.58-67) crée un `Avoir` à **montant libre**, sans lignes ni taux, et `RegimeBase::genererEcritureExtourne()` (l.198-216) **contre-passe l'écriture entière**, quel que soit le montant remboursé.
 
 ### F-4 — Les migrations de #50 ne peuvent pas partir telles quelles
 
@@ -63,6 +63,27 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 - **D44-bis** : une vente directe n'a ni session, ni espèces, ni impression automatique.
 - **U-1 (08/09)** : le taux des **échéances d'abonnement** est celui du produit, et on refuse plutôt que d'inventer.
 
+## CP-1 — validé par Maxime le 07/10/2026
+
+Réponses de Maxime au QCM, telles quelles. Les variantes écartées sont retirées de la spec ; elles restent lisibles dans l'historique de la PR #275. Ces décisions seront consignées dans `COORDINATION/DECISIONS.md` après ce lot de numéros (D111 à D121 en cours d'écriture par d'autres).
+
+| Question | Décision | Effet sur la spec |
+|---|---|---|
+| **Q-A1** — timeout du terminal | **Bloquer et faire constater** : le règlement ne repart pas au terminal tant que le caissier n'a pas déclaré « accepté » (avec la référence du ticket CB, tracé) ou « non passé » | G-6 |
+| **Q-A2** — synchronisation hors-ligne | **Lot dédié**, avant le premier poste hors-ligne ; ce lot ne change pas son comportement | Hors périmètre |
+| **Q-B1** — source du taux | **La catégorie comptable**, correspondance valide, **gravée sur la ligne** ; la contradiction échéances ↔ ventes est tranchée à part | G-7 |
+| **Q-B2** — concordance | **Ticket = écritures** : TVA extraite du TTC ligne par ligne, puis sommée par taux ; la facture justificative est corrigée dans un **lot Facturation** à part | G-8 |
+| **Q-B3** — ligne sans taux | **Refus à la création de la ligne, avant paiement**, partout où l'on peut refuser ; « ventilation incomplète » seulement pour l'historique et le hors-ligne déjà vendu | G-9 |
+| **Q-B4** — empreinte NF525 | **La ventilation TVA entre dans l'empreinte** de la vente dès ce lot | G-10 |
+| **Q-C1** — trace des éditions | **Journal des éditions scellé à part**, avec son propre stockage et sa propre chaîne | G-14 |
+| **Q-C2** — identité du vendeur | **Figée à la validation**, dans le contenu scellé | G-12 |
+| **Q-C3** — impression à la validation | **Une impression ne compte que si une imprimante la confirme** ; d'ici le lot ESC/POS, à la demande seulement | G-14 |
+| Règle du duplicata (**révisée**) | Le duplicata reproduit **exactement l'original scellé**, avec « DUPLICATA n° k — édité le … » (exigence 9 du référentiel LNE), et **aucune** mention d'avoir ni de correction : l'avoir vit dans ses propres données et son propre justificatif. Remplace la règle « mentions sous le document d'origine » | G-17 |
+| Règle — code d'accès | **Gardée** : le ticket PDF n'en porte aucun | G-12 |
+| **Q-C4** — avoir | **Justificatif d'avoir complet, dans ce lot**, tranché après recherche aux sources officielles : (1) **enregistrement juste** — un remboursement devient des lignes négatives avec leur taux, réparties puis **figées à la saisie** ; (2) **vente facturée** — la caisse refuse et renvoie vers l'avoir `AVF` ; (3) **justificatif d'avoir** — série distincte, référence de la vente d'origine, lignes, HT/TVA/TTC par taux, remis à la demande ou par e-mail, réimpression en DUPLICATA au journal des éditions | G-19, G-20, G-21 |
+
+**Sources de Q-C4 et de la règle révisée** (citées par Maxime) : BOFiP BOI-TVA-DECLA-30-10-30 §50 et §90 ; référentiel LNE rév. 1.8, exigences 3, 4 et 9 ; CGI art. 272, 289 et annexe II art. 242 nonies A ; BOI-TVA-DECLA-30-20-20-20 §220-260 ; code de l'environnement D541-370 à D541-372 (impression non systématique). Décisions du dépôt qui s'appliquent : D45, RG-M2-07, RG-FACT-05, RG-M6-05, RG-M6-07/08.
+
 ## Objectifs (Goals)
 
 ### A — Le règlement ne s'encaisse qu'une fois
@@ -70,41 +91,63 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 - **G-1** — Un règlement porte une **clé d'idempotence**, **unique sur toute la table** (comme l'`id`, qui vaut clé). Rejouer une clé déjà enregistrée sur la même vente rend le règlement existant **sans solliciter ni le TPE ni le PMV**, y compris quand la vente a été validée entre-temps (réponse « déjà enregistré », pas un 409 « encaissement clos »). Une clé déjà enregistrée sur **une autre vente** est refusée **avant tout débit**. Chaque appelant fournit sa clé :
   - les deux écrans (`Caisse.jsx`, `SouscriptionAbonnement.jsx`) : G-2 ;
   - `DebitPmvStrategie` : une clé tirée de la **facturation de no-show**, jamais de la vente qu'il ouvre ;
-  - la synchronisation hors-ligne : selon **Q-A2**.
+  - la synchronisation hors-ligne : **inchangée** dans ce lot (Q-A2 → lot dédié) ; elle continue d'appeler `encaisser()` sans clé, et les nouvelles gardes ne doivent pas casser ce chemin.
 - **G-2** — Un écran génère une clé **par intention de règlement** (un moyen, un montant) et la garde **jusqu'à une issue définitive** : tout réessai, tout nouveau clic sur « Régler » pendant l'attente, tout rechargement de la page réemploie la clé en attente (ou l'écran relit les tentatives de la vente à son retour). Le coupe-circuit ne dit plus « réessayez » : il dit que le résultat est inconnu et rejoue avec la **même** clé.
 - **G-3** — Deux demandes simultanées sur une même vente (double clic, deux onglets, réessai pendant l'attente du TPE) sont **sérialisées par une tentative unique « en cours » par vente** (contrainte d'unicité et statut), pas par un verrou de base tenu pendant l'appel au terminal : la seconde reçoit « en cours » et rejoue plus tard. Jamais deux sollicitations du TPE ou du PMV pour une même clé ; la somme encaissée ne dépasse jamais le dû, hors rendu espèces.
 - **G-4** — Même clé, contenu différent (moyen ou montant) : **refus explicite**, aucun effet.
 - **G-5** — Ce qui déplace l'argent et ce qui l'écrit forment **une seule unité** : débit PMV et `Paiement` ; pour `DebitPmvStrategie`, débit, `Paiement`, validation de la vente et statut de la facturation de no-show, sérialisés sur cette facturation. Aucun `flush()` intermédiaire dans l'unité de l'appelant ; les événements (dont le refus de carte de PAY-3) partent **après le commit** (D7-bis).
-- **G-6** — La **tentative** vers le terminal est écrite (et validée en base) **avant** l'appel, avec sa clé : si le processus meurt pendant l'attente, un rejeu sait qu'une demande est partie sans issue connue. Après un **timeout** — ou une tentative sans issue — : comportement tranché en **Q-A1**.
+- **G-6** — La **tentative** vers le terminal est écrite (et validée en base) **avant** l'appel, avec sa clé : si le processus meurt pendant l'attente, un rejeu sait qu'une demande est partie sans issue connue. Après un **timeout** — ou une tentative sans issue — le même règlement **ne repart pas au terminal** (Q-A1) tant que le caissier n'a pas déclaré ce qu'affiche le terminal :
+  - « **accepté** » : il saisit la référence du ticket CB ; le règlement est créé avec cette référence ; la déclaration est tracée (qui, quand, quelle tentative) ;
+  - « **non passé** » : la tentative est close, un nouvel envoi est permis.
 
 ### B — La TVA est juste, une fois pour toutes
 
-- **G-7** — Chaque ligne **grave à sa création** le taux appliqué — sa **valeur**, sa catégorie EN 16931 et son libellé, pas seulement une clé vers `TauxTva` (F-2) — depuis la source tranchée en **Q-B1**, résolue par `MappingComptable::estValide()` au moment de la création. Gravé par `LineLabelStamper` (le même mécanisme que le libellé) ; jamais relu ensuite. Seul le **taux** est gravé : le compte de produit reste lu à la génération des écritures.
-- **G-8** — La ventilation (par taux : base HT, TVA, TTC) sort d'**un seul calcul** (D63-bis), partagé par le ticket et les écritures de vente : sur une même vente, **ticket = écritures, au centime**. Les écritures lisent le taux gravé ; sans taux gravé (ventes antérieures), elles gardent leur lecture actuelle (D66-ter). La facture justificative : selon **Q-B2**.
-- **G-9** — Une ligne sans taux résolu n'est **jamais** rangée à 0 % en silence ; conduite tranchée en **Q-B3**. Le refus vient du **créateur de la ligne**, avant tout mouvement d'argent — pas de l'écouteur, qui ne fait que graver :
+- **G-7** — Chaque ligne **grave à sa création** le taux appliqué — sa **valeur**, sa catégorie EN 16931 et son libellé, pas seulement une clé vers `TauxTva` (F-2) — depuis la **correspondance comptable de la catégorie du produit** (Q-B1), exigée valide (`MappingComptable::estValide()`) au moment de la création. `Produit::$tauxTva` n'est pas lu. Gravé par `LineLabelStamper` (le même mécanisme que le libellé) ; jamais relu ensuite. Seul le **taux** est gravé : le compte de produit reste lu à la génération des écritures.
+- **G-8** — La ventilation (par taux : base HT, TVA, TTC) sort d'**un seul calcul** (D63-bis), partagé par le ticket et les écritures de vente : TVA extraite du TTC **ligne par ligne**, puis **sommée par taux** (Q-B2). Sur une même vente, **ticket = écritures, au centime**. Les écritures lisent le taux gravé ; sans taux gravé (ventes antérieures), elles gardent leur lecture actuelle (D66-ter). La facture justificative n'est pas touchée : elle sera corrigée dans un lot Facturation à part.
+- **G-9** — Une ligne sans taux résolu n'est **jamais** rangée à 0 % en silence. Elle est **refusée à sa création, avant tout paiement**, partout où l'on peut refuser (Q-B3) ; « ventilation incomplète » n'apparaît que pour l'historique et pour une vente hors-ligne déjà faite. Le refus vient du **créateur de la ligne** — pas de l'écouteur, qui ne fait que graver :
   - caisse (`AjoutLigneHandler`) : à l'ajout au panier ;
   - réservation et no-show (`VenteReservationHandler`, `DebitPmvStrategie`) : avant le débit, comme le no-show refuse déjà un créneau sans produit (`DebitPmvStrategie.php:56`) ;
   - boutique (`ConfirmerCommandeHandler`) : à la création de la ligne (l.175), avant la confirmation du paiement (l.213) ;
-  - abonnement en ligne (`SouscriptionAbonnementEnLigneHandler:169`) : point de refus à établir au plan ;
+  - abonnement en ligne (`SouscriptionAbonnementEnLigneHandler::souscrire()`, l.83) : en tête, avant le mandat (l.152) et le règlement (l.177) ;
   - synchronisation hors-ligne : la vente a déjà eu lieu, la ligne est gravée « sans taux » et le ticket le dit.
-- **G-10** — Scellement de la ventilation (et, selon Q-C2, du vendeur) dans l'empreinte NF525 de la vente : tranché en **Q-B4**. Si oui, `DocumentTicket` **confronte** ce qu'il imprime au payload scellé et signale tout écart (une ligne altérée en SQL donne un duplicata en anomalie).
+- **G-10** — La ventilation (par ligne, le taux ; par taux, base HT, TVA, TTC) et l'identité du vendeur (G-12) **entrent dans le payload scellé** de la vente dès ce lot (Q-B4, Q-C2). `DocumentTicket` **confronte** ce qu'il imprime au payload scellé et signale tout écart (une ligne altérée en SQL donne un duplicata en anomalie).
 
 ### C — Le ticket est complet, compté et fidèle
 
 - **G-11** — **Un seul document** (`DocumentTicket`) lu par la réponse JSON et par le PDF ; son extraction de `TicketProcessor` est prouvée par l'égalité de la sortie (filet de #50).
-- **G-12** — Rendu **PDF 80 mm**, sans troncature quel que soit le contenu (libellés longs, nombreuses lignes), portant : identité du vendeur (**Q-C2**), site, n° de ticket, **`Vente::$date`** dans le **fuseau de l'établissement** (jamais l'horodatage du scellement), lignes (libellé gravé, quantité, prix unitaire, remise, montant), total TTC, ventilation TVA, moyens de paiement et rendu, mention d'édition (**Q-C1**). **Jamais** « logiciel certifié NF525 » — nous ne le sommes pas, un test l'interdit. **Jamais de code d'accès** : le billet reste un document distinct, et un duplicata ne doit pas devenir un second billet. Libellé en français, à défaut la seule traduction disponible.
+- **G-12** — Rendu **PDF 80 mm**, sans troncature quel que soit le contenu (libellés longs, nombreuses lignes), portant : identité du vendeur — l'exploitant (raison sociale, adresse, SIRET, n° de TVA intracommunautaire) et le nom du site, **figés à la validation** dans le contenu scellé (Q-C2) —, n° de ticket, **`Vente::$date`** dans le **fuseau de l'établissement** (jamais l'horodatage du scellement), lignes (libellé gravé, quantité, prix unitaire, remise, montant), total TTC, ventilation TVA, moyens de paiement et rendu, mention d'édition (G-14). **Jamais** « logiciel certifié NF525 » — nous ne le sommes pas, un test l'interdit. **Jamais de code d'accès** : le billet reste un document distinct, et un duplicata ne doit pas devenir un second billet. Libellé en français, à défaut la seule traduction disponible.
 - **G-13** — **Pas de ticket pour une vente non validée** : refus, quel que soit le canal (JSON, PDF, impression).
-- **G-14** — **Toute émission est comptée et tracée** selon **Q-C1** : la première est l'original, les suivantes portent « DUPLICATA n° k » et la date de la réédition. La mention se déduit **du nombre d'éditions comptées**, plus de `imprime`.
-  - **Émettre, c'est produire le papier** (le PDF, demain l'imprimante). L'affichage du ticket à l'écran après la validation (`POST /ticket`, `Caisse.jsx:943`) est une consultation : il ne compte pas.
+- **G-14** — **Toute émission est comptée et tracée** dans un **journal des éditions scellé à part** (Q-C1) : son propre stockage (pas `nf525_operation_scellee`), sa propre chaîne d'empreintes par point de vente, même algorithme que la chaîne des ventes, un numéro d'édition unique par vente. La première émission est l'original, les suivantes portent « DUPLICATA n° k » et la date de la réédition. La mention se déduit **du nombre d'éditions comptées**, plus de `imprime`.
+  - **Émettre, c'est produire le papier** : aujourd'hui le PDF demandé. La validation **ne compte aucune édition** tant qu'aucune imprimante ne confirme l'impression (Q-C3) ; d'ici le lot ESC/POS, le ticket est **à la demande seulement**. L'affichage du ticket à l'écran après la validation (`POST /ticket`, `Caisse.jsx:943`) est une consultation : il ne compte pas.
   - La route du PDF est une **écriture** (`POST`), jamais un `GET` qu'un rafraîchissement ou un préchargement rejouerait.
-  - `imprime` garde son seul rôle et ses points de pose actuels — dire à l'annulation qu'il faut invalider les billets (F-3) — ; toute émission le pose aussi, rien ne le retire, et Q-C3 ne change pas ce que l'annulation lit.
+  - `imprime` garde son seul rôle et ses points de pose actuels — dire à l'annulation qu'il faut invalider les billets (F-3) — ; toute émission le pose aussi, rien ne le retire, et la règle Q-C3 ne change pas ce que l'annulation lit.
+  - Le seuil d'impression (CA-11) ne déclenche plus une impression réputée faite : au-dessus du seuil, l'écran **propose** d'imprimer.
 - **G-15** — Route sous `/api` (nginx), droit `vente.lire` comme `POST /ventes/{id}/ticket`. Cloisonnement par le même fournisseur que `/ventes/{id}/ticket`, ou par un contrôle explicite vente ↔ établissement actif ; un utilisateur qui n'est pas un `Utilisateur` (jeton partenaire, terminal d'accès) n'obtient rien. Hors périmètre : **404**, jamais 403. L'écran récupère le PDF par un appel authentifié par en-têtes, **jamais un jeton dans l'URL**.
 - **G-16** — Écran : « Imprimer le ticket » (aujourd'hui `window.print()`, `Caisse.jsx:2056`) et « Réimprimer » de l'historique (aujourd'hui `POST /ticket` en mode `duplicata`, `Caisse.jsx:1144`) passent par le **PDF serveur compté**.
-- **G-17** — Une vente annulée ou remboursée reste réimprimable (le document a existé) ; le duplicata porte, **sous** le document d'origine, les événements postérieurs — « ANNULÉE — avoir n° X du JJ/MM/AAAA », « REMBOURSÉE — avoir n° X, montant », « RÈGLEMENT CORRIGÉ le … (D45) » — sans jamais les fondre dans le document d'origine.
+- **G-17 (révisé)** — Le duplicata reproduit **exactement l'original scellé** — mêmes lignes, mêmes totaux, même ventilation, même vendeur — avec la seule mention « DUPLICATA n° k — édité le … ». **Aucune** mention d'avoir ni de correction de règlement ne s'y ajoute. Une vente annulée ou remboursée reste réimprimable : son duplicata est l'original.
+
+### C-bis — L'avoir est juste, et il a son justificatif
+
+- **G-19 — Enregistrement juste.** Un avoir (annulation ou remboursement) porte des **lignes négatives**, chacune avec son **taux gravé**, repris des lignes de la vente d'origine. Un montant global est **réparti puis figé à la saisie** :
+  - quand il vise des lignes, au **taux de chaque ligne** visée ;
+  - quand c'est un geste global, **au prorata des bases par taux** de la vente d'origine ;
+  - jamais au-delà de ce qui reste remboursable, par ligne et au total ;
+  - rien n'est recalculé ensuite (même règle que G-7).
+  Les lignes et leur ventilation **entrent dans le payload scellé** de l'avoir (même patron que G-10). L'annulation produit toutes les lignes en négatif. Les écritures en dérivent : **`RegimeBase::genererEcritureExtourne()` contre-passe ce que l'avoir porte**, et non plus l'écriture entière ; même calcul ligne par ligne que G-8.
+- **G-20 — Vente facturée.** La caisse **refuse** de rembourser ou d'annuler une vente qui a donné lieu à une facture, et dit où aller : l'avoir de facture `AVF` (RG-FACT-05, CGI 272-1 et 289 I-5). Refus avant tout effet (aucun avoir, aucun recrédit de porte-monnaie).
+- **G-21 — Justificatif d'avoir.** Un document propre à l'avoir, de **série distincte**, qui porte :
+  - la référence de la vente d'origine (numéro et date) ;
+  - les lignes remboursées ;
+  - HT, TVA et TTC par taux ;
+  - le vendeur figé de la vente d'origine ;
+  - la mention de certification — **voir le point bloquant ci-dessous**.
+  Le justificatif est remis **à la demande** ou **par e-mail**, jamais imprimé d'office (loi AGEC). Chaque émission passe au **journal des éditions** (G-14) ; une réimpression porte « DUPLICATA n° k — édité le … ». Pas de code d'accès. Même route et mêmes contrôles que le ticket (G-13, G-15).
+  - ⚠ **Point bloquant pour l'étape du justificatif — à trancher par Maxime :** la « mention de certification » contredit G-12 (« jamais « logiciel certifié NF525 » — nous ne le sommes pas »). Quelle mention exacte pour un logiciel non certifié ?
+  - ⚠ **Envoi par e-mail :** un expéditeur existe (Symfony Mailer, patron `Boutique/Notification/ConfirmationCommandeMailer.php`), mais `app/.env` porte `MAILER_DSN=null://null` et le prestataire reste à désigner (D82). Règle D94 : un canal non raccordé **refuse**, il n'annonce jamais un succès. Transport réel de la préprod : **UNVERIFIED**.
 
 ### D — Le portage
 
-- **G-18** — Les migrations sont **renumérotées** après la dernière de `main` (`Version20261006105004` au 07/10), écrites à la main, `BINARY(16)` pour les uuid ; `Version20260908094500` (#47) n'est pas touchée. Leur nombre se compte d'après les objectifs, pas d'après #50 : clé du règlement, tentatives (G-6), taux gravé et ses attributs (G-7), journal des éditions (Q-C1).
+- **G-18** — Les migrations sont **renumérotées** après la dernière de `main` (`Version20261006105004` au 07/10), écrites à la main, `BINARY(16)` pour les uuid ; `Version20260908094500` (#47) n'est pas touchée. Leur nombre se compte d'après les objectifs, pas d'après #50 : clé du règlement, tentatives (G-6), taux gravé et ses attributs (G-7), journal des éditions (Q-C1), lignes d'avoir et leur taux gravé (G-19).
 
 ## Cas limites
 
@@ -120,21 +163,27 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 | Clé déjà enregistrée sur une autre vente | refus avant tout débit | G-1 |
 | No-show facturé deux fois (deux agents, ou relance après un échec de validation) | un seul débit : clé de la facturation, unité unique, sérialisée | G-1, G-5 |
 | Refus TPE puis nouvel essai | aucun argent n'a bougé : nouvel envoi au terminal permis | G-1 |
-| Timeout TPE puis nouvel essai | selon Q-A1 | G-6 |
+| Timeout TPE (ou tentative sans issue) puis nouvel essai | pas de nouvel envoi au terminal tant que le caissier n'a pas déclaré « accepté » (référence CB) ou « non passé » | G-6 |
 | PMV débité, écriture du règlement en échec | tout est annulé, PMV compris | G-5 |
 | Rejeu après validation de la vente | « déjà enregistré », pas de 409 | G-1 |
-| Synchronisation hors-ligne rejouée | selon Q-A2 | — |
+| Synchronisation hors-ligne rejouée | inchangée dans ce lot (lot dédié, Q-A2) ; les nouvelles gardes ne la cassent pas | G-1 |
 | Taux légal modifié après la vente | le duplicata garde le taux gravé | G-7 |
 | `TauxTva` corrigé par `PATCH` après la vente | idem : la valeur est gravée, pas la clé | G-7 |
 | Correspondance comptable changée entre la vente et la génération des écritures | les écritures lisent le taux gravé : ticket = comptes | G-8 |
-| Catégorie sans correspondance valide | selon Q-B3, refus par le créateur de la ligne, **avant** tout règlement | G-9 |
-| Ligne de vente altérée en SQL après la vente | duplicata signalé en anomalie (si Q-B4-A) | G-10 |
+| Catégorie sans correspondance valide | refus par le créateur de la ligne, **avant** tout règlement | G-9 |
+| Ligne de vente altérée en SQL après la vente | duplicata signalé en anomalie | G-10 |
 | Vente en cours (non validée) | aucun ticket, quel que soit le canal | G-13 |
 | Vente validée par l'écran, puis « Imprimer » | **original** : l'affichage ne comptait pas | G-14 |
 | Vente directe (D44-bis) | pas d'impression automatique ; la première émission est l'original | G-14 |
 | Vente gratuite | règle existante (`TicketPrintingPolicy`) inchangée | — |
-| Vente annulée / remboursée partiellement | duplicata avec la mention de l'avoir | G-17 |
-| Correction de règlement (D45) | duplicata d'origine + mention datée de la correction | G-17 |
+| Vente annulée / remboursée partiellement | duplicata = l'original exact ; l'avoir a son propre justificatif | G-17, G-21 |
+| Correction de règlement (D45) | duplicata = l'original exact, sans mention | G-17 |
+| Remboursement d'un montant global sur une vente à deux taux | réparti au prorata des bases par taux, figé à la saisie, lignes négatives gravées | G-19 |
+| Remboursement visant une ligne | au taux de cette ligne ; jamais plus que ce qui reste remboursable | G-19 |
+| Remboursement partiel puis génération des écritures | l'extourne porte ce que porte l'avoir, pas l'écriture entière | G-19 |
+| Vente qui a donné lieu à une facture | la caisse refuse l'annulation et le remboursement, renvoie vers l'avoir `AVF` | G-20 |
+| Justificatif d'avoir demandé deux fois | original, puis DUPLICATA n° 2 au journal des éditions | G-21 |
+| Envoi par e-mail avec un transport non raccordé | refus explicite, jamais « envoyé » (D94) | G-21 |
 | Vente ouverte à 23:30 UTC | date et jour du fuseau de l'établissement | G-12 |
 | Libellé de 120 caractères, 40 lignes | aucune troncature | G-12 |
 | Utilisateur d'un autre établissement, jeton partenaire, jeton de terminal | 404 | G-15 |
@@ -145,11 +194,12 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 - **Adaptateur TPE réel** (interroger le sort d'une transaction) : lot prestataire.
 - ⚠ **`TpeMock` est câblé pour tous les environnements** (`services.yaml:138`, avant `when@test` l.429) : l'en-tête `X-Tpe-Simule` permet à n'importe quel appelant de forcer « accepté ». À fermer avant tout usage réel — lot TPE, signalé.
 - **Renvoi du ticket par e-mail/SMS** : aucun expéditeur n'existe (`TicketProcessor`, mode `renvoyer` refusé).
-- **Justificatif d'avoir imprimable** et ventilation TVA d'un remboursement partiel : selon Q-C4.
+- **Synchronisation hors-ligne** : lot dédié, avant le premier poste hors-ligne (Q-A2) ; ses défauts mesurés (terminal re-sollicité, débit PMV sans trace, vente jamais scellée) y sont listés en C-4 et C-11.
+- **Facture justificative** : concordance au centime avec la vente et avec le ticket dans un **lot Facturation** à part (Q-B2), validateur Factur-X à l'appui.
 - **Invalidation des billets à l'annulation et au remboursement** : elle dépend d'`imprime` et le remboursement ne la fait jamais (`ContrePassationHandler.php:44-76`) ; ce lot n'y touche pas (G-14), à traiter avec le lot annulation (#93).
 - « Imprimer le billet » (`Caisse.jsx:1958`, `window.print()`) : le billet n'est pas le ticket.
 - `Etablissement::$langue` (périmètre Organisation) : français par défaut d'ici là.
-- Réconciliation des taux **échéances ↔ ventes** pour un même produit (U-1) : signalée en Q-B1, arbitrage séparé.
+- Réconciliation des taux **échéances ↔ ventes** pour un même produit (U-1) : arbitrage séparé (Q-B1).
 - Reprise des ventes historiques : aucun taux rétroactif (D66-ter) ; leurs duplicatas disent « TVA non ventilée — vente antérieure au JJ/MM/AAAA ».
 - Paiement en ligne (boutique, PSP) : il ne passe pas par `PaiementHandler`.
 - `CardDebitFallback` (bascule carte → prélèvement) : non branché ; noté pour son lot qu'un **timeout n'est pas un refus**.
@@ -160,10 +210,11 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 
 ## Parcours utilisateur / UX
 
-1. **Régler** — inchangé pour le caissier : moyen, montant, « Régler ». Si le serveur tarde, l'écran affiche « Paiement en cours de vérification » et relance seul avec la même clé ; « Régler » reste lié à ce paiement en attente ; il ne dit plus « réessayez ». Même chose sur l'écran de souscription. Après un timeout du terminal : selon Q-A1.
-2. **Ticket** — à la validation, l'écran affiche le ticket (consultation, non comptée). « Imprimer le ticket » ouvre le PDF 80 mm : c'est l'original (selon Q-C3).
+1. **Régler** — inchangé pour le caissier : moyen, montant, « Régler ». Si le serveur tarde, l'écran affiche « Paiement en cours de vérification » et relance seul avec la même clé ; « Régler » reste lié à ce paiement en attente ; il ne dit plus « réessayez ». Même chose sur l'écran de souscription. Après un timeout du terminal, l'écran demande ce qu'affiche le terminal : « accepté » (saisie de la référence du ticket CB) ou « non passé » (nouvel envoi permis).
+2. **Ticket** — à la validation, l'écran affiche le ticket (consultation, non comptée). « Imprimer le ticket » ouvre le PDF 80 mm : c'est l'original. Au-dessus du seuil, l'écran propose d'imprimer ; rien n'est réputé imprimé.
 3. **Réimprimer** — depuis l'historique des ventes : « Réimprimer » produit le PDF ; le papier porte DUPLICATA, son numéro et la date du jour.
-4. **Erreurs** — produit sans TVA réglée (Q-B3) : refusé **à l'ajout au panier**, avec le geste qui répare (« réglez la TVA de la catégorie X dans Compta › Correspondances ») ; vente non validée : « le ticket existe une fois la vente validée ».
+4. **Rembourser** — le caissier choisit les lignes remboursées, ou saisit un montant global que l'écran montre réparti par taux avant de valider ; une vente facturée est refusée avec le renvoi vers l'avoir de facture `AVF`. Le justificatif d'avoir s'imprime à la demande (PDF) ou part par e-mail.
+5. **Erreurs** — produit sans TVA réglée : refusé **à l'ajout au panier**, avec le geste qui répare (« réglez la TVA de la catégorie X dans Compta › Correspondances ») ; vente non validée : « le ticket existe une fois la vente validée ».
 
 ## Contraintes & décisions techniques connues
 
@@ -173,7 +224,7 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
   - `Paiement` est append-only (`InalterabiliteListener`) : la clé se pose à la création, jamais après.
   - Une édition comptée est un enregistrement **ajouté**, jamais une écriture sur la vente scellée. Elle ne change aucun total de clôture (ils se calculent sur les ventes, `DailyClosureHandler.php:181-187`).
   - `CHAMPS_VENTE_FIGES` est une **liste noire** (`InalterabiliteListener.php:33-45`) : tout champ absent reste modifiable sur une vente scellée. Toute nouvelle colonne fiscale de `Vente` (instantané vendeur, ventilation) y entre, avec un test.
-  - Le journal des éditions (Q-C1-B) a **son propre stockage**, pas `nf525_operation_scellee` : `ScellementHandler::dernierMaillon()` et `chaine()` ne filtrent que par point de vente (l.37-66), les éditions s'intercaleraient dans la chaîne des ventes. Même algorithme (`HashChainSignataire`), unicité (vente, n° d'édition), entité déclarée append-only dans `InalterabiliteListener::estAppendOnly()` et cloisonnée dans `PerimetreVenteExtension::CHEMINS` (liste blanche).
+  - Le journal des éditions (Q-C1) a **son propre stockage**, pas `nf525_operation_scellee` : `ScellementHandler::dernierMaillon()` et `chaine()` ne filtrent que par point de vente (l.37-66), les éditions s'intercaleraient dans la chaîne des ventes. Même algorithme (`HashChainSignataire`), unicité (vente, n° d'édition), entité déclarée append-only dans `InalterabiliteListener::estAppendOnly()` et cloisonnée dans `PerimetreVenteExtension::CHEMINS` (liste blanche).
 - **Un seul calcul** (D63-bis) : la ventilation vit dans un service partagé ; les écritures l'appellent, elles ne la recopient pas.
 - **Route** : sous `/api` (sinon le repli SPA de nginx sert du HTML avec un 200 ; les tests ne traversent pas nginx — preuve par un appel réel après déploiement).
 - **D5** : identifiants anglais dans les fichiers ajoutés.
@@ -181,113 +232,14 @@ Faits **VERIFIED**, mesurés le 07/10 sur `origin/main` (`4462a2d8`) et sur la b
 
 ## Points UNVERIFIED
 
-**Bloquants pour CP-1** — ce sont les 10 questions ci-dessous. Quatre reposent sur des affirmations que le dépôt ne permet pas de vérifier et que seul Maxime tranche :
+**CP-1** : levés par les réponses de Maxime du 07/10, Q-C4 comprise. Les points de droit qu'il a tranchés (numéro d'édition d'un duplicata, ventilation dans les données signées, impression systématique et loi AGEC, avoir) le sont **par décision**, appuyée sur les sources qu'il cite (§CP-1), pas par une lecture des textes faite ici.
 
-- [ ] La norme NF525 exige-t-elle un **numéro d'édition** sur un duplicata et sa **trace** ? Affirmé par l'auteur de #50/#59, non vérifiable dans le dépôt (le cahier, lui, exige « duplicata tracés »). → Q-C1.
-- [ ] Les données signées d'un ticket doivent-elles porter la **ventilation par taux** ? Non vérifiable dans le dépôt. → Q-B4.
-- [ ] L'interdiction d'imprimer systématiquement les tickets (loi AGEC) s'applique-t-elle à l'impression automatique au-dessus du seuil (CA-11) ? → Q-C3.
-- [ ] Une facture EN 16931 / Factur-X peut-elle être pilotée par le TTC (HT déduit) sans enfreindre ses règles de calcul ? `infra/valider-facturx.sh` existe, rien n'a été mesuré. → Q-B2.
+**Bloquants pour le plan (CP-2)** :
 
-**Non bloquants pour CP-1, bloquants pour le plan (CP-2)** :
-
-- [ ] `bin/verifier-derive-schema.sh` rend-il de nouveau un verdict ? #50 le disait mort sur une limite mémoire ; le script n'a pas changé depuis le 01/09. À mesurer avant d'écrire les migrations ; à défaut, preuve par exécution du SQL sur une copie de la sauvegarde, comme #270.
-- [ ] Point de refus d'une ligne sans taux dans `SouscriptionAbonnementEnLigneHandler` (G-9).
-
-## Questions CP-1 pour Maxime
-
-Une réponse par question. Les recommandations sont argumentées par les mesures ci-dessus.
-
-### Objet A — Le règlement
-
-**Q-A1. Après un timeout du terminal, que se passe-t-il si le caissier relance le même règlement ?**
-Un timeout n'est pas un refus : le terminal a pu accepter pendant qu'on cessait d'attendre. La clé ne protège rien ici, puisqu'aucun `Paiement` n'est écrit (CA-10).
-
-- **A — Bloquer et faire constater.** Le même règlement ne repart pas au terminal tant que le caissier n'a pas dit ce que le terminal affiche : « accepté » (il saisit la référence du ticket CB, le règlement est créé et tracé : qui, quand) ou « non passé » (nouvel envoi permis). *Conséquence : jamais de double débit ; un geste de plus, sur un cas rare ; une déclaration « accepté » fausse se voit au rapprochement bancaire, et elle est signée.*
-- **B — Renvoyer au terminal** (état de #50). *Conséquence : zéro geste ; double débit possible dès qu'un vrai TPE sera branché.*
-- **C — Reporter au lot TPE réel**, dont l'adaptateur saura interroger la transaction. *Conséquence : rien à faire maintenant (seul `TpeMock` existe) ; le trou s'ouvre le jour du branchement si ce lot l'oublie.*
-
-**Recommandation : A.** Le coût est minime aujourd'hui (aucun terminal réel) et le trou ne s'ouvre jamais.
-
-**Q-A2. La synchronisation hors-ligne entre-t-elle dans ce lot ?**
-Mesuré : elle rappelle `encaisser()` comme un paiement neuf, donc **re-sollicite le TPE** pour une carte déjà passée hors ligne ; ses opérations ne portent pas d'identifiant de règlement ; et un refus ou une validation en échec peut laisser un porte-monnaie débité sans trace, ou une vente réelle jamais scellée. Aucun poste hors-ligne n'existe aujourd'hui (le front n'a pas de mode hors-ligne) : le défaut est latent.
-
-- **A — Non, lot dédié** avant le premier poste hors-ligne (issue à ouvrir) ; ce lot ne change rien à son comportement. *Conséquence : périmètre tenu ; la synchro reste fausse tant qu'elle n'a pas de client.*
-- **B — Oui, en entier** : un règlement synchronisé est un **fait** (le TPE n'est jamais sollicité, sa référence vient de l'opération), clé = (opération, rang du règlement), débit PMV + règlement + validation en une unité, doublon = vente **validée** seulement, remontées sérialisées. *Conséquence : la synchro devient sûre ; le lot grossit nettement.*
-- **C — Le minimum** : en synchro, le TPE n'est jamais sollicité et la clé est (opération, rang) ; le reste en lot dédié. *Conséquence : le pire (double carte) est fermé ; les autres défauts attendent.*
-
-**Recommandation : A.** Le défaut n'a pas de client aujourd'hui ; le corriger à moitié donnerait l'impression qu'il est traité.
-
-### Objet B — La TVA
-
-**Q-B1. Quelle est la source du taux de TVA d'une ligne de vente ?**
-
-- **A — La catégorie comptable** (correspondance M6 valide), gravée sur la ligne. C'est ce que font déjà les écritures et la facture justificative, et ce que dit la fiche produit depuis #270. *Conséquence : ticket = comptes ; 13 produits sur 21 couverts en préprod ; `Produit::$tauxTva` reste aux seules échéances (U-1) — pour les 2 produits mesurés, une formule vendue au comptoir dirait 20 % et ses échéances 10 %.*
-- **B — Le taux du produit** (étendre U-1 aux ventes, choix de #50). *Conséquence : écritures et facture justificative changent de source (lot élargi à Compta et Facturation) ; 19 produits sur 21 sans taux, donc refus ou défaut ; les 2 produits renseignés passent de 20 % à 10 % en comptabilité.*
-- **C — Un résolveur unique pour tout** (ventes, écritures, factures, échéances) : le produit s'il porte un taux, sinon la catégorie ; et la fiche produit refuse un taux qui contredit sa catégorie. *Conséquence : une seule règle partout ; les 2 produits doivent être corrigés avant de se vendre ; lot élargi à Offre, Compta et Facturation.*
-
-**Recommandation : A pour ce lot**, et la contradiction échéances ↔ ventes (2 produits mesurés) en arbitrage séparé. A garde la **règle** des comptes et ne change que ce qu'ils **lisent** : le taux gravé sur la ligne au lieu de la correspondance du jour (G-8) ; B et C changent la règle elle-même, dans un lot de caisse.
-
-**Q-B2. Sur une même vente, ticket, écritures et facture justificative doivent-ils concorder au centime — et qui cède ?**
-Mesuré : les écritures extraient la TVA du TTC ligne par ligne ; la facture justificative recalcule à l'endroit (HT × taux) et peut s'écarter d'un centime de la vente (1,15 € à 10 % → 1,16 € facturés). Ce défaut existe déjà sur `main`.
-
-- **A — Ticket = écritures dans ce lot** (TVA extraite du TTC ligne par ligne, sommée par taux) ; la facture justificative est corrigée dans un **lot Facturation dédié**, validateur Factur-X à l'appui. *Conséquence : le ticket est juste tout de suite ; d'ici le lot Facturation, la facture d'un ticket peut différer d'un centime, comme aujourd'hui.*
-- **B — Ticket = écritures = facture dans ce lot** : la facture justificative passe au pilotage par le TTC (HT déduit). *Conséquence : concordance totale ; lot élargi à Facturation, et conformité EN 16931 / Factur-X à re-prouver (UNVERIFIED).*
-- **C — Arrondi par taux sur le total TTC** (choix de #50). *Conséquence : la ventilation du ticket s'écarte d'un centime des écritures ; la facture reste à part.*
-
-**Recommandation : A.** Le ticket ne doit jamais contredire les comptes ; la facture a son propre modèle et son propre contrôle de conformité, elle mérite son lot.
-
-**Q-B3. Une ligne dont la catégorie n'a pas de correspondance valide (pas de taux) : que fait-on ?**
-
-- **A — Refuser à la création de la ligne**, avant tout règlement, avec le geste qui répare. *Conséquence : jamais un ticket sans TVA pour une vente neuve ; en préprod, 2 produits sur 15 deviennent invendables jusqu'à la correspondance.*
-- **B — Vendre, et le ticket imprime « VENTILATION INCOMPLÈTE »** (choix de #50). *Conséquence : aucune vente bloquée ; un ticket qui ne justifie pas la TVA, des écritures en anomalie, et la facture justificative qui dit 0 % pour la même vente.*
-- **C — Vendre au taux par défaut de l'exploitant**, gravé et signalé. *Conséquence : aucune vente bloquée ; un taux que personne n'a choisi pour ce produit, sur un document opposable.*
-
-**Recommandation : A** partout où l'on peut refuser (caisse, réservation, no-show, boutique) — B seulement pour ce qui ne peut pas refuser (vente hors-ligne déjà faite, ventes historiques). Refuser *après* paiement est exclu dans tous les cas.
-
-**Q-B4. La ventilation TVA entre-t-elle dans l'empreinte NF525 de la vente ?**
-
-- **A — Oui, à partir de ce lot** : le payload scellé ajoute, par ligne, le taux, et par taux, base HT, TVA et TTC ; le ticket confronte ce qu'il imprime au payload scellé. *Conséquence : un duplicata se prouve contre la chaîne, et une altération en base se voit ; les opérations anciennes restent vérifiables (l'empreinte se recalcule sur le payload stocké) ; le format du payload change à une date connue.*
-- **B — Non** : la TVA reste hors de la chaîne Vente (elle est scellée côté M6, dans les écritures). *Conséquence : rien ne change dans la chaîne ; un ticket dont la TVA serait altérée en base ne romprait aucune empreinte de vente.*
-
-**Recommandation : A.** C'est additif, sans effet sur l'existant, et c'est ce qui rend la TVA du ticket opposable plutôt que simplement affichée.
-
-### Objet C — Le ticket
-
-**Q-C1. Comment trace-t-on les éditions d'un ticket ?**
-
-Le papier porte, dans tous les cas sauf D, « DUPLICATA n° k — édité le … ».
-
-- **A — Une opération scellée dans la chaîne des ventes** du point de vente. *Conséquence : trace inaltérable ; mais une réimpression dispute le numéro de séquence à une validation de vente au même instant — l'unicité `uniq_op_pdv_sequence` (`OperationScellee.php:28`) fait échouer le perdant, qui peut être la vente.*
-- **B — Un journal des éditions scellé à part** : son propre stockage et sa propre chaîne d'empreintes par point de vente, même algorithme (`HashChainSignataire`). *Conséquence : inaltérable et vérifiable, sans jamais gêner une validation ; une seconde chaîne à vérifier et à exporter.*
-- **C — Un compteur sur la vente et une ligne au journal d'audit.** *Conséquence : plus léger ; trace modifiable en base, donc non opposable.*
-- **D — La mention DUPLICATA seule, sans compteur** (état de #59). *Conséquence : réimpressions illimitées et indiscernables ; contraire au cahier (« duplicata tracés »).*
-
-**Recommandation : B.** Le patron de D45 — on ajoute, on scelle, daté du geste — sans qu'une réimpression au back-office puisse faire échouer une vente au comptoir.
-
-**Q-C2. Quelle identité de vendeur figure sur le ticket ?**
-
-- **A — L'exploitant** (raison sociale, adresse, SIRET, n° de TVA intracommunautaire) et le nom du site, **figés à la validation** dans le payload scellé. *Conséquence : un duplicata reproduit l'identité du jour de la vente, même après un déménagement ou un changement de délégataire.*
-- **B — Le même contenu, relu à l'édition.** *Conséquence : plus simple ; un duplicata tiré après un changement d'exploitant porte la nouvelle identité.*
-- **C — Un en-tête libre, paramétré par établissement.** *Conséquence : souple ; rien ne garantit les mentions obligatoires.*
-
-**Recommandation : A.** Un duplicata doit dire qui a vendu ce jour-là, pas qui gère le site aujourd'hui.
-
-**Q-C3. Le ticket papier est-il réputé sorti à la validation ?**
-Aujourd'hui, la validation au-dessus du seuil (0 € par défaut) et l'affichage du ticket à l'écran marquent la vente imprimée sans qu'aucune imprimante ne soit pilotée : le premier ticket réellement demandé sortirait marqué DUPLICATA, et le client recevrait le duplicata d'un original qu'il n'a jamais eu (fait constaté par le test de #50). Dans toutes les options, l'affichage à l'écran ne compte pas (G-14) et `imprime` garde sa pose actuelle.
-
-- **A — À la demande seulement** : aucune édition n'est comptée à la validation ; le premier ticket demandé est l'original ; le seuil devient « proposer l'impression ». *Conséquence : aligné sur l'interdiction de l'impression systématique (loi AGEC, à confirmer par toi) ; modifie CA-11.*
-- **B — Garder CA-11** : au-dessus du seuil, l'original est réputé émis à la validation. *Conséquence : statu quo ; le défaut ci-dessus demeure tant qu'aucune imprimante ne confirme.*
-- **C — Compter à la validation seulement quand une imprimante confirme** (lot ESC/POS) ; d'ici là, comme A. *Conséquence : A aujourd'hui ; le comportement de CA-11 revient le jour où le matériel sait dire qu'il a imprimé.*
-
-**Recommandation : C** — c'est-à-dire A maintenant. On n'écrit pas un fait qui n'a pas eu lieu (même raison que D44-bis pour la vente directe).
-
-**Q-C4. Le client remboursé repart-il avec un justificatif d'avoir dans ce lot ?**
-
-- **A — Non, lot suivant** : le duplicata de la vente d'origine mentionne l'avoir (n°, date, montant) ; le justificatif d'avoir vient avec le lot annulation (#93, brouillon). *Conséquence : périmètre tenu ; pendant ce temps, le client remboursé n'a pas de papier propre à l'avoir.*
-- **B — Oui, sans ventilation TVA** : n° d'avoir, vente d'origine, montant, motif. *Conséquence : un papier tout de suite ; pas de TVA pour un remboursement partiel, faute de savoir le ventiler (un avoir ne porte qu'un montant).*
-- **C — Oui, avec ventilation au prorata des lignes.** *Conséquence : complet ; règle de prorata fiscale à arrêter, et lot nettement plus gros.*
-
-**Recommandation : A.** L'avoir ne porte pas de lignes ; le ventiler est un chantier à lui seul, et #93 travaille déjà sur l'annulation.
+- [x] Point de refus d'une ligne sans taux dans l'abonnement en ligne — **VERIFIED** : en tête de `SouscriptionAbonnementEnLigneHandler::souscrire()` (l.83), avant le mandat (l.152), la ligne (l.169) et le règlement (l.177).
+- [x] `bin/verifier-derive-schema.sh` rend-il un verdict ? — **VERIFIED : non.** Mesuré le 07/10 avec le jeton `ticket07` : « Les migrations n'ont pas abouti », `Allowed memory size of 134217728 bytes exhausted`. Les migrations de ce lot se prouveront donc en exécutant leur SQL (`up`, `down`, `up`) sur une copie de la sauvegarde de préprod, puis par `SELECT` sur les colonnes, comme #270.
+- [ ] **Mention de certification du justificatif d'avoir** (G-21) : contredit G-12 ; à trancher par Maxime. Bloque l'étape du rendu du justificatif d'avoir.
+- [ ] **Transport e-mail réel de la préprod** (G-21, D94) : à mesurer sans lire de secret. Bloque l'étape d'envoi par e-mail.
 
 ## Critères d'acceptation
 
@@ -296,21 +248,26 @@ Aujourd'hui, la validation au-dessus du seuil (0 € par défaut) et l'affichage
 - **G-3** : deux appels **concurrents** (deux connexions) sur une vente à 45 € → un seul débit, le second reçoit « en cours », reste dû cohérent ; test réellement concurrent, pas séquentiel.
 - **G-4** : même clé, montant différent → refus, aucun débit.
 - **G-5** : échec forcé de l'écriture après un débit PMV → solde PMV intact ; no-show : échec forcé de la validation → aucun débit, facturation toujours « à facturer », relance → un seul débit ; aucun événement publié pour une transaction annulée.
-- **G-6** : selon Q-A1 ; processus interrompu pendant l'appel au terminal → la tentative existe, le rejeu ne renvoie pas au terminal.
+- **G-6** : timeout simulé → le rejeu ne renvoie pas au terminal ; déclaration « accepté » avec référence → un règlement, tracé ; « non passé » → nouvel envoi permis ; processus interrompu pendant l'appel au terminal → la tentative existe, le rejeu ne renvoie pas au terminal.
 - **G-7** : produit à 10 %, taux changé à 20 % après la vente → duplicata à 10 % ; `PATCH` du `TauxTva` → duplicata inchangé.
-- **G-8** : sur un jeu de ventes multi-taux, ventilation du ticket = écritures, au centime ; un oracle de test indépendant (D67) balaie montants × taux ; facture : selon Q-B2.
-- **G-9** : selon Q-B3, un test par créateur de ligne ; jamais un groupe « 0 % » pour une ligne sans taux (témoin : une vraie ligne à 0 % hors champ reste ventilée à 0 %).
-- **G-10** : selon Q-B4 ; vérification de chaîne verte avant et après le changement de format ; une ligne altérée en SQL → duplicata en anomalie.
+- **G-8** : sur un jeu de ventes multi-taux, ventilation du ticket = écritures, au centime ; un oracle de test indépendant (D67) balaie montants × taux ; la facture justificative n'est pas touchée.
+- **G-9** : un refus avant paiement par créateur de ligne (caisse, réservation, no-show, boutique, abonnement en ligne) ; ligne hors-ligne sans taux → « ventilation incomplète » ; jamais un groupe « 0 % » pour une ligne sans taux (témoin : une vraie ligne à 0 % hors champ reste ventilée à 0 %).
+- **G-10** : le payload scellé d'une vente neuve porte la ventilation et le vendeur ; vérification de chaîne verte avant et après le changement de format ; une ligne altérée en SQL → duplicata en anomalie.
 - **G-11** : le filet de sortie de #50 reste vert sans être retouché pendant l'extraction.
 - **G-12** : le HTML du rendu contient chaque mention ; la date est `Vente::$date` dans le fuseau de l'établissement (vente ouverte à 23:30 UTC) ; un ticket de 40 lignes à libellés longs n'est pas tronqué ; « certifié » absent ; aucun code d'accès.
 - **G-13** : ticket demandé sur une vente en cours → refus, sur chaque canal.
 - **G-14** : vente validée par l'écran (affichage compris), puis trois émissions → original, DUPLICATA n° 2, DUPLICATA n° 3 ; deux réimpressions simultanées → deux numéros distincts ; `imprime` posé ; annulation ensuite → billets invalidés.
 - **G-15** : vente d'un autre établissement → 404 ; jeton partenaire, jeton de terminal → 404 ; sans `vente.lire` → 403 ; appel réel après déploiement → `application/pdf`, pas la coquille HTML ; aucun jeton dans une URL.
 - **G-16** : plus aucun `window.print()` ni `POST /ticket` en mode `duplicata` derrière « Imprimer le ticket » et « Réimprimer ».
-- **G-17** : vente annulée puis réimprimée → mention de l'avoir sous le document d'origine.
+- **G-17** : vente annulée, remboursée ou corrigée puis réimprimée → HTML du duplicata identique à celui de l'original, hors la seule mention « DUPLICATA n° k — édité le … » ; aucune mention d'avoir ni de correction.
 - **G-18** : `doctrine:migrations:status` sur une copie de la préprod liste les nouvelles migrations comme à exécuter ; `up`, `down`, `up` passent ; colonnes et tables présentes ensuite (preuve par `SELECT`, pas par le statut).
+- **G-19** : remboursement global sur une vente à deux taux → lignes négatives au prorata des bases, somme exacte au centime, figées (un changement de correspondance ensuite ne les change pas) ; remboursement d'une ligne → son taux ; dépassement du remboursable → refus ; payload scellé de l'avoir portant lignes et ventilation ; écritures : l'extourne d'un remboursement partiel porte les montants de l'avoir, au centime ; annulation → extourne égale à l'écriture d'origine (témoin).
+- **G-20** : vente facturée → refus d'annuler et de rembourser, message qui renvoie vers l'avoir `AVF`, aucun avoir créé, porte-monnaie intact ; vente non facturée → inchangé (témoin).
+- **G-21** : le justificatif porte la série distincte, la référence de la vente (numéro, date), les lignes, HT/TVA/TTC par taux, le vendeur ; deux émissions → original puis DUPLICATA n° 2 au journal ; e-mail avec transport non raccordé → refus ; aucune impression d'office ; aucun code d'accès.
 
 ## Contradiction / Réponse
+
+Historique des deux relectures, antérieures au CP-1 : les renvois aux options (« Q-B4-A », « question pour Maxime ») visent le QCM tranché le 07/10 (§CP-1).
 
 ### Première relecture (auteur de la spec, 07/10)
 
@@ -331,7 +288,7 @@ Trois axes : ce qui casse la chaîne NF525, ce qui encaisse deux fois, ce qui re
 - **Date imprimée en UTC.** → **retenue** : fuseau de l'établissement (G-12).
 - **Hauteur du PDF estimée à une ligne par libellé** : troncature. → **retenue** : G-12.
 - **Une clé vers `TauxTva` ne fige rien** (`PATCH`). → **retenue** : la valeur est gravée (G-7).
-- **Mentionner l'avoir ou la correction D45 sur un duplicata** pourrait être lu comme une altération de l'original. → **retenue sous condition** : mentions séparées, sous le document (G-17) ; Maxime peut l'écarter au CP-1.
+- **Mentionner l'avoir ou la correction D45 sur un duplicata** pourrait être lu comme une altération de l'original. → **retenue sous condition** au premier tour ; **remplacée par Maxime le 07/10** : le duplicata reproduit exactement l'original, l'avoir a son propre justificatif (G-17 révisé, G-21).
 - **Ventes historiques** : ni taux gravé ni vendeur figé. → **écartée de ce lot** : aucun taux rétroactif (D66-ter), duplicata qui le dit.
 - **Validation rejouée → 409.** → **écartée de ce lot** : sans effet sur l'argent ni sur la chaîne.
 

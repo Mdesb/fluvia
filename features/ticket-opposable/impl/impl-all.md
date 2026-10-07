@@ -1,6 +1,6 @@
 # Suivi d'implémentation — ticket-opposable
 
-**État :** spec — CP-1 en attente de Maxime <!-- discovery → spec → plan → build → review → done -->
+**État :** plan — CP-1 validé le 07/10, plan en cours de révision (périmètre avoir) <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/ticket-opposable (worktree `/home/debian/wt/ticket-opposable`)
 **Spec :** features/ticket-opposable/specs/spec-ticket-opposable.md
 **Plan :** features/ticket-opposable/plans/plan-ticket-opposable.md (après CP-1)
@@ -8,7 +8,7 @@
 
 ## Checkpoints
 
-- [ ] **CP-1** — spec validée par Maxime (10 questions)
+- [x] **CP-1** — spec validée par Maxime le 07/10/2026 (10 questions, Q-C4 comprise ; règle du duplicata révisée)
 - [ ] **CP-2** — plan
 - [ ] **CP-3** — revue avant merge
 
