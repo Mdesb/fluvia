@@ -26,4 +26,9 @@ final class PorteMonnaieVirtuelStub implements PorteMonnaieVirtuelInterface
     {
         // no-op : stub L2, aucun solde à créditer.
     }
+
+    public function recreditePourVente(Uuid $clientId, Uuid $venteId): string
+    {
+        return '0.00';
+    }
 }
