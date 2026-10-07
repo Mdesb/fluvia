@@ -6,6 +6,8 @@ namespace App\Membership\Adapter;
 
 use App\Crm\Entity\Client;
 use App\Crm\Service\BeneficiaryResolver;
+use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipStatus;
 use App\Membership\Repository\SubscriptionRepository;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Offre\Entity\Formule;
@@ -121,6 +123,26 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             }
 
             $adherent = $this->beneficiaires->forPurchase($payeur, $designe);
+
+            // ── L'ABONNEMENT DÉJÀ SOUSCRIT PAR CE PARCOURS (G-5 : formule déjà active → 1 seul) ──
+            // L'écran de souscription souscrit d'abord, PUIS encaisse le 1er mois dans une vente qui
+            // porte la même formule : souscrire ici en créait un second (PR #276, 2 → 3). On relie la
+            // ligne à l'abonnement actif du jour, même payeur, même formule, qu'aucune ligne n'a encore
+            // payé — la clé d'idempotence de `/sport/abonnements/souscrire`. La ligne de l'écran ne
+            // nomme pas l'adhérent : il ne départage que si elle le désigne.
+            $criteres = [
+                'payeur' => $payeur, 'formule' => $formule, 'etablissement' => $etablissement,
+                'statut' => MembershipStatus::Actif, 'dateSouscription' => $vente->getDate(), 'sourceSaleLineId' => null,
+            ];
+            if ($designe instanceof Client) {
+                $criteres['adherent'] = $adherent;
+            }
+            $dejaSouscrit = $this->abonnements->findOneBy($criteres);
+            if ($dejaSouscrit instanceof Membership) {
+                $dejaSouscrit->setSourceSaleLineId($ligne->getId());
+                $this->em->flush();
+                continue;
+            }
 
             $this->souscription->souscrire(
                 adherent: $adherent,

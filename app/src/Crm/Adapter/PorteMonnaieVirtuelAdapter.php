@@ -97,6 +97,24 @@ final class PorteMonnaieVirtuelAdapter implements PorteMonnaieVirtuelInterface
         $this->journaliser($pmv, TypeMouvementPmv::RemboursementVente, $montant, $venteId, null, $motif);
     }
 
+    public function recreditePourVente(Uuid $clientId, Uuid $venteId): string
+    {
+        $pmv = $this->trouverPmv($clientId);
+        if ($pmv === null) {
+            return '0.00';
+        }
+
+        // Référence libre `ref_vente_m2` (D58) : comparée en SQL avec UNHEX, jamais en DQL.
+        return (string) $this->connection->fetchOne(
+            'SELECT COALESCE(SUM(montant), 0) FROM crm_mouvement_pmv WHERE pmv_id = UNHEX(:pmv) AND type = :type AND ref_vente_m2 = UNHEX(:vente)',
+            [
+                'pmv' => bin2hex($pmv->getId()->toBinary()),
+                'type' => TypeMouvementPmv::RemboursementVente->value,
+                'vente' => bin2hex($venteId->toBinary()),
+            ],
+        );
+    }
+
     private function trouverPmv(Uuid $clientId): ?PorteMonnaieVirtuel
     {
         $client = $this->em->getRepository(Client::class)->find($clientId);
