@@ -12,20 +12,17 @@ namespace App\Facturation\Einvoicing;
  * informations** une facture doit contenir, chacune identifiée par un code `BT-xx`.
  *
  * ⚠ **C'EST LA PARTIE COMMUNE À QUATRE PAYS AU MOINS.** La France (Factur-X / Chorus / PDP),
- * l'Allemagne (XRechnung) et l'Espagne reposent dessus : leurs plateformes nationales sont des
- * **transports** par-dessus le même modèle, avec chacune ses restrictions (CIUS). Construire le
- * modèle une fois sert les quatre ; construire un connecteur national d'abord ne sert qu'un.
+ * l'Allemagne (XRechnung), l'Italie (SdI) et l'Espagne reposent tous dessus. Les plateformes
+ * nationales sont des **transports** par-dessus le même modèle, avec chacune ses restrictions
+ * (CIUS). Construire le modèle une fois sert les quatre ; construire un connecteur national d'abord
+ * ne sert qu'un.
  *
- * ⚠ **L'ITALIE EST L'EXCEPTION, ET CETTE LIGNE LA RANGEAIT AVEC LES AUTRES.** `FatturaPA` n'est ni
- * une syntaxe EN 16931 ni un CIUS : elle **précède** la norme et n'utilise ni UBL ni CII. Ce que
- * l'Italie a aligné, c'est le **contenu** — les champs exigés s'y retrouvent — et son SdI convertit
- * lui-même en FatturaPA la facture EN 16931 qu'on lui présente.
- *
- * Le pari ci-dessus tient donc, mais pour une raison plus étroite qu'écrit : ce qui se partage,
- * c'est le MODÈLE. La syntaxe et le transport, non — l'Italie demandera une conversion, pas le
- * simple connecteur que les trois autres appellent. Le dire compte parce que la formulation
- * précédente faisait espérer quatre validateurs schematron pour quatre pays ; côté italien il n'y
- * en a pas. (Vérifié le 11/09, en préparant le CP-1 de #14 sur le document dû à un abonné.)
+ * L'Italie a bien un CIUS : le **CIUS-IT** (AgID et Agenzia delle Entrate), avec son schematron
+ * pour UBL et pour CII. Il vaut pour les factures EN 16931 adressées à l'administration publique
+ * via le SdI, qui le vérifie puis traduit la facture en **FatturaPA**. FatturaPA est le format
+ * national (DM 55/2013), pas une syntaxe EN 16931 : en émettre directement serait une conversion.
+ * Sources : AgID, « CIUS-IT » rel. 1.0.0 (eIGOR, 2017) ; provvedimento de l'Agenzia delle Entrate
+ * du 18/04/2019 ; Regole tecniche (d.lgs. 148/2018, art. 3 c. 1) v2.6 du 15/05/2025, §§ 1 à 4.
  *
  * ── CE QUE CETTE ÉNUMÉRATION EST, ET CE QU'ELLE N'EST PAS ────────────────────────────────────────
  *
@@ -34,8 +31,8 @@ namespace App\Facturation\Einvoicing;
  * validateur officiel (schematron) peut vérifier.
  *
  * ⚠ **Porter tous ces termes ne rend donc PAS conforme.** Ça rend *émettable*. La conformité se
- * prouve contre le schematron de la norme et celui de chaque CIUS national *là où il en existe un*
- * — ce qui reste à faire, et ce qu'il ne faut pas laisser croire entre-temps.
+ * prouve contre le schematron de la norme et celui de chaque CIUS national — ce qui reste à faire,
+ * et ce qu'il ne faut pas laisser croire entre-temps.
  */
 enum BusinessTerm: string
 {
