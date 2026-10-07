@@ -22,6 +22,11 @@ final class ProjectionAccesTest extends ReservationApiTestCase
     {
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();
+        // Relatif au lancement, pas une date fixe (voir `creneauDans()`). Les 10, 11 et 12/10/2026 en
+        // dur ne faisaient pas encore rougir ce test : mesuré le 07/10, il reste vert avec des créneaux
+        // déjà passés. Mais il décrit un créneau à venir ; le jour où la projection refusera un
+        // créneau passé, une date fixe le casserait sans qu'il y ait de défaut.
+        [$debut, $fin] = self::creneauDans(30);
 
         /** @var \Doctrine\ORM\EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
@@ -33,8 +38,8 @@ final class ProjectionAccesTest extends ReservationApiTestCase
             'json' => [
                 'ressource' => '/api/reservation_ressources/' . $terrain->getId(),
                 'activite' => '/api/reservation_activites/' . $this->idActivite(ReservationFixtures::ACTIVITE_GRATUITE_LIBELLE),
-                'debut' => '2026-10-10T10:00:00+00:00',
-                'fin' => '2026-10-10T11:00:00+00:00',
+                'debut' => $debut,
+                'fin' => $fin,
                 'capacite' => 4,
             ],
         ]);
@@ -53,8 +58,8 @@ final class ProjectionAccesTest extends ReservationApiTestCase
         self::assertNotNull($reservation);
         $projection = $em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
         self::assertNotNull($projection, 'CA-15 : une projection est créée sur confirmation (Ressource.ouvreAcces=true).');
-        self::assertStringStartsWith('2026-10-10T10:00:00', $projection->getFenetreDebut()->format(\DateTimeInterface::ATOM));
-        self::assertStringStartsWith('2026-10-10T11:00:00', $projection->getFenetreFin()->format(\DateTimeInterface::ATOM));
+        self::assertStringStartsWith(substr($debut, 0, 19), $projection->getFenetreDebut()->format(\DateTimeInterface::ATOM));
+        self::assertStringStartsWith(substr($fin, 0, 19), $projection->getFenetreFin()->format(\DateTimeInterface::ATOM));
 
         // CA-1 (RG-ACC3-01/02) : la projection réelle référence un DroitAcces réellement exploitable.
         $droitRef = $projection->getDroitAccesRef();
@@ -63,8 +68,8 @@ final class ProjectionAccesTest extends ReservationApiTestCase
         self::assertInstanceOf(DroitAcces::class, $droit);
         self::assertSame(TypeDroitAcces::Booking, $droit->getSourceType(), 'RG-ACC3-02 : sourceType = TypeDroitAcces::Booking.');
         self::assertSame(StatutProjectionDroit::Valide, $droit->getStatutProjection());
-        self::assertStringStartsWith('2026-10-10T10:00:00', $droit->getFenetreDebut()?->format(\DateTimeInterface::ATOM));
-        self::assertStringStartsWith('2026-10-10T11:00:00', $droit->getFenetreFin()?->format(\DateTimeInterface::ATOM));
+        self::assertStringStartsWith(substr($debut, 0, 19), $droit->getFenetreDebut()?->format(\DateTimeInterface::ATOM));
+        self::assertStringStartsWith(substr($fin, 0, 19), $droit->getFenetreFin()?->format(\DateTimeInterface::ATOM));
         self::assertNotNull($droit->getEtablissement());
         self::assertSame($reservation->getEtablissement()?->getId()->toRfc4122(), $droit->getEtablissement()->getId()->toRfc4122(), 'RG-ACC3-06 : etablissement = Reservation.etablissement.');
         self::assertNull($droit->getCreditRestant(), 'RG-ACC3-02 : pas de décompte (pas une carte à quota).');
@@ -74,20 +79,22 @@ final class ProjectionAccesTest extends ReservationApiTestCase
         $client->request('GET', '/api/reservation_projection_acces/' . $projection->getId(), $entete);
         self::assertResponseIsSuccessful();
         $donnees = $client->getResponse()->toArray();
-        self::assertStringStartsWith('2026-10-10T10:00:00', $donnees['fenetreDebut']);
+        self::assertStringStartsWith(substr($debut, 0, 19), $donnees['fenetreDebut']);
     }
 
     public function testAucuneProjectionSiRessourceNouvrePasAcces(): void
     {
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();
+        // Relatif au lancement (voir `creneauDans()`).
+        [$debut, $fin] = self::creneauDans(30);
 
         $client->request('POST', '/api/reservation/creneaux', $entete + [
             'json' => [
                 'ressource' => '/api/reservation_ressources/' . $this->idRessource(ReservationFixtures::RESSOURCE_SALLE_LIBELLE),
                 'activite' => '/api/reservation_activites/' . $this->idActivite(ReservationFixtures::ACTIVITE_GRATUITE_LIBELLE),
-                'debut' => '2026-10-11T10:00:00+00:00',
-                'fin' => '2026-10-11T11:00:00+00:00',
+                'debut' => $debut,
+                'fin' => $fin,
                 'capacite' => 4,
             ],
         ]);
@@ -111,6 +118,8 @@ final class ProjectionAccesTest extends ReservationApiTestCase
     {
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();
+        // Relatif au lancement (voir `creneauDans()`).
+        [$debut, $fin] = self::creneauDans(30);
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
@@ -122,8 +131,8 @@ final class ProjectionAccesTest extends ReservationApiTestCase
             'json' => [
                 'ressource' => '/api/reservation_ressources/' . $terrain->getId(),
                 'activite' => '/api/reservation_activites/' . $this->idActivite(ReservationFixtures::ACTIVITE_GRATUITE_LIBELLE),
-                'debut' => '2026-10-12T10:00:00+00:00',
-                'fin' => '2026-10-12T11:00:00+00:00',
+                'debut' => $debut,
+                'fin' => $fin,
                 'capacite' => 4,
             ],
         ]);

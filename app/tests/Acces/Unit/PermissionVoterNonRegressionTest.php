@@ -11,6 +11,7 @@ use App\Securite\Port\SupportAccessRightsInterface;
 use App\Securite\Security\PermissionVoter;
 use App\Securite\Service\CalculateurDroits;
 use App\Securite\Service\ContexteEtablissement;
+use App\Securite\Service\PlatformScope;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -32,6 +33,10 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
  *
  * Il n'a été vu que le 27/08, à la première exécution complète de la suite : 1 718 tests, six heures,
  * et une seule erreur — celle-ci.
+ *
+ * **Et c'est revenu.** Le 23/09, #252 (équipe plateforme) a donné un troisième argument au
+ * calculateur (`PlatformScope`) et n'a relancé que les suites Securite et Subscription : même
+ * `ArgumentCountError`, vu le 07/10 seulement. La CI ne lance pas PHPUnit ; rien ne l'aurait dit.
  *
  * > **Un test qu'on ne lance jamais ne protège de rien, et coûte la confiance qu'on lui accorde.**
  *
@@ -57,9 +62,12 @@ final class PermissionVoterNonRegressionTest extends TestCase
             ['acces.gerer', 'acces.superviser', 'acces.ingestion', 'acces.snapshot'],
         );
 
+        // `PlatformScope` est réel : la classe est `final`, donc pas de bouchon. Il ne lit qu'un
+        // `Utilisateur` (`isPlateforme()`) ; s'il était seulement consulté pour un terminal, ce
+        // serait déjà la régression que ce test traque.
         $voter = new PermissionVoter(
             new ContexteEtablissement(new RequestStack(), $em),
-            new CalculateurDroits($em, $accesAssistance),
+            new CalculateurDroits($em, $accesAssistance, new PlatformScope()),
         );
 
         $terminal = (new Terminal())->setStatut(StatutTerminal::Actif);
