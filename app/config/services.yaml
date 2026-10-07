@@ -442,3 +442,16 @@ when@test:
         App\Tests\Reservation\Support\NoShowCreditEventCollector:
             public: true
             tags: ['kernel.event_subscriber']
+        # Tentatives de règlement (lot 2 du ticket opposable) : arrêtent l'AUTRE processus d'un test de
+        # concurrence au terminal ou après le débit du porte-monnaie (`SettlementBarrier`), et laissent
+        # passer partout ailleurs. Ils décorent les ALIAS : `TpeMock` reste ce que les tests vont chercher.
+        App\Tests\Vente\Support\BlockingTerminal:
+            decorates: App\Vente\Tpe\TerminalPaiementInterface
+            arguments: ['@.inner']
+        App\Tests\Vente\Support\BlockingWallet:
+            decorates: App\Vente\Port\PorteMonnaieVirtuelInterface
+            arguments: ['@.inner']
+        # Fait échouer une écriture PENDANT le `flush()` (G-5) ; désarmé tant qu'un test ne l'arme pas.
+        App\Tests\Vente\Support\FailingWriteListener:
+            public: true
+            tags: [{ name: doctrine.event_listener, event: postPersist }]

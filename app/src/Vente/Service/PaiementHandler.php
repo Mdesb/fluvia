@@ -31,22 +31,28 @@ use Symfony\Component\Uid\Uuid;
  * sur toute la table, comme l'index unique et comme la clé primaire ; une clé déjà employée sur une
  * autre vente, ou pour un autre contenu, est refusée avant tout effet.
  *
- * ── ⚠ CE QUE LA CLÉ NE FERME PAS ENCORE, ET IL FAUT LE SAVOIR ──────────────────────────────────
+ * ── ⚠ CE QUE CE GESTIONNAIRE SEUL NE FERME PAS, ET IL FAUT LE SAVOIR ───────────────────────────
  *
- * 1. **Deux appels SIMULTANÉS avec la même clé.** Les deux passent la recherche, les deux sollicitent
- *    le TPE ou le PMV ; le second échoue au `flush()` sur l'index unique — en 500, après son effet.
- *    L'index garantit qu'il n'existera jamais deux règlements pour une clé, pas qu'un seul débit
- *    partira. Le fermer demande une tentative écrite et validée en base AVANT l'effet (G-3, lot 2).
- * 2. **Un timeout du TPE.** CA-10 interdit de créer un `Paiement` sur un refus ou un timeout : la clé
- *    n'est écrite nulle part et un rejeu redemande au terminal. Juste pour un refus (aucun argent n'a
- *    bougé), dangereux pour un timeout (le terminal a pu accepter). Même remède (G-6, lot 2).
+ * Seul, il n'écrit rien avant l'effet. Le chemin de l'écran passe donc par `SettlementCoordinator`,
+ * qui écrit une TENTATIVE avant de l'appeler, l'appelle dans une transaction (ou le terminal hors
+ * transaction) et publie après le commit. Appelé directement — synchronisation hors ligne (Q-A2),
+ * no-show (lot 4) —, il garde ses limites d'avant :
+ *
+ * 1. **Deux appels SIMULTANÉS avec la même clé** passent tous deux la recherche et sollicitent tous
+ *    deux le TPE ou le PMV ; l'index unique refuse le second au `flush()`, après son effet.
+ * 2. **Un timeout du TPE** n'écrit la clé nulle part : un rejeu redemande au terminal.
  * 3. **Un appel sans clé ni `id`** n'est pas rejouable, et c'est voulu : un paiement scindé légitime
- *    envoie deux fois le même moyen et le même montant.
+ *    envoie deux fois le même moyen et le même montant. Le coordinateur lui donne une clé de serveur :
+ *    il est sérialisé avec les autres, il ne devient pas rejouable pour autant.
  *
  * @phpstan-type ResultatPaiement array{paiement: Paiement|null, statutTPE: StatutTPE|null, dejaEnregistre: bool}
  */
 final class PaiementHandler
 {
+    /** Le refus d'une clé ou d'un `id` déjà employé ailleurs. Il ne dit rien de l'autre vente : elle peut être celle d'un autre établissement. */
+    public const AUTRE_VENTE = 'Cette clé d\'idempotence (ou cet identifiant de règlement) a déjà servi pour une autre vente : '
+        . 'ce règlement n\'a pas été encaissé. Un nouveau règlement prend une nouvelle clé.';
+
     public function __construct(
         private readonly ReferentielReglementInterface $referentiel,
         private readonly TerminalPaiementInterface $tpe,
@@ -65,10 +71,13 @@ final class PaiementHandler
 
     /**
      * @param array<string, mixed> $donnees
+     * @param SettlementEvents|null $evenements fournis par qui tient la transaction : le refus de carte
+     *                                          y est retenu, sans `flush()`, jusqu'à son commit. Nul : le
+     *                                          refus est écrit et annoncé sur-le-champ, comme avant.
      *
      * @return array{paiement: Paiement|null, statutTPE: StatutTPE|null, dejaEnregistre: bool}
      */
-    public function encaisser(Vente $vente, array $donnees): array
+    public function encaisser(Vente $vente, array $donnees, ?SettlementEvents $evenements = null): array
     {
         // ── LE REJEU SE JUGE AVANT TOUT ────────────────────────────────────────────────────────
         //
@@ -156,6 +165,9 @@ final class PaiementHandler
 
         // TPE : envoi automatique ; seul « accepté » crée le règlement (CA-10).
         if ($moyen->exigeReference) {
+            if ($evenements !== null) {
+                $evenements->terminalAsked = true;
+            }
             $resultat = $this->tpe->demander($pdv, $paiement->getMontant());
             $paiement->setStatutTPE($resultat->statut);
             if (!$resultat->estAccepte()) {
@@ -163,13 +175,11 @@ final class PaiementHandler
                 // n'est créé (c'est la règle CA-10), donc jusqu'ici la seule chose qui restait d'une
                 // carte refusée était un code de statut dans une réponse HTTP que personne ne
                 // conserve. On l'écrit, puis on l'annonce — dans cet ordre, voir le service.
-                $this->refusCarte?->consigner(
-                    $vente,
-                    $code,
-                    $paiement->getMontant(),
-                    $resultat->statut,
-                    $resultat->reference,
-                );
+                if ($evenements !== null) {
+                    $this->refusCarte?->record($vente, $code, $paiement->getMontant(), $resultat->statut, $resultat->reference, $evenements);
+                } else {
+                    $this->refusCarte?->consigner($vente, $code, $paiement->getMontant(), $resultat->statut, $resultat->reference);
+                }
 
                 return ['paiement' => null, 'statutTPE' => $resultat->statut, 'dejaEnregistre' => false];
             }
@@ -217,11 +227,12 @@ final class PaiementHandler
      * Trouvé sur une autre vente : refus. Trouvé sur cette vente avec un autre contenu (moyen,
      * montant, ou l'autre identifiant) : refus aussi — rendre l'ancien règlement en silence ferait
      * croire à l'appelant que SA demande a été encaissée (G-4). Un montant absent du rejeu n'est pas
-     * comparé : il voulait dire « le reste dû », que le règlement d'origine a justement réduit.
+     * comparé ici : il voulait dire « le reste dû », que le règlement d'origine a justement réduit.
+     * Le coordinateur, lui, compare au montant DEMANDÉ que sa tentative a retenu.
      *
      * @param array<string, mixed> $donnees
      */
-    private function replay(Vente $vente, array $donnees, ?Uuid $cle): ?Paiement
+    public function replay(Vente $vente, array $donnees, ?Uuid $cle): ?Paiement
     {
         $id = $this->providedId($donnees);
         if ($cle === null && $id === null) {
@@ -235,12 +246,8 @@ final class PaiementHandler
             return null;
         }
 
-        // Le message ne dit rien de l'autre vente : elle peut être celle d'un autre établissement.
         if ($existant->getVente()?->getId()->equals($vente->getId()) !== true) {
-            throw new UnprocessableEntityHttpException(
-                'Cette clé d\'idempotence (ou cet identifiant de règlement) a déjà servi pour une autre vente : '
-                . 'ce règlement n\'a pas été encaissé. Un nouveau règlement prend une nouvelle clé.',
-            );
+            throw new UnprocessableEntityHttpException(self::AUTRE_VENTE);
         }
 
         $memeContenu = ($cle === null || $existant->getCleIdempotence()?->equals($cle) === true)
@@ -270,7 +277,7 @@ final class PaiementHandler
      *
      * @param array<string, mixed> $donnees
      */
-    private function idempotencyKey(array $donnees): ?Uuid
+    public function idempotencyKey(array $donnees): ?Uuid
     {
         $valeur = $donnees['cleIdempotence'] ?? null;
         if ($valeur === null) {
@@ -295,7 +302,7 @@ final class PaiementHandler
      *
      * @param array<string, mixed> $donnees
      */
-    private function providedId(array $donnees): ?Uuid
+    public function providedId(array $donnees): ?Uuid
     {
         $valeur = $donnees['id'] ?? null;
 
