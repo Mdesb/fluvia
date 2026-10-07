@@ -18,7 +18,13 @@ use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Activite;
+use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\FacturationNoShow;
+use App\Reservation\Entity\RegleAnnulation;
+use App\Reservation\Entity\Reservation;
 use App\Reservation\Entity\Ressource;
+use App\Reservation\Enum\StatutFacturationNoShow;
+use App\Reservation\Enum\StatutReservation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\DataFixtures\SepaFixtures;
@@ -211,6 +217,40 @@ abstract class ReservationApiTestCase extends ApiTestCase
         $debut = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify(sprintf('+%d days', $jours))->setTime(10, 0);
 
         return [$debut->format(\DATE_ATOM), $debut->modify('+1 hour')->format(\DATE_ATOM)];
+    }
+
+    /**
+     * Une réservation d'un créneau déjà passé, au statut voulu, avec sa facturation d'absence si un
+     * statut de facturation est donné. Posée en base : la bascule automatique est retirée (D95).
+     *
+     * @return array{0: string, 1: ?string} id de la réservation, id de la facturation
+     */
+    protected function pastBooking(string $etablissement, StatutReservation $statut, ?StatutFacturationNoShow $billing = null): array
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etab = $this->entite(Etablissement::class, ['nom' => $etablissement]);
+        $ressource = (new Ressource())->setEtablissement($etab)->setCodeType('terrain')
+            ->setLibelle('Terrain passé ' . bin2hex(random_bytes(4)))->setCapacitePropre(4);
+        $creneau = (new Creneau())->setRessource($ressource)->setEtablissement($etab)->setCapacite(4)
+            ->setDebut(new \DateTimeImmutable('-3 hours'))->setFin(new \DateTimeImmutable('-2 hours'));
+        $reservation = (new Reservation())->setCreneau($creneau)->setEtablissement($etab)->setStatut($statut)
+            ->setOrganisateur($em->find(Beneficiaire::class, $this->idBeneficiairePayeur()));
+        $em->persist($ressource);
+        $em->persist($creneau);
+        $em->persist($reservation);
+
+        $facturation = null;
+        if ($billing !== null) {
+            $regle = (new RegleAnnulation())->setEtablissement($etab)->setActif(false);
+            $facturation = (new FacturationNoShow())->setReservation($reservation)->setRegleAppliquee($regle)
+                ->setMontant('10.00')->setStatut($billing);
+            $em->persist($regle);
+            $em->persist($facturation);
+        }
+        $em->flush();
+
+        return [(string) $reservation->getId(), $facturation === null ? null : (string) $facturation->getId()];
     }
 
     protected function idBeneficiaireParPrenom(string $prenom): string

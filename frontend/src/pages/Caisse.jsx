@@ -44,6 +44,11 @@ const estAbonnement = (produit) => !!produit?.formule?.sepaActif
 const souscriptionRequise = (produit) =>
   estAbonnement(produit) && produit?.champsPerso?.venteSansSouscription !== true
 
+// Toute formule ouvre un abonnement à la validation (prélevée ou non), sauf « produit simple ». Le
+// serveur refuse alors une vente sans client payeur — après le règlement : on le demande avant.
+const ouvreAbonnement = (produit) =>
+  !!produit?.formule && produit?.champsPerso?.venteSansSouscription !== true
+
 // `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
 // `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
 const DEFAUTS_URL = { facture: '', historique: '', verifier: '' }
@@ -625,6 +630,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Démarre l'encaissement : crée la vente, ajoute les lignes, passe en phase paiement.
   async function demarrerPaiement() {
     if (panier.length === 0 || !session) return
+    if (!client && panier.some((l) => ouvreAbonnement(l.produit))) {
+      setBesoinClient(true)
+      setErreur('Ce panier ouvre un abonnement : rattachez le client payeur avant d’encaisser.')
+      setPickerOuvert(true)
+      return
+    }
     setBusy(true)
     setErreur(null)
     setAvis(null)

@@ -278,13 +278,14 @@ export default function SouscriptionAbonnement({
         abonnementId: idDe(abonnement),
         sessionId: session.id,
         payeurId: idDe(payeur),
+        beneficiaireId: idDe(adherent || payeur),
         produitId: idDe(produit),
         tarif: typeTarifId(produit),
         moyen: moyenSel,
         montant: Number(montantComptant).toFixed(2),
         prixForce: comptantExigeForcage,
       }),
-    [produit, session, payeur, moyenSel, montantComptant, comptantExigeForcage],
+    [produit, session, payeur, adherent, moyenSel, montantComptant, comptantExigeForcage],
   )
 
   const soumettre = useCallback(async () => {
