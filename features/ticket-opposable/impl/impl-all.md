@@ -1,0 +1,23 @@
+# Suivi d'implémentation — ticket-opposable
+
+**État :** spec — CP-1 en attente de Maxime <!-- discovery → spec → plan → build → review → done -->
+**Branche :** feature/ticket-opposable (worktree `/home/debian/wt/ticket-opposable`)
+**Spec :** features/ticket-opposable/specs/spec-ticket-opposable.md
+**Plan :** features/ticket-opposable/plans/plan-ticket-opposable.md (après CP-1)
+**Inventaire :** features/ticket-opposable/refs/inventaire-pr50-pr59.md
+
+## Checkpoints
+
+- [ ] **CP-1** — spec validée par Maxime (9 questions)
+- [ ] **CP-2** — plan
+- [ ] **CP-3** — revue avant merge
+
+## Étapes (reprises du plan)
+
+Aucune avant CP-1 : ni code, ni portage de commit, ni migration.
+
+## Journal de Session
+
+- 07/10 — #50 et #59 fermées, branche neuve depuis `main` `4462a2d8`. Inventaire et spec écrits ; spec relue en contradiction (§Contradiction / Réponse de la spec). Branches d'origine conservées pour le portage.
+
+## Journal de Rétropropagation
