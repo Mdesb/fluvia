@@ -60,10 +60,14 @@ abstract class FacturationApiTestCase extends ApiTestCase
         ])->toArray()['token'];
     }
 
-    /** @return array{0: Client, 1: array<string, mixed>, 2: string} client, entête auth+étab, id établissement A */
-    protected function adminSurA(): array
+    /**
+     * @param array<string, mixed> $optionsNoyau options de `createClient()`, ex. `['debug' => false]`
+     *
+     * @return array{0: Client, 1: array<string, mixed>, 2: string} client, entête auth+étab, id établissement A
+     */
+    protected function adminSurA(array $optionsNoyau = []): array
     {
-        $client = static::createClient();
+        $client = static::createClient($optionsNoyau);
         $token = $this->jeton($client, SocleFixtures::ADMIN_EMAIL, SocleFixtures::ADMIN_MDP);
         $idA = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
         $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
