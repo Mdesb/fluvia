@@ -43,8 +43,6 @@ final class ComptageNonNominatifHandler
 
         $horodatage ??= new \DateTimeImmutable();
 
-        // Cf. ValidationPassageHandler : on mire l'objet en mémoire après le raw SQL (contourne le
-        // suivi ORM) pour éviter qu'un appelant relisant $jauge via la map d'identité soit périmé.
         $jauge = $this->em->getRepository(JaugeFmi::class)->findOneBy(['espace' => $espace]);
         if ($jauge instanceof JaugeFmi) {
             $hex = bin2hex($jauge->getId()->toBinary());
@@ -53,14 +51,16 @@ final class ComptageNonNominatifHandler
                     'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + 1, cumul_jour = cumul_jour + 1 WHERE id = UNHEX(:hex)',
                     ['hex' => $hex],
                 );
-                $jauge->setValeurCourante($jauge->getValeurCourante() + 1)->setCumulJour($jauge->getCumulJour() + 1);
             } else {
                 $this->connection->executeStatement(
                     'UPDATE acces_jauge_fmi SET valeur_courante = GREATEST(valeur_courante - 1, 0) WHERE id = UNHEX(:hex)',
                     ['hex' => $hex],
                 );
-                $jauge->setValeurCourante(max(0, $jauge->getValeurCourante() - 1));
             }
+            // Recharger, jamais recalculer (#267, cf. `ValidationPassageHandler`) : recopier
+            // `valeur_en_mémoire ± 1` faisait réécrire au flush une occupation absolue, qui effaçait
+            // un passage compté entre-temps.
+            $this->em->refresh($jauge);
         }
 
         $passage = new Passage();

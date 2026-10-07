@@ -45,16 +45,24 @@ sauvegarder() {
     horodatage="$(date -u +%Y%m%dT%H%M%SZ)"
     fichier="$DEST/billetterie-$horodatage.sql.gz"
     partiel="$fichier.partiel"
+    brut="$DEST/billetterie-$horodatage.sql.partiel"
 
     # On écrit d'abord sous un nom PARTIEL : un fichier interrompu ne doit jamais porter le nom d'une
     # sauvegarde valide. Il n'est renommé qu'après vérification.
+    #
+    # ⚠ PAS DE TUBE ENTRE LE DUMP ET GZIP (#257). `sh` n'a pas de pipefail : un tube rend le code de
+    # gzip, et un dump coupé en route (connexion perdue…) était compressé puis GARDÉ s'il contenait
+    # déjà la table témoin. On teste donc le dump seul. Pas de bash + pipefail non plus : le
+    # `gunzip | grep -q` plus bas finirait en SIGPIPE (141) et refuserait les bonnes sauvegardes.
     if ! mariadb-dump --host=db --user=root --password="$DB_ROOT_PASSWORD" \
             --single-transaction --routines --triggers --events \
-            "$DB_NAME" 2>"$DEST/.derniere-erreur" | gzip > "$partiel"; then
+            "$DB_NAME" 2>"$DEST/.derniere-erreur" > "$brut" \
+       || ! gzip < "$brut" > "$partiel"; then
         echo "[sauvegarde] ✗ ÉCHEC du dump — voir $DEST/.derniere-erreur" >&2
-        rm -f "$partiel"
+        rm -f "$brut" "$partiel"
         return 1
     fi
+    rm -f "$brut"
 
     octets="$(wc -c < "$partiel")"
     if [ "$octets" -lt 1024 ]; then
