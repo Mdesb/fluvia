@@ -3435,3 +3435,31 @@ mieux qu'un détecteur muet.
 D109 ne se voyait pas. Corriger D110 seul — redémarrer pour activer la quatrième tâche — aurait donc
 **levé le verrou sur tout ce qu'on aurait ajouté entre-temps**. C'est pour cela que D109 a été corrigé
 et prouvé **avant** le redémarrage, et non l'inverse.
+
+---
+
+## D121 — Une entrée hors ligne remontée sur une jauge pleine est comptée, et l'exploitant est prévenu
+
+**Tranché par Maxime le 07/10, sur QCM : « compter et signaler ».**
+
+**Ce qui était faux, mesuré pendant #273.** Seuil 1, jauge à 1, une entrée faite sur une borne hors
+ligne puis remontée : le passage était journalisé `refuse / seuil_fmi` et la jauge restait à 1. La
+personne était pourtant entrée : la borne coupée ne connaît pas la jauge, elle ouvre sur son
+instantané. La jauge de sécurité restait donc une personne sous la réalité, et laissait entrer en
+ligne une personne de trop.
+
+**La règle.** Au rejeu, une entrée hors ligne est comptée même jauge pleine : la jauge dit l'état
+réel, quitte à dépasser le seuil. Le passage est accepté avec le code `seuil_fmi_depasse_hors_ligne`
+(même dérogation que le litige de crédit CA-8 : un code sur un passage accepté). La cloche prévient
+ceux qui ont `acces.superviser` sur le site (`access.capacity_exceeded`, critique), **une fois par
+espace et par lot remonté** : une borne coupée à l'heure d'affluence remonte des dizaines d'entrées,
+et une cloche qui sonne pour chacune ne se lit plus.
+
+**Ce qui ne change pas.** En ligne, une jauge pleine refuse toujours (`seuil_fmi`). Les autres refus
+au rejeu restent des refus — carte épuisée (R-6, en attente d'IT Cotation), anti-passback, zone,
+horaires : chacun appelle sa propre décision, celle-ci ne les tranche pas.
+
+**La contrepartie.** Une jauge au-dessus du seuil bloque les entrées en ligne jusqu'à ce qu'elle
+redescende : c'est ce que veut dire un seuil de sécurité. Et le dépassement se constate **à la
+remontée**, pas à l'heure du passage : une entrée dont la personne est déjà ressortie ne fait que
+compenser sa sortie, déjà décomptée, et n'alerte que si la jauge reste au-dessus du seuil après elle.
