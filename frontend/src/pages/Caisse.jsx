@@ -327,6 +327,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout). ⚠ DÉCLARÉ ICI, EN AMONT :
   // `modaleSouscription` plus bas le référence, et une const de la TDZ lue trop tôt casse l'écran.
   const ligneAbo = panier.find((l) => souscriptionRequise(l.produit)) || null
+  // Un règlement sans issue d'une AUTRE vente de cet onglet (relu à chaque rendu : il vit dans l'onglet).
+  const autreEnAttente = pendingIntents(sessionStorage, etabActif).find((i) => i.saleId !== vente?.id) || null
 
   // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
   // Les fusionner obligerait a ressaisir pour vendre un adulte et un enfant ensemble, ce qui est la
@@ -911,6 +913,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     try {
       v = await api.vente(intention.saleId)
     } catch (e) {
+      if (e?.status === 404) {
+        // Introuvable sur l'établissement de l'intention : rien à reprendre ici.
+        forgetIntent(sessionStorage, intention.saleId)
+        return
+      }
       setErreur(`Un règlement de la vente ${intention.saleNumber ? `n° ${intention.saleNumber} ` : ''}attend son issue, `
         + `mais la vente n'a pas pu être relue (${e.message || 'refus du serveur'}). Rechargez la page : ne l'encaissez pas une seconde fois.`)
       return
@@ -993,11 +1000,6 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     let venteObj = vente
     let paiementsPrec = paiements
     if (!venteObj) {
-      // Un règlement sans issue attend dans cet onglet : on le reprend avant d'ouvrir une autre vente.
-      if (pendingIntents(sessionStorage, etabActif).length > 0) {
-        await reprendre()
-        return
-      }
       const ctx = await demarrerPaiement()
       if (!ctx) return
       venteObj = ctx.vObj
@@ -1495,6 +1497,15 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 )}
               </div>
 
+              {!vente && autreEnAttente && (
+                <div className="banner banner-warn">
+                  Un règlement de la vente {autreEnAttente.saleNumber ? `n° ${autreEnAttente.saleNumber}` : 'précédente'} attend
+                  son issue dans cet onglet : ne réencaissez pas cet achat.{' '}
+                  <button className="btn sm" type="button" onClick={reprendreReglement} disabled={busy}>
+                    Reprendre cette vente
+                  </button>
+                </div>
+              )}
               {panier.length === 0 && !enPaiement ? (
                 <div className="empty">Cliquez un produit pour l'ajouter.</div>
               ) : (
@@ -1581,7 +1592,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       <code> vente.encaisser</code>. Ce n’est pas une panne&nbsp;; demandez-le à un
                       administrateur.
                     </div>
-                  ) : ligneAbo ? (
+                  ) : ligneAbo && !vente ? (
                     // UN ABONNEMENT NE SE RÈGLE PAS AU PAVÉ : il se SOUSCRIT. Le clic ouvre la modale
                     // (mandat SEPA + contrat signés, prorata, encaissement de la 1re échéance ici).
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>

@@ -236,9 +236,11 @@ function DetailVente({ detail, produits, droits, sessionId, onRetour, onRembours
         {/* Le remboursement n'a de sens que sur une vente validée : proposer le bouton sur une vente
             annulée ou déjà remboursée ferait cliquer pour rien, et le refus viendrait du serveur
             après coup. Une action qui n'a pas de sens est absente, jamais grisée. */}
-        {/* Une vente EN COURS se reprend en caisse : c'est la sortie d'un règlement resté sans issue
-            dans un autre onglet ou sur un autre poste (ticket opposable, G-6). */}
-        {detail.statut === 'en_cours' && onReprendre && aLeDroit(droits, 'vente.encaisser') && (
+        {/* Une vente EN COURS de la session ouverte se reprend en caisse : c'est la sortie d'un règlement
+            resté sans issue dans un autre onglet (ticket opposable, G-6). Jamais une vente d'une
+            session close : son règlement tomberait hors de tout Z. */}
+        {detail.statut === 'en_cours' && !!sessionId && detail.session?.id === sessionId
+          && onReprendre && aLeDroit(droits, 'vente.encaisser') && (
           <button className="btn ghost sm" type="button" onClick={() => onReprendre(detail)}>
             Reprendre en caisse
           </button>
