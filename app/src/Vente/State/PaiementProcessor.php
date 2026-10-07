@@ -17,6 +17,9 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  * rendu espèces uniquement, TPE automatique (un refus/timeout n'ajoute rien). Renvoie l'état du reste
  * à payer et, le cas échéant, le statut TPE.
  *
+ * Un rejeu (même `cleIdempotence` ou même `id`) rend le règlement déjà enregistré avec
+ * `dejaEnregistre: true` et un 200 : rien n'a été créé, rien n'a été encaissé de nouveau.
+ *
  * @implements ProcessorInterface<Vente, JsonResponse>
  */
 final class PaiementProcessor implements ProcessorInterface
@@ -37,16 +40,18 @@ final class PaiementProcessor implements ProcessorInterface
 
         $paiement = $resultat['paiement'];
         $statutTpe = $resultat['statutTPE'];
+        $dejaEnregistre = $resultat['dejaEnregistre'];
 
         return new JsonResponse([
             'vente' => (string) $data->getId(),
             'reglementEnregistre' => $paiement !== null,
+            'dejaEnregistre' => $dejaEnregistre,
             'paiement' => $paiement?->getId() !== null ? (string) $paiement->getId() : null,
             'moyen' => $paiement?->getMoyenCode(),
             'montant' => $paiement?->getMontant(),
             'rendu' => $paiement?->getRendu(),
             'statutTPE' => $statutTpe?->value,
             'resteAPayer' => $data->getResteAPayer(),
-        ], $paiement !== null ? JsonResponse::HTTP_CREATED : JsonResponse::HTTP_OK);
+        ], $paiement !== null && !$dejaEnregistre ? JsonResponse::HTTP_CREATED : JsonResponse::HTTP_OK);
     }
 }
