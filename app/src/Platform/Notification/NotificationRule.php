@@ -19,8 +19,9 @@ use App\Platform\Enum\NotificationSeverity;
  *   n'agit sur un refus isolé. Il n'entre pas.
  *
  * ⚠ CE N'EST PAS UNE LISTE À FAIRE GROSSIR. Vingt-huit événements sont réellement émis par ce
- * dépôt ; SIX entrent ici — le sixième posé le 03/09, sur arbitrage de Maxime, pour un délai
- * légal qu'aucun geste ne ferait remarquer. Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
+ * dépôt ; SEPT entrent ici — le sixième posé le 03/09, sur arbitrage de Maxime, pour un délai
+ * légal qu'aucun geste ne ferait remarquer ; le septième le 07/10, sur arbitrage de Maxime (D121),
+ * pour une jauge de sécurité dépassée. Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
  * problème personne ne le voit — c'est exactement ce qui arrive à un bandeau permanent qui répète
  * « tout va bien ».
  *
@@ -161,6 +162,23 @@ final class NotificationRule
                 .'position et l’échéancier pour décider : relancer, décaler un paiement, ou prévenir la '
                 .'collectivité.',
                 'projected_breach_date',
+            ),
+            // D121 (07/10, Maxime : « compter et signaler »). Une entrée faite sur une borne hors ligne
+            // est comptée à la remontée, même jauge pleine : l'espace accueille alors plus de monde que
+            // son seuil de sécurité. Critique : ça ne se planifie pas. Rare : une alerte par espace et
+            // par lot remonté (`SynchroPassageHandler`), jamais une par passage.
+            new self(
+                'access.capacity_exceeded',
+                NotificationSeverity::Critical,
+                'acces',
+                'superviser',
+                'supervision',
+                'espace',
+                'Jauge FMI dépassée après une remontée hors ligne',
+                'Des entrées faites pendant une coupure de borne ont été remontées alors que la jauge était pleine. '
+                .'Elles sont comptées : l’espace accueille plus de monde que son seuil de sécurité. Vérifiez la '
+                .'fréquentation sur place et retenez les entrées le temps qu’elle redescende.',
+                'space_label',
             ),
         ];
 
