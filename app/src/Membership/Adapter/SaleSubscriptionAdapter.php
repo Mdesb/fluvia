@@ -127,8 +127,8 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             // L'écran de souscription souscrit d'abord, PUIS encaisse le 1er mois dans une vente qui
             // porte la même formule : souscrire ici en créait un second (PR #276, 2 → 3). On relie la
             // ligne à l'abonnement actif du jour, même payeur, même formule, qu'aucune ligne n'a encore
-            // payé — la clé d'idempotence de `/sport/abonnements/souscrire`. La ligne de l'écran ne
-            // nomme pas l'adhérent : il ne départage que si elle le désigne.
+            // payé — la clé d'idempotence de `/sport/abonnements/souscrire`. L'adhérent ne départage
+            // que si la ligne le désigne (l'écran le fait ; un appel d'API peut ne pas le faire).
             $criteres = [
                 'payeur' => $payeur, 'formule' => $formule, 'etablissement' => $etablissement,
                 'statut' => MembershipStatus::Actif, 'dateSouscription' => $vente->getDate(), 'sourceSaleLineId' => null,

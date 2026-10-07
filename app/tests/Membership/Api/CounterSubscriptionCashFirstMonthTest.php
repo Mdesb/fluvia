@@ -84,7 +84,7 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         $enfant = $this->entite(Client::class, ['prenom' => CrmFixtures::ENFANT_PRENOM]);
         $session = $this->ouvrirSession($client, $entete);
 
-        // L'adhérent n'est porté que par la souscription : la ligne de l'écran n'en désigne aucun.
+        // La ligne nomme l'enfant, comme la souscription.
         $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit, $enfant);
         self::assertLessThan(300, $parcours['valider'], $parcours['corps']);
 
@@ -106,7 +106,7 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
         $session = $this->ouvrirSession($client, $entete);
 
-        $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit, null, true, (string) $payeur->getId());
+        $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit);
         self::assertLessThan(300, $parcours['valider'], $parcours['corps']);
 
         $abonnements = $this->subscriptionsOf($payeur, $produit);
@@ -150,8 +150,8 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
 
     /**
      * Rejoue `SouscriptionAbonnement.jsx` : `soumettre()` puis `encaisserComptant()`, dans l'ordre et
-     * avec ses corps. `$rattacher = false` rejoue le rattachement client qui échoue (l'écran
-     * continuait) ; `$beneficiaire` sort du chemin de l'écran (sonde du 07/10).
+     * avec ses corps : la ligne nomme l'adhérent, à défaut le payeur. `$rattacher = false` rejoue
+     * le rattachement client qui échoue.
      *
      * @param array<string, mixed> $entete
      *
@@ -165,7 +165,6 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         Produit $produit,
         ?Client $adherent = null,
         bool $rattacher = true,
-        ?string $beneficiaire = null,
     ): array {
         $payeurId = (string) $payeur->getId();
         $souscription = [
@@ -189,10 +188,8 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
             'produit' => (string) $produit->getId(),
             'typeTarif' => $this->idTarif(OffreFixtures::TARIF_PLEIN),
             'quantite' => 1,
+            'beneficiaire' => (string) ($adherent ?? $payeur)->getId(),
         ];
-        if ($beneficiaire !== null) {
-            $ligne['beneficiaire'] = $beneficiaire;
-        }
         $apres = $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + ['json' => $ligne])->toArray();
         $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + [
             'json' => ['moyen' => 'especes', 'montant' => '39.90'],
