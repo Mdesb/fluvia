@@ -103,6 +103,17 @@ test('sans réponse (délai, réseau, 502) ou « en cours », le même corps rep
   assert.deepEqual(relances, [1, 2, 3])
 })
 
+test('un appel non lu (jeton expiré 401, droit 403, autre établissement 404) n\'est pas une issue : la clé est gardée, sans relance', async () => {
+  for (const statut of [401, 403, 404]) {
+    const s = stockage()
+    const api = serveur(new ApiError('Non lu.', statut, {}))
+    const issue = await settle(api, s, intentFor(s, vente), sansAttente)
+    assert.equal(issue.outcome, 'pending', String(statut))
+    assert.notEqual(pendingIntent(s, 'v1'), null, String(statut))
+    assert.equal(api.appels.length, 1)
+  }
+})
+
 test('un terminal muet n\'est jamais relancé : l\'écran reçoit la tentative à déclarer, et garde la clé', async () => {
   const s = stockage()
   const api = serveur(inconnue())

@@ -1,6 +1,6 @@
 import { membres } from './client.js'
 import { idDe } from './iri.js'
-import { intentFor, settle } from './paymentIntent.js'
+import { intentFor, pendingIntents, settle } from './paymentIntent.js'
 
 // ── ENCAISSEMENT AU COMPTOIR DE LA PREMIÈRE ÉCHÉANCE (écran de souscription) ────────────────────
 //
@@ -35,6 +35,14 @@ export async function payFirstInstalmentAtCounter(
   if (!tarif) {
     return "L'abonnement est souscrit, mais ce produit n'a aucun tarif au guichet : rien n'a été "
       + "encaissé. Encaissez depuis la caisse, ou laissez la première échéance se prélever."
+  }
+  // Un règlement sans issue attend dans cet onglet (une souscription précédente, une vente de la
+  // caisse) : en ouvrir un autre ferait payer deux fois si le premier est passé.
+  const enAttente = pendingIntents(storage, establishment)[0]
+  if (enAttente) {
+    return `L'abonnement est souscrit, mais un règlement de la vente ${enAttente.saleNumber ? `n° ${enAttente.saleNumber}` : 'précédente'} `
+      + "attend encore son issue : rien n'a été encaissé ici. Vérifiez-le depuis la caisse ; la première "
+      + 'échéance sera prélevée normalement.'
   }
   let vente
   try {

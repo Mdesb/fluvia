@@ -8,16 +8,17 @@ import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
-// Chargé à part : le paquet principal frôlait les 500 kB et le bundler l'aurait signalé (n51) —
-// le bandeau des scans se dessine un instant après la caisse, sans rien changer à l'encaissement.
+// Chargés à part : le paquet principal frôlait les 500 kB, que le garde-fou n°51 refuse. Le bandeau des
+// scans se dessine un instant après la caisse ; l'écran d'ouverture et de Z, à l'ouverture de sa
+// modale. Rien ne change à l'encaissement.
 const ScansEnDirect = lazy(() => import('../components/ScansEnDirect.jsx'))
+const SessionCaisse = lazy(() => import('./SessionCaisse.jsx'))
 import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
-import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
   prixIndicatif,
@@ -138,6 +139,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setClient(null)
     setPmvClient(null)
     setBesoinClient(false)
+    setAttente(null)
+    setDeclaration(null)
     // ⚠ LA CAISSE NE DEMANDE QUE CE QU'ELLE PEUT VENDRE (06/10/2026). Elle affichait les brouillons
     // et les archivés, et le serveur les vendait : les deux défauts se couvraient l'un l'autre.
     // - statut : filtré par l'API (`statut=publie`) ;
@@ -800,7 +803,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     await reglerIntention(venteObj, intention, paiementsPrecedents)
   }
 
-  async function reglerIntention(venteObj, intention, paiementsPrecedents) {
+  async function reglerIntention(venteObj, intention, paiementsPrecedents, lignes = panier) {
     setBusy(true)
     setErreur(null)
     setAvis(null)
@@ -812,7 +815,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setAttente(pendingIntent(sessionStorage, venteObj.id))
     if (issue.outcome === 'paid') {
       setAvis(null)
-      await apresReglement(venteObj, issue.response, paiementsPrecedents)
+      await apresReglement(venteObj, issue.response, paiementsPrecedents, lignes)
     } else if (issue.outcome === 'unknown') {
       setAvis(issue.message)
       setDeclaration({ venteId: venteObj.id, tentative: issue.attempt })
@@ -841,7 +844,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   // Un règlement écrit (encaissé, ou déclaré « accepté ») : la liste, le reste, et la validation s'il solde.
-  async function apresReglement(venteObj, res, paiementsPrecedents) {
+  async function apresReglement(venteObj, res, paiementsPrecedents, lignes = panier) {
     let reglements
     let reste = res.resteAPayer ?? '0.00'
     if (res.dejaEnregistre) {
@@ -871,7 +874,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     // ⚠ La validation porte son propre message d'échec — « Échec de la validation » — qui est vrai et
     // qui n'invite pas à réencaisser : à cet instant l'argent EST encaissé.
     if (parseFloat(reste) > 0) return
-    const { proposables, horsPortee } = trierAppairables(panier)
+    const { proposables, horsPortee } = trierAppairables(lignes)
     if (proposables.length > 0 || horsPortee.length > 0) {
       setAppairageEnAttente({ venteId: venteObj.id, reglements, proposables, horsPortee })
     } else {
@@ -879,9 +882,29 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
-  // Au montage (F5) et au retour de la souscription : un règlement sans issue dans cet onglet rouvre
-  // sa vente, et se redemande avec la même clé. Une vente close (validée, annulée) a son issue écrite.
-  async function reprendreReglement() {
+  // Rouvre une vente EN COURS dans la caisse : lignes (produit du catalogue, pour l'appairage des
+  // cartes), règlements et reste dû relus du serveur. Rend null pour une vente close.
+  async function rouvrirVente(v) {
+    if (v.statut !== 'en_cours') return null
+    const catalogue = produits ?? membres(await api.produits({ statut: 'publie' }).catch(() => []))
+    const lignes = (v.lignes || []).map((l) => ({
+      cle: l.id,
+      ligneServeurId: l.id,
+      produit: catalogue.find((p) => String(p.id) === String(l.produit)) || { libelle: l.libelleProduit },
+      quantite: l.quantite,
+      prix: (parseFloat(l.prixUnitaire) + parseFloat(l.impactOptionsUnitaire ?? '0')).toFixed(2),
+      montant: l.montantLigne,
+      tarifLibelle: l.libelleTypeTarif || null,
+    }))
+    setPanier(lignes)
+    const { reglements } = await relireVente(v.id)
+    return { v, lignes, reglements }
+  }
+
+  // Au montage (F5), au retour de la souscription, ou avant d'ouvrir une autre vente : un règlement
+  // sans issue dans cet onglet rouvre sa vente et se redemande avec la même clé. Une vente close
+  // (validée, annulée) a son issue écrite : l'intention est oubliée.
+  async function reprendre() {
     const [intention] = pendingIntents(sessionStorage, etabActif)
     if (!intention) return
     let v
@@ -892,22 +915,29 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         + `mais la vente n'a pas pu être relue (${e.message || 'refus du serveur'}). Rechargez la page : ne l'encaissez pas une seconde fois.`)
       return
     }
-    if (v.statut !== 'en_cours') {
+    const lu = await rouvrirVente(v)
+    if (!lu) {
       forgetIntent(sessionStorage, intention.saleId)
       return
     }
-    setPanier((v.lignes || []).map((l) => ({
-      cle: l.id,
-      ligneServeurId: l.id,
-      produit: { libelle: l.libelleProduit },
-      quantite: l.quantite,
-      prix: (parseFloat(l.prixUnitaire) + parseFloat(l.impactOptionsUnitaire ?? '0')).toFixed(2),
-      montant: l.montantLigne,
-      tarifLibelle: l.libelleTypeTarif || null,
-    })))
-    const { reglements } = await relireVente(v.id)
-    await reglerIntention({ id: v.id, numero: v.numero ?? null }, intention, reglements)
+    await reglerIntention({ id: v.id, numero: v.numero ?? null }, intention, lu.reglements, lu.lignes)
   }
+
+  const reprendreReglement = () => seul(reprendre)
+
+  // Depuis l'historique, une vente EN COURS se reprend — c'est la sortie d'un règlement sans issue
+  // laissé par un autre onglet ou un autre poste : « Régler » ou « Valider » ouvre alors sa déclaration.
+  const reprendreDepuisHistorique = (detail) => seul(async () => {
+    try {
+      const lu = await rouvrirVente(await api.vente(detail.id))
+      if (lu) {
+        setAvis(`Vente n° ${lu.v.numero} reprise. Si un règlement y attend son issue, « Régler » ou « Valider » `
+          + "ouvre la fenêtre « Qu'affiche le terminal ? ».")
+      }
+    } catch (e) {
+      setErreur(e.message || "La vente n'a pas pu être reprise.")
+    }
+  })
 
   // « Qu'affiche le terminal ? » : la déclaration du caissier clôt le règlement sans issue.
   async function declarer(choix) {
@@ -949,23 +979,32 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   //
   // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses
   // `setVente`/`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait `null`.
-  async function reglerUnMoyen() {
+  async function seul(geste) {
     if (reglementEnCours.current) return
     reglementEnCours.current = true
     try {
-      let venteObj = vente
-      let paiementsPrec = paiements
-      if (!venteObj) {
-        const ctx = await demarrerPaiement()
-        if (!ctx) return
-        venteObj = ctx.vObj
-        paiementsPrec = []
-      }
-      await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
+      await geste()
     } finally {
       reglementEnCours.current = false
     }
   }
+
+  const reglerUnMoyen = () => seul(async () => {
+    let venteObj = vente
+    let paiementsPrec = paiements
+    if (!venteObj) {
+      // Un règlement sans issue attend dans cet onglet : on le reprend avant d'ouvrir une autre vente.
+      if (pendingIntents(sessionStorage, etabActif).length > 0) {
+        await reprendre()
+        return
+      }
+      const ctx = await demarrerPaiement()
+      if (!ctx) return
+      venteObj = ctx.vObj
+      paiementsPrec = []
+    }
+    await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
+  })
 
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
 //
@@ -1156,15 +1195,17 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       taille={session ? 'lg' : 'md'}
       titre={session ? 'Clôture de caisse (Z)' : 'Ouvrir la caisse'}
     >
-      <SessionCaisse
-        modale
-        me={me}
-        etabActif={etabActif}
-        session={session}
-        droits={droits}
-        onRefresh={onSessionRefresh}
-        onClose={() => setCaisseModale(false)}
-      />
+      <Suspense fallback={null}>
+        <SessionCaisse
+          modale
+          me={me}
+          etabActif={etabActif}
+          session={session}
+          droits={droits}
+          onRefresh={onSessionRefresh}
+          onClose={() => setCaisseModale(false)}
+        />
+      </Suspense>
     </Modal>
   )
 
@@ -1186,7 +1227,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
   const modaleSouscription = (
     <Modal
       open={souscriptionOuverte}
-      onClose={() => setSouscriptionOuverte(false)}
+      onClose={() => {
+        setSouscriptionOuverte(false)
+        reprendreReglement()
+      }}
       titre={ligneAbo ? `Souscrire — ${libelleProduit(ligneAbo.produit)}` : 'Souscrire un abonnement'}
       taille="lg"
     >
@@ -1197,7 +1241,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           payeurInitial={client}
           session={session}
           droits={droits}
-          onAnnuler={() => setSouscriptionOuverte(false)}
+          onAnnuler={() => {
+            setSouscriptionOuverte(false)
+            reprendreReglement()
+          }}
           onCree={() => {
             // Souscription aboutie (et 1re échéance encaissée par le composant lui-même) : on solde
             // le panier et on repart propre. On ne rejoue rien — sauf un règlement resté sans issue,
@@ -1270,6 +1317,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           onClose={fermerHistorique}
           droits={droits}
           sessionId={session?.id}
+          onReprendre={vente || !session ? null : (detail) => {
+            fermerHistorique()
+            reprendreDepuisHistorique(detail)
+          }}
           onDuplicata={async (vente) => {
             setErreur(null)
             try {
@@ -1563,7 +1614,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       onRegler={reglerUnMoyen}
                       onValider={validerVente}
                       onAbandon={abandonner}
-                      montrerAbandon={!!vente}
+                      montrerAbandon={!!vente && !(attente && attente.saleId === vente.id)}
                       attente={attente && attente.saleId === vente?.id ? { ...attente.body, libelle: libelleMoyen(attente.body.moyen) } : null}
                     />
                   )}

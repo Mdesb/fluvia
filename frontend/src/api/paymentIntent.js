@@ -100,6 +100,11 @@ export async function settle(api, storage, intent, { pause = wait, tries = 10, d
       if (e?.payload?.code === 'payment_outcome_unknown') {
         return { outcome: 'unknown', attempt: e.payload.tentative ?? null, message: e.message }
       }
+      // Non lu (jeton expiré, droit retiré, autre établissement actif) : CETTE demande n'a rien fait,
+      // mais une précédente a pu passer. L'intention reste, sans relance : rien ne la lirait mieux.
+      if ([401, 403, 404].includes(e?.status)) {
+        return { outcome: 'pending', message: `${e.message} — le règlement en attente est gardé : vérifiez-le une fois reconnecté, sur le bon établissement.` }
+      }
       const sansIssue = e?.payload?.code === 'payment_in_progress' || !e?.status || e.status >= 500
       if (!sansIssue) {
         forgetIntent(storage, intent.saleId)

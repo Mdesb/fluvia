@@ -36,7 +36,7 @@ const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis
 
 // L'historique des ventes du guichet : un écran de la caisse (#caisse?historique=1), plus une
 // modale (le nom du fichier est resté). Le détail d'une vente s'ouvre DANS cet écran.
-export default function HistoriqueVentes({ onClose, droits = [], sessionId, onDuplicata, onFacture }) {
+export default function HistoriqueVentes({ onClose, droits = [], sessionId, onDuplicata, onFacture, onReprendre }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [du, setDu] = useState('')
@@ -121,6 +121,7 @@ export default function HistoriqueVentes({ onClose, droits = [], sessionId, onDu
           }}
           onDuplicata={onDuplicata}
           onFacture={onFacture}
+          onReprendre={onReprendre}
         />
       ) : (
         <>
@@ -217,7 +218,7 @@ export default function HistoriqueVentes({ onClose, droits = [], sessionId, onDu
   )
 }
 
-function DetailVente({ detail, produits, droits, sessionId, onRetour, onRembourse, onDuplicata, onFacture }) {
+function DetailVente({ detail, produits, droits, sessionId, onRetour, onRembourse, onDuplicata, onFacture, onReprendre }) {
   const [remboursement, setRemboursement] = useState(null)
   const [annulation, setAnnulation] = useState(null) // null | 'formulaire' | { numero }
   const [facture, setFacture] = useState(null) // null | 'en_cours' | message d'erreur
@@ -235,6 +236,13 @@ function DetailVente({ detail, produits, droits, sessionId, onRetour, onRembours
         {/* Le remboursement n'a de sens que sur une vente validée : proposer le bouton sur une vente
             annulée ou déjà remboursée ferait cliquer pour rien, et le refus viendrait du serveur
             après coup. Une action qui n'a pas de sens est absente, jamais grisée. */}
+        {/* Une vente EN COURS se reprend en caisse : c'est la sortie d'un règlement resté sans issue
+            dans un autre onglet ou sur un autre poste (ticket opposable, G-6). */}
+        {detail.statut === 'en_cours' && onReprendre && aLeDroit(droits, 'vente.encaisser') && (
+          <button className="btn ghost sm" type="button" onClick={() => onReprendre(detail)}>
+            Reprendre en caisse
+          </button>
+        )}
         {detail.statut === 'validee' && onDuplicata && !remboursement && (
           <button className="btn ghost sm" type="button" onClick={() => onDuplicata(detail)}>
             Réimprimer le ticket

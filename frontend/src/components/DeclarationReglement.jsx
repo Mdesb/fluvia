@@ -20,7 +20,8 @@ export default function DeclarationReglement({ tentative, busy, erreur, onDeclar
         Le terminal n'a pas rendu d'issue pour le règlement
         {tentative ? ` de ${euros(tentative.montant)} (${tentative.moyen})` : ''}
         {depuis ? `, commencé à ${depuis}` : ''} : la carte a peut-être été débitée. Lisez l'écran ou le
-        ticket du terminal, puis déclarez ce qu'il affiche.
+        ticket du terminal, puis déclarez ce qu'il affiche. « Non passé » seulement s'il affiche un refus,
+        une annulation, ou n'a jamais lu la carte : s'il attend encore, attendez son issue.
       </p>
       {tentative?.raison && <p className="sub">{tentative.raison}</p>}
       <div className="field">

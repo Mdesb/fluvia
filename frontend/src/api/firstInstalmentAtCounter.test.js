@@ -129,3 +129,14 @@ test('un refus reste un refus : l\'abonnement est souscrit, l\'échéance sera p
   assert.match(message, /Le règlement a été refusé/)
   assert.equal(pendingIntent(stockage, 'v1'), null)
 })
+
+test('un règlement sans issue attend dans l\'onglet : la souscription n\'en ouvre pas un second', async () => {
+  const stockage = memoire()
+  const ancien = serveurReglement(new ApiError('Le terminal n\'a pas rendu d\'issue.', 409, { code: 'payment_outcome_unknown' }))
+  await payFirstInstalmentAtCounter(ancien, parametres, { storage: stockage, settleOptions: sansAttente })
+
+  const api = serveurReglement({ reglementEnregistre: true })
+  const message = await payFirstInstalmentAtCounter(api, parametres, { storage: stockage, settleOptions: sansAttente })
+  assert.match(message, /attend encore son issue/)
+  assert.deepEqual(api.appels, [])
+})
