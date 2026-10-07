@@ -21,7 +21,7 @@ use Doctrine\Migrations\AbstractMigration;
  *
  * SQL demandé à Doctrine (`doctrine:schema:update --dump-sql`) puis recopié, uuid en BINARY(16).
  */
-final class Version20261007185037 extends AbstractMigration
+final class Version20261007200615 extends AbstractMigration
 {
     public function getDescription(): string
     {

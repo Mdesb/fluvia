@@ -165,6 +165,9 @@ final class PaiementHandler
 
         // TPE : envoi automatique ; seul « accepté » crée le règlement (CA-10).
         if ($moyen->exigeReference) {
+            if ($pdv === null) {
+                throw new UnprocessableEntityHttpException('Aucun point de vente sur cette vente : aucun terminal à solliciter.');
+            }
             if ($evenements !== null) {
                 $evenements->terminalAsked = true;
             }

@@ -15,6 +15,8 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\MaxUuid;
+use Symfony\Component\Uid\NilUuid;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -62,9 +64,11 @@ final class SettlementCoordinator
      */
     public function settle(Vente $vente, array $donnees): array
     {
-        // L'`id` fourni vaut clé (D-3) : à défaut de clé, il en tient lieu pour la tentative.
+        // L'`id` fourni vaut clé (D-3) : à défaut de clé, il en tient lieu pour la tentative — sauf nul
+        // ou max, admis comme `id` (lot 1) mais pas comme clé : constants, ils ne désignent aucune demande.
         $cleFournie = $this->handler->idempotencyKey($donnees);
-        $cle = $cleFournie ?? $this->handler->providedId($donnees);
+        $id = $this->handler->providedId($donnees);
+        $cle = $cleFournie ?? ($id instanceof NilUuid || $id instanceof MaxUuid ? null : $id);
         $tentative = $cle !== null ? $this->attempts->byKey($cle) : null;
         if ($tentative === null) {
             // Un règlement écrit avant ce lot (sans tentative) : la garde du lot 1.

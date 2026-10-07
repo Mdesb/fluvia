@@ -206,6 +206,19 @@ final class PaymentAttemptTest extends CrmApiTestCase
         self::assertSame(0, $this->paymentCount($vente));
     }
 
+    /** Témoin : un `id` nul reste admis comme `id` (lot 1) ; il ne devient pas la clé de la tentative, qui en reçoit une du serveur. */
+    public function testANilIdIsStillAnIdButNotAKey(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $vente = $this->cardSale($client, $entete);
+
+        $reponse = $this->pay($client, $entete, $vente, ['moyen' => 'especes', 'montant' => '20.00', 'id' => '00000000-0000-0000-0000-000000000000']);
+
+        self::assertSame(201, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+        self::assertSame('00000000-0000-0000-0000-000000000000', $reponse->toArray()['paiement']);
+        self::assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM sale_payment_attempt WHERE idempotency_key = UNHEX('00000000000000000000000000000000')"));
+    }
+
     /**
      * La clé retient ce qui a été DEMANDÉ : un montant absent (« le reste dû ») n'est pas le même
      * contenu qu'un montant donné, dans un sens comme dans l'autre (G-4).
