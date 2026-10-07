@@ -7,7 +7,9 @@ namespace App\Tests\Acces\Api;
 use App\Acces\Entity\DroitAcces;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
+use App\Organisation\Entity\Etablissement;
 use App\Tests\Acces\AccesApiTestCase;
+use App\Tests\Acces\SnapshotDeltaTrait;
 use App\Vente\Entity\BilletSupport;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -20,6 +22,36 @@ use Symfony\Component\Uid\Uuid;
  */
 final class StubProjectionDroitFenetreFinTest extends AccesApiTestCase
 {
+    use SnapshotDeltaTrait;
+
+    /**
+     * La date butoir est le dernier jour utilisable, jusqu'à minuit à l'heure de l'établissement
+     * (décision de Maxime du 07/10/2026), en base ET sur la borne hors ligne, qui ne lit que
+     * `validiteFin` dans son snapshot. Mesuré le 07/10/2026 : les deux valaient 00:00 UTC le jour
+     * butoir, soit 01:00 à Paris.
+     */
+    public function testLaDateButoirVautJusquAMinuitSurLaBorneHorsLigne(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $em = $this->em();
+        $this->entite(Produit::class, ['libelleRecherche' => OffreFixtures::PRODUIT_CARTE])->getCarte()
+            ?->setValiditeDuree(null)->setDateButoir(new \DateTimeImmutable('2027-01-31'));
+        foreach ($em->getRepository(Etablissement::class)->findAll() as $etablissement) {
+            $etablissement->setFuseauHoraire('Europe/Paris');
+        }
+        $em->flush();
+
+        $session = $this->ouvrirSession($client, $entete);
+        [$identifiant, $billetSupportId] = $this->venteCarteEtEmission($client, $entete, $session['id']);
+        $client->request('POST', '/api/acces/appairages', $entete + ['json' => [
+            'identifiantSupport' => $identifiant, 'typeSupport' => 'QR', 'billetSupportRef' => $billetSupportId, 'mode' => 'caisse',
+        ]]);
+        self::assertResponseIsSuccessful();
+
+        // 23:59:59 à Paris le 31/01 (UTC+1).
+        self::assertSame('2027-01-31T22:59:59+00:00', $this->fullSnapshotEntry($identifiant)['validiteFin'] ?? null);
+    }
+
     public function testPremiereProjectionEcritFenetreFin(): void
     {
         [$client, $entete] = $this->adminSurA();

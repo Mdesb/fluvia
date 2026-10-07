@@ -123,7 +123,7 @@ final class CardRechargeHandler implements CardRechargeInterface
         // cette recharge (résolue depuis BilletSupport → LigneVente → Produit).
         $carte = $this->carteVendue($support);
         $nouvelleEcheance = $carte !== null
-            ? $this->cardExpiry->calculer($carte, $droit->getFenetreFin(), new \DateTimeImmutable())
+            ? $this->cardExpiry->calculer($carte, $droit->getFenetreFin(), new \DateTimeImmutable(), $droit->getEtablissement())
             : $droit->getFenetreFin();
 
         $droitId = $droit->getId();

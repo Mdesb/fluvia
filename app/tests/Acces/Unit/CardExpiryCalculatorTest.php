@@ -40,7 +40,8 @@ final class CardExpiryCalculatorTest extends TestCase
 
         $resultat = $this->calculateur->calculer($carte, null, $this->maintenant);
 
-        self::assertEquals(new \DateTimeImmutable('2026-10-23'), $resultat, 'Le butoir plus proche plafonne.');
+        // Jusqu'à 23:59:59 à Paris le jour butoir (UTC+2 en octobre) : `CardDeadlineLastDayTest`.
+        self::assertEquals(new \DateTimeImmutable('2026-10-23T21:59:59+00:00'), $resultat, 'Le butoir plus proche plafonne.');
     }
 
     public function testDureeEtButoirPlusLointainNestPasRetenu(): void
@@ -54,13 +55,13 @@ final class CardExpiryCalculatorTest extends TestCase
         self::assertEquals(new \DateTimeImmutable('2027-08-23 10:00:00'), $resultat, 'Le butoir lointain ne plafonne pas.');
     }
 
-    public function testButoirSeulEstRetourneTelQuel(): void
+    public function testButoirSeulVautJusquAuSoirDuJourButoir(): void
     {
         $carte = (new CarteMultiEntrees())->setDateButoir(new \DateTimeImmutable('2026-12-31'));
 
         $resultat = $this->calculateur->calculer($carte, null, $this->maintenant);
 
-        self::assertEquals(new \DateTimeImmutable('2026-12-31'), $resultat);
+        self::assertEquals(new \DateTimeImmutable('2026-12-31T22:59:59+00:00'), $resultat, '23:59:59 à Paris (UTC+1).');
     }
 
     public function testAucunDesDeuxRenvoieNull(): void
