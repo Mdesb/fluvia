@@ -74,7 +74,7 @@ final class PmvTest extends CrmApiTestCase
         $pmvApresPaiement = $client->request('GET', '/api/clients/' . $payeurId . '/pmv', $entete)->toArray();
         self::assertSame('45.05', $pmvApresPaiement['solde']);
 
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/annuler', $entete + ['json' => ['motif' => 'Test CA-9']]);
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertResponseIsSuccessful();
 
         $pmvApresAnnulation = $client->request('GET', '/api/clients/' . $payeurId . '/pmv', $entete)->toArray();
