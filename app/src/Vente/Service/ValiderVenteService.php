@@ -77,6 +77,7 @@ final class ValiderVenteService
         private readonly GenerateurCodeSupport $generateurCode,
         private readonly CardRechargeInterface $cardRecharge,
         private readonly EventBus $eventBus,
+        private readonly PaymentAttemptStore $tentatives,
     ) {
     }
 
@@ -93,6 +94,9 @@ final class ValiderVenteService
         if ($vente->getStatut() !== StatutVente::EnCours) {
             throw new ConflictHttpException('Seule une vente en cours peut être validée (NF525).');
         }
+
+        // Avant le reste dû : le caissier doit lire « un règlement attend son issue », pas « reste dû ».
+        $this->refuseWhileAPaymentHoldsTheSale($vente, false);
 
         $this->calculateur->recalculerVente($vente);
 
@@ -149,6 +153,9 @@ final class ValiderVenteService
         $supportsCrees = [];
         try {
             $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv, &$supportsCrees): OperationScellee {
+                // En tête de la transaction, sous verrou de la vente : voir la méthode.
+                $this->refuseWhileAPaymentHoldsTheSale($vente, true);
+
                 // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
                 $this->stock->decrementer($vente);
 
@@ -240,6 +247,35 @@ final class ValiderVenteService
         $this->evenementsEnAttente = [];
 
         return $operation;
+    }
+
+    /**
+     * D-4 du ticket opposable : on ne scelle pas une vente qu'une tentative de règlement tient — un
+     * terminal muet a peut-être débité, et un « accepté » déclaré ensuite ne pourrait plus s'écrire.
+     * Le reste dû ne suffit pas à l'empêcher : un paiement différé autorise la validation.
+     *
+     * Dans la transaction, la ligne de la vente est d'abord verrouillée (`FOR UPDATE`) : une tentative
+     * qui s'ouvre en même temps attend la fin de la validation (sa clé étrangère vers la vente pose un
+     * verrou partagé, mesuré par `PaymentAttemptSchemaTest`), puis trouve la vente scellée et n'encaisse
+     * rien. Une tentative ouverte juste avant est vue par la lecture verrouillante.
+     *
+     * ⚠ Le verrou sérialise aussi deux validations de la même vente (deux onglets) : la seconde
+     * attend, puis relirait un statut d'avant en mémoire et scellerait une seconde fois. Le statut est
+     * donc relu sous le verrou. Une vente pas encore écrite (créée dans la transaction de l'appelant)
+     * n'a pas de ligne : rien à verrouiller, et aucune tentative ne peut la tenir.
+     */
+    private function refuseWhileAPaymentHoldsTheSale(Vente $vente, bool $locking): void
+    {
+        if ($locking) {
+            $statut = $this->connection->fetchOne('SELECT statut FROM vente_vente WHERE id = UNHEX(:v) FOR UPDATE', ['v' => PaymentAttemptStore::hex($vente->getId())]);
+            if ($statut !== false && $statut !== StatutVente::EnCours->value) {
+                throw new ConflictHttpException('Seule une vente en cours peut être validée (NF525).');
+            }
+        }
+        $tentative = $this->tentatives->holding($vente, $locking);
+        if ($tentative !== null) {
+            throw PaymentAttemptConflict::holding($tentative);
+        }
     }
 
     private function aPaiementDiffere(Vente $vente): bool

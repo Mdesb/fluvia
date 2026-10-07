@@ -135,6 +135,64 @@ final class ConcurrentSettlementTest extends CrmApiTestCase
     }
 
     /**
+     * Le caissier déclare « accepté » pendant que le terminal tarde (lot 3) : sa déclaration tient, et
+     * l'acceptation tardive n'écrit pas un second règlement — l'index unique de la clé l'en empêche.
+     */
+    public function testADeclaredAcceptanceWinsOverALateTerminalAnswer(): void
+    {
+        [$apres, $tardive, $tentative] = $this->declareWhileTheTerminalLags('accepte');
+
+        self::assertSame(201, $apres->getStatusCode(), $apres->getContent(false));
+        self::assertSame([409, 'payment_outcome_known'], [$tardive['status'], $tardive['body']['code'] ?? null]);
+        self::assertSame('declared_accepted', $tentative['status']);
+        self::assertSame(1, $tentative['reglements'], 'Un seul règlement : le déclaré.');
+    }
+
+    /**
+     * Le caissier déclare « non passé » pendant que le terminal tarde, et le terminal accepte quand
+     * même : la déclaration tient — rien n'est écrit —, mais la référence de l'acceptation reste sur la
+     * tentative. Sans elle, un client débité sans règlement ne laisserait aucune trace.
+     */
+    public function testALateAcceptanceAfterANotProcessedDeclarationLeavesItsReference(): void
+    {
+        [$apres, $tardive, $tentative] = $this->declareWhileTheTerminalLags('non_passe');
+
+        self::assertSame(200, $apres->getStatusCode(), $apres->getContent(false));
+        self::assertSame([409, 'payment_outcome_known'], [$tardive['status'], $tardive['body']['code'] ?? null]);
+        self::assertSame(['declared_not_processed', 0], [$tentative['status'], $tentative['reglements']]);
+        self::assertStringContainsString('Accepté par le terminal (réf.', (string) $tentative['raison']);
+    }
+
+    /**
+     * Une carte part dans un autre processus et s'arrête au terminal (qui acceptera) ; la tentative est
+     * vieillie au-delà de 120 s, puis le caissier déclare ; enfin le terminal répond.
+     *
+     * @return array{0: \Symfony\Contracts\HttpClient\ResponseInterface, 1: array{status: int, body: array<string, mixed>}, 2: array{status: string, raison: ?string, reglements: int}}
+     */
+    private function declareWhileTheTerminalLags(string $issue): array
+    {
+        [$client, $entete, $idA] = $this->adminSurA();
+        $vente = $this->cardSale($client, $entete);
+        $cle = (string) Uuid::v4();
+        $premier = $this->settleInOtherProcess($vente, $entete['auth_bearer'], $idA, ['moyen' => 'cb', 'montant' => '45.00', 'cleIdempotence' => $cle]);
+        $this->waitUntilHeld($premier, 'terminal');
+        $this->db()->executeStatement(
+            'UPDATE sale_payment_attempt SET started_at = :d WHERE idempotency_key = UNHEX(:k)',
+            ['d' => (new \DateTimeImmutable('-121 seconds'))->format('Y-m-d H:i:s'), 'k' => $this->hex($cle)],
+        );
+        $id = (string) $this->db()->fetchOne('SELECT HEX(id) FROM sale_payment_attempt WHERE idempotency_key = UNHEX(:k)', ['k' => $this->hex($cle)]);
+
+        $apres = $client->request('POST', '/api/ventes/' . $vente . '/declarer-reglement', $entete + ['json' => [
+            'tentative' => Uuid::fromBinary((string) hex2bin($id))->toRfc4122(), 'issue' => $issue, 'referenceCarte' => 'CB-LUE-AU-TERMINAL',
+        ]]);
+        $apres->getStatusCode();
+        $tardive = $this->release($premier);
+        $ligne = $this->db()->fetchAssociative('SELECT status, failure_reason FROM sale_payment_attempt WHERE idempotency_key = UNHEX(:k)', ['k' => $this->hex($cle)]);
+
+        return [$apres, $tardive, ['status' => (string) $ligne['status'], 'raison' => $ligne['failure_reason'], 'reglements' => $this->paymentCount($vente)]];
+    }
+
+    /**
      * @param array<string, mixed> $corps
      *
      * @return array{0: resource, 1: string}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Vente\Service;
 
 use App\Platform\Event\EventBus;
+use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Paiement;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\PaymentAttemptStatus as Status;
@@ -13,6 +14,7 @@ use App\Vente\Port\ReferentielReglementInterface;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\MaxUuid;
@@ -33,6 +35,9 @@ use Symfony\Component\Uid\Uuid;
  *     Avec terminal : l'appel part HORS transaction — aucun verrou tenu pendant l'attente (C-9) —, puis
  *     une transaction courte écrit le règlement, ou la trace du refus, et clôt la tentative.
  *  5. Les événements partent après le commit (D7-bis).
+ *
+ * Un terminal muet laisse la tentative `unresolved` : la vente reste tenue, rien n'y repart au
+ * terminal, et la seule sortie est la déclaration du caissier ({@see declare()}, Q-A1, D122).
  *
  * La synchronisation hors ligne et le no-show appellent `PaiementHandler::encaisser()` directement,
  * sans tentative : ce lot ne les change pas (Q-A2 ; le no-show a son lot, le 4).
@@ -107,6 +112,87 @@ final class SettlementCoordinator
     }
 
     /**
+     * La déclaration du caissier sur une tentative sans issue connue (G-6, Q-A1, D122), seule sortie
+     * d'un terminal muet. « accepte » écrit le règlement avec la clé et le montant de la tentative et
+     * la référence du ticket CB, SANS terminal ; « non_passe » libère la vente. Qui, quand et quelle
+     * tentative restent écrits sur la tentative. Rejouée à l'identique, elle rend son issue.
+     *
+     * Une réponse tardive du terminal et une déclaration se disputent la même tentative : chacune ne la
+     * fait passer que depuis `unresolved`, et l'index unique de la clé du règlement n'en laisse écrire
+     * qu'un. La perdante n'écrit rien.
+     *
+     * @param array<string, mixed> $donnees { tentative, issue: accepte|non_passe, referenceCarte? }
+     *
+     * @return array{attempt: Attempt, status: Status, paiement: Paiement|null, dejaEnregistre: bool}
+     *
+     * @throws PaymentAttemptConflict la tentative est encore en cours, ou a trouvé son issue autrement
+     */
+    public function declare(Vente $vente, array $donnees, Utilisateur $par): array
+    {
+        $issue = match ($donnees['issue'] ?? null) {
+            'accepte' => Status::DeclaredAccepted,
+            'non_passe' => Status::DeclaredNotProcessed,
+            default => throw new UnprocessableEntityHttpException('issue vaut « accepte » ou « non_passe » : ce qu\'affiche le terminal.'),
+        };
+        $reference = \is_string($donnees['referenceCarte'] ?? null) ? trim($donnees['referenceCarte']) : '';
+        if ($issue === Status::DeclaredAccepted && ($reference === '' || mb_strlen($reference) > 64)) {
+            throw new UnprocessableEntityHttpException('« Accepté » exige la référence du ticket CB imprimé par le terminal (64 caractères au plus).');
+        }
+        $id = \is_string($donnees['tentative'] ?? null) && Uuid::isValid($donnees['tentative'])
+            ? PaymentAttemptStore::hex(Uuid::fromString($donnees['tentative'])) : null;
+        $tentative = $id !== null ? $this->attempts->byId($id) : null;
+        if ($id === null || $tentative === null || $tentative['sale'] !== PaymentAttemptStore::hex($vente->getId())) {
+            throw new UnprocessableEntityHttpException('Aucune tentative de règlement de cet identifiant sur cette vente.');
+        }
+
+        $statut = $this->releaseIfStale($tentative);
+        if ($statut === $issue) {
+            $paiement = $issue === Status::DeclaredAccepted ? $this->attempts->paymentWithKey($tentative['key']) : null;
+
+            return ['attempt' => $tentative, 'status' => $issue, 'paiement' => $paiement !== null ? $this->em->find(Paiement::class, $paiement) : null, 'dejaEnregistre' => true];
+        }
+        if ($statut !== Status::Unresolved) {
+            throw $statut === Status::Pending ? PaymentAttemptConflict::inProgress($tentative) : PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
+        }
+        if ($issue === Status::DeclaredNotProcessed) {
+            if (!$this->attempts->declare($id, $issue, $par->getId(), null, null)) {
+                throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
+            }
+
+            return ['attempt' => $tentative, 'status' => $issue, 'paiement' => null, 'dejaEnregistre' => false];
+        }
+
+        $this->em->refresh($vente);
+        if ($vente->estScellee()) {
+            throw new ConflictHttpException('Vente validée : encaissement clos (NF525).');
+        }
+        try {
+            $paiement = $this->connection->transactional(function () use ($vente, $tentative, $id, $par, $reference): Paiement {
+                $paiement = new Paiement();
+                $paiement->setMoyenCode($tentative['method']);
+                $paiement->setMontant($tentative['amount']);
+                $paiement->setRendu('0.00');
+                $paiement->setStatutTPE(StatutTPE::Accepte);
+                $paiement->setRefTPE($reference);
+                $paiement->setCleIdempotence($tentative['key']);
+                $vente->addPaiement($paiement);
+                $this->calculateur->recalculerVente($vente);
+                $this->em->flush();
+                if (!$this->attempts->declare($id, Status::DeclaredAccepted, $par->getId(), $reference, $paiement->getId())) {
+                    throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
+                }
+
+                return $paiement;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // La réponse tardive du terminal a écrit le règlement de cette clé juste avant.
+            throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
+        }
+
+        return ['attempt' => $tentative, 'status' => $issue, 'paiement' => $paiement, 'dejaEnregistre' => false];
+    }
+
+    /**
      * La clé a déjà sa tentative : on rend son issue, ou on rejoue une demande qui n'a rien fait bouger.
      *
      * @param Attempt              $tentative
@@ -131,12 +217,15 @@ final class SettlementCoordinator
         }
 
         return match ($this->releaseIfStale($tentative)) {
-            Status::Accepted => self::replayed($this->handler->replay($vente, $donnees, $tentative['key'])
+            Status::Accepted, Status::DeclaredAccepted => self::replayed($this->handler->replay($vente, $donnees, $tentative['key'])
                 ?? throw new \LogicException('Tentative acceptée sans règlement : ' . $tentative['id'])),
             Status::Refused => ['paiement' => null, 'statutTPE' => $tentative['terminal'], 'dejaEnregistre' => true],
             Status::Failed => $this->rerun($tentative, $vente, $donnees),
-            Status::Pending => throw PaymentAttemptConflict::inProgress(),
-            Status::Unresolved => throw PaymentAttemptConflict::outcomeUnknown(),
+            // Relue : le jugement de péremption a pu changer son statut et sa raison.
+            Status::Pending, Status::Unresolved => throw PaymentAttemptConflict::holding($this->attempts->byKey($tentative['key']) ?? $tentative),
+            // Le caissier a lu « non passé » sur le terminal : cette clé ne repart pas (une tentative par clé, D-4).
+            Status::DeclaredNotProcessed => throw new UnprocessableEntityHttpException('Ce règlement a été déclaré « non passé » : il n\'a rien encaissé, '
+                . 'et sa clé ne repart pas au terminal. Un nouveau règlement prend une nouvelle clé.'),
         };
     }
 
@@ -248,7 +337,8 @@ final class SettlementCoordinator
             default => Status::Refused,
         };
         // L'issue du terminal s'écrit même si la tentative a été jugée périmée (`unresolved`) pendant
-        // qu'il tardait : la vente est restée tenue, personne n'a pu encaisser entre-temps.
+        // qu'il tardait : la vente est restée tenue, personne n'a pu encaisser entre-temps — sauf le
+        // caissier, par une déclaration, qui l'emporte alors (voir le `catch`).
         $depuis = [Status::Pending, Status::Unresolved];
         try {
             $this->connection->transactional(function () use ($tentative, $issue, $statut, $resultat, $depuis): void {
@@ -262,13 +352,17 @@ final class SettlementCoordinator
             // peut-être débitée sans règlement écrit : il faudra une déclaration — la raison garde la
             // référence rendue par le terminal, pour que le caissier n'ait pas à la deviner.
             $reference = $resultat['paiement']?->getRefTPE();
-            $this->attempts->move(
-                $tentative['id'],
-                $depuis,
-                $issue === Status::Refused ? Status::Refused : Status::Unresolved,
-                $statut,
-                ($reference !== null ? sprintf('Accepté par le terminal (réf. %s), règlement non écrit : ', $reference) : '') . $e->getMessage(),
-            );
+            $raison = ($reference !== null ? sprintf('Accepté par le terminal (réf. %s), règlement non écrit : ', $reference) : '') . $e->getMessage();
+            if (!$this->attempts->move($tentative['id'], $depuis, $issue === Status::Refused ? Status::Refused : Status::Unresolved, $statut, $raison)) {
+                // Déclarée entre-temps par le caissier : sa déclaration tient. Si la carte a été
+                // acceptée quand même et qu'il a déclaré « non passé », le client est débité sans
+                // règlement : la référence reste écrite sur la tentative, pour le rapprochement.
+                if ($reference !== null) {
+                    $this->attempts->note($tentative['id'], 'Après la déclaration du caissier — ' . $raison);
+                }
+
+                throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($tentative['id']) ?? $tentative);
+            }
 
             throw $e;
         }
@@ -312,9 +406,9 @@ final class SettlementCoordinator
     /** Une autre tentative tient la vente : « en cours », ou « issue inconnue » si c'est un terminal muet. */
     private function busy(Vente $vente): PaymentAttemptConflict
     {
-        return ($this->attempts->holding($vente)['status'] ?? null) === Status::Unresolved
-            ? PaymentAttemptConflict::outcomeUnknown()
-            : PaymentAttemptConflict::inProgress();
+        $tenante = $this->attempts->holding($vente);
+
+        return $tenante !== null ? PaymentAttemptConflict::holding($tenante) : PaymentAttemptConflict::inProgress();
     }
 
     /**
