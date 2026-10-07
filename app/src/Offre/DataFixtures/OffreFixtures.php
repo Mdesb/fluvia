@@ -168,6 +168,15 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         // Les grilles et les enfants (formule, carnet) sont donc **à l'intérieur** de la garde : ils
         // n'ont pas d'unicité propre et se seraient empilés en silence, ce qui est pire que l'échec.
 
+        // ⚠ PUBLIÉS, ET NON EN BROUILLON (06/10/2026). Ces trois produits sont ceux que la caisse vend
+        // dans presque toutes les suites. Ils étaient en brouillon, et la caisse vendait les
+        // brouillons : la suite validait le défaut sans le savoir. La caisse refuse désormais un
+        // produit non publié (`CounterSellability`) ; un test qui a besoin d'un brouillon le pose
+        // lui-même, explicitement.
+        //
+        // N'agit qu'à la CRÉATION (garde ci-dessous) : un rechargement ne republie pas un produit
+        // qu'on a dépublié à la main en préproduction.
+
         // 1) Entrée unitaire (publiable : libellé + site + canal + prix + cat. comptable).
         $entree = $manager->getRepository(Produit::class)->findOneBy(['code' => 'PRD-ENTREE01']);
         if (!$entree instanceof Produit) {
@@ -177,7 +186,7 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
                 ->setLibelleRecherche(self::PRODUIT_ENTREE)
                 ->setCode('PRD-ENTREE01')
                 ->setCanaux(['guichet', 'en_ligne'])
-                ->setStatut(StatutProduit::Brouillon);
+                ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $entree->addEtablissement($etabA);
             }
@@ -208,7 +217,7 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
                 ->setCode('PRD-GOLD01')
                 ->setCanaux(['guichet', 'en_ligne'])
                 ->setFormule($formule)
-                ->setStatut(StatutProduit::Brouillon);
+                ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $gold->addEtablissement($etabA);
             }
@@ -231,7 +240,7 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
                 ->setCode('PRD-CARTE01')
                 ->setCanaux(['guichet'])
                 ->setCarte($carte)
-                ->setStatut(StatutProduit::Brouillon);
+                ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $carteProduit->addEtablissement($etabA);
             }

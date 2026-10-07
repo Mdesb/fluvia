@@ -150,7 +150,8 @@ final class CycleVieTest extends OffreApiTestCase
         self::assertStringContainsString('prix', $corps);
         self::assertStringContainsString('categorie_comptable', $corps);
 
-        // Produit complet (fixture) : publication OK, puis archivage OK.
+        // Produit complet (fixture) : publication OK, puis archivage OK. Il part d'un brouillon.
+        $this->remettreEnBrouillon(OffreFixtures::PRODUIT_ENTREE);
         $idEntree = $this->idProduit(OffreFixtures::PRODUIT_ENTREE);
         $publie = $client->request('POST', '/api/produits/' . $idEntree . '/publier', $entete)->toArray();
         self::assertResponseIsSuccessful();
@@ -166,6 +167,7 @@ final class CycleVieTest extends OffreApiTestCase
     {
         [$client, $token, $idA] = $this->adminSurA();
         $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+        $this->remettreEnBrouillon(OffreFixtures::PRODUIT_ENTREE);
         $idEntree = $this->idProduit(OffreFixtures::PRODUIT_ENTREE);
 
         $client->request('POST', '/api/produits/' . $idEntree . '/publier', $entete);

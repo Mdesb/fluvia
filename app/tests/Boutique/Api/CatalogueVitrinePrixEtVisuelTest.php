@@ -34,11 +34,16 @@ final class CatalogueVitrinePrixEtVisuelTest extends BoutiqueApiTestCase
 
     public function testAucunProduitNonPublieNiHorsPerimetreNeFuiteAuCatalogue(): void
     {
+        // Les produits d'OffreFixtures sont publiés depuis le 06/10/2026 (la caisse les vend) : le
+        // brouillon dont ce test a besoin est posé ici, explicitement, AVANT de lire le catalogue.
+        $this->entite(Produit::class, ['code' => 'PRD-ENTREE01'])->setStatut(\App\Offre\Enum\StatutProduit::Brouillon);
+        $this->em()->flush();
+
         $client = static::createClient();
         $catalogue = $client->request('GET', '/api/boutique/vitrines/' . $this->idVitrineA() . '/catalogue')->toArray();
         self::assertResponseIsSuccessful();
 
-        // Produit OffreFixtures resté en statut brouillon (jamais publié) : ne doit jamais apparaître.
+        // Produit OffreFixtures remis en brouillon ci-dessus : ne doit jamais apparaître.
         $produitBrouillon = $this->entite(Produit::class, ['code' => 'PRD-ENTREE01']);
         self::assertSame(\App\Offre\Enum\StatutProduit::Brouillon, $produitBrouillon->getStatut());
         self::assertNull($this->trouverProduit($catalogue['produits'], 'PRD-ENTREE01'));
