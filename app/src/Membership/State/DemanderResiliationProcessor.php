@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Membership\Entity\Membership;
 use App\Membership\Entity\Resiliation;
 use App\Membership\Service\DemanderResiliationHandler;
+use App\Organisation\Entity\Etablissement;
 use App\Vente\Service\LecteurCorps;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -39,7 +40,7 @@ final class DemanderResiliationProcessor implements ProcessorInterface
         $justificatif = isset($corps['justificatifChemin']) && \is_string($corps['justificatifChemin']) ? $corps['justificatifChemin'] : null;
         $dateDemande = isset($corps['dateDemande']) && \is_string($corps['dateDemande'])
             ? new \DateTimeImmutable($corps['dateDemande'])
-            : new \DateTimeImmutable('today');
+            : Etablissement::jourCivil($data->getEtablissement());
 
         return $this->handler->demander($data, $dateDemande, $motif, $motifLegitime, $justificatif);
     }

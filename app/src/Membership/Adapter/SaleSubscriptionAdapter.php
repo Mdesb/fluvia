@@ -156,7 +156,7 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                 payeur: $payeur,
                 formule: $formule,
                 etablissement: $etablissement,
-                dateSouscription: $vente->getDate(),
+                dateSouscription: Etablissement::jourCivil($etablissement, $vente->getDate()),
                 dureeEngagementMois: 12,
                 canal: Canal::Guichet,
                 mandatEnAttente: true,
