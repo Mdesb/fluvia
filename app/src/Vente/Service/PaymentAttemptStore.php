@@ -19,12 +19,12 @@ use Symfony\Component\Uid\Uuid;
  * autre demande a déjà fait passer la tentative ailleurs, et l'appelant en tire la conséquence. Les
  * identifiants se comparent en `UNHEX` (garde-fou n°14).
  *
- * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable, reason: ?string}
+ * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable, reason: ?string, cardReference: ?string}
  */
 final class PaymentAttemptStore
 {
     private const SELECT = 'SELECT LOWER(HEX(id)) id, LOWER(HEX(sale_id)) sale, idempotency_key, payment_method_code, requested_amount, amount, '
-        . 'uses_terminal, status, terminal_status, started_at, failure_reason FROM sale_payment_attempt WHERE ';
+        . 'uses_terminal, status, terminal_status, started_at, failure_reason, card_reference FROM sale_payment_attempt WHERE ';
 
     public function __construct(private readonly Connection $connection)
     {
@@ -52,6 +52,7 @@ final class PaymentAttemptStore
             'terminal' => null,
             'startedAt' => new \DateTimeImmutable(),
             'reason' => null,
+            'cardReference' => null,
         ];
         $this->connection->executeStatement(
             'INSERT INTO sale_payment_attempt (id, sale_id, open_sale_id, idempotency_key, payment_method_code, requested_amount, amount, uses_terminal, status, started_at) '
@@ -134,8 +135,18 @@ final class PaymentAttemptStore
             'statut' => $attempt['status']->value,
             'statutTPE' => $attempt['terminal']?->value,
             'depuis' => $attempt['startedAt']->format(\DATE_ATOM),
-            'raison' => $attempt['reason'],
+            'raison' => self::shownReason($attempt['reason']),
         ];
+    }
+
+    /**
+     * Ce que le caissier peut lire de la raison : les phrases écrites par le coordinateur (référence
+     * d'une acceptation, délai dépassé, réponse tardive), jamais le message brut d'une exception.
+     */
+    private static function shownReason(?string $reason): ?string
+    {
+        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\)|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?/u', $reason, $m) === 1
+            ? $m[0] : null;
     }
 
     /**
@@ -170,11 +181,14 @@ final class PaymentAttemptStore
         );
     }
 
-    /** Écrit la raison seule, quel que soit le statut : un fait appris après l'issue (réponse tardive du terminal). */
+    /**
+     * Ajoute un fait appris après l'issue (réponse tardive du terminal), quel que soit le statut. Il
+     * passe DEVANT la raison d'origine, qui est gardée : 255 caractères ne tronquent que l'ancien.
+     */
     public function note(string $id, string $reason): void
     {
         $this->connection->executeStatement(
-            'UPDATE sale_payment_attempt SET failure_reason = :reason WHERE id = UNHEX(:id)',
+            "UPDATE sale_payment_attempt SET failure_reason = LEFT(CONCAT_WS(' | ', :reason, failure_reason), 255) WHERE id = UNHEX(:id)",
             ['reason' => mb_substr($reason, 0, 255), 'id' => $id],
         );
     }
@@ -216,6 +230,7 @@ final class PaymentAttemptStore
             'terminal' => $ligne['terminal_status'] !== null ? StatutTPE::from((string) $ligne['terminal_status']) : null,
             'startedAt' => new \DateTimeImmutable((string) $ligne['started_at']),
             'reason' => $ligne['failure_reason'] !== null ? (string) $ligne['failure_reason'] : null,
+            'cardReference' => $ligne['card_reference'] !== null ? (string) $ligne['card_reference'] : null,
         ];
     }
 

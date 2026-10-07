@@ -160,7 +160,22 @@ final class ConcurrentSettlementTest extends CrmApiTestCase
         self::assertSame(200, $apres->getStatusCode(), $apres->getContent(false));
         self::assertSame([409, 'payment_outcome_known'], [$tardive['status'], $tardive['body']['code'] ?? null]);
         self::assertSame(['declared_not_processed', 0], [$tentative['status'], $tentative['reglements']]);
-        self::assertStringContainsString('Accepté par le terminal (réf.', (string) $tentative['raison']);
+        self::assertStringContainsString('le terminal a répondu « accepte » (réf.', (string) $tentative['raison']);
+        self::assertStringContainsString('Sans issue après 120 s', (string) $tentative['raison'], 'La raison d\'origine est gardée derrière la note.');
+    }
+
+    /**
+     * Le caissier déclare « accepté » et le terminal, en retard, REFUSE : la déclaration tient (un
+     * règlement), mais le refus reste écrit sur la tentative — un règlement sans débit se rapproche.
+     */
+    public function testALateRefusalAfterAnAcceptedDeclarationLeavesATrace(): void
+    {
+        [$apres, $tardive, $tentative] = $this->declareWhileTheTerminalLags('accepte', 'refuse');
+
+        self::assertSame(201, $apres->getStatusCode(), $apres->getContent(false));
+        self::assertSame([409, 'payment_outcome_known'], [$tardive['status'], $tardive['body']['code'] ?? null]);
+        self::assertSame(['declared_accepted', 1], [$tentative['status'], $tentative['reglements']]);
+        self::assertStringContainsString('le terminal a répondu « refuse »', (string) $tentative['raison']);
     }
 
     /**
@@ -169,12 +184,12 @@ final class ConcurrentSettlementTest extends CrmApiTestCase
      *
      * @return array{0: \Symfony\Contracts\HttpClient\ResponseInterface, 1: array{status: int, body: array<string, mixed>}, 2: array{status: string, raison: ?string, reglements: int}}
      */
-    private function declareWhileTheTerminalLags(string $issue): array
+    private function declareWhileTheTerminalLags(string $issue, string $tpe = ''): array
     {
         [$client, $entete, $idA] = $this->adminSurA();
         $vente = $this->cardSale($client, $entete);
         $cle = (string) Uuid::v4();
-        $premier = $this->settleInOtherProcess($vente, $entete['auth_bearer'], $idA, ['moyen' => 'cb', 'montant' => '45.00', 'cleIdempotence' => $cle]);
+        $premier = $this->settleInOtherProcess($vente, $entete['auth_bearer'], $idA, ['moyen' => 'cb', 'montant' => '45.00', 'cleIdempotence' => $cle], $tpe);
         $this->waitUntilHeld($premier, 'terminal');
         $this->db()->executeStatement(
             'UPDATE sale_payment_attempt SET started_at = :d WHERE idempotency_key = UNHEX(:k)',

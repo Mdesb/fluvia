@@ -78,6 +78,7 @@ final class ValiderVenteService
         private readonly CardRechargeInterface $cardRecharge,
         private readonly EventBus $eventBus,
         private readonly PaymentAttemptStore $tentatives,
+        private readonly SettlementCoordinator $reglements,
     ) {
     }
 
@@ -272,7 +273,8 @@ final class ValiderVenteService
                 throw new ConflictHttpException('Seule une vente en cours peut être validée (NF525).');
             }
         }
-        $tentative = $this->tentatives->holding($vente, $locking);
+        // Hors verrou, la péremption est jugée : une demande morte ne bloque pas « en cours » sans fin.
+        $tentative = $locking ? $this->tentatives->holding($vente, true) : $this->reglements->holdingAttempt($vente);
         if ($tentative !== null) {
             throw PaymentAttemptConflict::holding($tentative);
         }

@@ -201,6 +201,84 @@ final class SettlementDeclarationTest extends CrmApiTestCase
     }
 
     /**
+     * Le Z attend la déclaration (relecture du lot 3) : clos avant elle, il laissait un « accepté »
+     * déclaré ensuite écrire un règlement dans une session close, que le Z ne comptait pas.
+     */
+    public function testTheClosureWaitsForTheDeclaration(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete)['id'];
+        $vente = $this->cardSale($client, $entete, $session);
+        $this->timeout($client, $entete, $vente);
+        $z = fn (): ResponseInterface => $client->request('POST', '/api/sessions-caisse/' . $session . '/cloturer', $entete + ['json' => [
+            'comptages' => [['moyen' => 'especes', 'compte' => '50.00']],
+        ]]);
+
+        $refus = $z();
+        self::assertSame(422, $refus->getStatusCode());
+        self::assertStringContainsString('attend son issue', $refus->getContent(false));
+        self::assertSame('ouverte', $this->db()->fetchOne('SELECT etat FROM caisse_session WHERE id = UNHEX(:s)', ['s' => $this->hex($session)]));
+
+        $this->declare($client, $entete, $vente, ['tentative' => $this->attemptIdOnSale($vente), 'issue' => 'non_passe']);
+        self::assertSame(200, $z()->getStatusCode());
+    }
+
+    /**
+     * Une demande morte (processus tué au terminal) ne bloque pas la validation « en cours » sans fin :
+     * passé 120 s, elle est jugée — « issue inconnue » avec terminal, close sans terminal.
+     */
+    public function testAStaleAttemptIsJudgedBeforeTheValidationAnswers(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete)['id'];
+        foreach (['cb' => [true, 409], 'especes' => [false, 201]] as $moyen => [$terminal, $attendu]) {
+            $vente = $this->cardSale($client, $entete, $session);
+            $this->pay($client, $entete, $vente, ['moyen' => 'differe', 'montant' => '20.00', 'differe' => true]);
+            $this->attemptInFlight($vente, $moyen, $terminal, '-600 seconds');
+
+            $reponse = $client->request('POST', '/api/ventes/' . $vente . '/valider', $entete + ['json' => []]);
+
+            self::assertSame($attendu, $reponse->getStatusCode(), $moyen . ' : ' . $reponse->getContent(false));
+            if ($terminal) {
+                self::assertSame('payment_outcome_unknown', $reponse->toArray(false)['code']);
+                self::assertSame('Sans issue après 120 s', $reponse->toArray(false)['tentative']['raison'], 'La raison montrée est la phrase du coordinateur, pas un message brut.');
+            }
+        }
+    }
+
+    /** Une déclaration « accepté » rejouée avec une AUTRE référence CB n'est pas la même : refusée, rien de plus. */
+    public function testADeclarationReplayedWithAnotherCardReferenceIsRefused(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $vente = $this->cardSale($client, $entete);
+        $this->timeout($client, $entete, $vente);
+        $tentative = $this->attemptIdOnSale($vente);
+        self::assertSame(201, $this->declare($client, $entete, $vente, ['tentative' => $tentative, 'issue' => 'accepte', 'referenceCarte' => 'CB-1'])->getStatusCode());
+
+        $autre = $this->declare($client, $entete, $vente, ['tentative' => $tentative, 'issue' => 'accepte', 'referenceCarte' => 'CB-2']);
+
+        self::assertSame([409, 'payment_outcome_known'], [$autre->getStatusCode(), $autre->toArray(false)['code']]);
+        self::assertSame(1, $this->paymentCount($vente));
+    }
+
+    /** Le message brut d'une exception (SQL, chemins) écrit dans la raison n'est jamais montré au caissier. */
+    public function testARawExceptionMessageIsNeverShownAsTheReason(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $vente = $this->cardSale($client, $entete);
+        $this->timeout($client, $entete, $vente);
+        $this->db()->executeStatement(
+            "UPDATE sale_payment_attempt SET failure_reason = 'SQLSTATE[23000]: Integrity constraint violation: INSERT INTO vente_paiement' WHERE open_sale_id = UNHEX(:v)",
+            ['v' => $this->hex($vente)],
+        );
+
+        $reponse = $this->pay($client, $entete, $vente, ['moyen' => 'especes', 'cleIdempotence' => (string) Uuid::v4()]);
+
+        self::assertSame('payment_outcome_unknown', $reponse->toArray(false)['code']);
+        self::assertNull($reponse->toArray(false)['tentative']['raison']);
+    }
+
+    /**
      * Un règlement par carte que le terminal laisse sans issue (`X-Tpe-Simule: timeout`).
      *
      * @param array<string, mixed> $entete
