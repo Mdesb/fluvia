@@ -19,7 +19,7 @@ use Doctrine\Migrations\AbstractMigration;
  * (`reservation.*`, `*.*`) l'ont par le joker. Par migration et non seulement par fixture : c'est le
  * seul chemin qui atteint la base d'un client (voir `Version20261004010316`). Idempotente.
  */
-final class Version20261007120000 extends AbstractMigration
+final class Version20261007190000 extends AbstractMigration
 {
     public function getDescription(): string
     {
