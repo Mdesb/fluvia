@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Tests\Membership\Api;
 
 use ApiPlatform\Symfony\Bundle\Test\Client as ApiClient;
+use App\Acces\Entity\Appairage;
+use App\Acces\Entity\Support;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
 use App\Membership\Entity\EcheanceSepa;
 use App\Membership\Entity\Membership;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Membership\Enum\StatutEcheanceSepa;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
@@ -18,6 +21,7 @@ use App\Recouvrement\DataFixtures\RecouvrementFixtures;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
 use App\Tests\Acces\AccesApiTestCase;
+use App\Vente\Entity\BilletSupport;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -30,10 +34,10 @@ use Symfony\Component\Uid\Uuid;
  * l'abonnement de chaque ligne-formule (G-1) : sans reconnaître celui que l'écran vient de
  * souscrire, elle en créait un second (mesuré le 07/10, PR #276 : 2 → 3 abonnements actifs).
  *
- * Chaque test rejoue l'écran corps pour corps (identifiants nus, ligne sans bénéficiaire), pas une
- * sonde plus permissive que lui. La formule est rendue NON nominative (type sans facette accès) :
- * c'est le seul cas où l'écran va jusqu'à la validation, une ligne nominative sans bénéficiaire
- * étant refusée (422) avant tout encaissement.
+ * Chaque test rejoue l'écran corps pour corps (identifiants nus), pas une sonde plus permissive que
+ * lui. Jusqu'au 07/10, la ligne de l'écran ne nommait pas le bénéficiaire : une formule nominative
+ * (facette accès) était refusée (422) avant tout encaissement, et seule une formule NON nominative
+ * allait jusqu'à la validation. L'écran nomme désormais le bénéficiaire : les deux y vont.
  */
 final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
 {
@@ -80,7 +84,7 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         $enfant = $this->entite(Client::class, ['prenom' => CrmFixtures::ENFANT_PRENOM]);
         $session = $this->ouvrirSession($client, $entete);
 
-        // L'adhérent n'est porté que par la souscription : la ligne de l'écran n'en désigne aucun.
+        // La ligne nomme l'enfant, comme la souscription.
         $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit, $enfant);
         self::assertLessThan(300, $parcours['valider'], $parcours['corps']);
 
@@ -89,26 +93,38 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         self::assertSame((string) $enfant->getId(), (string) $abonnements[0]->getAdherent()?->getClient()?->getId());
     }
 
-    public function testADesignatedBeneficiaryStillGivesOneSubscription(): void
+    /**
+     * FORMULE NOMINATIVE : UN ABONNEMENT, ET UN SEUL ACCÈS. La ligne nomme le bénéficiaire (ce que
+     * l'écran fait depuis le 07/10). La vente émet alors son propre billet, avec un droit d'accès sans
+     * fin de validité (mesuré le 07/10) : il doublait le QR de l'abonnement et ouvrait encore après
+     * une résiliation. Seul le QR de l'abonnement doit rester.
+     */
+    public function testANominativeFormulaGivesOneSubscriptionAndOneAccess(): void
     {
         [$client, $entete] = $this->adminSurA();
         $produit = $this->entite(Produit::class, ['code' => 'PRD-GOLD01']);
         $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
         $session = $this->ouvrirSession($client, $entete);
 
-        // La sonde du 07/10 : formule nominative, ligne qui nomme le bénéficiaire (l'écran ne le fait pas).
-        $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit, null, true, (string) $payeur->getId());
+        $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit);
         self::assertLessThan(300, $parcours['valider'], $parcours['corps']);
 
-        self::assertCount(1, $this->subscriptionsOf($payeur, $produit));
+        $abonnements = $this->subscriptionsOf($payeur, $produit);
+        self::assertCount(1, $abonnements);
+        $em = $this->em();
+        $billet = $em->getRepository(BilletSupport::class)->findOneBy(['ligne' => Uuid::fromString($parcours['ligne'])]);
+        self::assertInstanceOf(BilletSupport::class, $billet, 'Témoin : la ligne nominative émet bien un billet.');
+        self::assertFalse($this->opens((string) $billet->getIdentifiantSupport()), 'Le billet de la vente n\'ouvre plus rien.');
+        $statut = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnements[0]]);
+        self::assertTrue($this->opens((string) $statut?->getSupportIdentifiant()), 'Le QR de l\'abonnement reste l\'accès.');
     }
 
     /**
-     * TÉMOIN DE CE QUE L'ÉCRAN LIT. Une vente d'abonnement anonyme est scellée PUIS refusée (G-5,
-     * voulu) : la réponse de `/valider` est un échec, mais la vente se relit `validee`. C'est ce
-     * second signal que l'écran consulte avant de dire « rien n'est encaissé ».
+     * UNE VENTE D'ABONNEMENT ANONYME EST REFUSÉE AVANT D'ÊTRE SCELLÉE (décision de Maxime du 07/10,
+     * qui revoit G-5). Jusque-là, elle était scellée PUIS refusée : l'argent entrait, sans abonnement
+     * possible ni reprise. Elle reste maintenant ouverte, et on peut lui rattacher le client.
      */
-    public function testAnAnonymousSubscriptionSaleIsRefusedAfterSealingAndReadsBackValidated(): void
+    public function testAnAnonymousSubscriptionSaleIsRefusedBeforeSealing(): void
     {
         [$client, $entete] = $this->adminSurA();
         $produit = $this->nonNominativeGold();
@@ -119,16 +135,23 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         self::assertSame(422, $parcours['valider'], $parcours['corps']);
 
         $relue = $client->request('GET', '/api/ventes/' . $parcours['vente'], $entete)->toArray();
-        self::assertSame('validee', $relue['statut']);
-        self::assertSame(1, (int) $this->em()->getRepository(OperationScellee::class)->count([]));
+        self::assertSame('en_cours', $relue['statut']);
+        self::assertSame(0, (int) $this->em()->getRepository(OperationScellee::class)->count([]));
+
+        // Et la vente se reprend : client rattaché, elle se valide et relie l'abonnement du jour.
+        $client->request('POST', '/api/ventes/' . $parcours['vente'] . '/client', $entete + ['json' => ['client' => (string) $payeur->getId()]]);
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/api/ventes/' . $parcours['vente'] . '/valider', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $this->subscriptionsOf($payeur, $produit));
     }
 
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     /**
      * Rejoue `SouscriptionAbonnement.jsx` : `soumettre()` puis `encaisserComptant()`, dans l'ordre et
-     * avec ses corps. `$rattacher = false` rejoue le rattachement client qui échoue (l'écran
-     * continuait) ; `$beneficiaire` sort du chemin de l'écran (sonde du 07/10).
+     * avec ses corps : la ligne nomme l'adhérent, à défaut le payeur. `$rattacher = false` rejoue
+     * le rattachement client qui échoue.
      *
      * @param array<string, mixed> $entete
      *
@@ -142,7 +165,6 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         Produit $produit,
         ?Client $adherent = null,
         bool $rattacher = true,
-        ?string $beneficiaire = null,
     ): array {
         $payeurId = (string) $payeur->getId();
         $souscription = [
@@ -166,10 +188,8 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
             'produit' => (string) $produit->getId(),
             'typeTarif' => $this->idTarif(OffreFixtures::TARIF_PLEIN),
             'quantite' => 1,
+            'beneficiaire' => (string) ($adherent ?? $payeur)->getId(),
         ];
-        if ($beneficiaire !== null) {
-            $ligne['beneficiaire'] = $beneficiaire;
-        }
         $apres = $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + ['json' => $ligne])->toArray();
         $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + [
             'json' => ['moyen' => 'especes', 'montant' => '39.90'],
@@ -228,6 +248,16 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
             'formule' => $produit->getFormule()?->getId(),
             'dateSouscription' => new \DateTimeImmutable('today'),
         ]);
+    }
+
+    /** Le support porte-t-il un appairage actif côté accès ? (Révoqué, il n'ouvre plus rien.) */
+    private function opens(string $code): bool
+    {
+        $em = $this->em();
+        $support = $em->getRepository(Support::class)->findOneBy(['identifiant' => $code]);
+
+        return $support instanceof Support
+            && $em->getRepository(Appairage::class)->findOneBy(['support' => $support, 'actif' => true]) instanceof Appairage;
     }
 
     private function echeancesAnnulees(string $abonnementId): int
