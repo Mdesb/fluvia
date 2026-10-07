@@ -20,11 +20,12 @@ use App\Membership\Enum\MembershipPeriodicity;
 use App\Membership\Enum\MembershipStatus;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Souscription d'un abonnement fitness (US-SPORT-01, CA-1). Crée l'abonnement, tokenise l'IBAN
  * (jamais persisté en clair) et signe le mandat, génère l'échéancier jusqu'à la fin d'engagement, et
- * ouvre un `StatutAccesFitness` (droit d'accès rattaché ultérieurement, §0 point 5 du plan).
+ * ouvre un `StatutAccesFitness` avec son billet d'accès (support QR).
  */
 final class SouscriptionAbonnementHandler
 {
@@ -34,6 +35,7 @@ final class SouscriptionAbonnementHandler
         private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
         private readonly SubscriptionPriceResolver $resolveurTarif,
+        private readonly MembershipQrAccessIssuer $qrIssuer,
     ) {
     }
 
@@ -62,8 +64,15 @@ final class SouscriptionAbonnementHandler
         Canal $canal = Canal::Guichet,
         // Le mandat déjà signé, quand il y en a un. Exclusif avec l'IBAN ci-dessus.
         ?MandatSepa $mandatExistant = null,
+        // Mode « caisse → abonnement » (spec-caisse-abonnement CP-1 G-3, plan CP-2 É1/É2) : crée un
+        // mandat EN ATTENTE (sans IBAN), à compléter plus tard par un lien de signature (É5, pas
+        // encore câblé). Exclusif avec ibanClair/titulaireMandat et mandatExistant.
+        bool $mandatEnAttente = false,
+        // La ligne de vente d'origine (App\Vente\Entity\LigneVente), quand l'abonnement naît d'une
+        // vente au comptoir : porte l'idempotence et le lien retour Vente → abonnement.
+        ?Uuid $sourceSaleLineId = null,
     ): Membership {
-        if ($mandatExistant === null && ($ibanClair === null || $titulaireMandat === null)) {
+        if ($mandatExistant === null && !$mandatEnAttente && ($ibanClair === null || $titulaireMandat === null)) {
             throw new UnprocessableEntityHttpException(
                 'Un mandat SEPA est requis : soit un mandat déjà signé, soit un IBAN et son titulaire.',
             );
@@ -136,59 +145,116 @@ final class SouscriptionAbonnementHandler
             ? (int) $engagement['dureeMin']
             : $dureeEngagementMois;
 
-        $abonnement = new Membership();
-        $abonnement->setAdherent($adherent)
-            ->setPayeur($payeur)
-            ->setFormule($formule)
-            ->setEtablissement($etablissement)
-            ->setPeriodicite($periodicite)
-            ->setStatut(MembershipStatus::Actif)
-            ->setDateSouscription($dateSouscription)
-            ->setDateDebutEngagement($dateSouscription)
-            ->setDateFinEngagement($dateSouscription->modify(sprintf('+%d months', $duree)));
+        // ── TOUT CE QUI ÉCRIT EST ATOMIQUE ───────────────────────────────────────────────────────
+        //
+        // ⚠ `AppairageHandler::appairer()` FLUSHE EN INTERNE, et sans transaction enveloppante le
+        //    billet QR (droit + appairage ACTIF) était COMMITÉ avant que `statutAcces.droitAcces` ne
+        //    soit écrit (flush final). Un échec entre les deux laissait un QR qui ouvre la porte mais
+        //    un statut à `droitAcces = null` — et la résiliation, qui ne dévalide que
+        //    `statutAcces.getDroitAcces()` (`PropagationAccesFitnessHandler`), ne le coupait jamais.
+        //    On enveloppe donc TOUTES les écritures : soit l'abonné existe entièrement, soit pas du
+        //    tout. Les flushes internes ne valident plus rien tant que la transaction n'est pas
+        //    committée en fin de bloc.
+        $abonnement = $this->em->wrapInTransaction(function () use (
+            $adherent,
+            $payeur,
+            $formule,
+            $etablissement,
+            $dateSouscription,
+            $periodicite,
+            $duree,
+            $engagement,
+            $mandatExistant,
+            $mandatEnAttente,
+            $ibanClair,
+            $titulaireMandat,
+            $montantCentimes,
+            $montantPremiereCentimes,
+            $sourceSaleLineId,
+        ): Membership {
+            $abonnement = new Membership();
+            $abonnement->setAdherent($adherent)
+                ->setPayeur($payeur)
+                ->setFormule($formule)
+                ->setEtablissement($etablissement)
+                ->setPeriodicite($periodicite)
+                ->setStatut(MembershipStatus::Actif)
+                ->setDateSouscription($dateSouscription)
+                ->setDateDebutEngagement($dateSouscription)
+                ->setDateFinEngagement($dateSouscription->modify(sprintf('+%d months', $duree)));
 
-        $preavis = (int) ($engagement['resiliation'] ?? 30);
-        $abonnement->setPreavisResiliationJours($preavis);
+            $preavis = (int) ($engagement['resiliation'] ?? 30);
+            $abonnement->setPreavisResiliationJours($preavis);
 
-        // `MandatSepa` (module partagé `App\Sepa`) est générique : rattaché au client + établissement
-        // directement, plus de cycle 1:1 à casser côté mandat (contrairement à l'ancien
-        // `MandatSepaFitness.abonnementRattache`) — le mandat est inséré une seule fois.
-        // ⚠ UN MANDAT DÉJÀ SIGNÉ SE REPREND, IL NE SE REFAIT PAS. Le tunnel en ligne fait saisir
-        //    l'IBAN au client avant qu'un abonnement existe ; en signer un second ici mettrait deux
-        //    RUM actifs sur le même client et le même établissement, et le rapprochement bancaire ne
-        //    dirait plus lequel a prélevé.
-        if ($mandatExistant instanceof MandatSepa) {
-            $mandat = $mandatExistant;
-        } else {
-            $token = $this->tokenisation->tokeniser((string) $ibanClair);
-            $mandat = new MandatSepa();
-            $mandat->setRum($this->genererRum($abonnement))
-                ->setIbanToken($token->token)
-                ->setIban4Derniers($token->quatreDerniers)
-                ->setIbanChiffre($this->chiffreur->chiffrer((string) $ibanClair))
-                ->setDebiteurNom((string) $titulaireMandat)
-                ->setDateSignature($dateSouscription)
-                ->setStatut(StatutMandatSepa::Actif)
-                ->setClient($payeur)
-                ->setEtablissement($etablissement);
-            $this->em->persist($mandat);
+            // `MandatSepa` (module partagé `App\Sepa`) est générique : rattaché au client + établissement
+            // directement, plus de cycle 1:1 à casser côté mandat (contrairement à l'ancien
+            // `MandatSepaFitness.abonnementRattache`) — le mandat est inséré une seule fois.
+            // ⚠ UN MANDAT DÉJÀ SIGNÉ SE REPREND, IL NE SE REFAIT PAS. Le tunnel en ligne fait saisir
+            //    l'IBAN au client avant qu'un abonnement existe ; en signer un second ici mettrait deux
+            //    RUM actifs sur le même client et le même établissement, et le rapprochement bancaire ne
+            //    dirait plus lequel a prélevé.
+            if ($mandatExistant instanceof MandatSepa) {
+                $mandat = $mandatExistant;
+            } elseif ($mandatEnAttente) {
+                // Placeholder EN ATTENTE (caisse → abonnement, G-3) : pas d'IBAN, non prélevable tant
+                // qu'il n'est pas complété par le lien de signature (É5, pas encore câblé).
+                // `dateSignature` est non-nullable : on la fixe à la date de vente, à corriger à la
+                // complétion.
+                $mandat = new MandatSepa();
+                $mandat->setRum($this->genererRum($abonnement))
+                    ->setDateSignature($dateSouscription)
+                    ->setStatut(StatutMandatSepa::EnAttente)
+                    ->setClient($payeur)
+                    ->setEtablissement($etablissement);
+                $this->em->persist($mandat);
+                $this->em->flush();
+            } else {
+                $token = $this->tokenisation->tokeniser((string) $ibanClair);
+                $mandat = new MandatSepa();
+                $mandat->setRum($this->genererRum($abonnement))
+                    ->setIbanToken($token->token)
+                    ->setIban4Derniers($token->quatreDerniers)
+                    ->setIbanChiffre($this->chiffreur->chiffrer((string) $ibanClair))
+                    ->setDebiteurNom((string) $titulaireMandat)
+                    ->setDateSignature($dateSouscription)
+                    ->setStatut(StatutMandatSepa::Actif)
+                    ->setClient($payeur)
+                    ->setEtablissement($etablissement);
+                $this->em->persist($mandat);
+                $this->em->flush();
+            }
+
+            $abonnement->setMandatSepa($mandat);
+
+            if ($sourceSaleLineId !== null) {
+                $abonnement->setSourceSaleLineId($sourceSaleLineId);
+            }
+
+            $this->em->persist($abonnement);
+
+            // ⚠ LE MONTANT COURANT VA SUR L'ABONNEMENT, LE PRORATA N'Y VA PAS. L'abonnement porte ce
+            //    qu'on facturera la prochaine fois — un demi-mois d'entrée ne dit rien du prix.
+            $abonnement->setMontantCentimes($montantCentimes);
+
+            $this->echeancier->generer($abonnement, $montantCentimes, $montantPremiereCentimes);
+
+            $statutAcces = new StatutAccesFitness();
+            $statutAcces->setAbonnement($abonnement)->setActif(true);
+            $this->em->persist($statutAcces);
+
+            // ── LE BILLET D'ACCÈS (support QR) EST ÉMIS ICI ──────────────────────────────────────
+            // Sans lui, l'abonné n'avait pas de support et la porte ne s'ouvrait pas. Le handler crée
+            // le droit d'accès + un support QR signé (zones du produit, D87) et les rattache au statut
+            // d'accès. `appairer()` flushe en interne, mais dans la transaction ci-dessus : rien n'est
+            // committé tant que le flush final n'a pas figé les liens (droit + code du support).
+            $this->qrIssuer->issue($abonnement, $formule, $etablissement, $statutAcces);
+
             $this->em->flush();
-        }
 
-        $abonnement->setMandatSepa($mandat);
-        $this->em->persist($abonnement);
+            return $abonnement;
+        });
 
-        // ⚠ LE MONTANT COURANT VA SUR L'ABONNEMENT, LE PRORATA N'Y VA PAS. L'abonnement porte ce
-        //    qu'on facturera la prochaine fois — un demi-mois d'entrée ne dit rien du prix.
-        $abonnement->setMontantCentimes($montantCentimes);
-
-        $this->echeancier->generer($abonnement, $montantCentimes, $montantPremiereCentimes);
-
-        $statutAcces = new StatutAccesFitness();
-        $statutAcces->setAbonnement($abonnement)->setActif(true);
-        $this->em->persist($statutAcces);
-
-        $this->em->flush();
+        \assert($abonnement instanceof Membership);
 
         return $abonnement;
     }

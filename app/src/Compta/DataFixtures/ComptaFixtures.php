@@ -173,6 +173,9 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
             ['avoir', 'Avoir', false, false, false],
             ['differe', 'Paiement différé', false, false, true],
             ['payfip', 'PayFiP (DGFiP)', false, true, false],
+            // Moyen SYSTÈME : l'encaissement d'un prélèvement SEPA est automatique, il ne se choisit
+            // pas à un pavé. Rendu INACTIF juste après la boucle. Miroir de Version20260921120000.
+            ['prelevement', 'Prélèvement SEPA', false, false, false],
         ];
         // ⚠ Chercher avant de créer, et pas seulement parce qu'un rechargement doublonnerait : la
         // migration `Version20260814231600` **insère déjà ces onze lignes** (`INSERT IGNORE`). Sur toute
@@ -191,6 +194,10 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
                 ->setCode($code)->setLibelle($libelle)
                 ->setAutoriseRendu($rendu)->setExigeReference($reference)->setAutoriseDiffere($differe));
         }
+        // Le prélèvement est un moyen SYSTÈME (encaissement automatique des échéances SEPA) : inactif,
+        // donc hors des listes manuelles (caisse, souscription) qui filtrent les moyens actifs. Le
+        // service le retrouve par son code. Miroir de Version20260921120000.
+        $depot->findOneBy(['code' => 'prelevement'])?->setActif(false);
         $manager->flush();
 
         // --- Compte de trésorerie par (exploitant, moyen) ---
@@ -211,7 +218,7 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
         // qu'il n'a pas.
         $correspondances = [
             ['exact' => '531000', 'prefixe' => '531', 'codes' => ['especes']],
-            ['exact' => '512000', 'prefixe' => '512', 'codes' => ['cb', 'virement', 'payfip']],
+            ['exact' => '512000', 'prefixe' => '512', 'codes' => ['cb', 'virement', 'payfip', 'prelevement']],
             ['exact' => '511200', 'prefixe' => '511', 'codes' => ['cheque', 'cheque_vacances', 'cheque_culture', 'cheque_loisirs']],
         ];
         foreach ($correspondances as $correspondance) {

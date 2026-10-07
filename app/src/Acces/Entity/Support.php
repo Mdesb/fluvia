@@ -29,6 +29,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'acces_support')]
 #[ORM\UniqueConstraint(name: 'uniq_support_identifiant', columns: ['identifiant'])]
 #[ORM\Index(columns: ['version_maj'], name: 'idx_support_version_maj')]
+#[ORM\Index(columns: ['updated_at'], name: 'idx_support_updated_at')]
 #[ApiResource(
     shortName: 'Support',
     operations: [
@@ -85,9 +86,31 @@ class Support
     #[Groups(['support:read'])]
     private int $versionMaj = 0;
 
+    /**
+     * Dernière modification de la projection de ce support, en UTC — avance EN MÊME TEMPS que
+     * `versionMaj` (même écouteur, même service SQL), jamais sur une lecture. `versionMaj` sert
+     * le curseur des bornes ; cette date sert les consommateurs qui raisonnent en temps (API
+     * partenaire, `updatedSince`).
+     */
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
+        $this->updatedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    }
+
+    public function getUpdatedAt(): \DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
+
+    public function setUpdatedAt(\DateTimeImmutable $updatedAt): self
+    {
+        $this->updatedAt = $updatedAt;
+
+        return $this;
     }
 
     public function getId(): Uuid

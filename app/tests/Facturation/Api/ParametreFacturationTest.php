@@ -76,6 +76,68 @@ final class ParametreFacturationTest extends FacturationApiTestCase
     }
 
     /**
+     * LE COMPTE DE PRODUIT PAR DEFAUT — LE SECOND VERROU DE L'EMISSION, ET IL N'ETAIT REGLABLE NULLE PART.
+     *
+     * `EmettreFactureDirecteHandler` exige DEUX choses : un taux de TVA et un compte de produit. Le
+     * second se resout par la categorie comptable de la ligne, puis par ce defaut — et a defaut des
+     * deux, il refuse. Le champ existait en base, portait deja son groupe d'ecriture, et AUCUN ecran
+     * ne le posait : mesure du 08/09, encore vraie le 14/09, `grep compteProduitDefaut` sur
+     * `frontend/src/pages` et `frontend/src/components` rendait zero.
+     *
+     * Consequence : un etablissement neuf ne pouvait RIEN facturer, sans aucun recours. La
+     * preproduction s'en sortait parce que sa valeur avait ete posee a la main, ce qui rendait le
+     * defaut invisible a tout le monde.
+     *
+     * ⚠ CE TEST RELIT DEPUIS LA BASE, comme son voisin : un champ hors groupe d'ecriture fait rendre
+     * 200 a une requete qui n'enregistre rien, et la reponse rend alors l'ancienne valeur sans se
+     * plaindre.
+     */
+    public function testLeCompteDeProduitParDefautPeutEnfinEtreRegleEtRelu(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('GET', '/api/parametres-facturation', $entete);
+        self::assertResponseIsSuccessful();
+        $liste = $client->getResponse()->toArray();
+        $membres = $liste['member'] ?? $liste['hydra:member'] ?? [];
+        self::assertNotEmpty($membres, 'temoin : un parametrage existe pour ce profil');
+        $id = $membres[0]['id'];
+
+        // Un compte de PRODUIT (classe 7) du profil — c'est ce que l'ecran propose, et rien d'autre :
+        // imputer une recette sur un 4xx ou un 5xx laisserait l'ecriture equilibree et le resultat
+        // de l'exercice faux.
+        $client->request('GET', '/api/compte_comptables', $entete);
+        self::assertResponseIsSuccessful();
+        $comptes = $client->getResponse()->toArray();
+        $produits = array_values(array_filter(
+            $comptes['member'] ?? $comptes['hydra:member'] ?? [],
+            static fn (array $c): bool => str_starts_with((string) ($c['numero'] ?? ''), '7'),
+        ));
+        self::assertNotEmpty($produits, 'temoin : le plan de comptes seme au moins un compte de produit');
+        $iri = $produits[0]['@id'];
+
+        $client->request('PATCH', '/api/parametres-facturation/' . $id, [
+            'auth_bearer' => $entete['auth_bearer'],
+            'headers' => $entete['headers'] + ['Content-Type' => 'application/merge-patch+json'],
+            'json' => ['compteProduitDefaut' => $iri],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+
+        $relu = $em->getRepository(ParametreFacturationEtablissement::class)->find($id);
+        self::assertInstanceOf(ParametreFacturationEtablissement::class, $relu);
+        self::assertNotNull($relu->getCompteProduitDefaut(), 'le compte doit etre RETENU, pas seulement accepte');
+        self::assertSame(
+            $produits[0]['numero'],
+            $relu->getCompteProduitDefaut()->getNumero(),
+            'et ce doit etre celui qu on a designe, pas un autre',
+        );
+    }
+
+    /**
      * LA CREATION — LE CHEMIN QUE L'ECRAN EMPRUNTE QUAND RIEN N'EXISTE ENCORE.
      *
      * ⚠ CE TEST COMBLE UN TROU DANS MA PROPRE COUVERTURE. Les autres font des PATCH sur la ligne

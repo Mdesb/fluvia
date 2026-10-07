@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Boutique\Api;
 
 use App\Boutique\DataFixtures\BoutiqueFixtures;
+use App\DataFixtures\SocleFixtures;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\StatutProduit;
+use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Tests\Boutique\BoutiqueApiTestCase;
 
@@ -49,5 +52,141 @@ final class AbonnementSepaTest extends BoutiqueApiTestCase
         $mandats = $this->em()->getRepository(MandatSepa::class)->findBy(['debiteurNom' => 'Camille Martin']);
         self::assertCount(1, $mandats, 'CA-13 : mandat SEPA créé (IBAN jamais en clair, TokenisationIbanInterface).');
         self::assertSame('0189', $mandats[0]->getIban4Derniers());
+    }
+
+    /**
+     * UN PRODUIT GUICHET-ONLY N'EST PAS SOUSCRIPTIBLE EN LIGNE (revue sécurité).
+     *
+     * Le handler ne vérifiait que `isSepaActif()`, jamais `Produit.aCanal(EnLigne)` — et le résolveur
+     * de prix résout sur la visibilité du `TypeTarif`, pas sur `canaux`. Un produit vendu au seul
+     * guichet, avec un tarif visible, devenait donc souscriptible en ligne. Ce témoin retire le canal
+     * en_ligne du produit de démo et attend un 404 (D3), même pour un titulaire de compte.
+     */
+    public function testProduitGuichetOnlyRefuseEnLigne(): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+        $produit->setCanaux(['guichet']);
+        $this->em()->flush();
+
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+        $client->request('POST', '/api/boutique/abonnements/souscrire', [
+            'auth_bearer' => $token,
+            'json' => [
+                'produit' => (string) $produit->getId(),
+                'iban' => 'FR7630006000011234567890189',
+                'bicDebiteur' => 'AGRIFRPP',
+                'debiteurNom' => 'Camille Martin',
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(404, 'un produit guichet-only n\'est pas souscriptible en ligne');
+    }
+
+    /**
+     * UN PRODUIT NON PUBLIÉ, OU D'UN AUTRE SITE, N'EST PAS SOUSCRIPTIBLE EN LIGNE (07/10/2026).
+     *
+     * Le handler regardait le canal, ni le statut ni le site : un brouillon, un archivé, ou le produit
+     * du seul site B souscrit au nom du site A se vendaient. Même 404 que le canal (D3), et aucun
+     * mandat créé. Témoin : le même produit, publié sur A, se souscrit.
+     */
+    public function testProduitNonPublieOuDUnAutreSiteRefuseEnLigne(): void
+    {
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+
+        // Le témoin passe en dernier : il crée la vente.
+        $cas = [
+            'brouillon' => [StatutProduit::Brouillon, SocleFixtures::ETAB_A_NOM],
+            'archivé' => [StatutProduit::Archive, SocleFixtures::ETAB_A_NOM],
+            'site B seulement' => [StatutProduit::Publie, SocleFixtures::ETAB_B_NOM],
+            'témoin publié sur A' => [StatutProduit::Publie, SocleFixtures::ETAB_A_NOM],
+        ];
+        $obtenu = [];
+        foreach ($cas as $nom => [$statut, $site]) {
+            // Relus à chaque tour : le noyau redémarre entre deux requêtes.
+            $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+            $produit->setStatut($statut);
+            foreach ($produit->getEtablissements()->toArray() as $e) {
+                $produit->removeEtablissement($e);
+            }
+            $produit->addEtablissement($this->entite(Etablissement::class, ['nom' => $site]));
+            $this->em()->flush();
+
+            $client->request('POST', '/api/boutique/abonnements/souscrire', [
+                'auth_bearer' => $token,
+                'json' => [
+                    'produit' => (string) $produit->getId(),
+                    'iban' => 'FR7630006000011234567890189',
+                    'bicDebiteur' => 'AGRIFRPP',
+                    'debiteurNom' => 'Cas ' . $nom,
+                ],
+            ]);
+            $mandats = $this->em()->getRepository(MandatSepa::class)->findBy(['debiteurNom' => 'Cas ' . $nom]);
+            $obtenu[$nom] = [$client->getResponse()->getStatusCode(), \count($mandats)];
+        }
+
+        // [statut HTTP, mandats créés]
+        self::assertSame([
+            'brouillon' => [404, 0],
+            'archivé' => [404, 0],
+            'site B seulement' => [404, 0],
+            'témoin publié sur A' => [201, 1],
+        ], $obtenu);
+    }
+
+    /**
+     * UN IBAN AU FORMAT INVALIDE EST REFUSÉ EN LIGNE AUSSI (revue #6).
+     */
+    public function testLaSouscriptionEnLigneRefuseUnIbanInvalide(): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+        $client->request('POST', '/api/boutique/abonnements/souscrire', [
+            'auth_bearer' => $token,
+            'json' => [
+                'produit' => (string) $produit->getId(),
+                'iban' => 'FR76-PAS-UN-IBAN',
+                'bicDebiteur' => 'AGRIFRPP',
+                'debiteurNom' => 'Camille Martin',
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(422, 'un IBAN au format invalide est refusé en ligne');
+    }
+
+    /**
+     * LE CLIENT RETROUVE SON ABONNEMENT DANS SON ESPACE (revue #, visibilité MonCompte).
+     *
+     * Après une souscription en ligne, `MonCompte` ne montrait ni abo, ni échéance, ni mandat. Ce
+     * témoin prouve que `GET /boutique/comptes/me/abonnements` expose l'abonnement du titulaire
+     * connecté (statut, périodicité, mandat masqué) — et jamais l'IBAN en clair.
+     */
+    public function testMesAbonnementsExposeLAbonnementSouscritEnLigne(): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+
+        $client->request('POST', '/api/boutique/abonnements/souscrire', [
+            'auth_bearer' => $token,
+            'json' => [
+                'produit' => (string) $produit->getId(),
+                'iban' => 'FR7630006000011234567890189',
+                'bicDebiteur' => 'AGRIFRPP',
+                'debiteurNom' => 'Camille Martin',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $reponse = $client->request('GET', '/api/boutique/comptes/me/abonnements', ['auth_bearer' => $token]);
+        self::assertResponseIsSuccessful();
+        $abos = $reponse->toArray()['abonnements'];
+        self::assertGreaterThanOrEqual(1, \count($abos), 'l\'abonnement souscrit en ligne est visible dans Mon Compte');
+        $abo = $abos[0];
+        self::assertArrayHasKey('statut', $abo);
+        self::assertArrayHasKey('periodicite', $abo);
+        self::assertSame('0189', $abo['mandatIban4Derniers']);
+        // L'IBAN complet n'est JAMAIS exposé (seulement les 4 derniers chiffres).
+        self::assertStringNotContainsString('FR7630006000011234567890189', $reponse->getContent());
     }
 }

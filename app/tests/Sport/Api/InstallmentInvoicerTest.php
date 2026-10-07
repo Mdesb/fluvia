@@ -9,15 +9,18 @@ use App\Compta\Entity\TauxTva;
 use App\DataFixtures\SocleFixtures;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\InstallmentInvoice;
+use App\Facturation\Entity\ReglementFacture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Service\InstallmentInvoicer;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Sepa\Dto\EcheanceSepaDue;
 use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Event\EcheancesCollecteesEvent;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * G-1 / G-1bis (chaine-encaissement) — la facture d'une échéance d'abonnement.
@@ -47,6 +50,51 @@ final class InstallmentInvoicerTest extends SportApiTestCase
         //    lequel croire.
         self::assertSame('120.00', $facture->getTotalTTC(), 'Le total TTC doit égaler ce que la banque prélève.');
         self::assertSame('100.00', $facture->getTotalHT());
+    }
+
+    /**
+     * LA COLLECTE SOLDE LA FACTURE ET FAIT ENTRER L'ARGENT AU GRAND LIVRE (chaîne-encaissement).
+     *
+     * ⚠ LE TROU QUE CE TÉMOIN FERME. La facture d'échéance naît « en attente de paiement » (créance
+     * 411 débitée au journal FAC). Jusqu'ici, un prélèvement réussi ne produisait NI règlement NI
+     * écriture d'encaissement : la créance restait débitrice alors que l'argent était rentré. On
+     * simule ici la collecte par l'événement que `GenerationRemiseHandler` émet en vrai après une
+     * remise transmise, et on prouve que la facture passe à `Payee`, solde nul, avec un règlement
+     * portant son écriture d'encaissement (journal ENC).
+     */
+    public function testUneEcheanceCollecteeSoldeSaFactureEtEcritLEncaissement(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 12000);
+        $reservation = $invoicer->facturer($echeance, $etab, $auteur);
+        $factureId = $reservation->getInvoiceId();
+        self::assertNotNull($factureId);
+        self::assertSame(StatutFacture::EnAttentePaiement, $em->getRepository(Facture::class)->find($factureId)?->getStatut());
+
+        // La collecte réussit : on émet l'événement (mêmes arguments que le handler réel).
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = static::getContainer()->get(EventDispatcherInterface::class);
+        $dispatcher->dispatch(new EcheancesCollecteesEvent([$echeance->referenceOrigine], 'SIMULATION-TEST'));
+
+        $em->clear();
+        $facture = $em->getRepository(Facture::class)->find($factureId);
+        self::assertInstanceOf(Facture::class, $facture);
+        self::assertSame(StatutFacture::Payee, $facture->getStatut(), 'La collecte doit solder la facture.');
+        self::assertSame('0.00', $facture->getSoldeDu(), 'La créance doit revenir à zéro au grand livre.');
+
+        $reglements = $em->getRepository(ReglementFacture::class)->findBy(['facture' => $factureId]);
+        self::assertCount(1, $reglements, 'Un règlement, et un seul, pour la collecte.');
+        self::assertNotNull($reglements[0]->getEcritureEncaissement(), 'L\'écriture d\'encaissement (journal ENC) doit exister.');
+
+        // ⚠ IDEMPOTENCE : une collecte rejouée ne double NI le règlement NI l'écriture, et ne lève
+        // pas (la facture n'est plus « en attente », on la saute avant d'appeler le handler).
+        $dispatcher->dispatch(new EcheancesCollecteesEvent([$echeance->referenceOrigine], 'SIMULATION-TEST'));
+        self::assertCount(
+            1,
+            $em->getRepository(ReglementFacture::class)->findBy(['facture' => $factureId]),
+            'Un rejeu de collecte reste un no-op : toujours un seul règlement.',
+        );
     }
 
     /** Rejouer la tâche ne fabrique pas un second document scellé — c'est la contrainte qui le garantit. */
@@ -91,6 +139,161 @@ final class InstallmentInvoicerTest extends SportApiTestCase
             0,
             (int) $em->getRepository(InstallmentInvoice::class)->createQueryBuilder('r')->select('COUNT(r.id)')->getQuery()->getSingleScalarResult(),
             'La réservation doit être retirée : l\'échéance reste rejouable.',
+        );
+    }
+
+    /**
+     * LE MODE À BLANC REFUSE EXACTEMENT CE QUE L'ÉMISSION REFUSE, MOT POUR MOT.
+     *
+     * ⚠ CE TEST EXISTE PARCE QUE LE CONTRAIRE EST ARRIVÉ. Le 14/09, `sepa:echeances:facturer
+     * --dry-run --depuis=2026-09-01` a annoncé « 5 à facturer, 0 refus » ; le passage réel, lancé
+     * dans la foulée, a refusé les cinq — aucune n'avait de taux de TVA. Le mode à blanc sortait
+     * après le seul plancher de date, sans rien résoudre.
+     *
+     * ⚠ ET L'ASSERTION PORTE SUR L'ÉGALITÉ DES DEUX MESSAGES, PAS SUR « ÇA REFUSE ». Vérifier
+     * seulement qu'une exception part laisserait passer une vérification qui refuse pour une AUTRE
+     * raison que l'émission — un mode à blanc pessimiste, qui ferait renoncer à des facturations
+     * légitimes. Ce qu'on veut n'est pas qu'il refuse, c'est qu'il dise la même chose.
+     */
+    public function testLaVerificationRefuseMotPourMotCeQueLEmissionRefuse(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        // Aucun taux nulle part, ni sur l'échéance ni en défaut : les deux modes doivent refuser.
+        $this->poserTauxDefaut($em, $etab, null);
+        $echeance = $this->echeance($em, 2990);
+
+        $refusAblanc = null;
+        try {
+            $invoicer->verifier($echeance, $etab);
+        } catch (\Throwable $echec) {
+            $refusAblanc = $echec->getMessage();
+        }
+
+        $refusReel = null;
+        try {
+            $invoicer->facturer($echeance, $etab, $auteur);
+        } catch (\Throwable $echec) {
+            $refusReel = $echec->getMessage();
+        }
+
+        self::assertNotNull($refusAblanc, 'le mode à blanc doit refuser, pas annoncer une émission qui n\'aura pas lieu');
+        self::assertNotNull($refusReel, 'précondition du test : l\'émission doit bien refuser ici');
+        self::assertSame($refusReel, $refusAblanc, 'le même refus, mot pour mot — c\'est la seule garantie qui tienne');
+    }
+
+    /**
+     * LA VÉRIFICATION N'ÉCRIT RIEN — Y COMPRIS PAS DE RÉSERVATION.
+     *
+     * Un mode à blanc qui laisserait une réservation derrière lui rendrait l'échéance « déjà connue »
+     * au passage suivant, et le vrai passage la sauterait. Le mode à blanc aurait alors empêché la
+     * facturation qu'il servait à préparer.
+     */
+    public function testLaVerificationNecritRien(): void
+    {
+        [$em, $invoicer, $etab] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 2990);
+
+        $invoicer->verifier($echeance, $etab);
+
+        self::assertSame(
+            0,
+            (int) $em->getRepository(InstallmentInvoice::class)->createQueryBuilder('r')
+                ->select('COUNT(r.id)')->getQuery()->getSingleScalarResult(),
+            'une vérification à blanc ne doit laisser aucune réservation',
+        );
+    }
+
+    /**
+     * UN DESTINATAIRE SANS ADRESSE EST REFUSÉ **AVANT** TOUTE ÉCRITURE.
+     *
+     * ⚠ CE TEST VIENT D'UN SECOND PASSAGE RATÉ, LE 14/09, APRÈS LE PREMIER CORRECTIF. Le mode à
+     * blanc — rendu honnête sur le taux la veille — annonçait « 5 à facturer, 0 refus » ; l'émission
+     * a refusé les cinq pour « l'adresse du destinataire est requise » (RG-FACT-08). Les vingt
+     * clients de la préproduction sont sans adresse. Le contrôle existait, il était simplement de
+     * l'autre côté du mur — alors qu'il ne demande aucune écriture.
+     *
+     * La leçon n'est pas « il manquait ce contrôle-ci » : c'est qu'un mode à blanc se juge sur ce
+     * qu'il NE traverse pas, et que cette liste doit être mesurée, pas supposée.
+     */
+    public function testUnDestinataireSansAdresseEstRefuseAvantToutEcriture(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+        $echeance = $this->echeance($em, 2990);
+
+        $mandat = $em->getRepository(MandatSepa::class)->find($echeance->mandatId);
+        self::assertInstanceOf(MandatSepa::class, $mandat);
+        $client = $mandat->getClient();
+        self::assertNotNull($client);
+        $client->setAdresse(null);
+        $em->flush();
+
+        $avant = (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture');
+
+        $refusAblanc = null;
+        try {
+            $invoicer->verifier($echeance, $etab);
+        } catch (\Throwable $echec) {
+            $refusAblanc = $echec->getMessage();
+        }
+
+        $refusReel = null;
+        try {
+            $invoicer->facturer($echeance, $etab, $auteur);
+        } catch (\Throwable $echec) {
+            $refusReel = $echec->getMessage();
+        }
+
+        self::assertNotNull($refusAblanc, 'le mode à blanc doit voir l\'adresse manquante : elle se lit sans rien écrire');
+        self::assertSame($refusReel, $refusAblanc, 'le même refus, mot pour mot');
+        self::assertStringContainsString('adresse', (string) $refusAblanc);
+
+        self::assertSame(
+            $avant,
+            (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture'),
+            'refusée sur le destinataire, la facture ne doit même pas avoir été ébauchée',
+        );
+    }
+
+    /**
+     * UNE ÉMISSION REFUSÉE PAR LE SCELLEUR NE LAISSE PAS SON BROUILLON.
+     *
+     * ⚠ MESURÉ SUR LA PRÉPRODUCTION LE 14/09 : cinq refus ont laissé cinq `facturation_facture` à
+     * l'état brouillon, avec leurs lignes et leurs destinataires. Ni numéro ni écriture comptable —
+     * donc rien de scellé — mais elles apparaissent sur la fiche du client, et chaque nouveau
+     * passage en aurait ajouté cinq. `retirerReservation()` ne les emportait pas : elle ne connaît
+     * que la réservation.
+     *
+     * Le refus employé ici vient du SCELLEUR, pas de la résolution : sans compte de produit,
+     * `EmettreFactureDirecteHandler` refuse — donc après que le brouillon a été écrit. C'est la
+     * seule façon d'éprouver le retrait.
+     */
+    public function testUneEmissionRefuseeParLeScelleurNeLaissePasDeBrouillon(): void
+    {
+        [$em, $invoicer, $etab, $auteur] = $this->contexte();
+        $this->poserTauxDefaut($em, $etab, '20.00');
+
+        $profil = $this->profil($em);
+        $parametre = $em->getRepository(\App\Facturation\Entity\ParametreFacturationEtablissement::class)
+            ->findOneBy(['profilExploitant' => $profil->getId()]);
+        self::assertNotNull($parametre);
+        $parametre->setCompteProduitDefaut(null);
+        $em->flush();
+
+        $avant = (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture');
+
+        try {
+            $invoicer->facturer($this->echeance($em, 2990), $etab, $auteur);
+            self::fail('Sans compte de produit, le scelleur devait refuser.');
+        } catch (\Throwable $echec) {
+            self::assertStringContainsString('produit', $echec->getMessage());
+        }
+
+        self::assertSame(
+            $avant,
+            (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM facturation_facture'),
+            'le brouillon de la facture refusée doit avoir été retiré',
         );
     }
 

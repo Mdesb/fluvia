@@ -19,18 +19,16 @@ import { TYPES_QUALIFICATION } from '../api/qualifications.js'
  * fait ». L'affectation d'un salarié est un second geste, servi par une autre route. L'écran le
  * dit, sinon on cherche longtemps où choisir la personne.
  */
-export default function PlanningTravail({ etabActif, droits = [] }) {
+export default function PlanningTravail({ etabActif, droits = [], params = {}, majParams }) {
   const [creneaux, setCreneaux] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [creation, setCreation] = useState(false)
   // ⚠ `null` = PAS LU, comme pour les creneaux. Un planning qui affiche « personne » alors qu'il
   // n'a pas su lire fait chercher des remplacants pour des postes deja pourvus.
   const [affectations, setAffectations] = useState(null)
   const [employes, setEmployes] = useState(null)
   const [aAffecter, setAAffecter] = useState(null)
-  const [aModifier, setAModifier] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'personnel.gerer_planning')
 
@@ -55,6 +53,33 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
   }, [etabActif])
 
   useEffect(() => { recharger() }, [recharger])
+
+  // ⚠ LE CRÉNEAU CORRIGÉ SE LIT PAR SON IDENTIFIANT, PAS DANS LA LISTE : celle-ci est bornée à
+  // 200, et un lien ne doit pas en dépendre. Seul un 404 dit « il n'existe pas » ; tout le reste
+  // est une lecture qui a échoué. `nouveau` ne lit rien : c'est une création.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // ⚠ LA CLÉ PORTE L'ÉTABLISSEMENT. L'effet relisait déjà à la bascule, mais la clé ne changeait
+  // pas : le créneau lu depuis l'ancien établissement restait affiché sous le nouveau jusqu'au
+  // retour de la lecture. Avec lui, la lecture rangée ne correspond plus : l'écran charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureCreneau, setLectureCreneau] = useState(null)
+  const cleCreneau = params.creneau && params.creneau !== 'nouveau' ? `${params.creneau}|${etabActif}` : null
+  useEffect(() => {
+    if (!(params.creneau && params.creneau !== 'nouveau')) { setLectureCreneau(null); return undefined }
+    const cle = `${params.creneau}|${etabActif}`
+    let vivant = true
+    api.creneauTravail(params.creneau)
+      .then((v) => { if (vivant) setLectureCreneau({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureCreneau({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.creneau, etabActif])
+  const lectureCreneauCourante = lectureCreneau?.cle === cleCreneau ? lectureCreneau : null
+  const chargementCreneau = cleCreneau !== null && lectureCreneauCourante === null
+  const creneauOuvert = lectureCreneauCourante?.valeur ?? null
+  const lectureCreneauEchouee = lectureCreneauCourante?.echouee ?? false
 
   useEffect(() => {
     api.employes()
@@ -111,6 +136,75 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
     }
   }
 
+  // ── PLANIFIER OU CORRIGER UN CRÉNEAU, EN ÉCRAN ──────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET L'ÉCRAN LES REPREND : le droit de gérer
+  // le planning pour les deux gestes, et un créneau non annulé pour la correction.
+  //
+  // ⚠ DEUX MONTAGES, PAS UNE INSTANCE PARTAGÉE. Le formulaire se remet à zéro sur `open` ; une
+  // instance partagée entre créer et corriger ferait porter à la création les valeurs du dernier
+  // créneau ouvert. `key` sépare `nouveau` de chaque identifiant.
+  if (params.creneau) {
+    const fermerCreneau = () => majParams({ creneau: '' }, { pousser: true })
+    const c = creneauOuvert
+    let contenu
+    if (!peutGerer) {
+      contenu = (
+        <div className="banner banner-warn">
+          Planifier ou corriger un créneau demande le droit de gérer le planning, que ce compte n’a pas.
+        </div>
+      )
+    } else if (params.creneau === 'nouveau') {
+      contenu = (
+        <CreneauModal
+          key="nouveau"
+          open
+          etabActif={etabActif}
+          onClose={fermerCreneau}
+          onFait={() => { fermerCreneau(); setSucces('Créneau planifié.'); recharger() }}
+        />
+      )
+    } else if (chargementCreneau) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!c) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureCreneauEchouee
+            ? 'Ce créneau n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce créneau n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (c.statut === 'annule') {
+      contenu = (
+        <div className="banner banner-warn">
+          Ce créneau est annulé : il ne se corrige plus. Planifiez-en un nouveau.
+        </div>
+      )
+    } else {
+      contenu = (
+        <CreneauModal
+          key={params.creneau}
+          open
+          etabActif={etabActif}
+          creneau={c}
+          onClose={fermerCreneau}
+          onFait={() => { fermerCreneau(); setSucces('Créneau corrigé — les affectations sont conservées.'); recharger() }}
+        />
+      )
+    }
+    return (
+      <section className="card">
+        <div className="card-b">
+          <button className="btn ghost sm" type="button" onClick={fermerCreneau}
+            style={{ marginBottom: 'var(--esp-large)' }}>
+            ← Retour au planning
+          </button>
+          {contenu}
+        </div>
+      </section>
+    )
+  }
+
   const actifs = (creneaux || []).filter((c) => c.statut !== 'annule')
 
   return (
@@ -124,7 +218,7 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
         </span>
         {peutGerer && (
           <div className="r">
-            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            <button className="btn sm" type="button" onClick={() => majParams({ creneau: 'nouveau' }, { pousser: true })}>
               ＋ Planifier un créneau
             </button>
           </div>
@@ -210,7 +304,7 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
                           type="button"
                           disabled={busy}
                           title="Corrige l'horaire, le poste, l'effectif ou la qualification exigée, sans toucher aux affectations."
-                          onClick={() => { setAModifier(c); setErreur(null); setSucces(null) }}
+                          onClick={() => { setErreur(null); setSucces(null); majParams({ creneau: String(c.id) }, { pousser: true }) }}
                         >
                           Modifier
                         </button>
@@ -255,23 +349,6 @@ export default function PlanningTravail({ etabActif, droits = [] }) {
         onErreur={setErreur}
       />
 
-      <CreneauModal
-        open={creation}
-        etabActif={etabActif}
-        onClose={() => setCreation(false)}
-        onFait={() => { setCreation(false); setSucces('Créneau planifié.'); recharger() }}
-      />
-
-      {/* ⚠ DEUX MONTAGES, PAS UN SEUL AVEC UN DRAPEAU. La modale se remet a zero sur `open`, et
-          partager l'instance entre « creer » et « corriger » ferait porter a la creation les
-          valeurs du dernier creneau ouvert. */}
-      <CreneauModal
-        open={aModifier !== null}
-        etabActif={etabActif}
-        creneau={aModifier}
-        onClose={() => setAModifier(null)}
-        onFait={() => { setAModifier(null); setSucces('Créneau corrigé — les affectations sont conservées.'); recharger() }}
-      />
     </section>
   )
 }
@@ -382,8 +459,11 @@ function CreneauModal({ open, etabActif, creneau = null, onClose, onFait }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre={edite ? 'Corriger le créneau' : 'Planifier un créneau de travail'}>
+    <>
+      <h2>{edite ? 'Corriger le créneau' : 'Planifier un créneau de travail'}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -464,7 +544,7 @@ function CreneauModal({ open, etabActif, creneau = null, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

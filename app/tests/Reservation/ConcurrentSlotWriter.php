@@ -1,0 +1,230 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Reservation;
+
+use App\Crm\Entity\Beneficiaire;
+use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\Reservation;
+use App\Reservation\Enum\ModeDecompteReservation;
+use App\Reservation\Service\JaugeCreneauGuard;
+use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
+
+/**
+ * Joue une écriture CONCURRENTE sur la jauge, pour les tests de verrou.
+ *
+ * PHPUnit ne lance pas deux requêtes en même temps. La concurrence est donc jouée par un second
+ * PROCESSUS, sur sa propre connexion : il verrouille une ligne, comme le fait une réservation en
+ * cours, y écrit, signale qu'il tient le verrou, attend, puis valide. La requête testée part pendant
+ * cette attente.
+ *
+ * Deux écritures possibles :
+ *  - `holdSlotLock()` : verrouille le CRÉNEAU et porte une réservation de remplissage à la quantité
+ *    voulue — pour les contrôles de places (un verrou pris en première lecture fait attendre ET
+ *    compter ce qui a été validé ; d'où les deux assertions, le refus et l'attente) ;
+ *  - `holdOccupationIncrement()` : verrouille la RESSOURCE et ajoute des unités à son compteur
+ *    d'occupation, comme une réservation concurrente — pour les écritures du compteur (une écriture
+ *    en valeur absolue écraserait ces unités ; seule une écriture relative les garde).
+ */
+trait ConcurrentSlotWriter
+{
+    private const HOLD_MS = 2000;
+
+    /** Une réservation d'une place sur le créneau, que le processus concurrent gonflera. */
+    protected function persistFillerReservation(string $idCreneau, Beneficiaire $organisateur): string
+    {
+        $em = $this->slotEntityManager();
+        $creneau = $em->getRepository(Creneau::class)->find($idCreneau);
+        \assert($creneau instanceof Creneau);
+        $organisateur = $em->getRepository(Beneficiaire::class)->find($organisateur->getId());
+        \assert($organisateur instanceof Beneficiaire);
+
+        $reservation = (new Reservation())
+            ->setCreneau($creneau)
+            ->setOrganisateur($organisateur)
+            ->setEtablissement($creneau->getEtablissement())
+            ->setModeDecompte(ModeDecompteReservation::Gratuit)
+            ->setMontantDu('0.00')
+            ->setQuantity(1);
+        $em->persist($reservation);
+        $em->flush();
+
+        return (string) $reservation->getId();
+    }
+
+    /**
+     * La quantité à donner à la réservation de remplissage pour qu'il reste `$restantes` places une fois
+     * l'écriture concurrente validée. Lue par la jauge elle-même, pas recalculée.
+     */
+    protected function fillerQuantityLeaving(string $idCreneau, int $restantes): int
+    {
+        $em = $this->slotEntityManager();
+        $creneau = $em->getRepository(Creneau::class)->find($idCreneau);
+        \assert($creneau instanceof Creneau);
+        $em->refresh($creneau);
+        /** @var JaugeCreneauGuard $jauge */
+        $jauge = static::getContainer()->get(JaugeCreneauGuard::class);
+        $quantite = $jauge->placesRestantes($creneau) + 1 - $restantes;
+        self::assertGreaterThanOrEqual(1, $quantite, 'Le créneau n\'a pas assez de places pour monter ce cas.');
+
+        return $quantite;
+    }
+
+    /**
+     * Verrouille le créneau et porte la réservation de remplissage à `$quantite`. Rend la main quand le
+     * processus TIENT le verrou.
+     *
+     * @return array{0: resource, 1: array<int, resource>}
+     */
+    protected function holdSlotLock(string $idCreneau, string $idReservation, int $quantite): array
+    {
+        return $this->startConcurrentWriter('slot', $idCreneau, $idReservation, $quantite);
+    }
+
+    /**
+     * Verrouille la ressource et ajoute `$unites` à son compteur d'occupation. Rend la main quand le
+     * processus TIENT le verrou.
+     *
+     * @return array{0: resource, 1: array<int, resource>}
+     */
+    protected function holdOccupationIncrement(string $idRessource, int $unites): array
+    {
+        return $this->startConcurrentWriter('counter', $idRessource, '-', $unites);
+    }
+
+    /** Le compteur d'occupation tel qu'il est EN BASE, pas tel qu'un objet chargé le croit. */
+    protected function occupationInDatabase(string $idRessource): int
+    {
+        /** @var Connection $connexion */
+        $connexion = static::getContainer()->get('doctrine')->getConnection();
+        $valeur = $connexion->fetchOne(
+            'SELECT occupation_courante FROM reservation_ressource WHERE id = UNHEX(?)',
+            [str_replace('-', '', $idRessource)],
+        );
+        self::assertNotFalse($valeur, 'Ressource introuvable en base.');
+
+        return (int) $valeur;
+    }
+
+    /** @param array{0: resource, 1: array<int, resource>} $concurrent */
+    protected function releaseSlotLock(array $concurrent): void
+    {
+        [$processus, $tuyaux] = $concurrent;
+        $sortie = stream_get_contents($tuyaux[1]);
+        $erreur = stream_get_contents($tuyaux[2]);
+        $code = proc_close($processus);
+
+        // Si le concurrent n'a pas validé, le cas testé n'a pas eu lieu.
+        self::assertSame(0, $code, 'Le processus concurrent a échoué : ' . $erreur);
+        self::assertStringContainsString('COMMITTED', (string) $sortie);
+    }
+
+    /** Un refus obtenu SANS attendre viendrait d'un autre contrôle que le verrou testé. */
+    protected function assertWaitedForTheConcurrentWrite(float $secondes): void
+    {
+        self::assertGreaterThanOrEqual(self::HOLD_MS / 1000 * 0.75, $secondes, 'La requête doit avoir attendu la validation concurrente.');
+    }
+
+    /** @return array{0: resource, 1: array<int, resource>} */
+    private function startConcurrentWriter(string $mode, string $cible, string $reservation, int $valeur): array
+    {
+        /** @var Connection $connexion */
+        $connexion = static::getContainer()->get('doctrine')->getConnection();
+        $parametres = $connexion->getParams();
+        self::assertNotEmpty($parametres['dbname'] ?? null, 'Paramètres de connexion introuvables.');
+
+        $code = <<<'PHP'
+            $args = array_values(array_filter(array_slice($argv, 1), static fn ($a) => $a !== '--'));
+            [$mode, $hote, $port, $base, $utilisateur, $motDePasse, $cible, $reservation, $valeur, $attente] = $args;
+            // FOUND_ROWS : `rowCount()` compte les lignes TROUVÉES, pas les lignes modifiées. Sans lui, une
+            // quantité déjà à la bonne valeur rendait 0 et faisait conclure à une réservation absente.
+            $pdo = new PDO("mysql:host=$hote;port=$port;dbname=$base;charset=utf8mb4", $utilisateur, $motDePasse, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::MYSQL_ATTR_FOUND_ROWS => true]);
+            $pdo->beginTransaction();
+            if ($mode === 'slot') {
+                $verrou = $pdo->prepare('SELECT id FROM reservation_creneau WHERE id = UNHEX(?) FOR UPDATE');
+                $verrou->execute([str_replace('-', '', $cible)]);
+                if ($verrou->fetchAll() === []) { fwrite(STDOUT, "NOSLOT\n"); exit(2); }
+                $maj = $pdo->prepare('UPDATE reservation_reservation SET quantity = ? WHERE id = UNHEX(?)');
+                $maj->execute([(int) $valeur, str_replace('-', '', $reservation)]);
+                if ($maj->rowCount() !== 1) { fwrite(STDOUT, "NORESERVATION\n"); exit(2); }
+            } else {
+                $verrou = $pdo->prepare('SELECT id FROM reservation_ressource WHERE id = UNHEX(?) FOR UPDATE');
+                $verrou->execute([str_replace('-', '', $cible)]);
+                if ($verrou->fetchAll() === []) { fwrite(STDOUT, "NORESOURCE\n"); exit(2); }
+                $maj = $pdo->prepare('UPDATE reservation_ressource SET occupation_courante = occupation_courante + ? WHERE id = UNHEX(?)');
+                $maj->execute([(int) $valeur, str_replace('-', '', $cible)]);
+                if ($maj->rowCount() !== 1) { fwrite(STDOUT, "NORESOURCE\n"); exit(2); }
+            }
+            fwrite(STDOUT, "LOCKED\n");
+            usleep((int) $attente * 1000);
+            $pdo->commit();
+            fwrite(STDOUT, "COMMITTED\n");
+            PHP;
+
+        $processus = proc_open(
+            [
+                \PHP_BINARY, '-r', $code, '--',
+                $mode,
+                (string) ($parametres['host'] ?? 'localhost'),
+                (string) ($parametres['port'] ?? 3306),
+                (string) $parametres['dbname'],
+                (string) ($parametres['user'] ?? ''),
+                (string) ($parametres['password'] ?? ''),
+                $cible,
+                $reservation,
+                (string) $valeur,
+                (string) self::HOLD_MS,
+            ],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $tuyaux,
+        );
+        self::assertIsResource($processus, 'Le processus concurrent n\'a pas démarré.');
+
+        $ligne = $this->readConcurrentLine($tuyaux[1], 15.0);
+        if ($ligne !== 'LOCKED') {
+            $erreur = stream_get_contents($tuyaux[2]);
+            proc_terminate($processus);
+            proc_close($processus);
+            self::fail(sprintf('Le processus concurrent ne tient pas le verrou : « %s » %s', $ligne, $erreur));
+        }
+
+        return [$processus, $tuyaux];
+    }
+
+    private function slotEntityManager(): EntityManagerInterface
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        return $em;
+    }
+
+    /** @param resource $flux */
+    private function readConcurrentLine($flux, float $delai): ?string
+    {
+        stream_set_blocking($flux, false);
+        $tampon = '';
+        $limite = microtime(true) + $delai;
+        while (microtime(true) < $limite) {
+            $lus = [$flux];
+            $rien = null;
+            if (stream_select($lus, $rien, $rien, 0, 200000) > 0) {
+                $morceau = fread($flux, 1024);
+                if ($morceau === false || ($morceau === '' && feof($flux))) {
+                    break;
+                }
+                $tampon .= $morceau;
+                if (str_contains($tampon, "\n")) {
+                    stream_set_blocking($flux, true);
+
+                    return trim(strstr($tampon, "\n", true));
+                }
+            }
+        }
+        stream_set_blocking($flux, true);
+
+        return $tampon === '' ? null : trim($tampon);
+    }
+}

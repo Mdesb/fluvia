@@ -62,10 +62,21 @@ final class GenerateurNumeroFacture
         // un objet de moins qui peut manquer -- une serie dediee devrait etre creee par quelqu'un,
         // et un etablissement neuf n'en aurait pas.
         $prefixe = $facture->getNature() === NatureFacture::Avoir ? PrefixeSerie::Avoir : PrefixeSerie::Facture;
-        $serie = $this->serieVerrouillee($profil, $periode, $prefixe);
+
+        // ⚠ LE COMPTEUR SUIT L'ANNEE, PAS LA PERIODE — ET C'EST UN CORRECTIF, PAS UN CHOIX DE STYLE.
+        //
+        // `PeriodeComptableResolver` cree une periode par MOIS. Verrouiller le compteur sur la
+        // periode le rendait mensuel, alors que le numero compose juste en dessous ne porte que
+        // l'annee. La premiere facture de chaque nouveau mois reprenait donc le numero de la
+        // premiere du mois precedent, et `uniq_facture_numero` la rejetait : plus aucune facture
+        // emettable a partir du deuxieme mois, pour tout exploitant.
+        //
+        // L'annee se lit sur le DEBUT de la periode, comme avant : une periode ne chevauche jamais
+        // deux annees (elle va du 1er au dernier jour d'un mois), donc les deux bornes s'accordent.
+        $exercice = (int) $periode->getDateDebut()->format('Y');
+        $serie = $this->serieVerrouillee($profil, $exercice, $prefixe);
 
         $sequence = $serie->incrementer();
-        $exercice = $periode->getDateDebut()->format('Y');
 
         $numero = sprintf('%s-%s-%05d', $prefixe->value, $exercice, $sequence);
         $facture->setNumero($numero);
@@ -74,12 +85,12 @@ final class GenerateurNumeroFacture
     }
 
     /** Charge (ou crée) la ligne de compteur, puis la verrouille en écriture jusqu'au commit. */
-    private function serieVerrouillee(ProfilExploitant $profil, PeriodeComptable $periode, PrefixeSerie $prefixe): SerieNumerotation
+    private function serieVerrouillee(ProfilExploitant $profil, int $exercice, PrefixeSerie $prefixe): SerieNumerotation
     {
         $repository = $this->em->getRepository(SerieNumerotation::class);
         $criteres = [
             'profilExploitant' => $profil->getId(),
-            'periode' => $periode->getId(),
+            'exercice' => $exercice,
             'prefixe' => $prefixe,
         ];
 
@@ -87,7 +98,7 @@ final class GenerateurNumeroFacture
         if (!$serie instanceof SerieNumerotation) {
             $serie = (new SerieNumerotation())
                 ->setProfilExploitant($profil)
-                ->setPeriode($periode)
+                ->setExercice($exercice)
                 ->setPrefixe($prefixe);
             $this->em->persist($serie);
             // La ligne doit exister en base avant de pouvoir être verrouillée : ce flush reste dans la

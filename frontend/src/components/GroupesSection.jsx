@@ -26,7 +26,7 @@ import ReferentielEditable from './ReferentielEditable.jsx'
 // `IS_AUTHENTICATED_FULLY` — c'est `Organisation/Doctrine/GroupScopeExtension` qui restreint
 // `Groupe::class` à l'utilisateur. Sans elle, cet écran aurait montré aux uns les groupes des
 // autres, et la permission n'y aurait rien vu.
-export default function GroupesSection({ peutEcrire, onChange }) {
+export default function GroupesSection({ peutEcrire, onChange, params, majParams }) {
   const descripteur = {
     titre: 'Groupes',
     aQuoiCaSert:
@@ -55,5 +55,5 @@ export default function GroupesSection({ peutEcrire, onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} params={params} majParams={majParams} />
 }

@@ -27,7 +27,9 @@ import Modal from './Modal.jsx'
  * numero qu'on vient de choisir dans une liste serait absurde, et surtout ce serait rendre lente une
  * fonction dont le seul interet est d'etre rapide.
  */
-export default function RechercheBilletModal({ open, onClose, numeroInitial = '', droits = [] }) {
+// « Vérifier un billet ou une carte » : un écran de la caisse et de la supervision
+// (?verifier=1 ou ?verifier=<numéro>), plus une modale. Le nom du fichier est resté.
+export default function RechercheBillet({ onClose, numeroInitial = '', droits = [] }) {
   const [numero, setNumero] = useState('')
   const [resultat, setResultat] = useState(null)
   const [chargement, setChargement] = useState(false)
@@ -56,13 +58,12 @@ export default function RechercheBilletModal({ open, onClose, numeroInitial = ''
   // rouvrir la fenetre sur le meme billet n'aurait rien relance et afficherait l'etat precedent --
   // sur un controle d'acces, montrer un ancien resultat serait pire que ne rien montrer.
   useEffect(() => {
-    if (!open) return
     setNumero(numeroInitial || '')
     setResultat(null)
     setErreur(null)
     if (numeroInitial) chercher(null, numeroInitial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, numeroInitial])
+  }, [numeroInitial])
 
   async function chercher(e, force) {
     e?.preventDefault?.()
@@ -101,7 +102,8 @@ export default function RechercheBilletModal({ open, onClose, numeroInitial = ''
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre="Vérifier un billet ou une carte" taille="lg">
+    <>
+      <h2>Vérifier un billet ou une carte</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       <form onSubmit={chercher} style={{ display: 'flex', gap: 10, alignItems: 'end', marginBottom: 14 }}>
@@ -222,7 +224,7 @@ export default function RechercheBilletModal({ open, onClose, numeroInitial = ''
           )}
         </>
       )}
-    </Modal>
+    </>
   )
 }
 

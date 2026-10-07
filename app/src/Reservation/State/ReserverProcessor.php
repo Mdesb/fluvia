@@ -11,6 +11,7 @@ use App\Crm\Entity\Beneficiaire;
 use App\Offre\Entity\ServiceInclus;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutReservation;
@@ -26,6 +27,8 @@ use App\Reservation\Service\VenteReservationHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use App\Securite\Service\ContexteEtablissement;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -106,6 +109,76 @@ final class ReserverProcessor implements ProcessorInterface
         $quantite = $this->quantiteDemandee->read($corps);
 
         $ressource = $creneau->getRessource();
+
+        // ── LE CONTRÔLE DE JAUGE ET L'ÉCRITURE DANS UNE MÊME TRANSACTION, SOUS VERROU ─────────────
+        //
+        // Le contrôle lisait l'état validé, et la réservation s'écrivait au `flush()` final, hors de
+        // toute transaction : deux demandes simultanées sur la dernière place passaient toutes deux.
+        // Le serveur refusait bien un créneau complet, sauf à la seconde près où cela comptait.
+        //
+        // Les créneaux consommés (D33) se résolvent AVANT d'ouvrir la transaction : c'est une lecture,
+        // et en REPEATABLE READ la première lecture fige l'instantané. Faite après `beginTransaction()`,
+        // elle ferait compter la jauge d'avant l'attente — voir `JaugeCreneauGuard::verrouiller()`.
+        //
+        // Le débit de la carte et la vente à l'unité s'écrivent DANS la transaction (points de
+        // sauvegarde) : un échec les annule avec la réservation. La compensation qui rendait l'unité
+        // de carte après un `flush()` raté a donc disparu — elle créditerait désormais une unité que
+        // l'annulation a déjà rendue.
+        //
+        // Pas de `wrapInTransaction()` : il ferme l'EntityManager sur toute exception, y compris un
+        // simple 409 « complet », et la requête suivante du même noyau échouerait.
+        $consommes = $this->creneauxConsommes->resolve($creneau);
+        $connexion = $this->em->getConnection();
+        $connexion->beginTransaction();
+        try {
+            $this->jauge->verrouiller($consommes, $ressource?->ressourcePorteuseJauge());
+            $reservation = $this->reserverSousVerrou($corps, $creneau, $organisateur, $quantite, $ressource, $consommes);
+            $this->em->flush();
+            $connexion->commit();
+        } catch (RetryableException $concurrence) {
+            // Interblocage ou attente de verrou expirée : rien n'a été écrit, et la demande est
+            // rejouable telle quelle. Un 500 ferait croire à une panne.
+            $this->annuler($connexion);
+
+            throw new ConflictHttpException('Une autre réservation était en cours sur ce créneau : la vôtre n\'a pas été enregistrée. Réessayez.', $concurrence);
+        } catch (\Throwable $echec) {
+            $this->annuler($connexion);
+
+            throw $echec;
+        }
+
+        $this->projectionAcces->projeterSiApplicable($reservation);
+
+        return $reservation;
+    }
+
+    /**
+     * Défait la transaction ouverte par `process()`.
+     *
+     * Un échec du `rollBack()` lui-même (transaction déjà défaite par le serveur sur un interblocage)
+     * ne doit pas masquer l'erreur qui l'a provoqué : c'est elle que l'appelant relance.
+     */
+    private function annuler(Connection $connexion): void
+    {
+        if (!$connexion->isTransactionActive()) {
+            return;
+        }
+        try {
+            $connexion->rollBack();
+        } catch (\Throwable) {
+            // L'erreur d'origine est relancée par l'appelant.
+        }
+    }
+
+    /**
+     * Contrôles de jauge, décompte et construction de la réservation — appelé SOUS le verrou posé par
+     * `process()`. Ne valide rien : `process()` écrit et valide.
+     *
+     * @param array<string, mixed> $corps
+     * @param list<Creneau>        $consommes
+     */
+    private function reserverSousVerrou(array $corps, Creneau $creneau, Beneficiaire $organisateur, int $quantite, ?Ressource $ressource, array $consommes): Reservation
+    {
         if ($this->jauge->estComplet($creneau) || ($ressource !== null && $this->jaugeMere->jaugeDepassee($ressource))) {
             throw new ConflictHttpException('Créneau complet : seule l\'inscription en liste d\'attente est proposée (RG-M5-01, CA-4).');
         }
@@ -130,9 +203,8 @@ final class ReserverProcessor implements ProcessorInterface
 
         // ACT-1 point 3 / D33 — le créneau visé reste unique, mais la réservation consomme aussi les
         // créneaux des ressources ancêtres qui le couvrent : une table libre ne suffit pas si le
-        // service n'a plus de couverts. Résolus ici, contrôlés ici, et stockés plus bas — jamais
-        // redérivés au contrôle suivant.
-        $consommes = $this->creneauxConsommes->resolve($creneau);
+        // service n'a plus de couverts. Résolus avant la transaction (`process()`), contrôlés ici sous
+        // verrou, et stockés plus bas — jamais redérivés au contrôle suivant.
         foreach ($consommes as $consomme) {
             if ($this->jauge->peutAccueillir($consomme, $quantite)) {
                 continue;
@@ -262,21 +334,6 @@ final class ReserverProcessor implements ProcessorInterface
         if ($ressource !== null) {
             $this->jaugeMere->incrementer($ressource, $quantite);
         }
-
-        try {
-            $this->em->flush();
-        } catch (\Throwable $echec) {
-            // Le débit de la carte a sa propre transaction, déjà committée à ce stade : si la
-            // réservation ne s'enregistre pas, le client aurait payé une séance sans en avoir une.
-            // On rend l'unité avant de laisser remonter l'échec. Compensation explicite plutôt que
-            // transaction englobante : ce processor n'en ouvre pas, et en ouvrir une ici changerait
-            // le comportement de toutes les autres branches de décompte.
-            $this->carteStock->restituer($reservation->getCreditDroitRef());
-
-            throw $echec;
-        }
-
-        $this->projectionAcces->projeterSiApplicable($reservation);
 
         return $reservation;
     }

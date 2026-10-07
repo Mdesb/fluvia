@@ -11,6 +11,7 @@ use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutPanier;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\StatutProduit;
 use App\Tests\Boutique\BoutiqueApiTestCase;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Enum\StatutVente;
@@ -52,7 +53,7 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         // CA-7 : chaque article doit porter un bénéficiaire avant paiement.
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', [
             'headers' => $entete,
-            'json' => ['rgpd' => true],
+            'json' => ['mentionVersion' => 'mention-test'],
         ]);
         self::assertResponseIsSuccessful();
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/payer', ['headers' => $entete]);
@@ -122,10 +123,60 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         self::assertSame(StatutPanier::TransformeEnCommande, $panierFinal->getStatut());
     }
 
+    /**
+     * UN PRODUIT ARCHIVÉ APRÈS SA MISE AU PANIER N'EST PAS VENDU (07/10/2026).
+     *
+     * L'ajout au panier refuse un produit non publié, mais le paiement ne le revérifiait pas : le
+     * produit retiré de la vente entre-temps se vendait quand même. Refus en 422, aucune vente
+     * créée. Témoin : le même panier, produit republié, passe au paiement.
+     */
+    public function testUnProduitArchiveApresLaMiseAuPanierNEstPasVendu(): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_SIMPLE_CODE]);
+        [$client, $panierId, $jeton] = $this->ouvrirPanierInviteA();
+        $entete = [PanierProprietaireGuard::HEADER => $jeton];
+
+        $panier = $client->request('POST', '/api/boutique/paniers/' . $panierId . '/lignes', [
+            'headers' => $entete,
+            'json' => ['produit' => (string) $produit->getId(), 'quantite' => 1],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/identifier', [
+            'headers' => $entete,
+            'json' => ['mode' => 'invite', 'email' => 'invite.archive@example.test'],
+        ]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', [
+            'headers' => $entete,
+            'json' => ['mentionVersion' => 'mention-test'],
+        ]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/beneficiaires', [
+            'headers' => $entete,
+            'json' => ['lignes' => [['ligneId' => (string) $panier['lignes'][0]['id'], 'beneficiaireSimple' => ['nom' => 'Dupont', 'prenom' => 'Jean', 'dateNaissance' => '1990-01-01']]]],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        // Relu ici : `ouvrirPanierInviteA()` a démarré un autre noyau, l'entité lue avant n'est plus suivie.
+        $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_SIMPLE_CODE])->setStatut(StatutProduit::Archive);
+        $this->em()->flush();
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/payer', ['headers' => $entete]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('non publié', $client->getResponse()->getContent(false));
+        $panierEntity = $this->em()->getRepository(PanierEnLigne::class)->find($panierId);
+        self::assertNull(
+            $this->em()->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['panierOrigine' => $panierEntity]),
+            'Aucune commande ne doit naître d\'un produit archivé.',
+        );
+
+        $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_SIMPLE_CODE])->setStatut(StatutProduit::Publie);
+        $this->em()->flush();
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/payer', ['headers' => $entete]);
+        self::assertResponseIsSuccessful('Témoin : le même panier, produit publié, passe au paiement.');
+    }
+
     public function testConsentementEtBeneficiairesSansJetonSontRefuses(): void
     {
         [$client, $panierId] = $this->ouvrirPanierInviteA();
-        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['json' => ['rgpd' => true]]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['json' => ['mentionVersion' => 'mention-test']]);
         self::assertResponseStatusCodeSame(403, '⚠ Risque n°3 : jeton de panier requis pour manipuler un panier invité.');
     }
 }

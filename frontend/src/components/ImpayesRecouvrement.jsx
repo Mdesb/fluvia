@@ -36,7 +36,7 @@ import { confirmer } from './Confirmation.jsx'
 //
 // Les présenter côte à côte comme deux boutons équivalents ferait choisir le plus rapide.
 
-export default function ImpayesRecouvrement({ etabActif, droits }) {
+export default function ImpayesRecouvrement({ etabActif, droits, params = {}, majParams }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, cet ecran affirmait deux fois
   // qu'il n'y avait aucun impaye — dans le compteur du bandeau de carte, et dans l'etat vide.
   // C'est la phrase qui fait arreter de chercher, sur le seul ecran ou une creance oubliee
@@ -57,7 +57,6 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const peutForcer = aLeDroit(droits, 'recouvrement.forcer_acces')
   const [exemptions, setExemptions] = useState([])
   const [exemption, setExemption] = useState(null)
-  const [reglement, setReglement] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -142,7 +141,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   // moyen, à quelle date, sous quelle référence.
   function resoudre(incident) {
     setErreur(null)
-    setReglement(incident)
+    majParams({ reglement: String(incident.id) }, { pousser: true })
   }
 
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
@@ -176,6 +175,52 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     ? assietteDuTaux === 0
     : (incidents || []).length === 0 && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques)
   const resolus = (incidents || []).filter((i) => i.statut === 'resolu')
+
+  // ── LE CONSTAT D'UN RÈGLEMENT, EN ÉCRAN ─────────────────────────────────────────────────
+  //
+  // ⚠ CE GESTE ROUVRE UN ACCÈS. Il mérite d'être relu en pleine page, et son adresse permet de
+  // le faire relire avant de le poser.
+  //
+  // Les trois états sont consultés dans l'ordre : `chargement` d'abord, puis la recherche.
+  if (params.reglement) {
+    const fermerR = () => majParams({ reglement: '' }, { pousser: true })
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermerR}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour au recouvrement
+      </button>
+    )
+    if (chargement) {
+      return (
+        <>{retour}<div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div></>
+      )
+    }
+    const cible = incidents.find((i) => String(i.id) === String(params.reglement))
+    if (!cible) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            Cet impayé n’est plus dans la file — il a sans doute déjà été réglé depuis que ce lien
+            a été copié.
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <ReglementImpayeModal
+          key={params.reglement}
+          incident={cible}
+          onClose={fermerR}
+          onFait={(m) => { fermerR(); setSucces(m); setErreur(null); recharger() }}
+          onErreur={setErreur}
+        />
+      </>
+    )
+  }
 
   return (
     <>
@@ -502,7 +547,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         onErreur={setErreur}
       />
 
-      <Politique droits={droits} etabActif={etabActif} onSucces={setSucces} />
+      <Politique droits={droits} etabActif={etabActif} onSucces={setSucces} params={params} majParams={majParams} />
 
       <ExemptionModal
         incident={exemption}
@@ -515,13 +560,6 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         incident={forcage}
         onClose={() => setForcage(null)}
         onFait={(m) => { setForcage(null); setSucces(m); setErreur(null); recharger() }}
-        onErreur={setErreur}
-      />
-
-      <ReglementImpayeModal
-        incident={reglement}
-        onClose={() => setReglement(null)}
-        onFait={(m) => { setReglement(null); setSucces(m); setErreur(null); recharger() }}
         onErreur={setErreur}
       />
     </>
@@ -653,11 +691,10 @@ function Representations({ peutPiloter, incidentsParId, listeIncidentsPartielle,
 // dédié, et aucun écran ne les appelait. L'exploitant voyait donc la règle qui coupe l'accès de ses
 // abonnés, la trouvait trop brutale, et n'avait aucun moyen d'en changer : il en concluait que le
 // logiciel était comme ça. Montrer un réglage sans donner le bouton est pire que ne rien montrer.
-function Politique({ droits, etabActif, onSucces }) {
+function Politique({ droits, etabActif, onSucces, params = {}, majParams }) {
   const [politiquesLu, setPolitiquesLu] = useState(null)
   // ⚠ `null` = PAS LU. Il ne sort pas d'ici : tout l'aval lit un tableau.
   const politiques = politiquesLu || []
-  const [edition, setEdition] = useState(null)
 
   const peutParametrer = aLeDroit(droits, 'recouvrement.parametrer')
 
@@ -680,6 +717,29 @@ function Politique({ droits, etabActif, onSucces }) {
     apres_n_representations_echouees: 'après N représentations échouées',
   }
 
+  // ── LA RÈGLE DE RECOUVREMENT, EN ÉCRAN ──────────────────────────────────────────────────
+  //
+  // ⚠ C'EST UN SINGLETON : une politique par établissement, ouverte par `politiques[0] || {}`.
+  // Son paramètre n'a donc aucun identifiant à porter — `1` suffit, et l'écran relit la
+  // politique dans la liste déjà chargée. Un identifiant ici aurait été un faux précis.
+  if (params.regle === '1') {
+    const fermerRegle = () => majParams({ regle: '' }, { pousser: true })
+    return (
+      <section className="card"><div className="card-b">
+        <button className="btn ghost sm" type="button" onClick={fermerRegle}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au recouvrement
+        </button>
+        <PolitiqueModal
+          politique={politiques[0] || {}}
+          etabActif={etabActif}
+          onClose={fermerRegle}
+          onFait={(m) => { fermerRegle(); onSucces(m); recharger() }}
+        />
+      </div></section>
+    )
+  }
+
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -690,7 +750,7 @@ function Politique({ droits, etabActif, onSucces }) {
             <button
               className="btn sm"
               type="button"
-              onClick={() => setEdition(politiques[0] || {})}
+              onClick={() => majParams({ regle: '1' }, { pousser: true })}
             >
               {politiques.length > 0 ? 'Modifier la règle' : 'Définir une règle'}
             </button>
@@ -742,13 +802,6 @@ function Politique({ droits, etabActif, onSucces }) {
           ))
         )}
       </div>
-
-      <PolitiqueModal
-        politique={edition}
-        etabActif={etabActif}
-        onClose={() => setEdition(null)}
-        onFait={(m) => { setEdition(null); onSucces(m); recharger() }}
-      />
     </section>
   )
 }
@@ -828,11 +881,8 @@ function PolitiqueModal({ politique, etabActif, onClose, onFait }) {
   }
 
   return (
-    <Modal
-      open={!!politique}
-      onClose={onClose}
-      titre={edition ? 'Modifier la règle de recouvrement' : 'Définir la règle de recouvrement'}
-    >
+    <>
+      <h2>{edition ? 'Modifier la règle de recouvrement' : 'Définir la règle de recouvrement'}</h2>
       <form onSubmit={envoyer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -930,7 +980,7 @@ function PolitiqueModal({ politique, etabActif, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -1077,7 +1127,8 @@ function ReglementImpayeModal({ incident, onClose, onFait, onErreur }) {
   }
 
   return (
-    <Modal open={!!incident} onClose={onClose} titre="Constater le règlement d'un impayé">
+    <>
+      <h2>Constater le règlement d’un impayé</h2>
       {incident && (
         <form onSubmit={envoyer}>
           <p>
@@ -1164,7 +1215,7 @@ function ReglementImpayeModal({ incident, onClose, onFait, onErreur }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 

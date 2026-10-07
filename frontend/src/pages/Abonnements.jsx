@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
+import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { euros, libelleProduit, prixIndicatif } from '../api/produit.js'
+import { euros, libelleProduit } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
+import { mot } from '../api/vocabulaire.js'
+import { STATUTS_ABONNEMENT, tonStatutAbonnement } from '../api/abonnement.js'
 
 // Onglet Exploitation « Abonnements » — gestion transverse des abonnements clients.
 //
@@ -20,24 +23,16 @@ import { idDe } from '../api/iri.js'
 // ⚠ Discipline des états : `null` = on lit ; `undefined` = on n'a PAS PU lire (refus) ; un tableau =
 // lu. Jamais « — » là où rien n'a été mesuré, jamais de `.find`/accès sur `null`.
 
-const LABEL_STATUT = {
-  actif: 'Actif',
-  suspendu: 'Suspendu',
-  en_pause: 'En pause',
-  resilie: 'Résilié',
-  expire: 'Expiré',
-}
+// LES STATUTS NE SONT PLUS NOMMÉS ICI : `../api/abonnement.js` porte la liste, `mot()` porte les
+// mots. La table locale qui vivait à cette place nommait `suspendu`, `en_pause` et `expire` — trois
+// clés qu'aucun producteur serveur n'émet — et ignorait `pause`, `impaye` et `echu`, que la colonne
+// Statut affichait donc en code brut. Le filtre ci-dessous étant construit depuis cette même table,
+// il proposait trois choix qui ne ramenaient jamais rien.
 
 const LABEL_PERIODICITE = {
   mensuel: 'Mensuel',
   annuel: 'Annuel',
   personnalise: 'Personnalisé',
-}
-
-function classeStatut(s) {
-  if (s === 'actif') return 'good'
-  if (s === 'resilie' || s === 'expire') return 'crit'
-  return 'warn'
 }
 
 function labelPeriodicite(v) {
@@ -61,7 +56,7 @@ function dateFr(v) {
   }
 }
 
-export default function Abonnements({ droits }) {
+export default function Abonnements({ droits, session }) {
   const [vue, setVue] = useState('liste') // 'liste' | 'creation'
   const [liste, setListe] = useState(null)
   const [produits, setProduits] = useState(null)
@@ -172,8 +167,10 @@ export default function Abonnements({ droits }) {
 
   if (vue === 'creation') {
     return (
-      <CreationAbonnement
+      <SouscriptionAbonnement
         produits={produits}
+        session={session}
+        droits={droits}
         onAnnuler={() => setVue('liste')}
         onCree={async () => {
           setVue('liste')
@@ -233,7 +230,7 @@ export default function Abonnements({ droits }) {
                   <td>{nomClient(a.payeur) || <span className="sub">—</span>}</td>
                   <td>{nomAdherent || <span className="sub">—</span>}</td>
                   <td>
-                    <span className={`badge ${classeStatut(s)}`}>{LABEL_STATUT[s] || a.statut || '—'}</span>
+                    <span className={`badge ${tonStatutAbonnement(s)}`}>{mot(s)}</span>
                   </td>
                   <td>{labelPeriodicite((a.periodicite || '').toLowerCase())}</td>
                   <td className="num">
@@ -293,9 +290,9 @@ export default function Abonnements({ droits }) {
             <span className="sub">Statut</span>
             <select className="select" value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value)}>
               <option value="">Tous</option>
-              {Object.entries(LABEL_STATUT).map(([v, l]) => (
+              {STATUTS_ABONNEMENT.map((v) => (
                 <option key={v} value={v}>
-                  {l}
+                  {mot(v)}
                 </option>
               ))}
             </select>
@@ -320,225 +317,6 @@ export default function Abonnements({ droits }) {
       <div className="card">
         <div className="card-b">{corps()}</div>
       </div>
-    </div>
-  )
-}
-
-// Détails du produit choisi : prix indicatif, cadence, jour de prélèvement. Rendus depuis l'objet
-// produit déjà chargé (la collection porte `formule` et `grilles`), sans appel supplémentaire.
-function DetailsProduit({ produit }) {
-  const f = produit.formule || {}
-  const prix = prixIndicatif(produit)
-  return (
-    <div
-      style={{
-        border: '1px solid var(--line)',
-        borderRadius: 10,
-        padding: 'var(--esp-normal)',
-        display: 'grid',
-        gap: 'var(--esp-serre)',
-      }}
-    >
-      <strong>{libelleProduit(produit)}</strong>
-      <div className="row" style={{ gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
-        <span>
-          <span className="sub">Prix&nbsp;: </span>
-          {prix != null ? euros(prix) : '—'}
-        </span>
-        <span>
-          <span className="sub">Périodicité&nbsp;: </span>
-          {labelPeriodicite(f.periodicite)}
-        </span>
-        {f.jourPrelevement != null && (
-          <span>
-            <span className="sub">Prélèvement le&nbsp;: </span>
-            {f.jourPrelevement}
-          </span>
-        )}
-        <span>
-          <span className="sub">SEPA&nbsp;: </span>
-          {f.sepaActif ? 'oui' : 'non'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// Souscription au guichet. Le prix et la cadence NE SONT PAS envoyés — le serveur les résout depuis la
-// formule du produit (« pas de prix libre »). Payeur et adhérent sont des CLIENTS (recherche/création
-// comme en caisse) ; l'adhérent est facultatif (par défaut le payeur).
-function CreationAbonnement({ produits, onAnnuler, onCree }) {
-  const [produitId, setProduitId] = useState('')
-  const [payeur, setPayeur] = useState(null)
-  const [adherent, setAdherent] = useState(null)
-  const [picker, setPicker] = useState(null) // null | 'payeur' | 'adherent'
-  const [iban, setIban] = useState('')
-  const [titulaire, setTitulaire] = useState('')
-  const [dureeMois, setDureeMois] = useState(12)
-  const [envoi, setEnvoi] = useState(false)
-  const [erreur, setErreur] = useState(null)
-
-  // ⚠ CE QUE CET ÉCRAN SAIT SOUSCRIRE : un produit d'abonnement PRÉLEVÉ EN SEPA. Le filtre n'est pas
-  // cosmétique — la souscription ouvre un mandat (IBAN + titulaire obligatoires). Montrer un produit
-  // sans SEPA laisserait choisir ce qu'on ne peut pas finir de saisir ici.
-  const produitsAbo = useMemo(
-    () => (Array.isArray(produits) ? produits.filter((p) => p?.formule?.sepaActif) : []),
-    [produits],
-  )
-  const produit = useMemo(
-    () => produitsAbo.find((p) => idDe(p) === produitId) || null,
-    [produitsAbo, produitId],
-  )
-
-  const soumettre = useCallback(async () => {
-    setErreur(null)
-    if (!produit || !payeur || !iban.trim() || !titulaire.trim()) {
-      setErreur('Produit, payeur, IBAN et titulaire du mandat sont requis.')
-      return
-    }
-    const formule = produit.formule ? idDe(produit.formule) : null
-    if (!formule) {
-      setErreur("Ce produit n'est pas un abonnement (aucune formule attachée).")
-      return
-    }
-    setEnvoi(true)
-    try {
-      const corps = {
-        payeur: idDe(payeur),
-        formule,
-        iban: iban.trim(),
-        titulaireMandat: titulaire.trim(),
-        dureeEngagementMois: Number(dureeMois) || 12,
-      }
-      // Adhérent facultatif : présent seulement s'il diffère du payeur. Absent = le serveur prend le
-      // payeur comme adhérent (mais un adhérent DÉSIGNÉ mais introuvable est refusé, pas ignoré).
-      if (adherent) corps.adherent = idDe(adherent)
-      await api.souscrireAbonnement(corps)
-      await onCree()
-    } catch (e) {
-      setErreur(e?.message || 'La souscription a été refusée.')
-      setEnvoi(false)
-    }
-  }, [produit, payeur, adherent, iban, titulaire, dureeMois, onCree])
-
-  return (
-    <div className="view large">
-      <div className="view-head">
-        <div className="ttl">
-          <button
-            type="button"
-            className="btn ghost sm"
-            onClick={onAnnuler}
-            style={{ marginBottom: 'var(--esp-serre)' }}
-          >
-            ← Retour aux abonnements
-          </button>
-          <h2>Nouvel abonnement</h2>
-          <p className="sub">Souscription au guichet : produit, payeur, adhérent, mandat SEPA.</p>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-b" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
-          <label className="field" style={{ margin: 0 }}>
-            <span className="sub">Produit d'abonnement</span>
-            <select className="select" value={produitId} onChange={(e) => setProduitId(e.target.value)}>
-              <option value="">Sélectionner…</option>
-              {produitsAbo.map((p) => (
-                <option key={idDe(p)} value={idDe(p)}>
-                  {libelleProduit(p)}
-                </option>
-              ))}
-            </select>
-            {produits === undefined && <small className="crit">Produits non lisibles.</small>}
-            {Array.isArray(produits) && produitsAbo.length === 0 && (
-              <small className="sub">Aucun produit d'abonnement prélevé en SEPA dans le catalogue.</small>
-            )}
-            <small className="sub">Le prix et la cadence viennent de la formule du produit.</small>
-          </label>
-
-          {produit && <DetailsProduit produit={produit} />}
-
-          <div className="field" style={{ margin: 0 }}>
-            <span className="sub">Payeur</span>
-            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn" onClick={() => setPicker('payeur')}>
-                {payeur ? 'Modifier le payeur' : 'Choisir un payeur'}
-              </button>
-              <span>{payeur ? nomClient(payeur) : <span className="sub">Aucun payeur choisi</span>}</span>
-            </div>
-          </div>
-
-          <div className="field" style={{ margin: 0 }}>
-            <span className="sub">Adhérent (facultatif)</span>
-            <div className="row" style={{ gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn" onClick={() => setPicker('adherent')}>
-                {adherent ? "Modifier l'adhérent" : 'Choisir un adhérent'}
-              </button>
-              <span>
-                {adherent ? (
-                  nomClient(adherent)
-                ) : (
-                  <span className="sub">Par défaut, le payeur est l'adhérent</span>
-                )}
-              </span>
-              {adherent && (
-                <button type="button" className="btn ghost sm" onClick={() => setAdherent(null)}>
-                  Retirer
-                </button>
-              )}
-            </div>
-            <small className="sub">Recherche ou création d'un client, comme en caisse.</small>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-serre)' }}>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">IBAN (mandat SEPA)</span>
-              <input className="input" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 …" />
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span className="sub">Titulaire du mandat</span>
-              <input className="input" value={titulaire} onChange={(e) => setTitulaire(e.target.value)} />
-            </label>
-          </div>
-
-          <label className="field" style={{ margin: 0, maxWidth: 240 }}>
-            <span className="sub">Durée d'engagement (mois)</span>
-            <input
-              className="input"
-              type="number"
-              min="0"
-              value={dureeMois}
-              onChange={(e) => setDureeMois(e.target.value)}
-            />
-          </label>
-
-          {erreur && <div className="banner banner-error">{erreur}</div>}
-
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-serre)' }}>
-            <button type="button" className="btn" onClick={onAnnuler} disabled={envoi}>
-              Annuler
-            </button>
-            <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
-              {envoi ? 'Souscription…' : "Souscrire l'abonnement"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {picker && (
-        <ClientPicker
-          open
-          titre={picker === 'payeur' ? 'Payeur' : 'Adhérent'}
-          avecCreation
-          onClose={() => setPicker(null)}
-          onSelect={(c) => {
-            if (picker === 'payeur') setPayeur(c)
-            else setAdherent(c)
-            setPicker(null)
-          }}
-        />
-      )}
     </div>
   )
 }

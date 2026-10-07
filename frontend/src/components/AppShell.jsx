@@ -64,10 +64,6 @@ const NAV = [
     section: 'Exploitation',
     items: [
       { id: 'dashboard', ic: 'dashboard', label: 'Tableau de bord', admin: true },
-      // La boutique de modules. `admin: true` parce que Maxime a arbitre le 01/09 : « achat ouvert
-      // a qui administre l'etablissement » — pas une permission de module, puisqu'il s'agit
-      // justement d'acquerir des modules qu'on n'a pas encore.
-      { id: 'modules', ic: 'modules', label: 'Modules', admin: true },
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
       { id: 'caisse', ic: 'register', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
@@ -155,10 +151,18 @@ const NAV = [
       // onglets de `Comptabilite` ; leur ouvrir une entree propre creerait DEUX CHEMINS vers la
       // meme liste, deux endroits a corriger, et personne pour savoir lequel fait foi.
       //
-      // Ce qui a change : les trois ecrans sont desormais des composants partages
-      // (`PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`) rendus AUX DEUX ENDROITS.
-      // Il y a bien deux portes, mais une seule piece derriere -- une seule implementation, qui ne
-      // peut pas diverger d'elle-meme. L'objection portait sur la duplication, pas sur les portes.
+      // Ce qui a change : les trois ecrans sont devenus des composants a part
+      // (`PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`), et les onglets de
+      // `Comptabilite` qui les rendaient ont ete RETIRES depuis.
+      //
+      // ⚠ CE BLOC A DIT << rendus AUX DEUX ENDROITS >> et << deux portes, une seule piece >>
+      // jusqu'au 14/09. Mesure ce jour-la : chacun des trois n'a plus qu'UN SEUL hote
+      // (`Sepa.jsx`, `Recouvrement.jsx`, `Cautions.jsx`), et `Comptabilite.jsx` porte la
+      // mention << SEPA EST PARTI AUSSI >>. La justification s'appuyait donc sur un fait
+      // disparu -- elle survivait au deplacement qu'elle decrivait.
+      //
+      // Ce qui reste vrai se dit plus simplement : une porte, une piece. L'objection portait
+      // sur la duplication, et il n'y en a plus du tout.
       //
       // Et elles ont chacune une raison d'exister a part :
       //  - SEPA porte quatre ecritures (mandat, remise, rejet, creancier) : c'est un poste de
@@ -231,6 +235,11 @@ const NAV = [
         ic: 'settings', label: 'Paramètres',
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
+      // La boutique de modules — déplacée d'Exploitation vers Administration le 20/09 : acquérir des
+      // modules est un geste d'administration, pas d'exploitation quotidienne. `admin: true`
+      // (arbitrage Maxime, 01/09) : achat ouvert à qui administre l'établissement — pas une
+      // permission de module, puisqu'il s'agit justement d'acquérir des modules qu'on n'a pas encore.
+      { id: 'modules', ic: 'modules', label: 'Modules', admin: true },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
       // « Autorisations » faisait chercher les droits ici, et on y tombait sur un journal vide :
       // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les

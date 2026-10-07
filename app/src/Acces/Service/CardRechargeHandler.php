@@ -56,7 +56,7 @@ final class CardRechargeHandler implements CardRechargeInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
-        private readonly VersionSnapshotSequencer $sequencer,
+        private readonly SnapshotVersionBumper $bumper,
         private readonly CardExpiryCalculator $cardExpiry,
         private readonly Security $security,
     ) {
@@ -127,17 +127,15 @@ final class CardRechargeHandler implements CardRechargeInterface
             : $droit->getFenetreFin();
 
         $droitId = $droit->getId();
-        $supportId = $accesSupport->getId();
-        $version = $this->sequencer->suivant();
 
         // RG-CQ1-08 — UPDATE SQL conditionnel, même patron que `ValidationPassageHandler:188-204`. Voir
         // la note de classe : ce `transactional()` s'imbrique dans la transaction ouverte par
         // `ValiderVenteService::valider()` sans committer séparément.
         $this->connection->transactional(function () use (
-            $droit, $accesSupport, $credits, $nouvelleEcheance, $droitId, $supportId, $version
+            $droit, $credits, $nouvelleEcheance, $droitId
         ): void {
             $this->connection->executeStatement(
-                'UPDATE acces_droit_acces SET credit_restant = credit_restant + :n, fenetre_fin = :fin WHERE id = UNHEX(:hex)',
+                'UPDATE acces_droit_acces SET credit_restant = credit_restant + :n, fenetre_fin = :fin, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex)',
                 [
                     'n' => $credits,
                     'fin' => $nouvelleEcheance?->format('Y-m-d H:i:s'),
@@ -158,14 +156,9 @@ final class CardRechargeHandler implements CardRechargeInterface
             // sur ces deux colonnes.
             $this->em->refresh($droit);
 
-            $this->connection->executeStatement(
-                'UPDATE acces_support SET version_maj = :v WHERE id = UNHEX(:hex)',
-                ['v' => $version, 'hex' => bin2hex($supportId->toBinary())],
-            );
-            // `versionMaj` est une valeur ABSOLUE fraîchement tirée d'une séquence unique (pas un
-            // calcul relatif sur une base périmée) : aucun risque symétrique ici, contrairement à
-            // `creditRestant` ci-dessus.
-            $accesSupport->setVersionMaj($version);
+            // Version du snapshot de TOUS les supports du droit, pas seulement de celui qu'on
+            // recharge : la même carte peut être portée par un badge (`SnapshotVersionBumper`).
+            $this->bumper->bumpPairedSupports($droitId);
 
             $this->em->flush();
         });

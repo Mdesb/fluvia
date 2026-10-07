@@ -38,6 +38,12 @@ final class StubPaymentReceiptSigner
 {
     public function __construct(
         #[Autowire(env: 'APP_SECRET')] private readonly string $secret,
+        // ⚠ FAIL-CLOSED (audit du 14/09, bloquant 1). Ce signataire fabrique ET atteste des recus de
+        //   paiement sans qu'aucun paiement reel ait eu lieu — c'est la nature d'un bouchon, voulu en
+        //   preproduction, dangereux partout ailleurs. Il refuse donc d'operer tant que l'opt-in
+        //   explicite n'est pas pose. Defaut FERME : la production ne mint rien tant que rien n'est
+        //   active. Pose en preproduction (infra/.env.preprod) et en test (.env.test), jamais en prod.
+        #[Autowire(env: 'bool:PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE')] private readonly bool $autorise = false,
     ) {
     }
 
@@ -49,6 +55,8 @@ final class StubPaymentReceiptSigner
      */
     public function receipts(string $referenceTransaction, int $montantCentimes): array
     {
+        $this->garantirBouchonAutorise();
+
         $receipts = [];
         foreach (StatutTPE::cases() as $statut) {
             $receipts[$statut->value] = $this->sign($referenceTransaction, $statut, $montantCentimes);
@@ -60,6 +68,8 @@ final class StubPaymentReceiptSigner
     /** Le statut que ce reçu atteste — `null` s'il n'atteste rien pour cette référence et ce montant. */
     public function verify(string $referenceTransaction, int $montantCentimes, mixed $receipt): ?StatutTPE
     {
+        $this->garantirBouchonAutorise();
+
         if (!\is_string($receipt) || $receipt === '') {
             return null;
         }
@@ -71,6 +81,26 @@ final class StubPaymentReceiptSigner
         }
 
         return null;
+    }
+
+    /**
+     * ⚠ REFUSE D'OPERER TANT QUE LE BOUCHON N'EST PAS EXPLICITEMENT AUTORISE. Un recu que ce
+     * signataire fabrique atteste un paiement qui n'a pas eu lieu ; hors preproduction, ce serait un
+     * faux « accepte » pris pour un encaissement reel. Fail-closed : on echoue bruyamment plutot que
+     * de mentir en silence. Un vrai prestataire (PSP CB, vrai PayFiP) n'appelle pas ce signataire.
+     */
+    private function garantirBouchonAutorise(): void
+    {
+        if ($this->autorise) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            'Prestataire de paiement en ligne de DEMONSTRATION invoque alors que '
+            . 'PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE n\'est pas active. Ce bouchon signe lui-meme ses '
+            . 'recus : le laisser servir ferait passer un faux « accepte » pour un paiement reel. '
+            . 'Branchez un prestataire reel, ou posez PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE=1 en preproduction.'
+        );
     }
 
     private function sign(string $referenceTransaction, StatutTPE $statut, int $montantCentimes): string

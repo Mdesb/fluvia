@@ -13,6 +13,7 @@ import { mot } from '../api/vocabulaire.js'
 import { euros, libelleProduit } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
 import { confirmer } from '../components/Confirmation.jsx'
+import { useEtatUrl } from '../api/url.js'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
 //
@@ -37,12 +38,23 @@ import { confirmer } from '../components/Confirmation.jsx'
 // reste 12 sur la première page ». On préfère donc afficher un point d'interrogation et dire
 // pourquoi. Le jour où le champ serveur existe, l'agrégation et ce garde-fou disparaissent ensemble.
 
+// `corriger` : l'identifiant de l'article dont on corrige le stock.
+// `inventaire` : `lancer` quand on lance un inventaire.
+// `commande` : la commande d'achat dont on compose les lignes ; `onglet` : l'onglet de la page.
+const DEFAUTS_URL = { onglet: 'etat', corriger: '', inventaire: '', commande: '', ref: '' }
+
 export default function Stock({ etabActif, droits }) {
+  const [params, majParams] = useEtatUrl('stock', DEFAUTS_URL)
   // ⚠ `null` = PAS LU. Sur une lecture refusee, l'ecran annoncait << 0 reference >> puis
   // << Aucun article de stock. Un article, c'est ce que vous achetez et comptez [...] >> --
   // c'est-a-dire le message d'accueil d'un etablissement neuf, servi a un exploitant dont le stock
   // existe et n'a simplement pas pu etre lu.
   const [articles, setArticles] = useState(null)
+  // ⚠ LE NOMBRE D'ARTICLES EST CELUI QU'ANNONCE LE SERVEUR, PAS CELUI DES LIGNES REÇUES. L'écran lisait
+  // 200 articles et affichait « 200 références » là où GI-ONE en a 422 (mesuré le 15/09/2026). La
+  // liste est désormais lue en entier ; si la lecture s'arrête avant, `articlesTronques` le dit.
+  const [articlesAnnonces, setArticlesAnnonces] = useState(null)
+  const articlesTronques = articles !== null && articlesAnnonces !== null && articlesAnnonces > articles.length
   const [lots, setLots] = useState([])
   const [lotsTronques, setLotsTronques] = useState(false)
   // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. Ici la phrase de l'etat vide VANTE le filet :
@@ -65,10 +77,12 @@ export default function Stock({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [ajustement, setAjustement] = useState(null)
   const [rattachement, setRattachement] = useState(null)
   const [recherche, setRecherche] = useState('')
-  const [onglet, setOnglet] = useState('etat')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE avec l'écran des lignes d'une commande : sans lui, « précédent »
+  // après un F5 ramènerait à « Ce qu'il reste », et non aux achats d'où l'on venait.
+  const onglet = params.onglet
+  const setOnglet = (v) => majParams({ onglet: v })
 
   const peutAjuster = aUnDesDroits(droits, ['stock.ajuster', 'stock.gerer'])
   // Le meme couple que le serveur exige sur les trois routes de transfert.
@@ -86,7 +100,9 @@ export default function Stock({ etabActif, droits }) {
       const [a, l, m] = await Promise.all([api.stockArticles(), api.stockLots(), api.stockMouvements()])
       const lus = membres(l)
       const annonces = l?.totalItems ?? l?.['hydra:totalItems'] ?? lus.length
-      setArticles(membres(a))
+      const articlesLus = membres(a)
+      setArticles(articlesLus)
+      setArticlesAnnonces(a?.totalItems ?? a?.['hydra:totalItems'] ?? articlesLus.length)
       setLots(lus)
       // Le serveur annonce combien de lots existent ; si on n'en a pas reçu autant, toute somme
       // calculée dessus est fausse — et rien à l'écran ne le montrerait.
@@ -95,6 +111,7 @@ export default function Stock({ etabActif, droits }) {
     } catch (e) {
       setErreur(e.message)
       setArticles(null)
+      setArticlesAnnonces(null)
       setMouvementsLus(null)
     } finally {
       setChargement(false)
@@ -110,6 +127,30 @@ export default function Stock({ etabActif, droits }) {
   useEffect(() => {
     recharger()
   }, [recharger])
+
+  // ⚠ L'ARTICLE CORRIGÉ SE LIT PAR SON IDENTIFIANT : un lien ne doit pas dépendre de la liste, dont la
+  // lecture peut échouer ou s'arrêter avant la fin. Seul un 404 dit « il n'existe pas » ; tout le
+  // reste est une lecture échouée.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureArticle, setLectureArticle] = useState(null)
+  const cleArticle = params.corriger ? `${params.corriger}|${etabActif}` : null
+  useEffect(() => {
+    if (!(params.corriger)) { setLectureArticle(null); return undefined }
+    const cle = `${params.corriger}|${etabActif}`
+    let vivant = true
+    api.stockArticle(params.corriger)
+      .then((v) => { if (vivant) setLectureArticle({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureArticle({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.corriger, etabActif])
+  const lectureArticleCourante = lectureArticle?.cle === cleArticle ? lectureArticle : null
+  const chargementArticle = cleArticle !== null && lectureArticleCourante === null
+  const articleCorrige = lectureArticleCourante?.valeur ?? null
+  const lectureArticleEchouee = lectureArticleCourante?.echouee ?? false
 
   // Le stock d'un article = la somme de ce qui reste dans ses lots.
   const restantParArticle = useMemo(() => {
@@ -136,10 +177,167 @@ export default function Stock({ etabActif, droits }) {
     )
   }, [articles, recherche])
 
+  // ⚠ `etat` GARDE SON IDENTITÉ : l'effet du formulaire remet quantité et motif à zéro à chaque
+  // nouvel objet. Écrit en ligne, il effacerait la frappe à chaque rendu.
+  const restantCorrige = articleCorrige ? (restantParArticle[articleCorrige.id] || 0) : 0
+  const etatCorrection = useMemo(
+    () => (articleCorrige ? { article: articleCorrige, restant: restantCorrige } : null),
+    [articleCorrige, restantCorrige],
+  )
+
   async function apres(message) {
     setSucces(message)
     setErreur(null)
     await recharger()
+  }
+
+  // ── LES LIGNES D'UNE COMMANDE D'ACHAT, EN ÉCRAN ────────────────────────────────────────────
+  //
+  // La page cède la place à AchatsStock : c'est lui qui lit commandes et lignes, et lui qui reprend
+  // les conditions du bouton. Les articles qu'on peut commander viennent de la liste de la page.
+  if (params.commande) {
+    const fermerCommande = () => majParams({ commande: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerCommande}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux achats
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : articles === null ? (
+          <div className="banner banner-error">
+            La liste des articles n’a pas pu être lue : on ne compose pas une commande sans savoir ce
+            qu’on peut y mettre.
+          </div>
+        ) : (
+          <>
+            {articlesTronques && <ArticlesIncomplets lus={articles.length} annonces={articlesAnnonces} />}
+            <AchatsStock
+              articles={articles}
+              droits={droits}
+              etabActif={etabActif}
+              onErreur={setErreur}
+              onFait={apres}
+              params={params}
+              majParams={majParams}
+            />
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ── LANCER UN INVENTAIRE, EN ÉCRAN ─────────────────────────────────────────────────────────
+  //
+  // La page cède toute la place à InventaireStock : c'est lui qui lit les inventaires, donc lui
+  // qui sait si un autre est déjà ouvert, et lui qui reprend les conditions du bouton.
+  //
+  // ⚠ LE PÉRIMÈTRE SE PRÉSENTE SUR LA LISTE DES ARTICLES. Illisible, elle ferait annoncer « les 0
+  // articles en service » : on le dit au lieu d'ouvrir le formulaire.
+  if (params.inventaire) {
+    const fermerInventaire = () => majParams({ inventaire: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerInventaire}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au stock
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : articles === null ? (
+          <div className="banner banner-error">
+            La liste des articles n’a pas pu être lue : le périmètre d’un inventaire ne peut pas être
+            présenté, et on ne lance pas un comptage sur une liste qu’on n’a pas.
+          </div>
+        ) : articlesTronques ? (
+          // « Les 200 articles en service » sur 422 : le formulaire présenterait un périmètre faux,
+          // et la sélection ne proposerait qu'une partie des articles.
+          <div className="banner banner-error">
+            Seuls {articles.length} articles sur {articlesAnnonces} ont pu être lus : le périmètre d’un
+            inventaire ne peut pas être présenté en entier, et on ne lance pas un comptage sur une
+            partie de la liste. Rechargez la page.
+          </div>
+        ) : (
+          <InventaireStock
+            articles={articles}
+            droits={droits}
+            etabActif={etabActif}
+            onErreur={setErreur}
+            onFait={apres}
+            params={params}
+            majParams={majParams}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── CORRIGER UN STOCK, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND : le droit d'ajuster, et
+  // des lots lus EN ENTIER. Le chiffre qu'on corrige est leur somme : sur une lecture échouée,
+  // `lots` garde sa valeur précédente et rend un zéro qui a l'air juste ; sur une lecture tronquée,
+  // une somme partielle. On ne corrige pas un chiffre qu'on ne connaît pas.
+  if (params.corriger) {
+    const fermerCorrection = () => majParams({ corriger: '' }, { pousser: true })
+    let contenu
+    if (!peutAjuster) {
+      contenu = (
+        <div className="banner banner-warn">
+          Corriger le stock demande le droit d’ajuster le stock, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargement || chargementArticle) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!articleCorrige) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureArticleEchouee
+            ? 'Cet article n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cet article n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (articles === null) {
+      contenu = (
+        <div className="banner banner-error">
+          Les lots de stock n’ont pas pu être lus : cet écran ne sait pas combien il reste de
+          « {articleCorrige.libelle} », et on ne corrige pas un chiffre qu’on ne connaît pas.
+        </div>
+      )
+    } else if (lotsTronques) {
+      contenu = (
+        <div className="banner banner-error">
+          Cet établissement a plus de lots que cet écran n’en charge : le stock de
+          « {articleCorrige.libelle} » ne peut pas être calculé en entier, et la correction reste
+          désactivée, comme dans la liste.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <AjustementModal
+            key={params.corriger}
+            etat={etatCorrection}
+            onClose={fermerCorrection}
+            onFait={(m) => { fermerCorrection(); apres(m) }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerCorrection}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au stock
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   return (
@@ -153,6 +351,8 @@ export default function Stock({ etabActif, droits }) {
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+      {/* Au-dessus des onglets : les quatre lisent la même liste d'articles. */}
+      {!chargement && articlesTronques && <ArticlesIncomplets lus={articles.length} annonces={articlesAnnonces} />}
 
       <Tabs
         onglets={[
@@ -192,6 +392,8 @@ export default function Stock({ etabActif, droits }) {
           etabActif={etabActif}
           onErreur={setErreur}
           onFait={apres}
+          params={params}
+          majParams={majParams}
         />
       ) : (
         <>
@@ -199,19 +401,20 @@ export default function Stock({ etabActif, droits }) {
 
           <ArticlesSection
             articles={filtres}
-            total={articles === null ? null : articles.length}
+            total={articles === null ? null : articlesAnnonces}
+            lus={articles === null ? null : articles.length}
             restantParArticle={restantParArticle}
             lotsCharges={lots.length}
             tronque={lotsTronques}
             recherche={recherche}
             onRecherche={setRecherche}
             peutAjuster={peutAjuster && !lotsTronques}
-            onAjuster={(a) => setAjustement({ article: a, restant: restantParArticle[a.id] || 0 })}
+            onAjuster={(a) => { setErreur(null); setSucces(null); majParams({ corriger: String(a.id) }, { pousser: true }) }}
             onRattacher={peutGererArticle ? (a) => setRattachement(a) : null}
             nonSuivis={(articles || []).filter((a) => !a.produit).length}
           />
 
-          {peutGererArticle && <ArticlesEdition onChange={recharger} />}
+          {peutGererArticle && <ArticlesEdition onChange={recharger} params={params} majParams={majParams} />}
 
           <RegleEcart parametrage={parametrage} lu={parametrageLu} droits={droits} />
 
@@ -221,20 +424,21 @@ export default function Stock({ etabActif, droits }) {
             etabActif={etabActif}
             onErreur={setErreur}
             onFait={apres}
+            params={params}
+            majParams={majParams}
           />
 
           {/* ⚠ `articles || []` et non `articles` : la liste vaut `null` tant que la lecture
               n'a pas abouti, et le journal doit rendre une colonne vide plutôt que tomber. */}
-          <JournalSection mouvements={mouvements} articles={articles || []} nonLu={mouvementsLus === null} />
+          <JournalSection
+            mouvements={mouvements}
+            articles={articles || []}
+            articlesIncomplets={articlesTronques}
+            nonLu={mouvementsLus === null}
+          />
         </>
       )}
 
-      <AjustementModal
-        etat={ajustement}
-        onClose={() => setAjustement(null)}
-        onFait={(m) => { setAjustement(null); apres(m) }}
-        onErreur={setErreur}
-      />
 
       <RattachementModal
         article={rattachement}
@@ -242,6 +446,24 @@ export default function Stock({ etabActif, droits }) {
         onFait={(m) => { setRattachement(null); apres(m) }}
         onErreur={setErreur}
       />
+    </div>
+  )
+}
+
+// --------------------------------------------------------------------------------------------
+// La liste d'articles n'a pas été lue jusqu'au bout.
+// --------------------------------------------------------------------------------------------
+// Tout ce qui s'appuie sur elle — recherche, décompte des non-rattachés, listes de choix d'une
+// commande, d'un retour ou d'un inventaire, noms du journal et sens des transferts — porte alors sur
+// une partie. Un article absent d'une liste ne veut plus dire qu'il n'existe pas : c'est ce qu'il
+// faut dire, puisque rien d'autre à l'écran ne le distingue.
+function ArticlesIncomplets({ lus, annonces }) {
+  return (
+    <div className="banner banner-error">
+      <b>Seuls {lus} articles sur {annonces} ont pu être lus.</b> La recherche, le décompte des
+      articles non rattachés, les listes de choix (commande, retour, inventaire), les noms du journal
+      et le sens des transferts portent sur ceux-là seulement : un article qui n’y figure pas peut
+      exister. Rechargez la page ; si l’écart persiste, signalez-le.
     </div>
   )
 }
@@ -331,14 +553,23 @@ function AlertesSection({ alertes }) {
 // Les articles et ce qu'il en reste.
 // --------------------------------------------------------------------------------------------
 function ArticlesSection({
-  articles, total, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster,
+  articles, total, lus, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster,
   onAjuster, onRattacher, nonSuivis,
 }) {
+  // `total` est le nombre annoncé par le serveur, `lus` celui des lignes reçues. Ils ne diffèrent que
+  // si la lecture s'est arrêtée avant la fin — et alors le compte dit les deux.
+  const incomplet = total !== null && lus !== null && total > lus
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
         <h3>Articles</h3>
-        <span className="sub">{total === null ? '—' : `${total} référence${total > 1 ? 's' : ''}`}</span>
+        <span className="sub">
+          {total === null
+            ? '—'
+            : incomplet
+              ? `${lus} lues sur ${total} références`
+              : `${total} référence${total > 1 ? 's' : ''}`}
+        </span>
         <div className="r" style={{ minWidth: 240 }}>
           <input
             className="input"
@@ -361,12 +592,15 @@ function ArticlesSection({
             catalogue.
           </div>
         ) : articles.length === 0 ? (
-          <div className="empty">Aucun article ne correspond à « {recherche.trim()} ».</div>
+          <div className="empty">
+            Aucun article ne correspond à « {recherche.trim()} »
+            {incomplet ? ` parmi les ${lus} articles lus sur ${total}.` : '.'}
+          </div>
         ) : (
           <>
             {nonSuivis > 0 && (
               <div className="banner banner-warn">
-                <b>{nonSuivis} article{nonSuivis > 1 ? 's ne sont' : " n'est"} rattaché
+                <b>{incomplet ? 'Au moins ' : ''}{nonSuivis} article{nonSuivis > 1 ? 's ne sont' : " n'est"} rattaché
                 {nonSuivis > 1 ? 's' : ''} à aucun produit du catalogue.</b> Vendre ne les fera pas
                 descendre : leur quantité ne bougera que par correction manuelle. Ce n'est pas
                 forcément une erreur — on peut suivre un consommable qu'on ne vend pas — mais un
@@ -468,7 +702,7 @@ function ArticlesSection({
 // --------------------------------------------------------------------------------------------
 // Créer et modifier un article.
 // --------------------------------------------------------------------------------------------
-function ArticlesEdition({ onChange }) {
+function ArticlesEdition({ onChange, params, majParams }) {
   // Un article se crée et se modifie, mais ne se supprime PAS ici, et l'API ne le propose pas non
   // plus : un article porte des lots, des mouvements et un historique de valorisation. Ce qu'un
   // exploitant veut, c'est le retirer de la circulation — c'est la case « actif ».
@@ -569,7 +803,7 @@ function ArticlesEdition({ onChange }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} />
+      <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} params={params} majParams={majParams} />
     </div>
   )
 }
@@ -631,8 +865,11 @@ function AjustementModal({ etat, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!etat) return null
+
   return (
-    <Modal open={!!etat} onClose={onClose} titre={etat ? `Corriger — ${etat.article.libelle}` : ''}>
+    <>
+      <h2>{`Corriger — ${etat.article.libelle}`}</h2>
       {etat && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
@@ -711,7 +948,7 @@ function AjustementModal({ etat, onClose, onFait, onErreur }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -878,7 +1115,7 @@ function RegleEcart({ parametrage, lu, droits }) {
 // --------------------------------------------------------------------------------------------
 // Une correction sans trace visible est ce qui rend les corrections effrayantes. Le journal est donc
 // sur le même écran que le bouton qui les crée, et non dans un module de rapports.
-function JournalSection({ mouvements, articles = [], nonLu }) {
+function JournalSection({ mouvements, articles = [], articlesIncomplets = false, nonLu }) {
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
@@ -916,7 +1153,13 @@ function JournalSection({ mouvements, articles = [], nonLu }) {
                       mouvements était donc vide en permanence — un journal de stock qui ne dit pas
                       SUR QUOI porte le mouvement ne sert à rien. Résolu contre la liste des
                       articles déjà chargée par cet écran. */}
-                  <td>{resoudre(m.articleStock, articles)?.libelle || <span className="sub">article non transmis</span>}</td>
+                  {/* Sur une liste lue en partie, l'article absent peut simplement ne pas avoir été
+                      lu : « non transmis » accuserait le serveur à tort. */}
+                  <td>
+                    {resoudre(m.articleStock, articles)?.libelle || (
+                      <span className="sub">{articlesIncomplets ? 'article non lu' : 'article non transmis'}</span>
+                    )}
+                  </td>
                   <td><span className="badge mut">{mot(m.type)}</span></td>
                   <td className="num">{nombre(m.quantite)}</td>
                   <td>{m.motif || <span className="sub">—</span>}</td>
@@ -965,8 +1208,9 @@ function TransfertsSection({ articles, peutTransferer, onErreur, onFait }) {
     setTransferts(null)
     api.stockTransferts()
       .then((r) => setTransferts(membres(r)))
-      .catch(() => setTransferts(undefined))
-  }, [])
+      // La raison est dite : une liste refusée parce qu'incomplète n'est pas une panne.
+      .catch((e) => { setTransferts(undefined); onErreur(e.message || 'Les transferts n’ont pas pu être lus.') })
+  }, [onErreur])
 
   useEffect(charger, [charger])
 

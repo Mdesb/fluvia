@@ -103,7 +103,9 @@ class Mesure implements RattachementNiveauInterface
     #[Groups(['mesure:read'])]
     private bool $comparabiliteRegime = false;
 
-    #[ORM\Column(length: 8, enumType: StatutCompletude::class, options: ['default' => 'complet'])]
+    // ⚠ 20 ET NON 8 : « non_instrumente » fait 15 caracteres. A 8, MySQL tronque ou refuse
+    // selon le mode strict — et une valeur tronquee ne se relit pas en enum. Migration jointe.
+    #[ORM\Column(length: 20, enumType: StatutCompletude::class, options: ['default' => 'complet'])]
     #[Groups(['mesure:read'])]
     private StatutCompletude $statutCompletude = StatutCompletude::Complet;
 

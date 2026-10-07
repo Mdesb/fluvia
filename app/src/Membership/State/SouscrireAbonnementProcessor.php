@@ -6,15 +6,26 @@ namespace App\Membership\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Crm\Security\CustomerReachability;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
+use App\Offre\Entity\Produit;
+use App\Offre\Service\ProductSaleScopeGuard;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipStatus;
 use App\Membership\Service\SouscriptionAbonnementHandler;
+use App\Membership\Service\SubscriptionContractSigner;
+use App\Sepa\Service\IbanFormatValidator;
+use App\Sepa\Service\SepaMandateSigner;
+use App\Vente\Service\CounterSellability;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -37,6 +48,14 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly SouscriptionAbonnementHandler $handler,
         private readonly ContexteEtablissement $contexte,
         private readonly BeneficiaryResolver $beneficiaires,
+        private readonly CustomerReachability $customers,
+        private readonly IbanFormatValidator $ibanValidator,
+        private readonly ProductSaleScopeGuard $saleScopeGuard,
+        private readonly SepaMandateSigner $mandateSigner,
+        private readonly SubscriptionContractSigner $contractSigner,
+        private readonly Security $security,
+        private readonly RequestStack $requestStack,
+        private readonly CounterSellability $sellability,
     ) {
     }
 
@@ -49,6 +68,14 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         if (!$payeur instanceof Client || !$formule instanceof Formule) {
             throw new UnprocessableEntityHttpException('« payeur » et « formule » sont requis et doivent référencer des ressources existantes.');
         }
+
+        // ── CLOISONNEMENT DU PAYEUR (constat 5, même règle que CreerMandatSepaProcessor) ─────────
+        // `payeur` est résolu par `find()` : `CustomerScope` (filtre de requête) ne protège pas un
+        // processeur qui tient l'entité en main. Sans ce contrôle, un utilisateur souscrivait un
+        // abonnement — mandat, échéancier, accès, billet QR — au nom du client d'un AUTRE groupe, et
+        // la réponse 201 fuyait sa PII. 404 et non 403 (D3). L'adhérent désigné, lui, reste borné au
+        // groupe du payeur juste en dessous : payeur atteignable + même groupe ⇒ adhérent atteignable.
+        $this->customers->assertReachable($payeur);
 
         // ── L'ADHÉRENT EST UN CLIENT, RÉSOLU EN BÉNÉFICIAIRE — MÊME MODÈLE QUE LA CAISSE ──────
         // On ne fait plus choisir un `Beneficiaire` dans une liste (« adhérent » ne parlait à
@@ -76,6 +103,21 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Établissement actif requis (en-tête X-Etablissement).');
         }
 
+        $produitFormule = $this->em->getRepository(Produit::class)->findOneBy(['formule' => $formule]);
+        // Cloisonnement de commercialisation : le produit qui porte la formule doit être vendu sur
+        // l'établissement actif (convention socle : liste vide = partout), comme le catalogue, la
+        // caisse et les créneaux. `find()` sort de PerimetreProduitExtension, d'où ce garde explicite
+        // sur l'entité résolue.
+        if ($produitFormule instanceof Produit) {
+            $this->saleScopeGuard->assertSoldAt($produitFormule, $etablissement);
+            // Cette souscription est une vente au guichet : même règle que la caisse (publié, canal
+            // guichet). Une formule en brouillon ou archivée se souscrivait ici (mesuré le 07/10/2026).
+            $refus = $this->sellability->offerRefusal($produitFormule);
+            if ($refus !== null) {
+                throw new UnprocessableEntityHttpException($refus);
+            }
+        }
+
         // ⚠ `periodicite` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
         //
         // Arbitrage de Maxime du 06/09 : le contrat gèle les termes de l'offre. La cadence vient
@@ -97,6 +139,9 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         if (trim($iban) === '' || trim($titulaire) === '') {
             throw new UnprocessableEntityHttpException('« iban » et « titulaireMandat » sont requis pour signer le mandat SEPA.');
         }
+        // Format de l'IBAN (structure pays + clé mod-97) : un IBAN mal saisi était tokenisé, chiffré et
+        // stocké, pour n'échouer qu'au pain.008 / rejet bancaire, loin de la saisie. On refuse ici.
+        $this->ibanValidator->valider($iban);
 
         $dateSouscription = isset($corps['dateSouscription']) && \is_string($corps['dateSouscription'])
             ? new \DateTimeImmutable($corps['dateSouscription'])
@@ -135,7 +180,28 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             }
         }
 
-        return $this->handler->souscrire(
+        $existant = $this->em->getRepository(Membership::class)->findOneBy([
+            'payeur' => $payeur,
+            'adherent' => $adherent,
+            'formule' => $formule,
+            'etablissement' => $etablissement,
+            'statut' => MembershipStatus::Actif,
+            'dateSouscription' => $dateSouscription,
+        ]);
+        // ── IDEMPOTENCE : UN DOUBLE-POST NE CRÉE PAS DEUX ABONNEMENTS ─────────────────────────────
+        // Sans clé d'idempotence, un double-clic ou un rejeu réseau créait deux abonnements, deux
+        // mandats (RUM distincts), deux échéanciers → double prélèvement. On renvoie l'abonnement ACTIF
+        // déjà créé le même jour pour le même (payeur, adhérent, formule, établissement) : on ne
+        // souscrit pas deux fois la même offre pour la même personne le même jour ; un abonnement
+        // résilié n'étant pas actif, une vraie re-souscription reste possible.
+        // ⚠ LE CLOISONNEMENT PORTE SUR L'ENTITÉ RÉSOLUE : `$existant->getEtablissement()` la confronte à
+        // l'établissement actif (le critère l'a déjà bornée ; on le confirme sur l'objet, pas seulement
+        // dans la requête — même exigence que l'IDOR d'appairage du 22/08).
+        if ($existant instanceof Membership && $existant->getEtablissement() === $etablissement) {
+            return $existant;
+        }
+
+        $abonnement = $this->handler->souscrire(
             $adherent,
             $payeur,
             $formule,
@@ -146,6 +212,34 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             $titulaire,
             $montantPremiereCentimes,
         );
+
+        // ── SIGNATURE DU MANDAT ET DU CONTRAT (avancée, scellée — module App\Signature) ──────────
+        // La souscription ne « marque » plus le mandat Actif sans preuve : elle SIGNE le mandat et
+        // le contrat, et scelle les deux. L'image manuscrite arrive du tunnel (`signatureMandat` /
+        // `signatureContrat`, base64) ; absente, la signature reste un consentement horodaté valide
+        // (opérateur, IP, empreinte du document) — jamais moins qu'aujourd'hui, où rien n'était signé.
+        $operateur = $this->security->getUser();
+        $operateur = $operateur instanceof Utilisateur ? $operateur : null;
+        $requete = $this->requestStack->getCurrentRequest();
+        $ip = $requete?->getClientIp();
+        $userAgent = $requete?->headers->get('User-Agent');
+        $signatureMandat = \is_string($corps['signatureMandat'] ?? null) ? $corps['signatureMandat'] : null;
+        $signatureContrat = \is_string($corps['signatureContrat'] ?? null) ? $corps['signatureContrat'] : null;
+
+        $mandat = $abonnement->getMandatSepa();
+        if ($mandat !== null) {
+            $this->mandateSigner->sign($mandat, $payeur, $operateur, $signatureMandat, $ip, $userAgent);
+            // ⚠ ON FLUSH ENTRE LES DEUX SIGNATURES. La séquence de la chaîne se lit en base
+            // (`lastLink`) : sans ce flush, le contrat interrogerait une chaîne où la signature du
+            // mandat n'est pas encore écrite, prendrait la MÊME séquence, et le second INSERT
+            // violerait `uniq_electronic_signature_seq`. Mesuré : SQLSTATE 23000 sur (etab, 1).
+            $this->em->flush();
+        }
+        $this->contractSigner->sign($abonnement, $payeur, $operateur, $signatureContrat, $ip, $userAgent);
+
+        $this->em->flush();
+
+        return $abonnement;
     }
 
     /** @param class-string $classe */

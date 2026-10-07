@@ -13,7 +13,10 @@ use App\Musee\Port\ConnecteurOtaInterface;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Vente\Service\LecteurCorps;
+use Doctrine\DBAL\Exception\RetryableException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -34,6 +37,7 @@ final class CreerReservationOtaProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly ConnecteurOtaInterface $connecteur,
     ) {
     }
@@ -52,27 +56,73 @@ final class CreerReservationOtaProcessor implements ProcessorInterface
         }
 
         $creneau = $allocation->getCreneau();
-        if ($creneau === null || $this->jauge->estComplet($creneau)) {
+        if ($creneau === null) {
             throw new ConflictHttpException('RG-MUS-04 : créneau complet (inventaire partagé avec la vente directe).');
         }
 
-        $reservation = new Reservation();
-        $reservation->setCreneau($creneau)
-            ->setOrganisateur($beneficiaire)
-            ->setEtablissement($allocation->getEtablissement())
-            ->setModeDecompte(ModeDecompteReservation::VenteUnite)
-            ->setMontantDu($allocation->getPartenaire()?->getTarifNet() ?? '0.00');
-        $this->em->persist($reservation);
+        // ── QUOTA ET JAUGE SE CONTRÔLENT SOUS VERROU, DANS LA TRANSACTION QUI ÉCRIT ─────────────────
+        //
+        // Deux ventes OTA simultanées lisaient la même jauge et le même `quotaConsomme`, puis écrivaient
+        // chacune : le créneau et le quota partenaire débordaient ensemble, et le compteur perdait une
+        // unité (`quotaConsomme + 1` calculé deux fois sur la même valeur). Même défaut, même remède que
+        // `ReserverProcessor` — voir `JaugeCreneauGuard::verrouiller()`.
+        //
+        // Ordre : l'allocation, puis le créneau. Une réservation ordinaire ne verrouille que le créneau :
+        // aucune attente croisée possible. Les relectures viennent après les deux verrous.
+        $connexion = $this->em->getConnection();
+        $connexion->beginTransaction();
+        try {
+            $this->em->lock($allocation, LockMode::PESSIMISTIC_WRITE);
+            $this->jauge->verrouiller([$creneau], null);
+            $this->em->refresh($allocation);
 
-        $allocation->setQuotaConsomme($allocation->getQuotaConsomme() + 1);
+            if ($allocation->estEpuisee()) {
+                throw new ConflictHttpException('RG-MUS-04 : quota alloué à ce partenaire épuisé sur ce créneau.');
+            }
+            if ($this->jauge->estComplet($creneau)) {
+                throw new ConflictHttpException('RG-MUS-04 : créneau complet (inventaire partagé avec la vente directe).');
+            }
 
-        $reservationOta = new ReservationOTA();
-        $reservationOta->setAllocation($allocation)
-            ->setReservationRattachee($reservation)
-            ->setHorodatageConfirmation($reservation->getDateCreation());
-        $this->em->persist($reservationOta);
-        $this->em->flush();
+            $reservation = new Reservation();
+            $reservation->setCreneau($creneau)
+                ->setOrganisateur($beneficiaire)
+                ->setEtablissement($allocation->getEtablissement())
+                ->setModeDecompte(ModeDecompteReservation::VenteUnite)
+                ->setMontantDu($allocation->getPartenaire()?->getTarifNet() ?? '0.00');
+            $this->em->persist($reservation);
+            // La place prise pèse sur la jauge globale de la ressource (RG-M5-08), comme celle d'une
+            // réservation ordinaire : sans cet incrément, l'annulation de cette réservation rendrait
+            // au compteur une unité que personne n'y a posée.
+            $ressource = $creneau->getRessource();
+            if ($ressource !== null) {
+                $this->jaugeMere->incrementer($ressource);
+            }
 
+            $allocation->setQuotaConsomme($allocation->getQuotaConsomme() + 1);
+
+            $reservationOta = new ReservationOTA();
+            $reservationOta->setAllocation($allocation)
+                ->setReservationRattachee($reservation)
+                ->setHorodatageConfirmation($reservation->getDateCreation());
+            $this->em->persist($reservationOta);
+            $this->em->flush();
+            $connexion->commit();
+        } catch (RetryableException $concurrence) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw new ConflictHttpException('Une autre vente était en cours sur ce créneau : celle-ci n\'a pas été enregistrée. Réessayez.', $concurrence);
+        } catch (\Throwable $echec) {
+            if ($connexion->isTransactionActive()) {
+                $connexion->rollBack();
+            }
+
+            throw $echec;
+        }
+
+        // Prévenu APRÈS la validation : prévenu avant, le connecteur annoncerait une vente que
+        // l'annulation de la transaction aurait effacée.
         $this->connecteur->notifierAllocation($allocation);
 
         return $reservationOta;

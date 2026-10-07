@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euroCentimes, dateFr } from './Liste.jsx'
+import { mot } from '../api/vocabulaire.js'
+import { tonStatutAbonnement } from '../api/abonnement.js'
 
 /**
  * LES ABONNEMENTS D'UN CLIENT — les deux rôles, séparés parce qu'ils répondent à deux questions.
@@ -105,11 +107,12 @@ function compte(lignes) {
   return lignes.length
 }
 
+// Le code brut s'affichait tel quel (« impaye », « echu »), et tout ce qui n'etait ni `actif` ni
+// `resilie` prenait la meme couleur d'alerte — une pause demandee par l'adherent se lisait aussi
+// grave qu'un prelevement rejete. Les mots et la couleur viennent maintenant du meme endroit que sur
+// les trois autres ecrans qui montrent ce statut.
 function statut(a) {
-  const s = a.statut || '—'
-  const classe = s === 'actif' ? 'good' : s === 'resilie' ? 'crit' : 'warn'
-
-  return <span className={`badge ${classe}`}>{s}</span>
+  return <span className={`badge ${tonStatutAbonnement(a.statut)}`}>{mot(a.statut)}</span>
 }
 
 function Bloc({ titre, aide, lignes, vide, entetes, rendu }) {

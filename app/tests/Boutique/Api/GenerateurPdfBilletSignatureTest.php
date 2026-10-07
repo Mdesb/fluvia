@@ -61,7 +61,7 @@ final class GenerateurPdfBilletSignatureTest extends BoutiqueApiTestCase
 
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', [
             'headers' => $entete,
-            'json' => ['rgpd' => true],
+            'json' => ['mentionVersion' => 'mention-test'],
         ]);
         self::assertResponseIsSuccessful();
 

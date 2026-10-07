@@ -60,7 +60,7 @@ final class CloisonnementProduitEtablissementTest extends BoutiqueApiTestCase
             ->setSessionClient($session)
             ->setEtablissement($vitrineA->getEtablissement())
             ->setContactConnu('cloisonnement@example.test')
-            ->setConsentementRgpdHorodatage(new \DateTimeImmutable());
+            ->recordPrivacyNotice('mention-test');
         $em->persist($panier);
         $ligne = (new \App\Boutique\Entity\LignePanierEnLigne())
             ->setProduit($produitEtabB)->setQuantite(1)->setExpirationA($panier->getDateExpiration());

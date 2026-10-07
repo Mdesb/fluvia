@@ -6,6 +6,7 @@ import { dateFr, dateHeureFr, euroCentimes, jourLocal } from './Liste.jsx'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { tonStatutMandat } from '../api/sepa.js'
 import { idDe } from '../api/iri'
 import { confirmer } from './Confirmation.jsx'
 
@@ -34,8 +35,11 @@ import { confirmer } from './Confirmation.jsx'
 // impayé : c'est la porte de sortie de cet écran vers « Recouvrement », et elle est écrite en toutes
 // lettres au bas de l'onglet des rejets, parce que rien dans le mot « rejet » ne dit qu'un accès va
 // se fermer.
-export default function PrelevementsSepa({ etabActif, droits }) {
-  const [onglet, setOnglet] = useState('mandats')
+export default function PrelevementsSepa({ etabActif, droits, params = {}, majParams }) {
+  // ⚠ L'ONGLET VIENT DE L'ADRESSE, POSÉE PAR LA PAGE HÔTE. Il n'y a plus qu'un seul hôte
+  // (`Sepa.jsx`) : l'onglet de comptabilité qui rendait aussi cet écran a été retiré.
+  const onglet = params.tab || 'mandats'
+  const setOnglet = (v) => majParams({ tab: v, mandat: '', creancier: '', rejet: '' })
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
@@ -53,10 +57,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   // l'écran incomplet, elle le rend FAUX.
   const [tronquees, setTronquees] = useState([])
 
-  const [creationMandat, setCreationMandat] = useState(false)
   const [generation, setGeneration] = useState(false)
-  const [rejetSur, setRejetSur] = useState(null)
-  const [editionConfig, setEditionConfig] = useState(false)
 
   const peutGerer = aLeDroit(droits, 'sepa.gerer') || aLeDroit(droits, 'compta.gerer')
 
@@ -158,6 +159,106 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     recharger()
   }
 
+  // ── L'ÉCRAN DU REJET ────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ DEUX FORMES DANS UN SEUL PARAMÈTRE, et elles ne se résolvent pas pareil. `choisir` n'a
+  // rien à résoudre : le formulaire propose lui-même la liste des lignes. Un identifiant, lui,
+  // doit être retrouvé dans `lignes` — qui part à `[]` et non à `null`, donc la longueur de la
+  // liste ne dit RIEN sur la lecture. C'est `chargement` qui porte la distinction, et on le
+  // consulte AVANT de conclure « cette ligne n'existe pas ».
+  if (params.rejet) {
+    const fermerRejet = () => majParams({ rejet: '' }, { pousser: true })
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermerRejet}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux prélèvements
+      </button>
+    )
+    const libre = params.rejet === 'choisir'
+    if (!libre && chargement) {
+      return (
+        <>
+          {retour}
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        </>
+      )
+    }
+    const ligne = libre ? null : lignes.find((l) => String(l.id) === String(params.rejet))
+    if (!libre && !ligne) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            Cette ligne de prélèvement n’est plus dans les remises chargées — la remise a sans
+            doute été archivée depuis que ce lien a été copié. Le rejet se déclare aussi depuis
+            l’onglet « Rejets », en choisissant la ligne.
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <DeclarationRejetModal
+          key={params.rejet}
+          cible={libre ? 'choisir' : ligne}
+          lignes={lignes}
+          mandatsParId={mandatsParId}
+          lignesRejetees={lignesRejetees}
+          onClose={fermerRejet}
+          onFait={(m) => { fermerRejet(); apresEcriture(m) }}
+        />
+      </>
+    )
+  }
+
+  // ── LES DEUX ÉCRANS DE NIVEAU 2 ─────────────────────────────────────────────────────────
+  //
+  // Tous deux s'ouvrent sur un booléen : il n'y a aucun identifiant à résoudre, donc aucun des
+  // trois états (« pas lu » / « illisible » / « introuvable ») qui piègent les écrans ouverts
+  // par identifiant. Le créancier reçoit `config`, qui peut valoir `null` — c'est ce qui
+  // distingue « déclarer » de « modifier », et le formulaire sait déjà le lire.
+  if (params.creancier === '1' || params.mandat === '1') {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => majParams({ mandat: '', creancier: '' }, { pousser: true })}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux prélèvements
+      </button>
+    )
+    const fermer = () => majParams({ mandat: '', creancier: '' }, { pousser: true })
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {params.creancier === '1' ? (
+          <ConfigCreancierModal
+            open
+            config={config}
+            etabActif={etabActif}
+            onClose={fermer}
+            onFait={(m) => { fermer(); apresEcriture(m) }}
+          />
+        ) : (
+          <CreationMandatModal
+            open
+            etabActif={etabActif}
+            onClose={fermer}
+            onFait={(m) => { fermer(); apresEcriture(m) }}
+          />
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -224,7 +325,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
             <Mandats
               mandats={mandats}
               peutGerer={peutGerer}
-              onCreer={() => setCreationMandat(true)}
+              onCreer={() => majParams({ mandat: '1' }, { pousser: true })}
               onRevoquer={revoquerMandat}
             />
           )}
@@ -237,7 +338,10 @@ export default function PrelevementsSepa({ etabActif, droits }) {
               lignesRejetees={lignesRejetees}
               peutGerer={peutGerer}
               onGenerer={() => setGeneration(true)}
-              onRejeter={setRejetSur}
+              onRejeter={(c) => majParams(
+                { rejet: c === 'choisir' ? 'choisir' : String(c.id) },
+                { pousser: true },
+              )}
               onErreur={setErreur}
             />
           )}
@@ -248,44 +352,23 @@ export default function PrelevementsSepa({ etabActif, droits }) {
               lignes={lignes}
               lignesRejetees={lignesRejetees}
               peutGerer={peutGerer}
-              onRejeter={setRejetSur}
+              onRejeter={(c) => majParams(
+                { rejet: c === 'choisir' ? 'choisir' : String(c.id) },
+                { pousser: true },
+              )}
             />
           )}
 
           {onglet === 'creancier' && (
-            <Creancier config={config} peutGerer={peutGerer} onEditer={() => setEditionConfig(true)} />
+            <Creancier config={config} peutGerer={peutGerer} onEditer={() => majParams({ creancier: '1' }, { pousser: true })} />
           )}
         </>
       )}
-
-      <CreationMandatModal
-        open={creationMandat}
-        etabActif={etabActif}
-        onClose={() => setCreationMandat(false)}
-        onFait={(m) => { setCreationMandat(false); apresEcriture(m) }}
-      />
 
       <GenerationRemiseModal
         open={generation}
         onClose={() => setGeneration(false)}
         onFait={(m) => { setGeneration(false); apresEcriture(m) }}
-      />
-
-      <DeclarationRejetModal
-        cible={rejetSur}
-        lignes={lignes}
-        mandatsParId={mandatsParId}
-        lignesRejetees={lignesRejetees}
-        onClose={() => setRejetSur(null)}
-        onFait={(m) => { setRejetSur(null); apresEcriture(m) }}
-      />
-
-      <ConfigCreancierModal
-        open={editionConfig}
-        config={config}
-        etabActif={etabActif}
-        onClose={() => setEditionConfig(false)}
-        onFait={(m) => { setEditionConfig(false); apresEcriture(m) }}
       />
     </>
   )
@@ -365,7 +448,7 @@ function Mandats({ mandats, peutGerer, onCreer, onRevoquer }) {
                   </td>
                   <td className="num">{m.nbCollectesReussies ?? 0}</td>
                   <td>
-                    <span className={`badge ${m.statut === 'actif' ? 'good' : 'mut'}`}>{mot(m.statut)}</span>
+                    <span className={`badge ${tonStatutMandat(m.statut)}`}>{mot(m.statut)}</span>
                   </td>
                   {/* ⚠ TON `danger` : LE CRITÈRE DU DÉPÔT EST « LES GESTES DONT ON NE REVIENT PAS ».
                       Une révocation n'a pas de chemin inverse — reprélever ce client exigera un
@@ -837,7 +920,8 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
 
   return (
     <>
-      <Modal open={open} onClose={onClose} titre="Signer un mandat de prélèvement">
+      <>
+      <h2>Signer un mandat de prélèvement</h2>
         <form onSubmit={envoyer}>
           {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -933,7 +1017,7 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
             </button>
           </div>
         </form>
-      </Modal>
+      </>
 
       <ClientPicker
         open={pickerOuvert}
@@ -1113,7 +1197,8 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
   }
 
   return (
-    <Modal open={!!cible} onClose={onClose} titre="Enregistrer un rejet de la banque">
+    <>
+      <h2>Enregistrer un rejet de la banque</h2>
       <form onSubmit={envoyer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -1242,7 +1327,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -1307,7 +1392,8 @@ function ConfigCreancierModal({ open, config, etabActif, onClose, onFait }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre={config ? 'Modifier le créancier SEPA' : 'Déclarer le créancier SEPA'}>
+    <>
+      <h2>{config ? 'Modifier le créancier SEPA' : 'Déclarer le créancier SEPA'}</h2>
       <form onSubmit={envoyer}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -1437,7 +1523,7 @@ function ConfigCreancierModal({ open, config, etabActif, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

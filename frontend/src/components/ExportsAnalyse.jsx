@@ -114,9 +114,13 @@ function lireLeFichier(csv) {
 }
 
 export default function ExportsAnalyse({ etabActif, etablissements }) {
-  const [exportsLus, setExportsLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [exportsLus, setExportsLus] = useState()
   const listeExports = exportsLus || []
-  const [indicateursLus, setIndicateursLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [indicateursLus, setIndicateursLus] = useState()
   const indicateurs = indicateursLus || []
   const [groupesLus, setGroupesLus] = useState(null)
 
@@ -310,7 +314,9 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
             <legend className="field-lbl">
               Indicateurs {choisis.length === 0 ? '· tous les actifs' : `· ${choisis.length} choisi(s)`}
             </legend>
-            {indicateursLus === null ? (
+            {indicateursLus === undefined ? (
+              <p className="hint">Lecture…</p>
+            ) : indicateursLus === null ? (
               <div className="banner banner-warn">
                 Le référentiel des indicateurs n’a pas pu être lu : on ne sait pas ce qu’un export
                 contiendrait.
@@ -371,7 +377,9 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
         )}
 
         <h3 style={{ marginTop: 'var(--esp-bloc)' }}>Exports demandés</h3>
-        {exportsLus === null ? (
+        {exportsLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : exportsLus === null ? (
           <div className="banner banner-warn">
             La liste des exports n’a pas pu être lue. Ce qui a déjà été demandé n’apparaît pas ici —
             ce n’est pas une absence.
@@ -403,15 +411,36 @@ export default function ExportsAnalyse({ etabActif, etablissements }) {
                       </td>
                       <td>{(x.format || '').toUpperCase()}</td>
                       <td>
-                        <span className={x.statut === 'genere' ? 'badge good' : 'badge crit'}>
-                          {x.statut === 'genere' ? 'disponible' : 'échec'}
+                        {/* ⚠ TROIS ÉTATS, PAS DEUX. `envoye` est un SUCCÈS — le rapport
+                            planifié a produit le fichier PUIS l'a expédié. Le ranger avec
+                            `echec` affichait en rouge un rapport que le destinataire a reçu. */}
+                        {/* ⚠ QUATRE ÉTATS, ET UN TON PAR SENS. `non_expedie` n'est ni un succès
+                            ni une panne : le fichier est là, et personne ne l'a reçu. Le vert
+                            affirmerait un envoi, le rouge une panne. Il est neutre, et il se nomme.
+                            ⚠ Et le repli ne dit plus « échec » : c'est lui qui affichait un badge
+                            VERT libellé « échec » pour tout statut qu'il ne connaissait pas. */}
+                        <span className={{
+                          genere: 'badge good',
+                          envoye: 'badge good',
+                          non_expedie: 'badge',
+                          echec: 'badge crit',
+                        }[x.statut] || 'badge'}>
+                          {{
+                            genere: 'disponible',
+                            envoye: 'envoyé',
+                            non_expedie: 'non expédié — aucun transport de courriel',
+                            echec: 'échec',
+                          }[x.statut] || x.statut}
                         </span>
-                        {x.statut !== 'genere' && x.messageErreur && (
+                        {x.statut === 'envoye' && x.destinataireEmail && (
+                          <div className="hint">à {x.destinataireEmail}</div>
+                        )}
+                        {x.statut === 'echec' && x.messageErreur && (
                           <div className="hint">{x.messageErreur}</div>
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        {x.statut === 'genere' && (
+                        {x.statut !== 'echec' && (
                           <button className="btn ghost sm" type="button" onClick={() => telecharger(x.id)}>
                             Télécharger
                           </button>
