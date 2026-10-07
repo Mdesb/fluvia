@@ -161,7 +161,7 @@ final class AjoutLigneHandler
         $ligne->setImpactOptionsUnitaire($this->calculateur->decimal($impactOptionsCentimes));
 
         // CA-4 — promotions éligibles appliquées automatiquement et visibles sur la ligne.
-        $ligne->setPromotionsAppliquees($this->tarif->promotionsAuto($produit, $vente->getDate()));
+        $ligne->setPromotionsAppliquees($this->tarif->promotionsAuto($produit, $vente->getDate(), $vente->getEtablissement()));
 
         $vente->addLigne($ligne);
         $this->calculateur->recalculerLigne($ligne);
