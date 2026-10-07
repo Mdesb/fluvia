@@ -154,6 +154,11 @@ final class AuditWriteSubscriber
         // sensibles, RG-SOCLE-07).
         \App\Autorisation\Entity\LimiteAutorisation::class,
         \App\Autorisation\Entity\OperationSensible::class,
+        // Module M5 Réservation (spec-reservation.md §8) : statut d'une réservation (absence constatée,
+        // absence levée) et facturation d'absence (exonération, motif). Les dix exonérations de préprod
+        // du 07/10/2026 n'avaient laissé aucune trace.
+        \App\Reservation\Entity\Reservation::class,
+        \App\Reservation\Entity\FacturationNoShow::class,
     ];
 
     /**
