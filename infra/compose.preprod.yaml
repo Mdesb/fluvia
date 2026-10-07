@@ -76,6 +76,11 @@ services:
       # n'atteint pas le conteneur et POST /api/boutique/paniers/{id}/payer repond 500
       # (StubPaymentReceiptSigner refuse de servir un faux « accepte »).
       PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
+      # Autorise le terminal de paiement SIMULE de la caisse (TpeMock). 1 en PREPRODUCTION pour
+      # demontrer l'encaissement par carte ; 0 (ou absent) ailleurs : la carte est refusee (422
+      # « aucun terminal de paiement configure »). Seul ce service encaisse : ni le worker ni
+      # l'ordonnanceur n'appellent le terminal.
+      TPE_SIMULE_AUTORISE: ${TPE_SIMULE_AUTORISE:-0}
     depends_on:
       db:
         condition: service_healthy
