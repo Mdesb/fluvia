@@ -125,7 +125,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/annuler',
-            description: 'Annule une vente non validee. Corps : { motif?, demandeEscalade? (jeton de rejeu) }.',
+            description: 'Annule une vente validée par contre-passation (avoir). Corps : { motif ∈ {Erreur de saisie, Client parti, Doublon}, demandeEscalade? }',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.annuler')",

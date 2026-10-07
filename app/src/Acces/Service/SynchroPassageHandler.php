@@ -7,9 +7,15 @@ namespace App\Acces\Service;
 use App\Acces\Dto\EvenementPassageDto;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
+use App\Acces\Entity\JaugeFmi;
 use App\Acces\Entity\Passage;
 use App\Acces\Enum\SensPassage;
 use App\Acces\Enum\CodeMotifRefus;
+use App\Organisation\Entity\Etablissement;
+use App\Platform\Event\DomainEvent;
+use App\Platform\Event\EventBus;
+use App\Platform\Event\EventSubject;
+use App\Platform\Event\EventTenant;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -37,6 +43,7 @@ final class SynchroPassageHandler
         private readonly EntityManagerInterface $em,
         private readonly ValidationPassageHandler $validation,
         private readonly RecalageFmiHandler $recalage,
+        private readonly EventBus $bus,
     ) {
     }
 
@@ -214,7 +221,49 @@ final class SynchroPassageHandler
             ];
         }
 
+        $this->signalOverCapacity($passages);
+
         return ['details' => $details, 'passages' => $passages];
+    }
+
+    /**
+     * D121 : une entrée hors ligne comptée au-delà du seuil FMI prévient l'exploitant, par la cloche
+     * (`NotificationRule`). UNE alerte par espace et par lot, pas une par passage : une borne coupée à
+     * l'heure d'affluence en remonterait quarante, et une cloche qui sonne quarante fois ne se lit plus.
+     * Publiée après les transactions des passages (D7-bis) ; un lot rejoué n'a que des doublons, il
+     * n'alerte donc pas deux fois.
+     *
+     * @param list<Passage> $passages
+     */
+    private function signalOverCapacity(array $passages): void
+    {
+        /** @var array<string, array{0: EspaceAcces, 1: Etablissement, 2: int}> $parEspace */
+        $parEspace = [];
+        foreach ($passages as $passage) {
+            $espace = $passage->getEspace();
+            $etablissement = $espace?->getEtablissement();
+            if ($espace !== null && $etablissement !== null && $passage->getCodeMotif() === CodeMotifRefus::SeuilFmiDepasseHorsLigne) {
+                $cle = (string) $espace->getId();
+                $parEspace[$cle] = [$espace, $etablissement, ($parEspace[$cle][2] ?? 0) + 1];
+            }
+        }
+        foreach ($parEspace as [$espace, $etablissement, $entrees]) {
+            $jauge = $this->em->getRepository(JaugeFmi::class)->findOneBy(['espace' => $espace]);
+            $this->bus->publish(new DomainEvent(
+                'access.capacity_exceeded',
+                new EventTenant($etablissement->getId()),
+                new EventSubject('EspaceAcces', (string) $espace->getId()),
+                [
+                    'space_label' => $espace->getLibelle(),
+                    'offline_entries' => $entrees,
+                    'occupancy' => $jauge?->getValeurCourante(),
+                    'threshold' => $jauge?->getSeuil(),
+                ],
+            ));
+        }
+        if ($parEspace !== []) {
+            $this->em->flush(); // La cloche persiste sans écrire : c'est l'émetteur qui écrit.
+        }
     }
 
     private function uuid(mixed $reference): ?Uuid
