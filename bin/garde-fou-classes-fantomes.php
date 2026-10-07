@@ -5,6 +5,9 @@ declare(strict_types=1);
 /**
  * Garde-fou n°37 — une classe CSS citée par un écran et définie dans aucune feuille.
  *
+ * ⚠ CSS seulement. Une classe PHP supprimée mais toujours citée, c'est le n°58 (#30 : on a cru
+ * que celui-ci la voyait, il la laissait verte).
+ *
  * ── CE QU'IL EMPÊCHE ──────────────────────────────────────────────────────────────────────────
  *
  * Une classe inconnue ne casse RIEN. Le build passe, aucun avertissement n'est émis, l'élément
