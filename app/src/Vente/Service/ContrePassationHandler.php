@@ -14,6 +14,8 @@ use App\Vente\Nf525\OperationAScellerDto;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Port\AppairageAccesInterface;
 use App\Vente\Port\PorteMonnaieVirtuelInterface;
+use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -30,6 +32,7 @@ final class ContrePassationHandler
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
         private readonly PanierCalculateur $calc,
+        private readonly EntityManagerInterface $em,
         // Frontière M4 (RG-M4-03, CA-9, §2.3 plan-crm.md) : nullable, même précaution que
         // `PaiementHandler` — ne casse aucun test M2 existant si aucun port n'est câblé.
         private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
@@ -37,6 +40,36 @@ final class ContrePassationHandler
     }
 
     public function annuler(Vente $vente, string $motif, Utilisateur $auteur): Avoir
+    {
+        return $this->sousVerrou($vente, fn (): Avoir => $this->annulerSousVerrou($vente, $motif, $auteur));
+    }
+
+    public function rembourser(Vente $vente, ?string $montant, string $motif, Utilisateur $auteur): Avoir
+    {
+        return $this->sousVerrou($vente, fn (): Avoir => $this->rembourserSousVerrou($vente, $montant, $motif, $auteur));
+    }
+
+    /**
+     * Une contre-passation à la fois par vente (patron transactionnel de `ValiderVenteService`) : la
+     * vente est verrouillée et relue avant tout contrôle, puis l'avoir, son scellement et le recrédit
+     * PMV sont validés d'un bloc. Sans ce verrou, deux remboursements simultanés lisaient le même
+     * « déjà recrédité » et recréditaient chacun le porte-monnaie.
+     *
+     * @param \Closure(): Avoir $contrePassation
+     */
+    private function sousVerrou(Vente $vente, \Closure $contrePassation): Avoir
+    {
+        return $this->em->getConnection()->transactional(function () use ($vente, $contrePassation): Avoir {
+            $this->em->refresh($vente, LockMode::PESSIMISTIC_WRITE);
+            $avoir = $contrePassation();
+            $this->em->persist($avoir);
+            $this->em->flush();
+
+            return $avoir;
+        });
+    }
+
+    private function annulerSousVerrou(Vente $vente, string $motif, Utilisateur $auteur): Avoir
     {
         $this->exigerValidee($vente);
         $avoir = $this->creerAvoir($vente, $vente->getTotal(), $motif, $auteur, 'annulation');
@@ -49,13 +82,13 @@ final class ContrePassationHandler
             $avoir->setSupportInvalide(true);
         }
 
-        $this->recrediterPmv($vente);
+        $this->recrediterPmv($vente, $vente->getTotal());
         $vente->setStatut(StatutVente::Annulee);
 
         return $avoir;
     }
 
-    public function rembourser(Vente $vente, ?string $montant, string $motif, Utilisateur $auteur): Avoir
+    private function rembourserSousVerrou(Vente $vente, ?string $montant, string $motif, Utilisateur $auteur): Avoir
     {
         $this->exigerValidee($vente);
 
@@ -65,31 +98,35 @@ final class ContrePassationHandler
         }
 
         $avoir = $this->creerAvoir($vente, $montantAvoir, $motif, $auteur, 'remboursement');
-        // Recrédit PMV (RG-M4-03) : le cahier ne détaille pas la ventilation d'un remboursement
-        // partiel entre moyens — ⚠ HYPOTHÈSE, simplification retenue : recrédit intégral de la part
-        // PMV de la vente (comme pour une annulation complète), quel que soit le montant partiel
-        // demandé ; à affiner si un besoin de ventilation proportionnelle par moyen se confirme.
-        $this->recrediterPmv($vente);
+        $this->recrediterPmv($vente, $montantAvoir);
         $vente->setStatut(StatutVente::AvoirEmis);
 
         return $avoir;
     }
 
-    /** Recrédite intégralement la part PMV d'une vente annulée/remboursée (RG-M4-03, CA-9). */
-    private function recrediterPmv(Vente $vente): void
+    /**
+     * Recrédit PMV d'une contre-passation (RG-M4-03, CA-9) : le plus petit de l'avoir et de la part PMV
+     * non encore recréditée (option A de P-5, plan ticket-opposable — choix à valider par Maxime) ; le
+     * reste de l'avoir relève des autres moyens. Jusqu'ici, chaque remboursement, même partiel,
+     * recréditait toute la part PMV : 50 € payés, deux remboursements partiels, 100 € rendus.
+     */
+    private function recrediterPmv(Vente $vente, string $montantAvoir): void
     {
-        if ($this->pmv === null) {
-            return;
-        }
         $clientId = $vente->getClient();
-        if ($clientId === null) {
+        if ($this->pmv === null || $clientId === null) {
             return;
         }
+        $partPmv = 0;
         foreach ($vente->getPaiements() as $paiement) {
             \assert($paiement instanceof Paiement);
             if ($paiement->getMoyenCode() === 'pmv') {
-                $this->pmv->crediter($clientId, $paiement->getMontant(), $vente->getId(), 'remboursement_vente');
+                $partPmv += $this->calc->centimes($paiement->getMontant());
             }
+        }
+        $reste = $partPmv - $this->calc->centimes($this->pmv->recreditePourVente($clientId, $vente->getId()));
+        $credit = min($this->calc->centimes($montantAvoir), $reste);
+        if ($credit > 0) {
+            $this->pmv->crediter($clientId, $this->calc->decimal($credit), $vente->getId(), 'remboursement_vente');
         }
     }
 

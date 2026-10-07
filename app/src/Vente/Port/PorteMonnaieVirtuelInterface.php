@@ -28,4 +28,10 @@ interface PorteMonnaieVirtuelInterface
      * un `MouvementPmv(type=remboursement_vente)`.
      */
     public function crediter(Uuid $clientId, string $montant, Uuid $venteId, string $motif): void;
+
+    /**
+     * Somme déjà recréditée sur le PMV du client au titre de cette vente (mouvements
+     * `remboursement_vente`) : ce qu'une nouvelle contre-passation ne peut plus rendre.
+     */
+    public function recreditePourVente(Uuid $clientId, Uuid $venteId): string;
 }

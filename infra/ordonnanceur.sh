@@ -21,10 +21,14 @@
 # L'ancien texte disait l'inverse (« --only contourne la garde ») : vrai AVANT D91, faux depuis,
 # corrigé le 15/09.
 #
-# ⚠ EN PARTICULIER, `reservation:no-show:basculer` NE DOIT JAMAIS Y ENTRER (D95). Aucun écran n'écrit
-# la présence : `isPresenceConfirmee()` est faux pour toute réservation ayant jamais existé, donc la
-# tâche facturerait une absence à des gens venus. Six en base aujourd'hui, vingt sur un créneau réel.
-# La condition de levée est qu'un écran appelle `/emarger` — pas avant.
+# ⚠ EN PARTICULIER, `reservation:no-show:basculer` N'EST PAS DANS LA LISTE, ET N'Y REVIENT PAS SANS
+# LEVÉE DE D95. Sans présence confirmée, `isPresenceConfirmee()` est faux : la tâche facture une
+# absence à des gens venus. Elle y est pourtant entrée le 04/09 (4a86eb88) et y est restée jusqu'au
+# 07/10 : 10 réservations basculées en `no_show_facture`, 140,00 € « à facturer », 0 présence en base.
+# La levée a deux moitiés, mesurées le 07/10 : un écran appelle `/emarger` — oui, depuis le 31/08
+# (3242c148) ; une présence confirmée existe en base — non, zéro. Maxime, le 07/10 : D95 tient.
+# Ce commentaire seul ne l'a pas tenue dehors : `bin/garde-fou-no-show-hors-liste.sh` (n°57) refuse
+# son retour dans `TACHES_AUTORISEES`.
 #
 # ── CE QU'IL FAUT SAVOIR AVANT D'EN AJOUTER UNE ─────────────────────────────────────────────────
 #
@@ -215,7 +219,7 @@ set -eu
 #                                     SURE AU PREMIER PASSAGE : le handler revérifie interrupteur et
 #                                     consentement ; le partenaire deduplique par Idempotency-Key.
 #
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation public-api:webhooks:alerter public-api:webhooks:requeue"
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation public-api:webhooks:alerter public-api:webhooks:requeue"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
