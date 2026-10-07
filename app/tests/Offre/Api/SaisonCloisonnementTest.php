@@ -36,6 +36,12 @@ final class SaisonCloisonnementTest extends OffreApiTestCase
 {
     private const CHEZ_LE_VOISIN = 'Saison du voisin, mêmes dates';
 
+    /**
+     * Une priorité que la saison des fixtures (priorité 0 chez A, jusqu'à la fin de l'an prochain)
+     * n'occupe pas : ces saisons ne butent que l'une sur l'autre, quelle que soit l'année du lancement.
+     */
+    private const PRIORITE = 7;
+
     public function testUneSaisonDUnAutreEtablissementNEmpechePasLaCreation(): void
     {
         $this->saisonChezB();
@@ -49,7 +55,7 @@ final class SaisonCloisonnementTest extends OffreApiTestCase
                 'nom' => 'Saison hiver de A',
                 'dateDebut' => '2027-01-01',
                 'dateFin' => '2027-03-31',
-                'priorite' => 0,
+                'priorite' => self::PRIORITE,
             ],
         ]);
 
@@ -79,7 +85,7 @@ final class SaisonCloisonnementTest extends OffreApiTestCase
                 'nom' => 'Saison hiver de A',
                 'dateDebut' => '2027-01-01',
                 'dateFin' => '2027-03-31',
-                'priorite' => 0,
+                'priorite' => self::PRIORITE,
             ],
         ]);
 
@@ -106,7 +112,7 @@ final class SaisonCloisonnementTest extends OffreApiTestCase
             'nom' => $nom,
             'dateDebut' => '2028-01-01',
             'dateFin' => '2028-03-31',
-            'priorite' => 0,
+            'priorite' => self::PRIORITE,
         ];
 
         $client->request('POST', '/api/saisons', $enteteA + ['json' => $corps('Première chez A')]);
@@ -132,7 +138,7 @@ final class SaisonCloisonnementTest extends OffreApiTestCase
             ->setNom(self::CHEZ_LE_VOISIN)
             ->setDateDebut(new \DateTimeImmutable('2027-01-01'))
             ->setDateFin(new \DateTimeImmutable('2027-03-31'))
-            ->setPriorite(0)
+            ->setPriorite(self::PRIORITE)
             ->setActif(true)
             ->setEtablissement($etabB);
 
