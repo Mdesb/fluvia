@@ -29,6 +29,8 @@ Pars de la demande initiale et remonte les dépendances une par une :
 
 Ne t'arrête pas à la première réponse plausible : vérifie qu'elle est cohérente avec le reste de la documentation et du code.
 
+**Bibliothèques et API tierces** : ta connaissance d'entraînement a une date. Version lue dans le verrou (`app/composer.lock`, `frontend/package-lock.json`), puis fiche `docs/references/` ; sans fiche, le point reste UNVERIFIED et tu écris « fiche manquante : <bibliothèque> <version> — <question> » (la session lance `documentaliste`).
+
 ## Sortie attendue
 
 Un résumé structuré avec :

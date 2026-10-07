@@ -3435,3 +3435,27 @@ mieux qu'un détecteur muet.
 D109 ne se voyait pas. Corriger D110 seul — redémarrer pour activer la quatrième tâche — aurait donc
 **levé le verrou sur tout ce qu'on aurait ajouté entre-temps**. C'est pour cela que D109 a été corrigé
 et prouvé **avant** le redémarrage, et non l'inverse.
+
+## D120 — La protection de `main` vaut aussi pour les administrateurs ; le secours est une commande
+
+**Décidé par Maxime le 07/10/2026 (QCM), ticket #253.** Numéro D120 et non D111 : D111–D115 (arbitrages du
+14/09, branche `maxime`) et D116–D119 (PR #93) sont déjà cités ailleurs. Un numéro est une poignée (garde-fou n°46).
+
+**Ce qui était mesuré le 07/10.** La protection de `main` exigeait deux checks et une branche à jour, mais pas
+pour les administrateurs (`enforce_admins: false`). Or les sessions du VPS poussent avec le compte `Mdesb`,
+administrateur : dix commits sont entrés sur `main` sans PR du 16/09 au 23/09, et onze PR (#243 à #259) ont été
+fusionnées sans aucun check. Depuis le retour de la CI le 01/10, les PR #260 à #274 sont toutes passées par la
+fusion automatique, checks verts.
+
+**Ce qui change.** `enforce_admins` est activé dès que la PR qui corrige `CLAUDE.md` (#272) est fusionnée :
+plus d'envoi direct sur `main`, plus de `gh pr merge --admin` qui passe outre des checks rouges ou absents.
+La fusion automatique n'est pas touchée : son jeton n'est pas administrateur, elle subissait déjà la règle.
+
+**Le prix, et le secours.** Si la CI retombe en panne (E-10), plus aucune PR ne fusionne, même par Maxime.
+Le secours tient en une commande, à lancer par Maxime seul, puis à annuler dès que la CI revient :
+
+```
+gh api -X DELETE repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # suspendre
+gh api -X POST   repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # rétablir
+gh api repos/Mdesb/fluvia/branches/main/protection/enforce_admins --jq .enabled
+```

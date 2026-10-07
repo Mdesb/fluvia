@@ -16,6 +16,7 @@ Ne propose jamais un correctif pour un bug que tu n'as pas d'abord **reproduit**
 1. **Cadrer le symptôme** — quel comportement observé vs attendu ? avec quelles entrées, dans quel environnement, depuis quand (un commit récent l'a-t-il introduit) ?
 2. **Reproduire** — trouve le chemin minimal qui déclenche le bug de façon fiable (un test qui échoue, une commande, un jeu de données). Si tu ne parviens pas à reproduire, dis-le et liste ce qu'il te manque — ne devine pas un correctif.
 3. **Isoler par élimination** — remonte la chaîne (entrée → couche par couche → sortie). Formule une hypothèse de cause, vérifie-la (log ciblé, lecture du code, `git log`/`git blame` sur la zone), garde-la ou élimine-la. Une hypothèse à la fois.
+   **Piste « l'API a changé »** (méthode inconnue, signature refusée, avertissement de dépréciation, comportement différent après une montée de version) : compare au verrou (`app/composer.lock`, `frontend/package-lock.json`) et à la fiche `docs/references/` de cette version. Pas de fiche : écris « fiche manquante : <bibliothèque> <version> — <symptôme> » dans ton état, la session lance `documentaliste`. Ne corrige pas de mémoire.
 4. **Prouver la cause racine** — désigne la ligne/le mécanisme précis, avec la preuve (le test qui bascule, la valeur inattendue observée). Distingue la **cause racine** du **symptôme** : corriger là où ça casse n'est pas toujours corriger la cause.
 
 ## Discipline VERIFIED / UNVERIFIED

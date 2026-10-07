@@ -21,6 +21,9 @@ Le plan (`features/<nom>/plans/plan-*.md`) doit contenir :
 2. **Étapes** — liste ordonnée, chacune : un seul objectif clair, fichiers concernés, critère de "fait" vérifiable (build/lint/test qui doit passer)
 3. **Tests** — quels tests unitaires/d'intégration valident chaque étape
 4. **Couverture** — table Goal → Étape(s)
+5. **Fiches à produire** — chaque bibliothèque, framework ou API tierce que le plan utilise, avec sa version (lue dans `app/composer.lock` ou `frontend/package-lock.json`) et la question précise (« dépréciations depuis 7.3 », « signature de X »). Lis d'abord `docs/references/` : une fiche valide se cite, elle ne se redemande pas. Rien à produire : écris « aucune ». Tu ne lances pas le `documentaliste` (un sous-agent n'en lance pas un autre) : la session le fait d'après cette liste, puis te rend les fiches ; si l'une contredit une décision, tu corriges l'étape concernée avant CP-2.
+
+Sans la section 5, le plan n'est pas prêt pour CP-2.
 
 ## 16 principes de rédaction de plan
 
