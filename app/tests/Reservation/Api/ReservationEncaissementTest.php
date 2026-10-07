@@ -108,7 +108,8 @@ final class ReservationEncaissementTest extends ReservationApiTestCase
         $client->disableReboot();
 
         // Créneau largement au-delà du délai franc (24h) : annulation immédiate = dans le délai.
-        $idCreneau = $this->creerCreneau($client, $entete, '2026-10-08T10:00:00+00:00', '2026-10-08T11:00:00+00:00');
+        // Relatif au lancement, pas une date fixe (voir `creneauDans()`).
+        $idCreneau = $this->creerCreneau($client, $entete, ...self::creneauDans(30));
         $idReservation = $this->reserverPayant($client, $entete, $idCreneau);
 
         $reservation = $client->request('GET', '/api/reservations/' . $idReservation, $entete)->toArray();
@@ -169,7 +170,9 @@ final class ReservationEncaissementTest extends ReservationApiTestCase
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();
 
-        $idCreneau = $this->creerCreneau($client, $entete, '2026-10-09T10:00:00+00:00', '2026-10-09T11:00:00+00:00');
+        // Dans le délai franc lui aussi (« annulee_libre » attendu) : même date fixe, même bombe, qui
+        // aurait sauté le 08/10 à 12:00 (Paris). Relatif au lancement (voir `creneauDans()`).
+        $idCreneau = $this->creerCreneau($client, $entete, ...self::creneauDans(30));
         $idReservation = $this->reserverPayant($client, $entete, $idCreneau);
 
         $reservation = $client->request('GET', '/api/reservations/' . $idReservation, $entete)->toArray();
