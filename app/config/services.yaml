@@ -134,7 +134,8 @@ services:
     App\Vente\Port\RechercheSupportInterface: '@App\Vente\Adapter\RechercheSupportParSupport'
     # Historique d'achats par client (frontière M4, fiche 360°, §2.4 plan-crm.md).
     App\Vente\Port\HistoriqueVenteInterface: '@App\Vente\Adapter\HistoriqueVenteParClient'
-    # Connecteur TPE (Ingenico/Nayax/PAX) — mock en L2 (US-L2-07).
+    # Connecteur TPE (Ingenico/Nayax/PAX) — simulateur (US-L2-07), qui REFUSE toute carte tant que
+    # TPE_SIMULE_AUTORISE n'est pas posé (test, démonstration en préprod). Aucun terminal réel.
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'

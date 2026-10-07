@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Tests\Vente\Api;
 
+use App\Autorisation\Entity\LimiteAutorisation;
+use App\Autorisation\Entity\OperationSensible;
+use App\Autorisation\Enum\PerimetreAutorisation;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
-use App\Tests\Vente\VenteApiTestCase;
+use App\Tests\Autorisation\AutorisationApiTestCase;
 
 /**
  * Remboursement / avoir / annulation par contre-passation (CA-13 / RG-M2-07) : droit requis,
  * traçabilité, avoir généré, support invalidé après impression, aucune ligne supprimée.
  */
-final class ContrePassationTest extends VenteApiTestCase
+final class ContrePassationTest extends AutorisationApiTestCase
 {
     /** CA-13 — Annulation par un habilité : avoir + support invalidé (après impression) ; lignes conservées. */
     public function testCa13AnnulationGenereAvoirEtInvalideSupport(): void
@@ -68,6 +73,78 @@ final class ContrePassationTest extends VenteApiTestCase
             'json' => ['motif' => 'Test'],
         ]);
         self::assertResponseStatusCodeSame(403);
+    }
+
+    /** CA-2 — Plafond 0,00 avec escalade : toute annulation part en escalade, la vente reste validée. */
+    public function testPlafondZeroEscaladeToujours(): void
+    {
+        $this->configurerLimiteAnnuler();
+        [$client, $entete] = $this->connecte('caissier-plafond0@test.itcotation.com');
+        $session = $this->ouvrirSessionCaissier($client, $entete);
+        $venteId = $this->venteCarteValidee($client, $entete, $session['id']);
+
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Client parti']]);
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame('escalade_requise', $reponse->toArray(false)['decision']);
+        self::assertArrayHasKey('demandeEscalade', $reponse->toArray(false));
+        self::assertSame('validee', $client->request('GET', '/api/ventes/' . $venteId, $entete)->toArray()['statut']);
+    }
+
+    /** CA-4 — Une vente déjà annulée ne s'annule pas deux fois : 409. */
+    public function testAnnulerDeuxFoisRend409(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $venteId = $this->venteCarteValidee($client, $entete, $session['id']);
+        $corps = $entete + ['json' => ['motif' => 'Doublon']];
+
+        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $corps);
+        self::assertResponseStatusCodeSame(201);
+        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $corps);
+        self::assertResponseStatusCodeSame(409);
+    }
+
+    /** CA-5 — Motif absent ou hors liste fermée : 422, et le message nomme les motifs admis. */
+    public function testMotifAbsentOuHorsListeRend422(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $venteId = $this->venteCarteValidee($client, $entete, $session['id']);
+
+        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => []]);
+        self::assertResponseStatusCodeSame(422);
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Bidon']]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('Erreur de saisie', $reponse->toArray(false)['detail']);
+    }
+
+    /** CA-3 — Un caissier d'un autre établissement ne voit pas la vente : 404. */
+    public function testAutreEtablissementRend404(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $venteId = $this->venteCarteValidee($client, $entete, $session['id']);
+
+        $etabB = $this->entite(Etablissement::class, ['nom' => SocleFixtures::ETAB_B_NOM]);
+        $this->creerUtilisateur('caissier-b@test.itcotation.com', $this->roleCaissier(), etablissement: $etabB);
+        $clientB = static::createClient();
+        $enteteB = ['auth_bearer' => $this->jeton($clientB, 'caissier-b@test.itcotation.com', 'aaa'), 'headers' => [ContexteEtablissement::HEADER => (string) $etabB->getId()]];
+        $reponse = $clientB->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteB + ['json' => ['motif' => 'Doublon']]);
+        self::assertSame(404, $reponse->getStatusCode());
+    }
+
+    private function configurerLimiteAnnuler(): void
+    {
+        $em = $this->em();
+        $em->persist((new LimiteAutorisation())
+            ->setOperation($em->getRepository(OperationSensible::class)->find('vente.annuler'))
+            ->setRole($this->roleCaissier())
+            ->setEtablissement($this->entite(Etablissement::class, ['nom' => SocleFixtures::ETAB_A_NOM]))
+            ->setPlafondMontant('0.00')
+            ->setPerimetre(PerimetreAutorisation::Global)
+            ->setEscaladeAuDela(true)
+            ->setAuteur($this->entite(Utilisateur::class, ['email' => SocleFixtures::ADMIN_EMAIL])));
+        $em->flush();
     }
 
     /**

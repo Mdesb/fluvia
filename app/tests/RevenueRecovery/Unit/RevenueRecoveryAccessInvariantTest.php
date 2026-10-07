@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * RG-RR-06 (invariant central, plan-revenue-recovery.md §0.2) : aucune classe `App\RevenueRecovery\*`
- * n'importe `App\Securite\Entity\DroitAcces` ni un service de propagation d'accès
+ * n'importe `App\Acces\Entity\DroitAcces` ni un service de propagation d'accès
  * (`App\Recouvrement\Service\PropagationAccesHandler` ou équivalent) — `RevenueRecovery` n'écrit jamais
  * sur l'accès, invariant d'exclusivité de `App\Recouvrement` (§0.1 de la spec).
  *
@@ -22,7 +22,7 @@ final class RevenueRecoveryAccessInvariantTest extends TestCase
 {
     /** @var list<string> */
     private const FORBIDDEN_SYMBOLS = [
-        'App\\Securite\\Entity\\DroitAcces',
+        'App\\Acces\\Entity\\DroitAcces',
         'DroitAcces',
         'PropagationAccesHandler',
     ];
@@ -43,7 +43,7 @@ final class RevenueRecoveryAccessInvariantTest extends TestCase
                     $contenu,
                     sprintf(
                         'RG-RR-06 violé : « %s » réfère au symbole interdit « %s » — App\\RevenueRecovery '
-                        . 'n\'écrit jamais sur App\\Securite\\Entity\\DroitAcces ni sur un service de '
+                        . 'n\'écrit jamais sur App\\Acces\\Entity\\DroitAcces ni sur un service de '
                         . 'propagation d\'accès (invariant central, spec §0.1).',
                         $fichier,
                         $symbole,
