@@ -167,8 +167,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // recommençait une vente et le client payait deux fois. Le mode strict de développement joue cet
   // effet deux fois : sans danger, la même clé rend la même issue.
   useEffect(() => {
-    reprendreReglement()
-  }, [etabActif])
+    if (session?.id) reprendreReglement()
+  }, [etabActif, session?.id])
 
   const total = useMemo(
     () =>
@@ -908,7 +908,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // (validée, annulée) a son issue écrite : l'intention est oubliée.
   async function reprendre() {
     const [intention] = pendingIntents(sessionStorage, etabActif)
-    if (!intention) return
+    if (!intention || !session?.id) return
     let v
     try {
       v = await api.vente(intention.saleId)
@@ -920,6 +920,15 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       }
       setErreur(`Un règlement de la vente ${intention.saleNumber ? `n° ${intention.saleNumber} ` : ''}attend son issue, `
         + `mais la vente n'a pas pu être relue (${e.message || 'refus du serveur'}). Rechargez la page : ne l'encaissez pas une seconde fois.`)
+      return
+    }
+    // Seulement une vente de la session OUVERTE de cette caisse : rejouée ailleurs, elle tomberait hors
+    // de tout Z. Une vente d'une session close n'est tenue par aucune tentative (le Z l'a refusé
+    // sinon) : rien n'y a abouti, et l'intention s'oublie sans rien perdre.
+    if (v.statut === 'en_cours' && v.session?.id !== session.id) {
+      forgetIntent(sessionStorage, intention.saleId)
+      setAvis(`Le règlement de la vente n° ${v.numero} n'est pas repris ici : elle appartient à une autre session de `
+        + "caisse. Rien n'est rejoué ; si elle attend encore, reprenez-la depuis la caisse de sa session.")
       return
     }
     const lu = await rouvrirVente(v)
