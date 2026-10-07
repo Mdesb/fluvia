@@ -538,7 +538,7 @@ export default function App() {
       {onglet === 'imports' && <Imports etabActif={etabActif} droits={droits} />}
       {onglet === 'social' && <Social etabActif={etabActif} droits={droits} />}
       {onglet === 'sport' && <Sport etabActif={etabActif} droits={droits} />}
-      {onglet === 'abonnements' && <Abonnements droits={droits} />}
+      {onglet === 'abonnements' && <Abonnements droits={droits} session={session} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

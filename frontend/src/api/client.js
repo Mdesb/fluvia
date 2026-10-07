@@ -1240,6 +1240,9 @@ export const api = {
   // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
   // que personne ne pouvait lire.
   sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // Un séjour par son identifiant : 404 s'il n'existe pas OU s'il appartient à un autre
+  // établissement (mesuré le 15/09/2026 : SEJ-TEST-B de Patinoire B, lu depuis Piscine A).
+  sejour: (id) => request(`/api/stays/${id}`),
   // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
   // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
   ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
@@ -2555,6 +2558,14 @@ export const api = {
   // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
   // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
   majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
+  // Le logo de la boutique — le fichier part en multipart, SANS en-tete Content-Type : le navigateur
+  // pose lui-meme la frontiere du corps, et l'ecrire a la main la casse (meme idiome que les photos
+  // de produit). Le serveur valide les octets et repond la vitrine avec son `logo` (URL /media/...).
+  televerserLogoVitrine: (id, fichier) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    return request(`/api/boutique/vitrines/${id}/logo`, { method: 'POST', formData: corps })
+  },
   // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
   // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
   accepterRemboursement: (id, montant) =>
@@ -3149,6 +3160,14 @@ export const api = {
   // part est un accès que personne ne referme.
   editorSupportAccesses: () => request('/api/editor/support-accesses'),
 
+  // ── ACCÈS PARTENAIRES, CÔTÉ EXPLOITANT (`api.gerer`) ────────────────────────────────────────
+  // Toujours pour l'établissement ACTIF (en-tête) : l'identifiant est celui de l'application.
+  accesPartenaires: () => request('/api/partner-accesses'),
+  accorderAccesPartenaire: (id, scopes) =>
+    request(`/api/partner-accesses/${id}/grant`, { method: 'POST', body: { scopes } }),
+  retirerAccesPartenaire: (id) =>
+    request(`/api/partner-accesses/${id}/withdraw`, { method: 'POST', body: {} }),
+
   // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
   //
   // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
@@ -3163,6 +3182,30 @@ export const api = {
   // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
   revoquerAccesAssistance: (id) =>
     request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
+
+  // ── API PARTENAIRE, CÔTÉ ÉDITEUR (spec API partenaire v1, §3.1) ─────────────────────────────
+  //
+  // Corps JSON simple (`input: false` côté serveur, comme les accès d'assistance). Le secret d'une
+  // clé n'arrive QUE dans la réponse d'`emettreClePartenaire` (`issuedSecret`) : la liste ne le rend
+  // jamais, le serveur n'en garde que l'empreinte.
+  editorPartnerApplications: () => request('/api/editor/partner-applications'),
+  creerApplicationPartenaire: (corps) =>
+    request('/api/editor/partner-applications', { method: 'POST', body: corps }),
+  desactiverApplicationPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/deactivate`, { method: 'POST', body: {} }),
+  // Corps : { expiresAt? } (AAAA-MM-JJ). Sans date, la clé n'expire pas : on la révoque.
+  emettreClePartenaire: (id, corps = {}) =>
+    request(`/api/editor/partner-applications/${id}/credentials`, { method: 'POST', body: corps }),
+  revoquerClePartenaire: (id) =>
+    request(`/api/editor/partner-credentials/${id}/revoke`, { method: 'POST', body: {} }),
+  // Webhooks d'une application. Corps : { url (https), events: [noms du catalogue fermé] }. Le secret
+  // de signature n'arrive que dans la réponse qui le crée ou le régénère (`issuedWebhookSecret`).
+  configurerWebhookPartenaire: (id, corps) =>
+    request(`/api/editor/partner-applications/${id}/webhook`, { method: 'POST', body: corps }),
+  regenererSecretWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/rotate-secret`, { method: 'POST', body: {} }),
+  couperWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/disable`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :

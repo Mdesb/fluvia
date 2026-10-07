@@ -7,6 +7,7 @@ namespace App\Vente\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
+use App\Vente\Port\SaleSubscriptionInterface;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -17,6 +18,16 @@ use Doctrine\ORM\EntityManagerInterface;
  * applique le seuil d'impression — le tout dans une seule transaction. Corps optionnel :
  *   { "supports": [{"ligne": uuid, "type": "qr", "identifiant": "…"}] }
  *
+ * ⚠ ABONNEMENT CRÉÉ APRÈS LE COMMIT (spec-caisse-abonnement CP-1 G-1, plan CP-2 É1). Une ligne
+ *   portant un produit à facette Formule crée son abonnement (`Membership`) via
+ *   `App\Vente\Port\SaleSubscriptionInterface`, appelé ICI — après `service->valider()` et son
+ *   `flush()`, donc après le commit réel du scellement NF525 — jamais dans la transaction scellée
+ *   (D45, patron D7-bis / boutique en ligne `SouscriptionAbonnementEnLigneHandler` l.171→193). C'est
+ *   la correction du montage transactionnel faux de l'ancienne branche `feature/caisse-abonnement`,
+ *   qui créait l'abonnement DANS la transaction scellée (un refus y faisait rollback le scel). Un
+ *   refus du port laisse ici la vente SCELLÉE et VALIDE (pas de rollback) : l'exception remonte
+ *   telle quelle, la reprise se fait hors de cette transaction (G-5).
+ *
  * @implements ProcessorInterface<Vente, Vente>
  */
 final class ValiderVenteProcessor implements ProcessorInterface
@@ -25,6 +36,7 @@ final class ValiderVenteProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ValiderVenteService $service,
+        private readonly SaleSubscriptionInterface $abonnements,
     ) {
     }
 
@@ -44,6 +56,9 @@ final class ValiderVenteProcessor implements ProcessorInterface
 
         $this->service->valider($data, $overrides);
         $this->em->flush();
+
+        // Après le commit réel (voir docblock de classe) : jamais dans la transaction de scellement.
+        $this->abonnements->createSubscriptionsFromSale($data);
 
         return $data;
     }

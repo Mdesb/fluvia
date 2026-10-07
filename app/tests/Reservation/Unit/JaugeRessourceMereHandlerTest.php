@@ -7,14 +7,27 @@ namespace App\Tests\Reservation\Unit;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Ressource;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\UnitOfWork;
 use PHPUnit\Framework\TestCase;
 
-/** Jauge de la ressource mère (RG-M5-08, CA-14). */
+/**
+ * Jauge de la ressource mère (RG-M5-08, CA-14) — l'arithmétique en mémoire.
+ *
+ * Les ressources de ce test ne sont pas en base : aucune décrémentation relative n'est programmée.
+ * L'écriture relative et sa résistance aux écritures concurrentes sont prouvées contre une vraie base
+ * par `OccupationCounterConcurrencyTest`.
+ */
 final class JaugeRessourceMereHandlerTest extends TestCase
 {
     public function testDecrementSurAnnulationSousRessource(): void
     {
-        $handler = new JaugeRessourceMereHandler();
+        // Des bouchons, pas des mocks : le test ne vérifie aucun appel, il fournit un état.
+        $uow = $this->createStub(UnitOfWork::class);
+        $uow->method('getEntityState')->willReturn(UnitOfWork::STATE_NEW);
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getUnitOfWork')->willReturn($uow);
+        $handler = new JaugeRessourceMereHandler($em);
         $etablissement = new Etablissement();
 
         $bassin = (new Ressource())->setEtablissement($etablissement)->setCodeType('bassin')->setLibelle('Bassin')

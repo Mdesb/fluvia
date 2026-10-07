@@ -11,7 +11,7 @@ import {
   SENS_PASSAGE,
   signeDeVie,
 } from '../api/acces.js'
-import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
+import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import { useEtatUrl } from '../api/url.js'
 
 function heure(v) {
@@ -78,12 +78,11 @@ function phraseIncident(i) {
 //    ne porte aucun filtre. Rien dans la charge utile ne permet de les rattacher à un site : on ne
 //    peut donc pas les écarter ici. On le dit, faute de pouvoir le corriger d'ici.
 // `geste` : `manuel` (ouvrir manuellement) ou `comptage` (compter un passage sans support).
-const DEFAUTS_URL = { geste: '' }
+const DEFAUTS_URL = { geste: '', verifier: '' }
 
 export default function Supervision({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('supervision', DEFAUTS_URL)
   const [sup, setSup] = useState(null)
-  const [verifBillet, setVerifBillet] = useState(false)
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sous un refus PARTIEL — seul `/api/passages` echoue —
   // ce tableau affichait « Aucun passage enregistre pour le moment. » et « 0 recents », sans
   // bandeau, au milieu d'un ecran plein de donnees fraiches qui rendaient le zero credible.
@@ -254,6 +253,28 @@ export default function Supervision({ etabActif, droits = [] }) {
   // « Rien n'a été lu » et « rien n'a été trouvé » ne s'écrivent pas pareil.
   const lectureManquee = !sup
 
+  // ── VÉRIFIER UN BILLET, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // `1` = l'écran vide (on tapera le numéro) ; toute autre valeur EST le numéro à vérifier — c'est
+  // ce que passent le fil des scans et la recherche globale, qui ont le numéro sous la main.
+  if (params.verifier) {
+    const fermerVerif = () => majParams({ verifier: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerVerif}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la supervision
+        </button>
+        <RechercheBillet
+          key={params.verifier}
+          numeroInitial={params.verifier === '1' ? '' : params.verifier}
+          onClose={fermerVerif}
+          droits={droits}
+        />
+      </div>
+    )
+  }
+
   // ── OUVRIR MANUELLEMENT OU COMPTER UN PASSAGE, EN ÉCRAN ─────────────────────────────────────
   //
   // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET L'ÉCRAN LES REPREND : le droit propre à
@@ -377,7 +398,7 @@ export default function Supervision({ etabActif, droits = [] }) {
           <button className={`btn${auto ? ' primary' : ''}`} onClick={() => setAuto((v) => !v)} disabled={sessionPerdue}>
             {auto ? '⏸ Auto' : '▶ Auto'}
           </button>
-          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+          <button className="btn" onClick={() => majParams({ verifier: '1' }, { pousser: true })}>Vérifier un billet</button>
           {peutOuvrir && (
             <button
               className="btn"
@@ -595,7 +616,6 @@ export default function Supervision({ etabActif, droits = [] }) {
         </>
       )}
 
-      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
     </div>
   )
 }

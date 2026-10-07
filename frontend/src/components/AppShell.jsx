@@ -64,10 +64,6 @@ const NAV = [
     section: 'Exploitation',
     items: [
       { id: 'dashboard', ic: 'dashboard', label: 'Tableau de bord', admin: true },
-      // La boutique de modules. `admin: true` parce que Maxime a arbitre le 01/09 : « achat ouvert
-      // a qui administre l'etablissement » — pas une permission de module, puisqu'il s'agit
-      // justement d'acquerir des modules qu'on n'a pas encore.
-      { id: 'modules', ic: 'modules', label: 'Modules', admin: true },
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
       { id: 'caisse', ic: 'register', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
@@ -239,6 +235,11 @@ const NAV = [
         ic: 'settings', label: 'Paramètres',
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
+      // La boutique de modules — déplacée d'Exploitation vers Administration le 20/09 : acquérir des
+      // modules est un geste d'administration, pas d'exploitation quotidienne. `admin: true`
+      // (arbitrage Maxime, 01/09) : achat ouvert à qui administre l'établissement — pas une
+      // permission de module, puisqu'il s'agit justement d'acquérir des modules qu'on n'a pas encore.
+      { id: 'modules', ic: 'modules', label: 'Modules', admin: true },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
       // « Autorisations » faisait chercher les droits ici, et on y tombait sur un journal vide :
       // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les

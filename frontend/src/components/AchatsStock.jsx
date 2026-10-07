@@ -85,22 +85,25 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
   // ⚠ LA COMMANDE SE LIT PAR SON IDENTIFIANT : un lien ne doit pas dépendre de la liste, dont la
   // lecture peut échouer.
   // Seul un 404 dit « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
-  const [commandeOuverte, setCommandeOuverte] = useState(null)
-  const [chargementCommande, setChargementCommande] = useState(false)
-  const [lectureCommandeEchouee, setLectureCommandeEchouee] = useState(false)
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, ET LA CLÉ PORTE L'ÉTABLISSEMENT (même motif que #178 et #185).
+  // Un drapeau levé dans l'effet ne l'est qu'APRÈS le rendu : ce rendu-là affirmait « n'existe
+  // pas » à l'ouverture, et montrait une trame la commande de l'ancien établissement après une
+  // bascule. Refermer l'écran oublie la lecture.
+  const [lectureCommande, setLectureCommande] = useState(null)
+  const cleCommande = params.commande ? `${params.commande}|${etabActif}` : null
   useEffect(() => {
-    const id = params.commande
-    if (!id) { setCommandeOuverte(null); setLectureCommandeEchouee(false); return undefined }
+    if (!params.commande) { setLectureCommande(null); return undefined }
+    const cle = `${params.commande}|${etabActif}`
     let vivant = true
-    setChargementCommande(true)
-    setLectureCommandeEchouee(false)
-    setCommandeOuverte(null)
-    api.stockCommandeAchat(id)
-      .then((c) => { if (vivant) setCommandeOuverte(c) })
-      .catch((e) => { if (vivant) setLectureCommandeEchouee(e?.status !== 404) })
-      .finally(() => { if (vivant) setChargementCommande(false) })
+    api.stockCommandeAchat(params.commande)
+      .then((v) => { if (vivant) setLectureCommande({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureCommande({ cle, valeur: null, echouee: e?.status !== 404 }) })
     return () => { vivant = false }
   }, [params.commande, etabActif])
+  const lectureCommandeCourante = lectureCommande?.cle === cleCommande ? lectureCommande : null
+  const chargementCommande = cleCommande !== null && lectureCommandeCourante === null
+  const commandeOuverte = lectureCommandeCourante?.valeur ?? null
+  const lectureCommandeEchouee = lectureCommandeCourante?.echouee ?? false
 
   const lignesParCommande = useMemo(() => {
     const index = {}
@@ -355,7 +358,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
 
       {peutGererFournisseur && (
         <div style={{ marginTop: 16 }}>
-          <FournisseursSection onChange={recharger} />
+          <FournisseursSection onChange={recharger} params={params} majParams={majParams} />
         </div>
       )}
 
@@ -785,7 +788,7 @@ function ReceptionsSection({ receptions, fournisseurs, peutReceptionner, onValid
 // --------------------------------------------------------------------------------------------
 // Les fournisseurs.
 // --------------------------------------------------------------------------------------------
-function FournisseursSection({ onChange }) {
+function FournisseursSection({ onChange, params, majParams }) {
   // Pas de suppression : un fournisseur porte des commandes et des réceptions. Ce qu'on veut, c'est
   // cesser de lui commander — c'est la case « actif », et elle est réversible.
   const descripteur = {
@@ -833,5 +836,5 @@ function FournisseursSection({ onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} params={params} majParams={majParams} />
 }

@@ -27,8 +27,39 @@ const MOTS = {
   issued: 'Émis',
   accepted: 'Accepté',
   rejected: 'Refusé',
+  // ⚠ « Périmé » EST JUSTE ICI, ET LE DEVIENDRAIT FAUX SI `MembershipStatus` REPASSAIT EN ANGLAIS.
+  //
+  // Quatre énumérations émettent `expired` : `Facturation\DocumentStatus` (un devis périmé),
+  // `SmartFlow\RescheduleProposalStatus`, `SmartFlow\SlotWaitlistEntryStatus` et
+  // `Dms\RetentionStatus`. « Périmé » est le mot pour les quatre.
+  //
+  // Une cinquième a failli s'y ajouter. Le lot 0 du module `Membership` avait posé un cas
+  // `Expired = 'expired'` pour un abonnement arrivé au terme de son engagement — ce que l'écran dit
+  // « Au terme », parce que l'adhérent n'a rien laissé périmer. `mot('expired')` aurait rendu
+  // « Périmé » en silence : un mot français plausible et faux, que personne n'aurait signalé.
+  //
+  // Le lot 1 a ramené ces valeurs en français (`echu`), donc le piège ne s'est pas armé. NE PAS
+  // corriger ici pour autant : si l'anglais revient, c'est `api/abonnement.js` qui doit porter le
+  // mot de l'abonnement, comme il porte déjà celui de `echu`.
+
   expired: 'Périmé',
   converted: 'Transformé',
+  // ⚠ `cancelled` EST LE SEUL CODE DE CETTE CARTE QUE LE FRANCAIS NE SAIT PAS ACCORDER SEUL.
+  //
+  // Huit enumerations serveur le portent — `Facturation\DocumentStatus` (devis, bon de commande,
+  // bon de livraison), `Finance\SupplierInvoice\SupplierInvoiceStatus` (facture),
+  // `Subscription`, `Project`, `Group\GroupBookingStatus`, `SmartFlow\SlotWaitlistEntryStatus`,
+  // `Crm\LossReason`, `RevenueRecovery\RecoveryAttemptStatus` — et le sujet accorde tantot au
+  // masculin (un devis, un projet, un abonnement), tantot au feminin (une facture, une
+  // reservation). Un code anglais ne porte pas de genre ; une carte globale ne peut pas le deviner.
+  //
+  // Il etait donc declare DEUX FOIS, ici « Annulé » et plus bas « Annulée ». JavaScript garde la
+  // derniere : « Annulée » gagnait partout, et l'ecran des pieces commerciales affichait
+  // « Devis — Annulée ». Une seule declaration desormais, au MASCULIN NON MARQUE — la forme d'usage
+  // pour une etiquette de statut, juste pour les pieces commerciales et acceptable ailleurs.
+  //
+  // Consequence assumee et visible : `FacturesFournisseur.jsx` lit « Annulé » et non plus
+  // « Annulée ». C'est une ligne a changer ici si l'on prefere l'inverse — mais pas les deux.
   cancelled: 'Annulé',
 
   // --- Espaces (types physiques) ---
@@ -90,6 +121,26 @@ const MOTS = {
   suspendu: 'Suspendu',
   invite: 'Invité',
 
+  // --- Abonnement (sport/fitness) ---
+  //
+  // Les cinq statuts de `App\Membership\Enum\MembershipStatus`. Quatre manquaient, et le repli
+  // les rendait sans accent : « Impaye », « Resilie », « Echu ». C'est le défaut que la ligne
+  // `reussie`/`echouee` plus bas nomme déjà — le repli désoulignise un code, il ne parle pas français.
+  //
+  // `actif` est déjà dans « Statuts courants » ci-dessus : le redéclarer ici serait une clé en
+  // double, que la dernière écrase silencieusement.
+  //
+  // « Au terme » plutôt qu'« Échu », et le mot compte : `MotifInactiviteAccesFitness::Terme` a déjà
+  // tranché la même question côté serveur — l'adhérent n'a rien résilié, son engagement est arrivé à
+  // son terme. La colonne « Fin d'engagement » du même écran dit déjà « au terme depuis 12 j ».
+  //
+  // `pause` et `impaye` valent aussi pour `MotifInactiviteAccesFitness`, et `impaye` pour
+  // `TypeMouvementComptableSepa` : même mot, même sens, pas de collision.
+  pause: 'En pause',
+  impaye: 'Impayé',
+  resilie: 'Résilié',
+  echu: 'Au terme',
+
   // --- Patinoire ---
   // « non_rendu » et « non_rendue » diffèrent d'un caractère et ne disent pas la même chose : le
   // premier qualifie l'état des patins au retour, le second l'état de la location. Traduire les deux
@@ -134,11 +185,13 @@ const MOTS = {
 
   // --- Achats & tresorerie ---
   // Ce module est nomme en anglais cote serveur ; les mots restent francais a l'ecran.
-  draft: 'Brouillon',
+  //
+  // `draft` et `cancelled` ne sont PAS redeclares ici : ce sont des etats de document, deja portes
+  // par les pieces commerciales plus haut. Les redeclarer etait sans effet pour `draft` (meme mot)
+  // et changeait le mot de tout le monde pour `cancelled` — voir la note qui l'accompagne.
   to_pay: 'À payer',
   partially_paid: 'Partiellement payée',
   disputed: 'En litige',
-  cancelled: 'Annulée',
 
   // --- Padel ---
   indoor: 'Couvert',
@@ -180,6 +233,20 @@ const MOTS = {
   // Le cycle d'une remise : composée en brouillon, figée en XML, puis remise à la banque.
   generee: 'Générée',
   transmise: 'Transmise à la banque',
+
+  // Le cycle d'une ÉCHÉANCE (`App\Membership\Enum\StatutEcheanceSepa`). Quatre manquaient, et la fiche
+  // d'un abonnement les affichait en code brut : « prelevee », « rejetee », « gelee ».
+  //
+  // ⚠ `gelee` SE DIT « EN PAUSE ». Le mot du modèle ne dit pas au lecteur ce qui va se passer :
+  // l'adhérent a demandé une suspension, et l'échéance REVIENDRA à la reprise. « Gelée » se lit
+  // comme un blocage, c'est-à-dire comme `annulee` — qui, elle, ne reviendra jamais. C'est
+  // l'arbitrage déjà posé dans `Sport.jsx`, et il vit désormais ici.
+  //
+  // `annulee` est déjà dans « Achats » plus bas, au même mot : ne pas le redéclarer.
+  a_venir: 'À venir',
+  prelevee: 'Prélevée',
+  rejetee: 'Rejetée',
+  gelee: 'En pause',
   // `actif` / `revoque` (statut d'un mandat) sont déjà dans « Statuts courants » plus haut : les
   // redéclarer ici serait une clé en double, que la dernière écrase silencieusement.
 
@@ -234,12 +301,12 @@ const MOTS = {
 
   // --- Achats ---
   // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
-  // etats propres au stock.
+  // etats propres au stock. `cloturee` est dans ce cas et vit deja dans « Comptabilite » ci-dessus,
+  // au meme mot : le redeclarer ici n'ajoutait rien qu'une clé en double.
   brouillon: 'Brouillon',
   envoyee: 'Envoyée',
   confirmee: 'Confirmée',
   partiellement_recue: 'Partiellement reçue',
-  cloturee: 'Clôturée',
   annulee: 'Annulée',
   validee: 'Validée',
 

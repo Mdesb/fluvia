@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { nomsDuCreneau } from '../api/slot-label.js'
 
 /**
  * LA VUE SEMAINE — demandée par Maxime depuis le début, et jamais livrée.
@@ -230,13 +231,15 @@ export default function PlanningSemaine({ creneaux, occupation, aConfirmer, ress
                   // confirme. Sans marque, le planning montre un créneau plein qui ne l'est
                   // peut-être pas — et l'exploitant l'apprend le jour où la place se rouvre seule.
                   const enAttente = aConfirmer?.[c.id] || 0
+                  // Activité ET ressource : « l'une ou l'autre » laissait lire un terrain pour une activité.
+                  const noms = nomsDuCreneau(c)
 
                   return (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => onCreneau?.(c)}
-                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)} · ${connue ? prises : '?'}/${capacite}` + (connue ? '' : ' · places non lues') + (enAttente > 0 ? ` · ${enAttente} à confirmer` : '')}
+                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)}${noms ? ` · ${noms}` : ''} · ${connue ? prises : '?'}/${capacite}` + (connue ? '' : ' · places non lues') + (enAttente > 0 ? ` · ${enAttente} à confirmer` : '')}
                       style={{
                         position: 'absolute',
                         top: (debut - heureMin) * HAUTEUR_HEURE + 1,
@@ -273,7 +276,7 @@ export default function PlanningSemaine({ creneaux, occupation, aConfirmer, ress
                       <b>{hhmm(c._debut)}</b>{' '}
                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>{connue ? prises : '?'}/{capacite}</span>
                       <div className="sub" style={{ fontSize: 11 }}>
-                        {c.activite?.libelle || c.ressource?.libelle || ''}
+                        {noms}
                         {enAttente > 0 ? ` · ${enAttente} à confirmer` : ''}
                       </div>
                     </button>

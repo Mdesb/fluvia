@@ -7,6 +7,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
+import { useEtatUrl } from '../api/url.js'
 
 // SÉJOURS — sept routes servies, aucun écran, et deux séjours déjà ouverts que personne ne pouvait
 // lire.
@@ -89,7 +90,11 @@ function aujourdhui() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+// `sejour` : le séjour dont la note est ouverte.
+const DEFAUTS_URL = { sejour: '' }
+
 export default function Sejours({ etabActif, droits }) {
+  const [params, majParams] = useEtatUrl('sejours', DEFAUTS_URL)
   const peutOuvrir = aLeDroit(droits, 'stay.write')
   const peutFacturer = aLeDroit(droits, 'stay.charge')
   const peutRegler = aLeDroit(droits, 'stay.settle')
@@ -101,7 +106,6 @@ export default function Sejours({ etabActif, droits }) {
   const [succes, setSucces] = useState(null)
 
   const [filtre, setFiltre] = useState('open')
-  const [ouvert, setOuvert] = useState(null)
   const [creation, setCreation] = useState(null) // null | 'client' | { client }
 
   const charger = useCallback(async () => {
@@ -130,6 +134,28 @@ export default function Sejours({ etabActif, droits }) {
     charger()
   }, [charger])
 
+  // ── LA NOTE D'UN SÉJOUR : LE SÉJOUR SE LIT PAR SON IDENTIFIANT ─────────────────────────────
+  //
+  // La liste est bornée à 200 et un lien ne doit pas en dépendre. Seul un 404 dit « n'existe
+  // pas » (le serveur rend aussi 404 pour le séjour d'un autre établissement) ; tout le reste est
+  // une lecture qui a échoué. « Pas encore lu » se déduit de la clé, qui porte l'établissement
+  // (#172) ; une adresse vidée oublie la lecture, pour qu'un écran rouvert relise.
+  const [lectureSejour, setLectureSejour] = useState(null)
+  const cleSejour = params.sejour ? `${params.sejour}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.sejour) { setLectureSejour(null); return undefined }
+    const cle = `${params.sejour}|${etabActif}`
+    let vivant = true
+    api.sejour(params.sejour)
+      .then((v) => { if (vivant) setLectureSejour({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureSejour({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.sejour, etabActif])
+  const lectureSejourCourante = lectureSejour?.cle === cleSejour ? lectureSejour : null
+  // ⚠ L'erreur d'un geste de la note a sa bannière dans l'écran : celle de la page n'y est pas rendue.
+  const [erreurNote, setErreurNote] = useState(null)
+  useEffect(() => { setErreurNote(null) }, [params.sejour, etabActif])
+
   const affiches = useMemo(
     () => (filtre === 'tous' ? sejours : sejours.filter((s) => s.status === filtre)),
     [sejours, filtre],
@@ -152,6 +178,54 @@ export default function Sejours({ etabActif, droits }) {
     } catch (e) {
       setErreur(e?.message || "L'ouverture du séjour a échoué.")
     }
+  }
+
+  // ── LA NOTE DU SÉJOUR, EN ÉCRAN ─────────────────────────────────────────────────────────────
+  //
+  // Le bouton « Voir la note » n'a pas de condition : l'écran n'en reprend aucune. Chaque geste de
+  // la note porte déjà son droit (facturer, clôturer, marquer réglé).
+  if (params.sejour) {
+    const fermerNote = () => majParams({ sejour: '' }, { pousser: true })
+    const s = lectureSejourCourante?.valeur ?? null
+    let contenu
+    if (lectureSejourCourante === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!s) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureSejourCourante.echouee
+            ? 'Ce séjour n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce séjour n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreurNote && <div className="banner banner-error">{erreurNote}</div>}
+          {succes && <div className="banner banner-ok">{succes}</div>}
+          <NoteSejour
+            key={cleSejour}
+            sejour={s}
+            peutFacturer={peutFacturer}
+            peutRegler={peutRegler}
+            peutCloturer={peutOuvrir}
+            onFermer={fermerNote}
+            onErreur={setErreurNote}
+            onSucces={(m) => { setSucces(m); setErreurNote(null) }}
+            onRecharger={charger}
+          />
+        </>
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerNote}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux séjours
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   return (
@@ -230,7 +304,7 @@ export default function Sejours({ etabActif, droits }) {
                       <td>{dateFr(s.expectedDepartureDate)}</td>
                       <td>{badgeStatut(s.status)}</td>
                       <td className="num">
-                        <button type="button" className="btn" onClick={() => setOuvert(s)}>
+                        <button type="button" className="btn" onClick={() => majParams({ sejour: String(idDe(s)) }, { pousser: true })}>
                           Voir la note
                         </button>
                       </td>
@@ -247,19 +321,6 @@ export default function Sejours({ etabActif, droits }) {
           </p>
         </div>
       </div>
-
-      {ouvert && (
-        <NoteSejour
-          sejour={ouvert}
-          peutFacturer={peutFacturer}
-          peutRegler={peutRegler}
-          peutCloturer={peutOuvrir}
-          onFermer={() => setOuvert(null)}
-          onErreur={setErreur}
-          onSucces={(m) => { setSucces(m); setErreur(null) }}
-          onRecharger={charger}
-        />
-      )}
 
       {/* Deux temps plutôt qu'une modale dans une modale : `ClientPicker` EST une modale, et les
           imbriquer donnerait deux boîtes superposées dont on ne saurait plus laquelle a le focus. */}
@@ -323,8 +384,10 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
       onSucces(message)
       await relire()
       await onRecharger()
+      return true
     } catch (e) {
       onErreur(e?.message || "L'opération a échoué.")
+      return false
     } finally {
       setEnCours(false)
     }
@@ -348,7 +411,8 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
   }
 
   return (
-    <Modal open onClose={onFermer} titre={`Note du séjour ${sejour.reference}`} taille="lg">
+    <>
+      <h2>Note du séjour {sejour.reference}</h2>
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
       ) : !note ? (
@@ -415,11 +479,13 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
               onFermer={() => setAjout(null)}
               onValider={async (corps) => {
                 const etaitReglement = ajout === 'reglement'
-                setAjout(null)
-                await geste(
+                // ⚠ LE FORMULAIRE SE FERME SUR UN SUCCÈS SEULEMENT. Il se fermait avant l'envoi : un
+                // refus du serveur effaçait le libellé et le montant qu'on venait de saisir.
+                const ok = await geste(
                   () => api.ajouterLigneSejour(idDe(sejour), corps),
                   etaitReglement ? 'Règlement enregistré.' : 'Ligne ajoutée.',
                 )
+                if (ok) setAjout(null)
               }}
             />
           )}
@@ -440,7 +506,7 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
                 <p className="hint">Le solde est nul : le séjour peut être marqué réglé.</p>
               )}
               <div className="bar">
-                <button type="button" className="btn" onClick={onFermer}>Fermer</button>
+                <button type="button" className="btn" onClick={onFermer}>Retour aux séjours</button>
                 {peutFacturer && (
                   <button type="button" className="btn" onClick={() => setAjout('ligne')} disabled={enCours}>
                     Ajouter une ligne
@@ -478,13 +544,13 @@ function NoteSejour({ sejour, peutFacturer, peutRegler, peutCloturer, onFermer, 
 
           {statut === 'settled' && (
             <div className="bar">
-              <button type="button" className="btn" onClick={onFermer}>Fermer</button>
+              <button type="button" className="btn" onClick={onFermer}>Retour aux séjours</button>
             </div>
           )}
         </>
       )}
 
-    </Modal>
+    </>
   )
 }
 

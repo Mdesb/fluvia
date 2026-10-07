@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
+use App\Membership\Repository\SubscriptionRepository;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
@@ -62,8 +63,9 @@ use Symfony\Component\Uid\Uuid;
  * (pause, résiliation, réengagement, rattachement du droit d'accès) — même patron que
  * `Consentement`/`PorteMonnaieVirtuel` en M4 : éviter un `{id}` d'URI ambigu sur l'enfant.
  */
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: SubscriptionRepository::class)]
 #[ORM\Table(name: 'sport_abonnement_fitness')]
+#[ORM\UniqueConstraint(name: 'uniq_abo_source_sale_line', columns: ['source_sale_line_id'])]
 #[ApiResource(
     shortName: 'AbonnementFitness',
     operations: [
@@ -138,6 +140,16 @@ class Membership
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['abonnement:read', 'pause:read', 'resiliation:read', 'incident:read', 'echeance:read', 'statut_acces:read'])]
     private Uuid $id;
+
+    /**
+     * La ligne de vente (`LigneVente`) qui a créé cet abonnement au comptoir. UNIQUE (nullable,
+     * contrainte `uniq_abo_source_sale_line`) : idempotence de la création au comptoir (une ligne
+     * ne crée qu'un abonnement, même si la reprise est rejouée) ET lien retour Vente → abonnement.
+     * `null` pour tout abonnement né ailleurs (en ligne, réengagement). Renseigné dans le même
+     * flush que l'abonnement (via `SouscriptionAbonnementHandler::souscrire()`).
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $sourceSaleLineId = null;
 
     #[ORM\ManyToOne(targetEntity: Beneficiaire::class)]
     #[ORM\JoinColumn(nullable: false)]
@@ -245,6 +257,18 @@ class Membership
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getSourceSaleLineId(): ?Uuid
+    {
+        return $this->sourceSaleLineId;
+    }
+
+    public function setSourceSaleLineId(?Uuid $sourceSaleLineId): self
+    {
+        $this->sourceSaleLineId = $sourceSaleLineId;
+
+        return $this;
     }
 
     public function getAdherent(): ?Beneficiaire

@@ -29,7 +29,7 @@ import ReferentielEditable from './ReferentielEditable.jsx'
 // Le champ est donc requis, et sans valeur vide. Si aucune région n'existe encore, l'écran le dit
 // et renvoie vers la section qui permet d'en créer une — elle non plus n'existait pas avant ce jour.
 
-export default function EtablissementsSection({ peutEcrire, onChange }) {
+export default function EtablissementsSection({ peutEcrire, onChange, params, majParams }) {
   const [regions, setRegions] = useState([])
   const [chargement, setChargement] = useState(true)
 
@@ -108,5 +108,5 @@ export default function EtablissementsSection({ peutEcrire, onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} params={params} majParams={majParams} />
 }

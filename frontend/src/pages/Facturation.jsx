@@ -7,7 +7,7 @@ import { useEtatUrl } from '../api/url.js'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import DevisModal from '../components/DevisModal.jsx'
-import FactureRendu from '../components/FactureRendu.jsx'
+import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri'
@@ -80,7 +80,8 @@ const STATUT_FACTURE = {
   echue: { libelle: 'Échue', ton: 'crit' },
 }
 
-const DEFAUTS = { tab: 'factures', statut: '', reglement: '' }
+// `nouveau` : `devis` ou `facture` (création) ; `brouillon` : le brouillon qu'on corrige.
+const DEFAUTS = { tab: 'factures', statut: '', reglement: '', document: '', nouveau: '', brouillon: '' }
 
 function jours(depuis) {
   const d = new Date(depuis)
@@ -111,16 +112,12 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   const [succes, setSucces] = useState(null)
   const [enCours, setEnCours] = useState(null)
 
-  const [nouveauDevis, setNouveauDevis] = useState(false)
-  const [nouvelleFacture, setNouvelleFacture] = useState(false)
   // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
   // le bouton n'apparait donc que sur une facture emise.
-  const [documentPour, setDocumentPour] = useState(null)
   const [reglementsDe, setReglementsDe] = useState(null)
   // Le rapport d'intégrité : `null` tant qu'on n'a pas demandé, jamais un état par défaut.
   const [chaine, setChaine] = useState(null)
   const [chaineEnCours, setChaineEnCours] = useState(false)
-  const [brouillonEdite, setBrouillonEdite] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'facturation.gerer')
   const peutEmettre = aLeDroit(droits, 'facturation.emettre_directe')
@@ -211,6 +208,131 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // solde dû — ET L'ÉCRAN LES REPREND, en disant laquelle manque. Sans elles, un lien copié
   // avant qu'une facture soit réglée ouvrirait un formulaire pré-rempli à zéro, que le serveur
   // refuserait.
+  // ── LE DOCUMENT LÉGAL D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LA CONDITION DU BOUTON ET L'ÉCRAN LA REPREND : « Voir » ne s'affiche pas
+  // sur un brouillon, qui n'a pas de numéro — remettre un document sans numéro serait pire que ne
+  // rien remettre.
+  const lectureDocument = useFactureLue(params.document, etabActif)
+  const lectureBrouillon = useFactureLue(params.brouillon, etabActif)
+
+  // ── UN DEVIS, UNE FACTURE DIRECTE, UN BROUILLON CORRIGÉ — EN ÉCRANS ─────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES DROITS DES BOUTONS ET LES ÉCRANS LES REPRENNENT : émettre pour la
+  // facture directe, gérer pour le devis. Et un brouillon corrigé se lit par son identifiant : la
+  // liste est filtrée, un lien ne doit pas en dépendre.
+  if (params.nouveau === 'devis' || params.nouveau === 'facture') {
+    const facture = params.nouveau === 'facture'
+    const fermer = () => majParams({ nouveau: '' }, { pousser: true })
+    const autorise = facture ? peutEmettre : peutGerer
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermer}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la facturation
+        </button>
+        {autorise ? (
+          <DevisModal
+            key={params.nouveau}
+            cible={facture ? 'facture' : 'devis'}
+            onClose={fermer}
+            onCree={() => {
+              fermer()
+              if (facture) setSucces('Brouillon de facture créé. Il ne prendra son numéro qu’à l’émission.')
+              recharger()
+            }}
+          />
+        ) : (
+          <div className="banner banner-warn">
+            {facture
+              ? 'Facturer un client demande le droit d’émettre les factures, que ce compte n’a pas.'
+              : 'Créer un devis demande le droit de gérer la facturation, que ce compte n’a pas.'}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (params.brouillon) {
+    const fermer = () => majParams({ brouillon: '' }, { pousser: true })
+    const f = lectureBrouillon.facture
+    let contenu
+    if (!peutEmettre && !peutGerer) {
+      contenu = <div className="banner banner-warn">Corriger un brouillon demande le droit de gérer la facturation, que ce compte n’a pas.</div>
+    } else if (lectureBrouillon.chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureBrouillon.echouee
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut !== 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          La facture {f.numero || ''} n’est plus un brouillon : elle est émise, et une facture émise ne se
+          corrige pas — elle s’avoire.
+        </div>
+      )
+    } else {
+      contenu = (
+        <DevisModal
+          key={params.brouillon}
+          cible="facture"
+          existante={f}
+          onClose={fermer}
+          onCree={() => { fermer(); setSucces('Brouillon corrigé.'); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermer}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la facturation
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
+  if (params.document) {
+    const fermerDocument = () => majParams({ document: '' }, { pousser: true })
+    const f = lectureDocument.facture
+    let contenu
+    if (lectureDocument.chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureDocument.echouee
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut === 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          Un brouillon n’a pas encore de document opposable : il n’a pas de numéro. Émettez la facture
+          d’abord.
+        </div>
+      )
+    } else {
+      contenu = <FactureRendu key={params.document} facture={f} onClose={fermerDocument} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerDocument}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux factures
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   if (params.reglement) {
     const fermerReglement = () => majParams({ reglement: '' }, { pousser: true })
     const f = factureReglee
@@ -286,12 +408,12 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         </div>
         <div className="actions">
           {params.tab === 'factures' && peutEmettre && (
-            <button className="btn primary" type="button" onClick={() => setNouvelleFacture(true)}>
+            <button className="btn primary" type="button" onClick={() => majParams({ nouveau: 'facture' }, { pousser: true })}>
               Facturer un client
             </button>
           )}
           {params.tab === 'devis' && peutGerer && (
-            <button className="btn primary" type="button" onClick={() => setNouveauDevis(true)}>
+            <button className="btn primary" type="button" onClick={() => majParams({ nouveau: 'devis' }, { pousser: true })}>
               + Nouveau devis
             </button>
           )}
@@ -452,7 +574,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                                     suppression -- et c'est voulu, la serie des numeros ne se troue
                                     pas. Sans correction possible, une facture mal saisie serait
                                     restee dans la liste pour toujours. */}
-                                <button className="btn sm" type="button" onClick={() => setBrouillonEdite(f)}>
+                                <button className="btn sm" type="button" onClick={() => majParams({ brouillon: String(f.id) }, { pousser: true })}>
                                   Corriger
                                 </button>
                                 <button
@@ -474,7 +596,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                                 className="btn sm"
                                 type="button"
                                 title="Affiche le document légal, imprimable ou enregistrable en PDF."
-                                onClick={() => setDocumentPour(f)}
+                                onClick={() => majParams({ document: String(f.id) }, { pousser: true })}
                               >
                                 Voir
                               </button>
@@ -586,37 +708,10 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         </section>
       )}
 
-      <DevisModal
-        open={nouveauDevis}
-        onClose={() => setNouveauDevis(false)}
-        onCree={() => { setNouveauDevis(false); recharger() }}
-      />
-
-      <DevisModal
-        open={nouvelleFacture}
-        cible="facture"
-        onClose={() => setNouvelleFacture(false)}
-        onCree={() => {
-          setNouvelleFacture(false)
-          setSucces('Brouillon de facture créé. Il ne prendra son numéro qu’à l’émission.')
-          recharger()
-        }}
-      />
-
-      <DevisModal
-        open={!!brouillonEdite}
-        cible="facture"
-        existante={brouillonEdite}
-        onClose={() => setBrouillonEdite(null)}
-        onCree={() => { setBrouillonEdite(null); setSucces('Brouillon corrigé.'); recharger() }}
-      />
 
 
-      {/* Montee seulement quand une facture est choisie : le composant lit le document a
-          l'ouverture, et le monter en permanence declencherait une lecture par rendu. */}
-      {documentPour && (
-        <FactureRendu facture={documentPour} onClose={() => setDocumentPour(null)} />
-      )}
+
+
 
       {/* ⚠ CE QUE L'API SERVAIT DEPUIS TOUJOURS ET QUE PERSONNE N'AFFICHAIT. `facture:read` sérialise
           `reglements`, `montantRegle` et `soldeDu` ; mesuré le 08/09 sur le build servi :

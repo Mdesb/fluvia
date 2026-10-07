@@ -1,5 +1,12 @@
 // Helpers de lecture des produits (structure API Platform).
 
+// Les canaux de vente d'un produit, tels que la fiche et l'écran de création les proposent.
+export const CANAUX_PRODUIT = [
+  { valeur: 'guichet', libelle: 'Au guichet' },
+  { valeur: 'en_ligne', libelle: 'En ligne' },
+  { valeur: 'borne', libelle: 'Sur borne' },
+]
+
 export function libelleProduit(p) {
   const l = p?.libelle
   if (!l) return p?.code || 'Produit'

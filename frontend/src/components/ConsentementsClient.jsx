@@ -23,7 +23,9 @@ const ETATS = [
 ]
 
 const LIB_CANAL = Object.fromEntries(CANAUX)
-const LIB_ETAT = Object.fromEntries(ETATS)
+// `invalide` (#101) : posé par une reprise, jamais saisi — il s'affiche, il ne se choisit pas, d'où
+// son absence de `ETATS`, qui alimente le sélecteur du formulaire.
+const LIB_ETAT = { ...Object.fromEntries(ETATS), invalide: 'Invalidé' }
 
 function jour(v) {
   if (!v) return '—'
@@ -132,6 +134,9 @@ export default function ConsentementsClient({ client, droits = [], onOuvrir, enE
                     <span className={`badge ${c.etat === 'accorde' ? 'good' : c.etat === 'refuse' ? 'crit' : 'warn'}`}>
                       {LIB_ETAT[c.etat] || c.etat}
                     </span>
+                    {c.etat === 'invalide' && c.invalidationReason && (
+                      <span className="sub" style={{ marginLeft: 'var(--esp-normal)' }}>{c.invalidationReason}</span>
+                    )}
                     {c.recueilliParRepresentant && (
                       <span className="sub" style={{ marginLeft: 6 }}>par le représentant légal</span>
                     )}

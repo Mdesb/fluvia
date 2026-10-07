@@ -9,7 +9,6 @@ use ApiPlatform\State\ProviderInterface;
 use App\Reporting\Entity\Export;
 use App\Reporting\Security\ExportDownloadAuthorizer;
 use App\Reporting\Enum\NiveauEntite;
-use App\Reporting\Enum\StatutExport;
 use App\Reporting\Security\PerimetreReportingResolver;
 use App\Reporting\Service\StockageExportInterface;
 use App\Securite\Entity\Utilisateur;
@@ -103,7 +102,8 @@ final class TelechargerExportProvider implements ProviderInterface
         // envoie le courriel, puis passe à `Envoye` sans toucher au chemin de stockage : le fichier
         // est toujours là. L'exclure ici rendait « la génération n'a pas abouti » à un destinataire
         // qui a le fichier dans sa boîte.
-        if ($export->getStatut() === StatutExport::Echec) {
+        // Meme source de verite que l'autre porte : `StatutExport::fichierDisponible()`.
+        if (!$export->getStatut()->fichierDisponible()) {
             // On ne rend pas 404 : l'export existe, il a échoué. Confondre les deux ferait chercher
             // un identifiant faux là où il y a un message d'erreur à lire.
             throw new UnprocessableEntityHttpException(sprintf(
