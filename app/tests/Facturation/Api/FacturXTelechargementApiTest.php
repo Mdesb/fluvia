@@ -79,10 +79,16 @@ final class FacturXTelechargementApiTest extends FacturationApiTestCase
      *
      * Un test sur le seul code de statut serait resté vert pendant tout ce temps. C'est pourquoi
      * celui-ci lit `detail`.
+     *
+     * ⚠ ET LE NOYAU TOURNE SANS DEBUG, COMME EN PRODUCTION — SINON LE TÉMOIN NE PROUVE RIEN. En
+     * `kernel.debug` (le défaut des tests), Symfony recopie le message de l'exception dans `detail` :
+     * la première version de ce test, client par défaut, passait aussi contre l'ancien contrôleur
+     * (mesuré le 07/10/2026 : 1 test, 8 assertions, vert). Sans debug, l'ancien code rend
+     * `detail: "Unprocessable Content"` et ce test rougit.
      */
     public function testTelechargementRefuseUneFactureIncompleteEtNommeCeQuiManque(): void
     {
-        [$client, $entete] = $this->adminSurA();
+        [$client, $entete] = $this->adminSurA(['debug' => false]);
 
         // ⚠ ON NE POSE PAS `VatCategory` : BT-151 reste nulle, et c'est le terme qui manquera.
         // Le test nominal ci-dessus la pose explicitement — la différence entre les deux EST le cas.
