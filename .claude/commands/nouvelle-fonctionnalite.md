@@ -29,7 +29,7 @@ Démarre une nouvelle fonctionnalité en Specification-Driven Development.
 
 6. **Présente la spec à l'utilisateur pour validation — c'est le CP-1.** N'avance pas vers le plan sans un accord explicite ("oui", "valide", "go").
 
-7. **Une fois CP-1 validé**, lance l'agent `architecte` pour produire le plan (`features/<nom>/plans/plan-<nom>.md`), puis présente-le pour validation — **CP-2**.
+7. **Une fois CP-1 validé**, lance l'agent `architecte` pour produire le plan (`features/<nom>/plans/plan-<nom>.md`). Si sa section « Fiches à produire » n'est pas « aucune », lance **une seule fois** `documentaliste` avec toute la liste, puis rends les fiches à l'`architecte` s'il y a un écart (API retirée, signature différente) pour qu'il corrige le plan. Ensuite présente-le pour validation — **CP-2**.
 
 8. **Une fois CP-2 validé**, passe en phase Construire avec les agents `developpeur` et `relecteur`, étape par étape, en mettant à jour `impl-all.md` après chaque étape.
 
