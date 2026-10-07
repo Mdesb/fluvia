@@ -146,7 +146,16 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '', consentement: '', devis: '' }
+const DEFAUTS = { q: '', statut: '', type: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '', edition: '', fusion: '', consentement: '', devis: '' }
+
+// Particulier ou personne morale. La colonne existait, le filtre non : une école, un comité
+// d'entreprise et un autocariste ne se travaillent pas comme un visiteur du dimanche, et les isoler
+// est le premier geste de qui prépare une relance, un devis ou une facturation groupée.
+const TYPES = [
+  ['', 'Particuliers et personnes morales'],
+  ['physique', 'Particuliers'],
+  ['morale', 'Personnes morales'],
+]
 
 // Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
 const INCLUABLES = [
@@ -231,6 +240,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         statut: params.statut
           ? params.statut
           : (params.inclure ? ['actif', 'inactif', ...params.inclure.split(',').filter(Boolean)] : ''),
+        type: params.type || '',
         // `avecPmv` et `mineur` sont des booléens côté serveur : une chaîne vide ne veut pas dire
         // « faux », elle veut dire « ne filtre pas ». `qs()` retire les valeurs vides, donc le
         // paramètre n'est pas envoyé du tout — ce qui est exactement le sens voulu.
@@ -255,7 +265,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     } finally {
       setChargement(false)
     }
-  }, [params.q, params.carte, params.statut, params.inclure, params.pmv, params.mineur, page])
+  }, [params.q, params.carte, params.statut, params.type, params.inclure, params.pmv, params.mineur, page])
 
   useEffect(() => { rechercher() }, [rechercher, etabActif])
 
@@ -619,6 +629,12 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                 {STATUTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 190px' }}>
+              <label htmlFor="cl-type">Type de fiche</label>
+              <select id="cl-type" className="input" value={params.type} onChange={(e) => filtre('type', e.target.value)}>
+                {TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
             <div className="field" style={{ margin: 0, flex: '1 1 150px' }}>
               <label htmlFor="cl-pmv">Porte-monnaie</label>
               <select id="cl-pmv" className="input" value={params.pmv} onChange={(e) => filtre('pmv', e.target.value)}>
@@ -706,7 +722,14 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                         </button>
                         {c.estMineur && <span className="badge warn" style={{ marginLeft: 6 }}>mineur</span>}
                       </td>
-                      <td>{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</td>
+                      {/* Pastille plutôt que texte : la nature de la fiche décide des champs
+                          d'identité, de la facturation et du discours commercial. Elle doit se
+                          repérer en parcourant la colonne, pas se lire ligne à ligne. */}
+                      <td>
+                        <span className={`badge ${c.type === 'morale' ? 'info' : 'mut'}`}>
+                          {c.type === 'morale' ? 'Personne morale' : 'Particulier'}
+                        </span>
+                      </td>
                       <td><span className={`badge ${c.statut === 'actif' ? 'good' : 'mut'}`}>{c.statut}</span></td>
                       <td>{c.avecPmv ? <span className="badge info">oui</span> : <span className="sub">—</span>}</td>
                       <td>
@@ -753,7 +776,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                   {items !== null && items.length === 0 && (
                     <tr>
                       <td colSpan={6} className="empty">
-                        {params.q || params.carte || params.statut || params.pmv || params.mineur
+                        {params.q || params.carte || params.statut || params.type || params.pmv || params.mineur
                           ? 'Aucun client ne correspond à cette recherche.'
                           : 'Aucun client enregistré. « Ajouter un client » crée la première fiche.'}
                       </td>

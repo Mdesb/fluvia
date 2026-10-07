@@ -10,6 +10,7 @@ use ApiPlatform\State\ProviderInterface;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\PorteMonnaieVirtuel;
 use App\Crm\Enum\StatutClient;
+use App\Crm\Enum\TypeClient;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Region;
 use App\Securite\Entity\Affectation;
@@ -24,7 +25,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 /**
  * GET /crm/clients/recherche (US-L5-01, CA-1/CA-2) : recherche tolérante à la casse (nom, prénom,
  * raison sociale, e-mail, téléphone) ou par n° de carte (`carte`, via `RechercheSupportInterface`),
- * combinée à des filtres `statut`, `avecPmv`, `mineur`. La liste est paginée. Réponse minimale
+ * combinée à des filtres `statut`, `type` (physique/morale), `avecPmv`, `mineur`. La liste est
+ * paginée. Réponse minimale
  * (pas d'`adresse`/`dateNaissance` en clair, §5 plan-crm.md « données perso protégées »).
  *
  * ⚠ PAR DÉFAUT, TROIS STATUTS SONT ÉCARTÉS : `archive`, `anonymise`, `fusionne` (R24, R25). Le
@@ -76,6 +78,26 @@ final class RechercheClientProvider implements ProviderInterface
                 implode(', ', $connus),
             ));
         }
+        // PARTICULIER OU PERSONNE MORALE : LA DISTINCTION EXISTAIT PARTOUT, SAUF EN FILTRE.
+        //
+        // `Client::$type` conditionne l'identité saisie (nom et prénom contre raison sociale et
+        // SIRET), la création le demande en premier, la fiche l'affiche, et chaque ligne rendue plus
+        // bas le porte. Mais aucun filtre ne le prenait : « donne-moi toutes les personnes morales »
+        // — le premier geste de qui prépare une relance, un devis ou une facturation groupée —
+        // n'avait pour seule réponse que de parcourir les pages à l'œil.
+        //
+        // Comme pour `statut` ci-dessus, une valeur inconnue est REFUSÉE et non ignorée : elle
+        // tomberait sinon dans le cas « aucun filtre » et rendrait toutes les fiches sous une
+        // étiquette qui n'en annonce qu'une partie.
+        $type = trim((string) $request?->query->get('type', ''));
+        if ($type !== '' && TypeClient::tryFrom($type) === null) {
+            throw new BadRequestHttpException(sprintf(
+                'Type de client inconnu : %s. Valeurs acceptees : %s.',
+                $type,
+                implode(', ', array_map(static fn (TypeClient $t): string => $t->value, TypeClient::cases())),
+            ));
+        }
+
         $avecPmv = $request?->query->get('avecPmv');
         $mineur = $request?->query->get('mineur');
         $page = max(1, (int) $request?->query->get('page', 1));
@@ -125,6 +147,10 @@ final class RechercheClientProvider implements ProviderInterface
             } else {
                 $qb->andWhere($qb->expr()->orX('c.dateNaissance <= :seuil', 'c.dateNaissance IS NULL'))->setParameter('seuil', $seuil, 'date_immutable');
             }
+        }
+
+        if ($type !== '') {
+            $qb->andWhere('c.type = :type')->setParameter('type', $type);
         }
 
         // ⚠ LE FILTRE DE STATUT S'APPLIQUE EN DERNIER, ET C'EST CE QUI PERMET DE COMPTER CE QU'IL
