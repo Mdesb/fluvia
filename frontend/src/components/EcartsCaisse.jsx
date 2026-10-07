@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import Modal from './Modal.jsx'
 import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -40,7 +39,9 @@ import { euros } from '../api/produit.js'
 // n'est pas un défaut à cacher, c'est ce qui rend un Z digne de foi. Un exploitant qui corrige puis
 // retourne voir son Z d'hier doit lire cette phrase, sinon il conclura que le logiciel n'a rien fait.
 
-export default function EcartsCaisse({ etabActif, droits }) {
+export default function EcartsCaisse({ etabActif, droits, params = {}, majParams }) {
+  const ouvert = params.ecart || ''
+  const fermer = () => majParams({ ecart: '' }, { pousser: true })
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. « Aucun ecart inexplique » sur une lecture refusee
   // annonce une caisse saine qu'on n'a pas regardee.
   const [alertesLu, setAlertesLu] = useState(null)
@@ -51,7 +52,6 @@ export default function EcartsCaisse({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [explication, setExplication] = useState(null)
 
   const peutVoir = aLeDroit(droits, 'caisse.voir_ecart')
   const peutCorriger = aLeDroit(droits, 'vente.corriger_reglement')
@@ -84,6 +84,59 @@ export default function EcartsCaisse({ etabActif, droits }) {
   // drapeau à maintenir — donc pas de drapeau qu'on oublie de maintenir.
   const ouvertes = (alertes || []).filter((a) => !a.expliquee)
   const closes = (alertes || []).filter((a) => a.expliquee)
+
+  // ── L'EXPLICATION D'UN ÉCART, EN ÉCRAN ──────────────────────────────────────────────────
+  //
+  // ⚠ `alertesLu` vaut `null` tant qu'on n'a pas lu, et le fichier le dit déjà en tête :
+  // « `[]` = LU ET VIDE ». On consulte donc `chargement` AVANT de conclure que l'alerte
+  // n'existe pas — un formulaire d'écart monté sur rien proposerait de corriger une caisse
+  // qu'on n'a pas regardée.
+  if (ouvert) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour au pilotage
+      </button>
+    )
+    if (chargement) {
+      return (
+        <>
+          {retour}
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        </>
+      )
+    }
+    const alerte = alertes.find((a) => String(a.id) === String(ouvert))
+    if (!alerte) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            {alertesLu === null
+              ? 'Les écarts n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Cet écart n’est plus dans la liste — il a sans doute déjà été expliqué depuis que ce lien a été copié.'}
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <ExplicationModal
+          key={ouvert}
+          alerte={alerte}
+          onClose={fermer}
+          onFait={(m) => { fermer(); setSucces(m); setErreur(null); recharger() }}
+          onErreur={setErreur}
+        />
+      </>
+    )
+  }
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
@@ -152,7 +205,7 @@ export default function EcartsCaisse({ etabActif, droits }) {
                           <button
                             className="btn primary sm"
                             type="button"
-                            onClick={() => setExplication(a)}
+                            onClick={() => majParams({ ecart: String(a.id) }, { pousser: true })}
                           >
                             Expliquer
                           </button>
@@ -171,18 +224,6 @@ export default function EcartsCaisse({ etabActif, droits }) {
           </>
         )}
       </div>
-
-      <ExplicationModal
-        alerte={explication}
-        onClose={() => setExplication(null)}
-        onFait={(m) => {
-          setExplication(null)
-          setSucces(m)
-          setErreur(null)
-          recharger()
-        }}
-        onErreur={setErreur}
-      />
     </section>
   )
 }
@@ -249,7 +290,8 @@ function ExplicationModal({ alerte, onClose, onFait, onErreur }) {
   const memeMoyen = debite !== '' && debite === credite
 
   return (
-    <Modal open={!!alerte} onClose={onClose} titre="Expliquer un écart de caisse" taille="lg">
+    <>
+      <h2>Expliquer un écart de caisse</h2>
       {alerte && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
@@ -357,6 +399,6 @@ function ExplicationModal({ alerte, onClose, onFait, onErreur }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }

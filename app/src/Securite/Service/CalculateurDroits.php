@@ -48,6 +48,7 @@ final class CalculateurDroits
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SupportAccessRightsInterface $supportAccessRights,
+        private readonly PlatformScope $platformScope,
     ) {
     }
 
@@ -58,6 +59,13 @@ final class CalculateurDroits
      */
     public function codesEffectifs(Utilisateur $utilisateur, ?Uuid $etablissementActif): array
     {
+        // ÉQUIPE PLATEFORME (mono-propriétaire) : tous les droits, partout. Voir `PlatformScope` pour
+        // l'exception assumée à RG-ED-07. `*.*` est déjà interprété par `autorise()` (jokers) et par le
+        // front (`couvre()`) : un membre plateforme a donc l'UI et l'API complètes sur le site actif.
+        if ($this->platformScope->isGlobal($utilisateur)) {
+            return ['*.*'];
+        }
+
         $criteres = ['utilisateur' => $utilisateur];
         $etablissement = null;
         if ($etablissementActif !== null) {

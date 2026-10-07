@@ -77,6 +77,51 @@ héritée sur `finance_treasury_cash_alert`. `--down` a ensuite été exécutée
 opérations inatteignables** avant et après le lot, plafond 521 : le socle n'a consommé aucun des
 dix-sept crans de marge, ce qui est exactement ce que « aucune exposition d'API » devait produire.
 
+## Lot 1 — la bascule (11/09)
+
+**État :** review · **Branche :** `feature/abonnement-bascule-lot1`
+
+- [x] Déplacer le bloc abonnement de `App\Sport` vers `App\Membership`
+- [x] Sport déclare sa dépendance vers `membership`
+- [x] Retirer la table `membership` du lot 0
+- [x] Suite complète verte
+- [ ] **CP-3** — revue avant merge
+
+### Journal de Session
+
+**11/09 — la stratégie du lot 0 était la mauvaise, et c'est l'Issue #1 qui l'a montré.** La spec
+demandait une entité neuve + migration de données. L'Issue portait une analyse mesurée que personne
+n'avait confrontée à la spec : les entités déclarent leur table explicitement, donc les classes
+peuvent changer de namespace sans qu'aucune donnée bouge. Ce qui a tranché n'est pas une préférence
+mais un comptage — **sept clés étrangères** pointent sur `sport_abonnement_fitness`, dont celle d'un
+échéancier de prélèvement en fonctionnement. Arbitrage de Maxime : « déplace sans renommer ».
+
+**11/09 — l'entité seule ne suffisait pas, et le premier essai l'a prouvé à l'exécution.** Déplacée
+seule, elle créait la dépendance INVERSE que l'Issue interdit : son `#[ApiResource]` nomme cinq
+processeurs restés dans Sport, ses sous-ressources nomment trois entités voisines. La machinerie est
+un bloc. Coupure retenue : Sport garde ce qui est propre au LIEU (SOS, présence isolée, accès
+nocturne) ; tout ce qui touche l'engagement part. `StatutAccesFitness` part avec — l'Issue le posait
+en « cas discutable, à trancher en le déplaçant », et le garder aurait recréé la dépendance inverse
+par les handlers de résiliation et de pause.
+
+**11/09 — trois pièges, dont aucun ne se voit dans un diff.**
+1. Les classes voisines de namespace s'écrivaient **sans `use`**. Après séparation, le nom reste
+   juste et résout dans le vide. Doctrine l'a dit au premier montage de schéma ; à la relecture, la
+   ligne a l'air correcte.
+2. `mapping.paths` d'API Platform est une **liste blanche explicite**. Un module absent perd ses
+   routes **sans aucun message** — la configuration l'écrit elle-même.
+3. Deux lignes de base sont indexées **par chemin de fichier**. Un déplacement s'y lit comme une
+   régression. Entrées reportées, comptes inchangés : 36 et 188 avant comme après.
+
+**11/09 — dette signalée, non corrigée.** `RattacherDroitAccesProcessor` résout une entité depuis un
+identifiant du corps sans recalculer l'autorité (D8). Vrai avant le déplacement, vrai après ; la
+dette reste inscrite à son nouveau nom. La corriger est un travail de sécurité qui mérite sa propre
+revue, pas un effet de bord d'un déménagement.
+
+**11/09 — mesure.** Git détecte **37 renommages** et **1 ajout** (la migration) : c'est bien un
+déplacement. Suite complète **2594 tests / 17 499 assertions**, garde-fous **50/50**, écart
+client/serveur 504 → 503.
+
 ## Journal de Rétropropagation
 
 **10/09 — FAIT.** `spec-abonnement-transverse.md` corrigée sur trois points, avec l'accord de Maxime :

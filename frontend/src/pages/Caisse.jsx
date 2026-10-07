@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
-import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
-import FactureRendu from '../components/FactureRendu.jsx'
+import HistoriqueVentes from '../components/HistoriqueVentesModal.jsx'
+import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
-import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
+import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
+import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
@@ -27,13 +29,34 @@ import {
 // Ordre de présentation préféré des moyens de paiement au guichet.
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
+// UN PRODUIT D'ABONNEMENT NE SE VEND PAS COMME UN AUTRE (demande de Maxime : « un abonnement se
+// vend de la même manière partout »). Au comptoir, il devient une ligne de panier, mais au moment
+// d'encaisser on ouvre la MODALE de souscription (le même composant que l'onglet Abonnements :
+// mandat SEPA + contrat signés, prorata, encaissement de la 1re échéance) au lieu du pavé de
+// paiement classique. On repère l'abonnement à sa formule prélevée en SEPA — exactement le filtre
+// de l'écran Abonnements.
+const estAbonnement = (produit) => !!produit?.formule?.sepaActif
+
+// …SAUF si la fiche produit demande de le vendre comme PRODUIT SIMPLE (`venteSansSouscription`).
+// Alors il redevient un produit ordinaire : pas de modale de souscription, pas d'abonnement ni de
+// mandat (l'adaptateur serveur le saute aussi). C'est le « sauf paramétrage contraire ».
+const souscriptionRequise = (produit) =>
+  estAbonnement(produit) && produit?.champsPerso?.venteSansSouscription !== true
+
+// `facture` : le document légal qu'on regarde, ouvert depuis l'historique des ventes.
+// `historique` : l'historique des ventes (`1`) ; `facture` : le document légal qu'on regarde.
+const DEFAUTS_URL = { facture: '', historique: '', verifier: '' }
+
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
+  const [params, majParams] = useEtatUrl('caisse', DEFAUTS_URL)
+  // Avec les autres crochets, et avant tout retour anticipé : un crochet conditionnel casserait
+  // le rendu dès que l'adresse change.
+  const lectureFacture = useFactureLue(params.facture, etabActif)
+  const fermerHistorique = () => majParams({ historique: '' }, { pousser: true })
   const [caisseModale, setCaisseModale] = useState(false)
-  const [historique, setHistorique] = useState(false)
   // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
   // La fenêtre existait et n'était atteignable que depuis l'écran de supervision — que le
   // caissier n'a jamais ouvert. Son propre commentaire le disait déjà.
-  const [verifBillet, setVerifBillet] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
   const [choixOptions, setChoixOptions] = useState(null)
   // ⚠ `null` = PAS LU. << Aucun produit disponible. >> lu par un caissier signifie << il n'y a
@@ -60,6 +83,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [client, setClient] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [besoinClient, setBesoinClient] = useState(false)
+  // La modale de souscription s'ouvre au moment d'encaisser un panier qui porte un abonnement.
+  const [souscriptionOuverte, setSouscriptionOuverte] = useState(false)
   // ⚠ LE SOLDE DU PORTE-MONNAIE, QUE CET ECRAN NE LISAIT PAS.
   //
   // `null` = pas de porte-monnaie, ou pas encore lu. La caisse proposait `pmv` comme moyen de
@@ -78,7 +103,6 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [moyenSel, setMoyenSel] = useState('especes')
   // La facture justificative qu'on vient d'émettre depuis l'historique, le temps de la montrer
   // et de la télécharger. `null` tant qu'aucune n'a été demandée.
-  const [facturePour, setFacturePour] = useState(null)
   const [montant, setMontant] = useState('')
   const [tpeSimule, setTpeSimule] = useState('accepte')
   const [busy, setBusy] = useState(false)
@@ -116,6 +140,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const total = useMemo(
     () =>
       panier.reduce((s, l) => {
+        // ⚠ ON SOMME DES MONTANTS DE LIGNE, ON NE MULTIPLIE PLUS UN PRIX PAR UNE QUANTITÉ.
+        //
+        // Une promotion en montant fixe s'applique **une fois par ligne**, pas une fois par unité :
+        // multiplier ici un net unitaire rendrait un nombre plausible et faux dès la deuxième unité.
+        // Le montant vient donc du serveur, pour la quantité réelle de la ligne.
+        if (l.montant != null) return s + (parseFloat(l.montant) || 0)
         const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
         return s + pu * l.quantite
       }, 0),
@@ -260,6 +290,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
+  // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
+  // (le panier n'en contient qu'un, et rien d'autre — garde à l'ajout). ⚠ DÉCLARÉ ICI, EN AMONT :
+  // `modaleSouscription` plus bas le référence, et une const de la TDZ lue trop tôt casse l'écran.
+  const ligneAbo = panier.find((l) => souscriptionRequise(l.produit)) || null
+
   // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
   // Les fusionner obligerait a ressaisir pour vendre un adulte et un enfant ensemble, ce qui est la
   // vente courante d'une famille au guichet.
@@ -297,6 +332,20 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       if (dispo.length === 1) retenues.push(dispo[0].valeurOption)
     }
     return retenues
+  }
+
+  // UN PRODUIT QUI EXIGE QU'ON NOMME SON BÉNÉFICIAIRE (RG-M2-04).
+  //
+  // ⚠ L'AUTORITÉ RESTE LE SERVEUR. `AjoutLigneHandler::estNominatif()` tranche pour de vrai — et sa
+  // garde, relayée par `demarrerPaiement`, reste le filet. Ceci ne sert qu'à savoir QUAND ouvrir le
+  // sélecteur : à l'ajout au panier plutôt qu'au paiement (demande de Maxime). On réplique donc
+  // exactement la même règle : un type portant la facette « accès », OU le drapeau produit
+  // `champsPerso.beneficiaireRequis`. Les deux champs sont bien servis par `/api/produits`.
+  function exigeBeneficiaire(produit) {
+    const facettes = produit?.type?.facettes
+    const parType = Array.isArray(facettes) && facettes.includes('acces')
+    const parDrapeau = produit?.champsPerso?.beneficiaireRequis === true
+    return parType || parDrapeau
   }
 
   /**
@@ -350,7 +399,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       }
     }
 
-    ajouterLigne(produit, g, options, devis)
+    await ajouterLigne(produit, g, options, devis)
   }
 
   /**
@@ -379,18 +428,62 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
-  function ajouterLigne(produit, g, options, devis, remplace = null) {
+  /**
+   * Ajoute une ligne au panier — ou rhabille celle qui est déjà là.
+   *
+   * ⚠ **LE MONTANT D'UNE LIGNE NE SE DÉDUIT PAS DE CELUI D'UNE UNITÉ.** Le devis reçu ici a été
+   * demandé pour une unité. Dès que la ligne en porte plusieurs — deuxième clic sur le même produit,
+   * ou ajustement d'une ligne déjà à deux — il faut le redemander pour la quantité réelle : une
+   * promotion en montant fixe s'applique **une fois par ligne**, pas une fois par unité.
+   *
+   * Sans ce second appel, le panier gardait le montant calculé pour UNE unité sous une quantité de
+   * deux. C'est le même défaut que celui qu'on vient de fermer, réintroduit par le remède : un
+   * nombre juste, devenu faux parce que ce qu'il décrit a changé sous lui.
+   */
+  async function ajouterLigne(produit, g, options, devis, remplace = null) {
     const cle = cleLigne(produit.id, g.typeTarif.id) + (options.length ? `|${[...options].sort().join(',')}` : '')
+    // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans le retrait plus
+    // bas, le panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
+    const existante = panier.find((l) => l.cle === cle)
+    const quantiteReprise = remplace !== null ? panier.find((l) => l.cle === remplace)?.quantite : null
+    // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
+    const quantite = existante ? existante.quantite + (remplace !== null ? 0 : 1) : (quantiteReprise ?? 1)
+
+    let devisLigne = devis
+    if (quantite > 1) {
+      try {
+        devisLigne = await api.tarifProduit(produit.id, {
+          typeTarif: g.typeTarif.id,
+          canal: devis?.canal,
+          options,
+          quantite,
+        })
+      } catch (e) {
+        // Le montant devient INCONNU plutôt que faux : on ne garde pas celui d'une autre quantité.
+        // Le panier retombe alors sur prix × quantité, et cesse de nommer des promotions qu'il ne
+        // sait plus chiffrer — l'écran dit donc ce qu'il sait, pas ce qu'il savait avant.
+        setErreur(e.message || "Le prix de la ligne n'a pas pu être recalculé.")
+        devisLigne = null
+      }
+    }
+
+    const dv = devisLigne ?? devis
+    const champsPrix = {
+      // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
+      prix: dv?.totalUnitaire ?? dv?.prixUnitaire ?? g.prix,
+      // Ce que la ligne coûte vraiment — promotions automatiques déduites par le serveur.
+      montant: devisLigne?.montantLigne ?? null,
+      // ET LE NOM DE CE QUI A RETIRÉ LA DIFFÉRENCE. Un rabais anonyme sur un ticket est un
+      // rabais que le caissier ne sait pas expliquer, et que le client finit par contester.
+      promotionsLibelles: (devisLigne?.promotions ?? []).map((x) => x.nom).filter(Boolean),
+    }
+
     setPanier((p) => {
-      // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans ce retrait, le
-      // panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
-      const quantiteReprise = remplace !== null ? p.find((l) => l.cle === remplace)?.quantite : null
       if (remplace !== null && remplace !== cle) p = p.filter((l) => l.cle !== remplace)
       const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
         const copie = [...p]
-        // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
-        copie[i] = { ...copie[i], quantite: copie[i].quantite + (remplace !== null ? 0 : 1) }
+        copie[i] = { ...copie[i], quantite, ...champsPrix }
         return copie
       }
       return [
@@ -398,28 +491,57 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         {
           cle,
           produit,
-          quantite: quantiteReprise ?? 1,
+          quantite,
           typeTarifId: g.typeTarif.id,
           tarifLibelle: libelleTarif(g),
           // Conservées pour rouvrir les options sans redemander au catalogue ce qu'on a déjà.
           grille: g,
-          aOptions: (devis?.options ?? []).length > 0,
-          // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
-          prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
+          aOptions: (dv?.options ?? []).length > 0,
+          ...champsPrix,
           options,
           // Les libellés servent à afficher la ligne sans redemander ; les montants viennent du devis.
-          optionsLibelles: (devis?.options ?? [])
+          optionsLibelles: (dv?.options ?? [])
             .flatMap((groupe) => groupe.valeurs)
             .filter((valeur) => options.includes(valeur.valeurOption))
             .map((valeur) => valeur.libelle),
         },
       ]
     })
+
+    // ── BÉNÉFICIAIRE DÈS L'AJOUT (Lot 2b, demande de Maxime) ────────────────────────────────────
+    //
+    // Un produit nominatif exige qu'on nomme la personne à qui il est destiné. Sans ça, la vente
+    // était refusée AU PAIEMENT et le sélecteur s'ouvrait en catastrophe (`demarrerPaiement`). On
+    // le demande donc ICI, au moment où le produit entre au panier : moins de gestes, et l'erreur
+    // ne surgit plus au pire moment. Le client rattaché à la vente est le bénéficiaire des lignes
+    // (modèle actuel) ; une fois quelqu'un rattaché, on ne redemande plus.
+    //
+    // On ne rouvre pas sur un simple réajustement d'options (`remplace`) : la ligne existait déjà,
+    // et le sélecteur a été proposé à sa création. La garde de `demarrerPaiement` reste le filet si
+    // le caissier ferme sans choisir.
+    if (remplace === null && !client && exigeBeneficiaire(produit)) {
+      setBesoinClient(true)
+      setPickerOuvert(true)
+    }
   }
 
   // Un clic reste un clic quand il n'y a rien a choisir : on ne fait payer le choix qu'a ceux qui en
   // ont un. Une caisse se juge au nombre de gestes par vente.
   function choisirPuisAjouter(produit) {
+    // ⚠ UN ABONNEMENT SE SOUSCRIT SEUL. La souscription est une opération à part (mandat + contrat
+    // signés, échéancier) : la mélanger à des ventes de produits dans le même panier n'aurait pas
+    // de sens d'encaissement. On refuse donc le mélange, plutôt que de laisser un panier qu'on ne
+    // saurait pas conclure.
+    const abo = souscriptionRequise(produit)
+    if (abo && panier.length > 0) {
+      setErreur('Un abonnement se souscrit seul : videz le panier avant de l’ajouter.')
+      return
+    }
+    if (!abo && panier.some((l) => souscriptionRequise(l.produit))) {
+      setErreur('Une souscription d’abonnement est dans le panier : concluez-la ou videz le panier avant d’ajouter un autre produit.')
+      return
+    }
+    setErreur(null)
     const grilles = grillesVendables(produit)
     if (grilles.length <= 1) ajouter(produit, grilles[0])
     else setChoixTarif({ produit, grilles })
@@ -442,9 +564,50 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     return { proposables, horsPortee }
   }
 
-  function changerQte(cle, delta) {
+  /**
+   * Changer la quantité **redemande le montant au serveur** au lieu de multiplier.
+   *
+   * Une promotion en montant fixe s'applique une fois par ligne : « ×2 » ne double pas le montant
+   * de la ligne, et l'écran n'a aucun moyen de le savoir sans demander. Il l'extrapolait, donc il
+   * se trompait — en rendant un nombre plausible, ce qui est la seule façon dont un prix faux
+   * survit jusqu'au comptoir.
+   */
+  async function changerQte(cle, delta) {
+    const ligne = panier.find((l) => l.cle === cle)
+    if (!ligne) return
+    const quantite = ligne.quantite + delta
+    if (quantite <= 0) {
+      retirer(cle)
+      return
+    }
+
+    let devis = null
+    try {
+      devis = await api.tarifProduit(ligne.produit.id, {
+        typeTarif: ligne.typeTarifId,
+        options: ligne.options ?? [],
+        quantite,
+      })
+    } catch (e) {
+      // ⚠ LA QUANTITÉ NE BOUGE PAS SI LE PRIX N'A PAS PU SUIVRE. Afficher « ×2 » sous un montant
+      // resté celui d'une unité est exactement le défaut qu'on ferme : un écran qui a l'air à jour.
+      setErreur(e.message || "Le prix n'a pas pu être recalculé : la quantité n'a pas changé.")
+      return
+    }
+
+    setErreur(null)
     setPanier((p) =>
-      p.map((l) => (l.cle === cle ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
+      p.map((l) =>
+        l.cle === cle
+          ? {
+              ...l,
+              quantite,
+              prix: devis?.totalUnitaire ?? l.prix,
+              montant: devis?.montantLigne ?? null,
+              promotionsLibelles: (devis?.promotions ?? []).map((x) => x.nom).filter(Boolean),
+            }
+          : l,
+      ),
     )
   }
   function retirer(cle) {
@@ -524,7 +687,27 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
             if (!ls) return l
             // L'id de ligne SERVEUR : c'est par lui que `valider` indexe les supports.
             const enrichie = { ...l, ligneServeurId: ls.id ?? null }
-            return ls.prixUnitaire != null ? { ...enrichie, prix: ls.prixUnitaire } : enrichie
+            if (ls.prixUnitaire == null) return enrichie
+            // ⚠ `prixUnitaire` EST LE PRIX DE BASE : LES OPTIONS SONT DANS UNE AUTRE COLONNE.
+            //
+            // `LigneVente` porte le supplément à part, dans `impactOptionsUnitaire`, et c'est
+            // `PanierCalculateur` qui additionne les deux pour le montant facturé. Recopier le seul
+            // `prixUnitaire` faisait donc **retomber la ligne au tarif nu au passage en paiement** :
+            // « 1 × Entrée unitaire 10,00 € » sous un total de 12,00 €, l'écart étant exactement
+            // l'option obligatoire que le caissier venait de choisir. Le prix cessait de suivre les
+            // options au moment précis où le client le regarde — et le panier, lui, l'affichait bien
+            // jusqu'au clic sur « Encaisser », donc rien ne signalait le changement.
+            //
+            // S'aligner sur le serveur ne veut pas dire recopier UN de ses champs : cela veut dire
+            // recomposer le prix comme lui le compose.
+            const pu = Number.parseFloat(ls.prixUnitaire) + Number.parseFloat(ls.impactOptionsUnitaire ?? '0')
+            return {
+              ...enrichie,
+              prix: Number.isFinite(pu) ? pu.toFixed(2) : ls.prixUnitaire,
+              // `montantLigne` est ce qui sera encaissé : options ajoutées, promotions retirées.
+              montant: ls.montantLigne ?? null,
+              promotionsLibelles: (ls.promotionsAppliquees ?? []).map((x) => x?.nom).filter(Boolean),
+            }
           }),
         )
       }
@@ -537,8 +720,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setPaiements([])
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
-      // Contexte RENVOYÉ pour un encaissement en un seul geste : `setVente`/`setMontant`
-      // ci-dessus ne sont pas encore lus dans ce tick, donc `encaisserRapide` règle d'après ceci.
+      // Contexte RENVOYÉ pour régler dans la foulée : `setVente`/`setMontant` ci-dessus ne sont pas
+      // encore lus dans ce tick, donc `reglerUnMoyen` (qui ouvre la vente au 1er règlement) règle
+      // d'après ceci plutôt que d'après l'état.
       return {
         vObj: { id: v.id, numero: v.numero ?? null, reste: resteServeur, total: totalServeur },
         resteServeur,
@@ -626,34 +810,26 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   // Le geste classique du pavé : régler le moyen sélectionné, avec l'état courant.
+  // RÉGLER UN MOYEN — et OUVRIR LA VENTE AU PREMIER RÈGLEMENT, PAS AVANT.
+  //
+  // Il n'y a plus de bouton « Encaisser » qui ouvrait la vente en une étape de plus (demande de
+  // Maxime : « laisse juste le paiement multiple scindé »). Le pavé de paiement — moyen, montant,
+  // rendu, paiement scindé — est affiché d'emblée dès qu'il y a un panier. Tant que rien n'est
+  // réglé, aucune vente n'existe et le panier reste modifiable ; le PREMIER « Régler » ouvre la
+  // vente côté serveur (fige le panier), puis chaque règlement suivant s'ajoute à la même vente.
+  //
+  // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses
+  // `setVente`/`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait `null`.
   async function reglerUnMoyen() {
-    await encaisserMoyen(vente, moyenCourant, montant, tpeSimule, paiements)
-  }
-
-  // ENCAISSEMENT EN UN SEUL GESTE (demande de Maxime : « Encaisser puis Régler = une étape en trop »).
-  //
-  // Le pavé sert à CHOISIR le moyen et le montant. Quand le moyen par défaut n'exige pas de
-  // référence (espèces, porte-monnaie) et que le montant dû est exact, il n'y a rien à choisir :
-  // on ouvre la vente ET on la solde d'un coup. Un moyen à référence (CB, chèque) garde le pavé —
-  // sa référence se saisit avant l'encaissement — et « Paiement détaillé » reste là pour le rendu
-  // ou le paiement scindé.
-  //
-  // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses `setVente`
-  // /`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait une vente `null`.
-  async function encaisserRapide() {
-    // Le moyen CHOISI sur les pastilles (par defaut le premier proposable), capture AVANT
-    // `demarrerPaiement` qui reinitialise la selection au defaut du point de vente.
-    const choisi = moyensDispo.find((m) => m.code === moyenSel) || null
-    const ctx = await demarrerPaiement()
-    if (!ctx) return
-    // On restaure le moyen choisi : `demarrerPaiement` vient de le remettre au defaut, et si le
-    // moyen exige une reference (CB, cheque) c'est lui que le pave doit presenter.
-    if (choisi) setMoyenSel(choisi.code)
-    // Un moyen sans reference et le montant exact : rien a saisir, on solde d'un geste. Un moyen
-    // a reference garde le pave ouvert -- la reference se saisit, puis Regler.
-    if (choisi && !choisi.exigeReference && parseFloat(ctx.resteServeur) > 0) {
-      await encaisserMoyen(ctx.vObj, choisi, ctx.resteServeur, 'accepte', [])
+    let venteObj = vente
+    let paiementsPrec = paiements
+    if (!venteObj) {
+      const ctx = await demarrerPaiement()
+      if (!ctx) return
+      venteObj = ctx.vObj
+      paiementsPrec = []
     }
+    await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
   }
 
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
@@ -863,6 +1039,143 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     />
   )
 
+  // ── MODALE DE SOUSCRIPTION AU COMPTOIR ──────────────────────────────────────────────────────
+  //
+  // Le MÊME composant que l'onglet Abonnements — donc le même process, la même preuve (mandat SEPA
+  // + contrat signés et scellés), le même prorata, le même encaissement de la 1re échéance. Ici le
+  // produit est IMPOSÉ (la ligne de panier) et le payeur pré-rempli avec le client rattaché à la
+  // vente. Le composant encaisse lui-même la 1re échéance dans la caisse en cours ; à la réussite,
+  // on solde le panier.
+  const modaleSouscription = (
+    <Modal
+      open={souscriptionOuverte}
+      onClose={() => setSouscriptionOuverte(false)}
+      titre={ligneAbo ? `Souscrire — ${libelleProduit(ligneAbo.produit)}` : 'Souscrire un abonnement'}
+      taille="lg"
+    >
+      {ligneAbo && souscriptionOuverte && (
+        <SouscriptionAbonnement
+          enModale
+          produitImpose={ligneAbo.produit}
+          payeurInitial={client}
+          session={session}
+          droits={droits}
+          onAnnuler={() => setSouscriptionOuverte(false)}
+          onCree={() => {
+            // Souscription aboutie (et 1re échéance encaissée par le composant lui-même) : on solde
+            // le panier et on repart propre. On ne rejoue rien.
+            setSouscriptionOuverte(false)
+            setPanier([])
+            setClient(null)
+            setBesoinClient(false)
+          }}
+        />
+      )}
+    </Modal>
+  )
+
+  // ── LE DOCUMENT LÉGAL D'UNE FACTURE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // Posé AVANT la garde de session : regarder un document est une lecture, et la caisse fermée ne
+  // l'empêche pas. La vente en cours vit dans l'état de ce composant, qui reste monté : revenir la
+  // retrouve intacte.
+  if (params.facture) {
+    const fermerFacture = () => majParams({ facture: '' }, { pousser: true })
+    const f = lectureFacture.facture
+    let contenu
+    if (lectureFacture.chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!f) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureFacture.echouee
+            ? 'Cette facture n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette facture n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (f.statut === 'brouillon') {
+      contenu = (
+        <div className="banner banner-warn">
+          Un brouillon n’a pas encore de document opposable : il n’a pas de numéro.
+        </div>
+      )
+    } else {
+      contenu = <FactureRendu key={params.facture} facture={f} onClose={fermerFacture} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerFacture}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
+  // ── L'HISTORIQUE DES VENTES, EN ÉCRAN ───────────────────────────────────────────────────────
+  //
+  // Posé avant la garde de session, comme le document : relire une vente d'hier ne demande pas
+  // une caisse ouverte. La vente en cours vit dans l'état de ce composant, qui reste monté.
+  // Le détail d'une vente reste DANS l'écran, avec son « ← Retour à la liste » : c'est la même
+  // lecture, pas un second niveau d'adresse.
+  if (params.historique === '1') {
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerHistorique}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <HistoriqueVentes
+          onClose={fermerHistorique}
+          droits={droits}
+          onDuplicata={async (vente) => {
+            setErreur(null)
+            try {
+              const info = await api.ticket(vente.id, 'duplicata')
+              setTicket(construireTicket(info, [], null))
+              majParams({ historique: '' }, { pousser: true })
+            } catch (e) {
+              setErreur(e.message || "Le duplicata n'a pas pu être édité.")
+            }
+          }}
+          onFacture={(f) => {
+            // ⚠ ON FERME L'HISTORIQUE AVANT D'OUVRIR LE DOCUMENT. `FactureRendu` monte sa PROPRE
+            // modale : la laisser s'ouvrir par-dessus celle de l'historique empilerait deux pièges à
+            // focus, et le caissier refermerait la mauvaise. Le geste se lit donc en une ligne — je
+            // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
+            setErreur(null)
+            // Une seule entrée d'historique : on quitte l'historique ET on ouvre le document.
+            majParams({ historique: '', facture: String(f.id) }, { pousser: true })
+          }}
+        />
+      </div>
+    )
+  }
+
+  // ── VÉRIFIER UN BILLET, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // `1` = l'écran vide (on tapera le numéro) ; toute autre valeur EST le numéro à vérifier — c'est
+  // ce que passent le fil des scans et la recherche globale, qui ont le numéro sous la main.
+  if (params.verifier) {
+    const fermerVerif = () => majParams({ verifier: '' }, { pousser: true })
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerVerif}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la caisse
+        </button>
+        <RechercheBillet
+          key={params.verifier}
+          numeroInitial={params.verifier === '1' ? '' : params.verifier}
+          onClose={fermerVerif}
+          droits={droits}
+        />
+      </div>
+    )
+  }
+
   // --- Rendu : pas de session ouverte ---
   if (!chargement && !session) {
     return (
@@ -875,12 +1188,12 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               vérification et du fil des scans parce qu'aucune caisse n'est ouverte, c'est lui
               retirer la réponse au moment précis où on la lui demande. */}
           <div className="actions">
-            <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+            <button className="btn" onClick={() => majParams({ verifier: '1' }, { pousser: true })}>Vérifier un billet</button>
           </div>
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
-        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
+        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif}
+          onVerifier={(numero) => majParams({ verifier: String(numero || '1') }, { pousser: true })} />
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -908,8 +1221,8 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           </p>
         </div>
         <div className="actions">
-          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
-          <button className="btn" onClick={() => setHistorique(true)} disabled={enPaiement}>Historique</button>
+          <button className="btn" onClick={() => majParams({ verifier: '1' }, { pousser: true })}>Vérifier un billet</button>
+          <button className="btn" onClick={() => majParams({ historique: '1' }, { pousser: true })} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
@@ -923,7 +1236,6 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
           du nouveau. */}
       <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
 
       {/* Elle s'ouvre seule : `appairageEnAttente` n'est renseigné que par un règlement qui solde
           la vente alors qu'une ligne porte une carte. */}
@@ -972,7 +1284,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 ) : (
                   <>
                     <span className="cb-info hint" style={{ margin: 0 }}>
-                      Vente au comptoir — aucun client rattaché
+                      {besoinClient
+                        ? 'Ce produit exige un bénéficiaire — rattachez la personne à qui il est destiné.'
+                        : 'Vente au comptoir — aucun client rattaché'}
                     </span>
                     <button
                       className={`btn sm${besoinClient ? ' primary' : ''}`}
@@ -992,6 +1306,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                 <>
                   {panier.map((l) => {
                     const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
+                    // Le montant du serveur fait foi ; la multiplication ne sert que tant qu'aucun
+                    // devis n'a pu être obtenu — et elle ne connaît alors aucune promotion.
+                    const montant = l.montant != null ? parseFloat(l.montant) || 0 : pu * l.quantite
                     return (
                       <div className="cline" key={l.cle}>
                         <div className="cn">
@@ -1009,6 +1326,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                           {l.optionsLibelles?.length > 0 && (
                             <div className="cp" style={{ opacity: 0.8 }}>
                               {l.optionsLibelles.join(' · ')}
+                            </div>
+                          )}
+                          {/* UN RABAIS SANS SON NOM EST UN ÉCART SANS CAUSE.
+                              La ligne montrait 8,44 € au-dessus d'un total de 7,60 € : une promotion
+                              automatique de −10 % retirait la différence, et rien ne la nommait. Le
+                              caissier voyait deux nombres qui ne s'additionnent pas, et le client
+                              qui demandait pourquoi n'obtenait pas de réponse. */}
+                          {l.promotionsLibelles?.length > 0 && (
+                            <div className="cp" style={{ opacity: 0.8, color: 'var(--good)' }}>
+                              {l.promotionsLibelles.join(' · ')}
+                              {l.montant != null && pu * l.quantite > montant
+                                ? ` −${euros(pu * l.quantite - montant)}`
+                                : ''}
                             </div>
                           )}
                           {!enPaiement && l.aOptions && (
@@ -1034,7 +1364,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                         ) : (
                           <span style={{ color: 'var(--ink-soft)' }}>× {l.quantite}</span>
                         )}
-                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(pu * l.quantite)}</span>
+                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(montant)}</span>
                         {!enPaiement && (
                           <button className="rm" onClick={() => retirer(l.cle)} title="Retirer">×</button>
                         )}
@@ -1047,21 +1377,30 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                     <span className="num">{euros(enPaiement && vente?.total != null ? vente.total : total)}</span>
                   </div>
 
-                  {!enPaiement ? (
+                  {/* PLUS DE BOUTON « ENCAISSER » : le pavé de paiement (moyen, montant, rendu, scindé)
+                      est là d'emblée. La vente s'ouvre au premier « Régler » — jusque-là le panier
+                      reste modifiable. (demande de Maxime : « laisse juste le paiement multiple scindé ».) */}
+                  {!peutEncaisser ? (
+                    <div className="banner">
+                      Ce compte peut lire la caisse mais pas encaisser&nbsp;: il lui manque le droit
+                      <code> vente.encaisser</code>. Ce n’est pas une panne&nbsp;; demandez-le à un
+                      administrateur.
+                    </div>
+                  ) : ligneAbo ? (
+                    // UN ABONNEMENT NE SE RÈGLE PAS AU PAVÉ : il se SOUSCRIT. Le clic ouvre la modale
+                    // (mandat SEPA + contrat signés, prorata, encaissement de la 1re échéance ici).
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-serre)' }}>
-                    {/* Le geste par défaut ouvre le pavé détaillé : moyen, montant, rendu et paiement
-                        scindé s'y choisissent, et rien ne se solde avant « Régler ». */}
-                    <button
-                      className="btn primary lg"
-                      onClick={demarrerPaiement}
-                      disabled={busy || !peutEncaisser}
-                      title={peutEncaisser
-                        ? undefined
-                        : 'Ce compte n’a pas le droit d’encaisser (vente.encaisser). Demandez-le à un administrateur.'}
-                    >
-                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
-                    </button>
-                    <small className="sub">Moyen de paiement, montant, rendu ou paiement scindé à l’étape suivante.</small>
+                      <button
+                        className="btn primary lg"
+                        onClick={() => setSouscriptionOuverte(true)}
+                        disabled={busy}
+                      >
+                        Souscrire l’abonnement
+                      </button>
+                      <small className="sub">
+                        Mandat SEPA et contrat signés, prorata éventuel, et encaissement de la
+                        première échéance dans cette caisse — comme en ligne.
+                      </small>
                     </div>
                   ) : (
                     <PanneauPaiement
@@ -1080,6 +1419,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       onRegler={reglerUnMoyen}
                       onValider={validerVente}
                       onAbandon={abandonner}
+                      montrerAbandon={!!vente}
                     />
                   )}
                 </>
@@ -1284,38 +1624,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         }}
       />
 
-      <HistoriqueVentesModal
-        open={historique}
-        onClose={() => setHistorique(false)}
-        droits={droits}
-        onDuplicata={async (vente) => {
-          setErreur(null)
-          try {
-            const info = await api.ticket(vente.id, 'duplicata')
-            setTicket(construireTicket(info, [], null))
-            setHistorique(false)
-          } catch (e) {
-            setErreur(e.message || "Le duplicata n'a pas pu être édité.")
-          }
-        }}
-        onFacture={(f) => {
-          // ⚠ ON FERME L'HISTORIQUE AVANT D'OUVRIR LE DOCUMENT. `FactureRendu` monte sa PROPRE
-          // modale : la laisser s'ouvrir par-dessus celle de l'historique empilerait deux pièges à
-          // focus, et le caissier refermerait la mauvaise. Le geste se lit donc en une ligne — je
-          // regarde un ticket, j'établis sa facture, j'ai la facture sous les yeux.
-          setErreur(null)
-          setHistorique(false)
-          setFacturePour(f)
-        }}
-      />
 
-      {/* Montée seulement quand une facture existe : le composant LIT le document à l'ouverture, et
-          le monter en permanence déclencherait une lecture par rendu (même raison qu'en Facturation). */}
-      {facturePour && (
-        <FactureRendu facture={facturePour} onClose={() => setFacturePour(null)} />
-      )}
       {modaleSession}
       {modaleClient}
+      {modaleSouscription}
     </div>
   )
 }
@@ -1398,7 +1710,7 @@ function AppairageModal({ etat, onValider, onIgnorer, busy }) {
 
 function PanneauPaiement({
   moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
-  tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon,
+  tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon, montrerAbandon = true,
 }) {
   const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
   const paye = solde <= 0.0001
@@ -1488,9 +1800,13 @@ function PanneauPaiement({
         </button>
       )}
 
-      <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
-        Abandonner la vente
-      </button>
+      {/* « Abandonner » n'a de sens qu'une fois la vente OUVERTE (au 1er règlement). Avant, il n'y a
+          rien à abandonner — on vide le panier par « Vider ». */}
+      {montrerAbandon && (
+        <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
+          Abandonner la vente
+        </button>
+      )}
     </div>
   )
 }

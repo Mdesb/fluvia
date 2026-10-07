@@ -20,7 +20,7 @@ use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
-use App\Sport\Entity\AbonnementFitness;
+use App\Membership\Entity\Membership;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -96,11 +96,11 @@ abstract class SportApiTestCase extends ApiTestCase
         return (string) $this->entite(EspaceAcces::class, ['libelle' => AccesFixtures::ESPACE_LIBELLE])->getId();
     }
 
-    protected function abonnementDemo(): AbonnementFitness
+    protected function abonnementDemo(): Membership
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $em->getRepository(AbonnementFitness::class)->findOneBy([], ['dateSouscription' => 'ASC']);
+        $abonnement = $em->getRepository(Membership::class)->findOneBy([], ['dateSouscription' => 'ASC']);
         self::assertNotNull($abonnement, 'Abonnement fitness de démonstration introuvable.');
 
         return $abonnement;

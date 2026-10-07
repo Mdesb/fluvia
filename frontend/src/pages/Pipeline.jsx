@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { useEtatUrl } from '../api/url.js'
 import Modal from '../components/Modal.jsx'
 import Relances from '../components/Relances.jsx'
 import DevisModal from '../components/DevisModal.jsx'
@@ -56,21 +57,23 @@ function jour(v) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
 }
 
+// ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. Une seule clé : la création ouverte.
+// `devis` : l'affaire pour laquelle on établit un devis.
+const DEFAUTS_URL = { nouvelle: '', devis: '' }
+
 export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
+  const [params, majParams] = useEtatUrl('affaires', DEFAUTS_URL)
   const peutModifier = aLeDroit(droits, 'crm.modifier') || aLeDroit(droits, 'crm.creer')
 
   const [tableau, setTableau] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [nouvelle, setNouvelle] = useState(false)
   const [aPerdre, setAPerdre] = useState(null)
   const [busy, setBusy] = useState(false)
   // L'affaire pour laquelle on est en train d'établir un devis, et le client résolu qui va le
   // recevoir. Deux états séparés : on ouvre la modale seulement une fois le client retrouvé, sinon
   // elle s'ouvrirait vide le temps de deux requêtes.
-  const [devisPour, setDevisPour] = useState(null)
-  const [clientDevis, setClientDevis] = useState(null)
   // Le refus remonte des relances arrive ici pour etre compare a celui du pipeline.
   const [erreurRelances, setErreurRelances] = useState(null)
 
@@ -80,33 +83,46 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   // faire un destinataire de devis il faut la vraie fiche : on relit donc l'affaire, on en tire
   // l'IRI du client, et on charge la fiche. Deux requêtes, sur un clic explicite — c'est le prix
   // d'un écran qui ne demande pas de retaper ce qu'il affiche déjà.
-  async function ouvrirDevis(affaire) {
-    setErreur(null)
-    setBusy(true)
-    try {
-      const detail = await api.opportunite(affaire.id)
-      const ref = detail?.customer
-      const idClient = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
-      if (!idClient) {
-        throw new Error("Cette affaire n'a pas de client rattaché : ouvrez sa fiche pour en choisir un.")
+  // ⚠ L'AFFAIRE ET SON CLIENT SE LISENT PAR L'ADRESSE, PAS PAR UN CLIC. Un devis s'établit POUR un
+  // client : sans lui, il n'y a rien à ouvrir, et l'écran le dit au lieu d'afficher un formulaire
+  // sans destinataire.
+  const [lectureDevis, setLectureDevis] = useState(null)
+  const cleDevis = params.devis ? `${params.devis}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.devis) { setLectureDevis(null); return undefined }
+    const cle = `${params.devis}|${etabActif}`
+    let vivant = true
+    ;(async () => {
+      try {
+        const detail = await api.opportunite(params.devis)
+        const ref = detail?.customer
+        const idClient = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
+        if (!idClient) {
+          if (vivant) setLectureDevis({ cle, client: null, message: 'Cette affaire n’a pas de client rattaché : ouvrez sa fiche pour en choisir un.' })
+          return
+        }
+        const client = await api.client(idClient)
+        if (vivant) setLectureDevis({ cle, client, message: null })
+      } catch (e) {
+        // ⚠ 404 ET « LECTURE ÉCHOUÉE » NE SE DISENT PAS PAREIL, et le message brut du serveur
+        // (« Not Found ») ne dit ni l'un ni l'autre à l'exploitant.
+        const message = e?.status === 404
+          ? 'Cette affaire n’existe pas, ou n’est pas visible depuis cet établissement.'
+          : (e?.message || 'Le client de cette affaire n’a pas pu être retrouvé.')
+        if (vivant) setLectureDevis({ cle, client: null, message })
       }
-      setClientDevis(await api.client(idClient))
-      setDevisPour(affaire)
-    } catch (e) {
-      setErreur(e.message || "Le client de cette affaire n'a pas pu être retrouvé.")
-    } finally {
-      setBusy(false)
-    }
-  }
+    })()
+    return () => { vivant = false }
+  }, [params.devis, etabActif])
 
   // Le devis créé est RATTACHÉ à l'affaire : c'est ce lien, et lui seul, qui fera passer la carte en
   // « Devis envoyé » le jour où le devis sera émis.
   async function lierDevis(piece) {
-    setDevisPour(null)
-    setClientDevis(null)
+    const idAffaire = params.devis
+    majParams({ devis: '' }, { pousser: true })
     if (!piece?.id) return
     try {
-      await api.majOpportunite(devisPour.id, { commercialDocumentRef: piece.id })
+      await api.majOpportunite(idAffaire, { commercialDocumentRef: piece.id })
       setSucces('Devis créé et rattaché à l’affaire. La carte suivra le devis dès qu’il sera émis.')
       await recharger()
     } catch (e) {
@@ -148,12 +164,62 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
     }
   }
 
+  // ── LA CRÉATION D'UNE AFFAIRE, EN ÉCRAN ─────────────────────────────────────────────────
+  //
+  // Avant la garde de chargement : le formulaire n'a besoin de rien de ce que la page lit.
+  if (params.nouvelle === '1') {
+    const fermer = () => majParams({ nouvelle: '' }, { pousser: true })
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermer}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux affaires
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <NouvelleAffaire
+          open
+          busy={busy}
+          onFermer={fermer}
+          onCreer={(corps) =>
+            agir(async () => {
+              await api.creerOpportunite(corps)
+              fermer()
+            }, 'Affaire créée.')
+          }
+        />
+      </div>
+    )
+  }
+
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
   const colonnes = tableau?.colonnes || []
   const messages = [erreur, erreurRelances].filter(Boolean).filter((m, i, t) => t.indexOf(m) === i)
   // ⚠ `tableau` NUL NE VEUT PAS DIRE ZERO AFFAIRE. Il veut dire qu'on n'a pas pu compter.
   const lectureRefusee = !tableau && Boolean(erreur)
+
+  // ── ÉTABLIR UN DEVIS POUR UNE AFFAIRE, EN ÉCRAN ─────────────────────────────────────────────
+  if (params.devis) {
+    const fermerDevis = () => majParams({ devis: '' }, { pousser: true })
+    const lu = lectureDevis?.cle === cleDevis ? lectureDevis : null
+    let contenu
+    if (lu === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!lu.client) {
+      contenu = <div className="banner banner-warn">{lu.message}</div>
+    } else {
+      contenu = <DevisModal key={cleDevis} client={lu.client} onClose={fermerDevis} onCree={lierDevis} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerDevis}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux affaires
+        </button>
+        {contenu}
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -172,7 +238,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
           </div>
         </div>
         {peutModifier && (
-          <button className="btn primary" type="button" onClick={() => setNouvelle(true)}>
+          <button className="btn primary" type="button" onClick={() => majParams({ nouvelle: '1' }, { pousser: true })}>
             + Nouvelle affaire
           </button>
         )}
@@ -272,7 +338,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
                             type="button"
                             disabled={busy}
                             style={{ padding: '1px 8px', fontSize: 11.5 }}
-                            onClick={() => ouvrirDevis(a)}
+                            onClick={() => majParams({ devis: String(a.id) }, { pousser: true })}
                           >
                             Etablir un devis
                           </button>
@@ -297,17 +363,6 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
       </div>
       )}
 
-      <NouvelleAffaire
-        open={nouvelle}
-        busy={busy}
-        onFermer={() => setNouvelle(false)}
-        onCreer={(corps) =>
-          agir(async () => {
-            await api.creerOpportunite(corps)
-            setNouvelle(false)
-          }, 'Affaire créée.')
-        }
-      />
 
       <MarquerPerdue
         affaire={aPerdre}
@@ -327,12 +382,6 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
 
       {/* La même modale que l'écran Facturation et la fiche client — troisième porte, une seule
           implémentation. Ici le client vient de l'affaire, et le devis créé lui est rattaché. */}
-      <DevisModal
-        open={!!devisPour && !!clientDevis}
-        client={clientDevis}
-        onClose={() => { setDevisPour(null); setClientDevis(null) }}
-        onCree={lierDevis}
-      />
     </div>
   )
 }
@@ -384,8 +433,11 @@ function NouvelleAffaire({ open, busy, onFermer, onCreer }) {
   const nomClient = (c) =>
     c?.raisonSociale || [c?.prenom, c?.nom].filter(Boolean).join(' ').trim() || c?.email || 'Client'
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onFermer} titre="Nouvelle affaire" taille="md">
+    <>
+      <h2>Nouvelle affaire</h2>
       <div style={{ display: 'grid', gap: 12 }}>
         <div>
           <label htmlFor="op-titre">Intitulé *</label>
@@ -474,7 +526,7 @@ function NouvelleAffaire({ open, busy, onFermer, onCreer }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }
 

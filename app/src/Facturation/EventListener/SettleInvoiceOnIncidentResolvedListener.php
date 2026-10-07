@@ -23,7 +23,7 @@ use Symfony\Component\Uid\Uuid;
  * D2 : communication par événements, jamais d'appel direct de module à module. `App\Recouvrement` ne
  * connaît ni `App\Facturation` ni `App\Compta` — il enregistre le canal, le moyen, la référence et une
  * **référence nue** vers la facture, puis annonce. C'est ici qu'on résout la pièce. Même sens de
- * dépendance que `App\Sport\EventListener\SynchroniserImpayeFitnessListener`, qui écoute les mêmes
+ * dépendance que `App\Membership\EventListener\SynchroniserImpayeFitnessListener`, qui écoute les mêmes
  * événements pour son propre statut métier.
  *
  * ── LES DEUX CHEMINS, ET POURQUOI LE SECOND EXISTE ──────────────────────────────────────────────

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { RESULTAT_CLS, RESULTAT_PASSAGE, phraseMotif } from '../api/acces.js'
-import RechercheBilletModal from './RechercheBilletModal.jsx'
 
 // LES SCANS EN DIRECT, À LA CAISSE — PARCE QUE C'EST LÀ QUE LE CLIENT SE PLAINT.
 //
@@ -62,7 +61,7 @@ const CLE_ACTIF = 'billetterie.scans-en-direct'
 const PERIODE_MS = 4000
 const MAX_AFFICHES = 6
 
-export default function ScansEnDirect({ droits = [], etabActif }) {
+export default function ScansEnDirect({ droits = [], etabActif, onVerifier }) {
   // Sans `acces.lire`, chaque interrogation partirait pour un 403 toutes les quatre secondes. Un
   // caissier qui n'a pas le droit de lire les passages ne voit simplement pas ce bandeau.
   const peutLire = aLeDroit(droits, 'acces.lire')
@@ -91,7 +90,6 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
   })
   const [arrete, setArrete] = useState(null) // raison d'un arrêt : session perdue, droit refusé…
   const [trouEventuel, setTrouEventuel] = useState(false)
-  const [billetOuvert, setBilletOuvert] = useState(null)
   const dernier = useRef(null) // horodatage ISO du dernier passage connu
   const amorce = useRef(false)
   // ⚠ DEUX INTERROGATIONS QUI SE CROISENT LISENT LE MÊME REPÈRE ET AFFICHENT DEUX FOIS.
@@ -308,7 +306,7 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
                       <div>
                         <button
                           className="btn ghost sm"
-                          onClick={() => setBilletOuvert(p.support.identifiant)}
+                          onClick={() => onVerifier?.(p.support.identifiant)}
                         >
                           Voir le billet
                         </button>
@@ -322,12 +320,6 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
         </div>
       </div>
 
-      <RechercheBilletModal
-        open={!!billetOuvert}
-        numeroInitial={billetOuvert || ''}
-        onClose={() => setBilletOuvert(null)}
-        droits={droits}
-      />
     </>
   )
 }

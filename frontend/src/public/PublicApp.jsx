@@ -354,33 +354,26 @@ export default function PublicApp() {
           onNaviguer={onNaviguer}
         />
       ) : route.vue === 'tunnel' ? (
-        panier && (panier.lignes || []).length > 0 ? (
-          <Tunnel
-            panier={panier}
-            vitrineId={vitrineId}
-            metaProduits={metaProduits}
-            metaCreneaux={metaCreneaux}
-            langue={langue}
-            connecte={connecte}
-            onPanierMaj={setPanier}
-            onConnexionClient={() => setConnecte(true)}
-            onCommandeConfirmee={commandeConfirmee}
-            onNaviguer={onNaviguer}
-          />
-        ) : (
-          <Panier
-            panier={panier}
-            metaProduits={metaProduits}
-            metaCreneaux={metaCreneaux}
-            langue={langue}
-            busy={busyPanier}
-            erreur={erreurPanier}
-            onRetirer={retirerLigne}
-            onModifier={modifierQuantite}
-            onVider={viderPanier}
-            onNaviguer={onNaviguer}
-          />
-        )
+        // ⚠ NE PAS conditionner le rendu du Tunnel sur `panier && lignes > 0`. Au paiement réussi,
+        // `commandeConfirmee` fait setPanier(null) : cette condition tomberait et démonterait le
+        // Tunnel AVANT son étape Confirmation, renvoyant le client vers un panier vide au lieu de
+        // son billet. L'étape Confirmation n'a plus besoin du panier (elle lit `infoBillets`), et le
+        // Tunnel se protège lui-même d'une entrée à panier vide (garde `etape < 1`, c.-à-d. l'écran
+        // « Vos billets », → retour panier).
+        <Tunnel
+          panier={panier}
+          vitrineId={vitrineId}
+          metaProduits={metaProduits}
+          metaCreneaux={metaCreneaux}
+          langue={langue}
+          connecte={connecte}
+          etablissementId={catalogue?.etablissement}
+          nomEtablissement={catalogue?.nom}
+          onPanierMaj={setPanier}
+          onDeconnexionClient={() => setConnecte(false)}
+          onCommandeConfirmee={commandeConfirmee}
+          onNaviguer={onNaviguer}
+        />
       ) : route.vue === 'legal' ? (
         <PageLegale
           etablissementId={catalogue?.etablissement}
@@ -390,7 +383,16 @@ export default function PublicApp() {
       ) : route.vue === 'verification-email' ? (
         <VerificationEmail jeton={route.jeton} onNaviguer={onNaviguer} />
       ) : route.vue === 'compte' ? (
-        <MonCompte connecte={connecte} onConnexionChange={setConnecte} onNaviguer={onNaviguer} />
+        <MonCompte
+          connecte={connecte}
+          onConnexionChange={(v) => {
+            setConnecte(v)
+            // « J'ai déjà un compte », depuis le tunnel (#101) : une fois connecté, on y revient —
+            // le panier n'a pas bougé, et le client n'a plus rien à saisir.
+            if (v && route.retour === 'tunnel') onNaviguer({ vue: 'tunnel' })
+          }}
+          onNaviguer={onNaviguer}
+        />
       ) : erreur ? (
         // ⚠ LE REPLI RENDAIT LA BOUTIQUE SANS LA GARDE D'ERREUR, ET C'EST UNE PAGE PUBLIQUE.
         //

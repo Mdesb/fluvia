@@ -62,6 +62,9 @@ api_platform:
             # reste invisible de l'API sans que rien ne le signale.
             - '%kernel.project_dir%/src/Integrations/Entity'
             - '%kernel.project_dir%/src/Integrations/ApiResource'
+            # API partenaire `/v1` (04/10) : les clés côté éditeur, les accords côté exploitant. Le
+            # dossier existe dans le MÊME commit que cette ligne (C9 : la liste est fail-hard).
+            - '%kernel.project_dir%/src/PublicApi/ApiResource'
             # Absent jusqu'au 27/08, et le symptome n'etait pas une route manquante.
             # Les routes CRUD des options repondaient 200 ; c'est le SERVICE DE FILTRE qui
             # n'existait pas -- `debug:container` en comptait 4 pour Offre (dossier liste) et
@@ -94,6 +97,11 @@ api_platform:
             - '%kernel.project_dir%/src/Crm/Entity'
             - '%kernel.project_dir%/src/Piscine/Entity'
             - '%kernel.project_dir%/src/Piscine/ApiResource'
+            # Le bloc abonnement a quitté Sport le 10/09 (lot 1). Sport ne garde que SOS,
+            # présence isolée et accès nocturne — dont aucune n'est exposée par ce chemin,
+            # mais la ligne reste : le dossier existe, et la retirer masquerait une
+            # ressource le jour où l'on en déclarerait une.
+            - '%kernel.project_dir%/src/Membership/Entity'
             - '%kernel.project_dir%/src/Sport/Entity'
             - '%kernel.project_dir%/src/Sport/ApiResource'
             - '%kernel.project_dir%/src/Sepa/Entity'

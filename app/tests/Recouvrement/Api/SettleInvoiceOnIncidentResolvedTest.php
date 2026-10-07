@@ -6,7 +6,7 @@ namespace App\Tests\Recouvrement\Api;
 
 use App\Compta\Entity\EcritureComptable;
 use App\Recouvrement\Entity\IncidentImpaye;
-use App\Sport\Entity\EcheanceSepa;
+use App\Membership\Entity\EcheanceSepa;
 use App\Tests\Recouvrement\RecouvrementApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 

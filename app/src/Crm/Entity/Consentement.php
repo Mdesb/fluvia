@@ -72,6 +72,25 @@ class Consentement
     #[Groups(['consentement:read', 'consentement:write'])]
     private bool $recueilliParRepresentant = false;
 
+    /**
+     * La version du texte auquel la personne a répondu (#101). Un accord se prouve par ce qu'il
+     * disait : « recevoir les nouveautés de X par e-mail » n'engage pas à la même chose qu'un texte
+     * modifié depuis. `null` pour les lignes antérieures, qui n'en gardaient pas trace.
+     */
+    #[ORM\Column(length: 40, nullable: true)]
+    #[Groups(['consentement:read'])]
+    private ?string $textVersion = null;
+
+    /** Motif d'une ligne `invalide` — posé par une reprise, jamais par l'API (#101). */
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['consentement:read'])]
+    private ?string $invalidationReason = null;
+
+    /** Référence du lot qui a invalidé — ce qui permet de défaire exactement cette reprise-là. */
+    #[ORM\Column(length: 64, nullable: true)]
+    #[Groups(['consentement:read'])]
+    private ?string $invalidationBatch = null;
+
     public function __construct(CanalConsentement $canal = CanalConsentement::Email, EtatConsentement $etat = EtatConsentement::Refuse)
     {
         $this->id = Uuid::v4();
@@ -167,6 +186,28 @@ class Consentement
         $this->recueilliParRepresentant = $recueilliParRepresentant;
 
         return $this;
+    }
+
+    public function getTextVersion(): ?string
+    {
+        return $this->textVersion;
+    }
+
+    public function setTextVersion(?string $textVersion): self
+    {
+        $this->textVersion = $textVersion;
+
+        return $this;
+    }
+
+    public function getInvalidationReason(): ?string
+    {
+        return $this->invalidationReason;
+    }
+
+    public function getInvalidationBatch(): ?string
+    {
+        return $this->invalidationBatch;
     }
 
     /** Valide et non expiré (RG-M4-07). */

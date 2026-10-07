@@ -39,7 +39,9 @@ import { idDe } from '../api/iri'
 // voulu, la serie des numeros ne se troue pas -- donc une facture mal saisie serait restee dans la
 // liste pour toujours. `PATCH /factures/{id}` accepte la modification libre TANT QUE brouillon, et
 // refuse explicitement une facture emise (elle est inalterable).
-export default function DevisModal({ open, client, onClose, onCree, cible = 'devis', existante = null }) {
+// Le devis (ou la facture directe) : un écran de ses trois hôtes — Clients, Affaires,
+// Facturation —, plus une modale. Le nom du fichier est resté.
+export default function DevisModal({ client, onClose, onCree, cible = 'devis', existante = null }) {
   const facture = cible === 'facture'
   const [echeance, setEcheance] = useState('')
   const [tauxTva, setTauxTva] = useState([])
@@ -70,7 +72,6 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   const destinataire = client || choisi
 
   useEffect(() => {
-    if (!open) return
     setChoisi(null)
     setErreur(null)
     setNonRattache(false)
@@ -116,7 +117,8 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
     api.produits({ itemsPerPage: 200 })
       .then((r) => setProduits(membres(r)))
       .catch(() => setProduits('refus'))
-  }, [open])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function majLigne(i, champ, valeur) {
     setLignes((precedent) => precedent.map((l, j) => (i === j ? { ...l, [champ]: valeur } : l)))
@@ -316,7 +318,8 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
 
   return (
     <>
-      <Modal open={open} onClose={onClose} titre={existante ? 'Corriger le brouillon' : facture ? 'Facturer un client' : 'Nouveau devis'}>
+      <>
+        <h2>{existante ? 'Corriger le brouillon' : facture ? 'Facturer un client' : 'Nouveau devis'}</h2>
         <form onSubmit={soumettre}>
           {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -565,7 +568,7 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
             </button>
           </div>
         </form>
-      </Modal>
+      </>
 
       <ClientPicker
         open={pickerOuvert}

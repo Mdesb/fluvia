@@ -64,24 +64,17 @@ function Abonnement({ produit, onNaviguer }) {
 
   if (faite) {
     return (
-      /* ⚠ CE MESSAGE DISAIT « ABONNEMENT SOUSCRIT » ET « LE PRÉLÈVEMENT SERA PRÉSENTÉ PAR
-         L'ÉTABLISSEMENT ». Les deux moitiés sont fausses aujourd'hui, et sur un chemin où le
-         client vient de signer un mandat SEPA.
-
-         `SouscriptionAbonnementEnLigneHandler` crée un mandat, une vente, une ligne et un
-         `Paiement('sepa', differe: true)` — puis s'arrête. Il ne crée PAS d'`AbonnementFitness` :
-         `new AbonnementFitness` n'existe qu'aux deux points du domaine Sport, et aucun fichier de
-         `app/src/Boutique` ne mentionne cette classe. Et rien ne collectera ce paiement :
-         `CompositeEcheanceSepaSource` n'agrège que les `EcheanceSepaSource`, dont aucune ne lit
-         `Vente` ni `Paiement`.
-
-         ⚠ ON N'ÉCRIT PAS L'INVERSE POUR AUTANT. « Aucun prélèvement ne sera présenté »
-           deviendrait faux le jour où ce chemin créera un vrai abonnement : ce serait remplacer
-           un mensonge par un autre, à retardement. On ne garde que ce qui est vrai dans les deux
-           cas — le mandat est signé, la commande est enregistrée. Le silence ne se périme pas. */
+      /* Le chemin en ligne crée un VRAI abonnement. `SouscriptionAbonnementEnLigneHandler` signe le
+         mandat, enregistre la commande, PUIS appelle le `souscrire()` canonique (section « ET
+         MAINTENANT LE CONTRAT ») : d'où un `AbonnementFitness`, son échéancier SEPA — réellement
+         collecté par `SportEcheanceSepaSource` via `CompositeEcheanceSepaSource` — et son accès. Le
+         message le DIT donc au client : il vient de s'engager et sera prélevé. Ne pas retomber sur
+         « commande enregistrée » seul, ce serait taire un engagement et des prélèvements réels
+         (l'ancien commentaire décrivait un état où le contrat n'était pas encore créé — il l'est). */
       <div className="banner banner-ok" role="status">
-        <strong>Commande enregistrée.</strong> Commande {faite.numero || faite.vente?.slice(0, 8)}.
-        Votre mandat SEPA est signé. Vous retrouvez la commande dans votre espace.
+        <strong>Abonnement souscrit.</strong> Commande {faite.numero || faite.vente?.slice(0, 8)}.
+        Votre mandat SEPA est signé : la première échéance sera prélevée, puis le montant de votre
+        offre à chaque période. Vous retrouvez votre commande dans votre espace.
       </div>
     )
   }

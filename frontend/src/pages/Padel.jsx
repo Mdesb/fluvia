@@ -6,6 +6,8 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { libelleProduit } from '../api/produit.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
+import { useEtatUrl } from '../api/url.js'
 
 // Padel — cinquante-six opérations exposées, une seule appelée jusqu'ici.
 //
@@ -28,8 +30,34 @@ import { libelleProduit } from '../api/produit.js'
 // réserver pour soi. L'écran ne fait pas la différence à l'affichage — le serveur tranche — mais il
 // ne prétend pas non plus que les deux sont la même chose.
 
+// `reserver` : l'identifiant du terrain qu'on réserve ; `terrain` : `nouveau` à la création ;
+// `sortie` : la sortie de matériel est ouverte.
+const DEFAUTS_URL = { onglet: 'terrains', reserver: '', terrain: '', sortie: '' }
+
 export default function Padel({ etabActif, droits }) {
-  const [onglet, setOnglet] = useState('terrains')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE avec les écrans : sans lui, « précédent » après un F5 sur la
+  // sortie de matériel ramènerait aux terrains, et non au matériel d'où l'on venait.
+  const [params, majParams] = useEtatUrl('padel', DEFAUTS_URL)
+  const onglet = params.onglet
+  const setOnglet = (v) => majParams({ onglet: v, reserver: '', terrain: '', sortie: '' })
+
+  // ── LES ÉCRANS PRENNENT LA PAGE ─────────────────────────────────────────────────────────────
+  // Chaque section lit ses propres listes : la page lui cède toute la place, et c'est elle qui
+  // reprend les conditions de ses boutons.
+  if (params.reserver || params.terrain) {
+    return (
+      <div className="view large">
+        <TerrainsSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
+      </div>
+    )
+  }
+  if (params.sortie) {
+    return (
+      <div className="view large">
+        <MaterielSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
+      </div>
+    )
+  }
 
   return (
     <div className="view large">
@@ -49,8 +77,8 @@ export default function Padel({ etabActif, droits }) {
         onChange={setOnglet}
       />
 
-      {onglet === 'terrains' && <TerrainsSection etabActif={etabActif} droits={droits} />}
-      {onglet === 'materiel' && <MaterielSection etabActif={etabActif} droits={droits} />}
+      {onglet === 'terrains' && <TerrainsSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
+      {onglet === 'materiel' && <MaterielSection etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
     </div>
   )
 }
@@ -91,10 +119,9 @@ const SURFACES_TERRAIN = {
   carpet: 'Moquette',
 }
 
-function TerrainsSection({ etabActif, droits }) {
+function TerrainsSection({ etabActif, droits, params = {}, majParams }) {
   // Le droit exige par `POST /padel/terrains`, et lui seul.
   const peutGererTerrain = aLeDroit(droits, 'padel.gerer_terrain')
-  const [creation, setCreation] = useState(false)
   // ⚠ `null` = PAS LU. << Aucun terrain declare. Sans terrain, aucune reservation n'est
   // possible. >> annonce une CONSEQUENCE : sur une lecture refusee, on refuse une reservation
   // pour un terrain qui existe.
@@ -104,7 +131,6 @@ function TerrainsSection({ etabActif, droits }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [reservation, setReservation] = useState(null)
   const [eclairage, setEclairage] = useState(null)
   const [rejoindre, setRejoindre] = useState(null)
   const [ressources, setRessources] = useState([])
@@ -158,10 +184,103 @@ function TerrainsSection({ etabActif, droits }) {
     recharger()
   }, [recharger])
 
+  // ⚠ LE TERRAIN RÉSERVÉ SE LIT PAR SON IDENTIFIANT : la liste est bornée à 100. Seul un 404 dit
+  // « il n'existe pas » ; tout le reste est une lecture qui a échoué.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureTerrain, setLectureTerrain] = useState(null)
+  const cleTerrain = params.reserver ? `${params.reserver}|${etabActif}` : null
+  useEffect(() => {
+    if (!(params.reserver)) { setLectureTerrain(null); return undefined }
+    const cle = `${params.reserver}|${etabActif}`
+    let vivant = true
+    api.padelTerrain(params.reserver)
+      .then((v) => { if (vivant) setLectureTerrain({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureTerrain({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.reserver, etabActif])
+  const lectureTerrainCourante = lectureTerrain?.cle === cleTerrain ? lectureTerrain : null
+  const chargementTerrain = cleTerrain !== null && lectureTerrainCourante === null
+  const terrainReserve = lectureTerrainCourante?.valeur ?? null
+  const lectureTerrainEchouee = lectureTerrainCourante?.echouee ?? false
+
   const ouvertes = useMemo(
     () => (reservations || []).filter((r) => r.ouverte && r.statutPartie !== 'complete'),
     [reservations],
   )
+
+  // ── CRÉER OU RÉSERVER UN TERRAIN, EN ÉCRAN ──────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET L'ÉCRAN LES REPREND. Et deux listes décident :
+  // la création vérifie qu'aucun terrain ne porte déjà le nom, la réservation choisit un organisateur
+  // parmi les joueurs. Illisibles, le premier contrôle passerait en silence et le second offrirait
+  // une liste vide — l'écran refuse dans les deux cas.
+  if (params.terrain || params.reserver) {
+    const fermerEcran = () => majParams({ terrain: '', reserver: '' }, { pousser: true })
+    let contenu
+    if (params.terrain) {
+      if (!peutGererTerrain) {
+        contenu = <div className="banner banner-warn">Créer un terrain demande le droit de gérer les terrains, que ce compte n’a pas.</div>
+      } else if (chargement) {
+        contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+      } else if (terrains === null) {
+        contenu = (
+          <div className="banner banner-error">
+            Les terrains existants n’ont pas pu être lus : cet écran ne pourrait pas vérifier qu’un terrain
+            porte déjà ce nom. Réessayez avant d’en créer un.
+          </div>
+        )
+      } else {
+        contenu = <TerrainModal open terrains={terrains} onClose={fermerEcran} onFait={() => { fermerEcran(); recharger() }} />
+      }
+    } else if (!peutReserver) {
+      contenu = <div className="banner banner-warn">Réserver un terrain demande le droit de réserver, que ce compte n’a pas.</div>
+    } else if (chargement || chargementTerrain) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!terrainReserve) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureTerrainEchouee
+            ? 'Ce terrain n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce terrain n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (terrains === null) {
+      contenu = (
+        <div className="banner banner-error">
+          Les joueurs n’ont pas pu être lus : on ne choisit pas un organisateur dans une liste qu’on n’a pas.
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <ReservationModal
+            key={params.reserver}
+            ressources={ressources}
+            terrains={terrains}
+            terrain={terrainReserve}
+            beneficiaires={beneficiaires}
+            onClose={fermerEcran}
+            onFait={(m) => { fermerEcran(); setSucces(m); recharger() }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerEcran}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux terrains
+        </button>
+        {contenu}
+      </>
+    )
+  }
 
   return (
     <>
@@ -242,18 +361,12 @@ function TerrainsSection({ etabActif, droits }) {
           </span>
           {peutGererTerrain && (
             <div className="actions" style={{ marginLeft: 'auto' }}>
-              <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+              <button className="btn sm" type="button" onClick={() => majParams({ terrain: 'nouveau' }, { pousser: true })}>
                 ＋ Créer un terrain
               </button>
             </div>
           )}
         </div>
-        <TerrainModal
-          open={creation}
-          terrains={terrains || []}
-          onClose={() => setCreation(false)}
-          onFait={() => { setCreation(false); recharger() }}
-        />
         <div className="card-b">
           {terrains === null ? (
             <div className="banner banner-error">
@@ -298,7 +411,7 @@ function TerrainsSection({ etabActif, droits }) {
                       <td className="num">
                         <div style={{ display: 'flex', gap: 'var(--esp-serre)', justifyContent: 'flex-end' }}>
                           {peutReserver && (
-                            <button className="btn primary sm" type="button" onClick={() => setReservation(t)}>
+                            <button className="btn primary sm" type="button" onClick={() => { setErreur(null); setSucces(null); majParams({ reserver: String(t.id) }, { pousser: true }) }}>
                               Réserver
                             </button>
                           )}
@@ -323,15 +436,6 @@ function TerrainsSection({ etabActif, droits }) {
         </div>
       </section>
 
-      <ReservationModal
-        ressources={ressources}
-        terrains={terrains || []}
-        terrain={reservation}
-        beneficiaires={beneficiaires}
-        onClose={() => setReservation(null)}
-        onFait={(m) => { setReservation(null); setSucces(m); recharger() }}
-        onErreur={setErreur}
-      />
 
       <RejoindreModal
         ressources={ressources}
@@ -401,8 +505,11 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
     }
   }
 
+  if (!terrain) return null
+
   return (
-    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
+    <>
+      <h2>{`Réserver — ${nomTerrain(terrain, ressources, terrains)}`}</h2>
       {terrain && (
         <form onSubmit={envoyer}>
           <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 'var(--esp-normal)' }}>
@@ -477,7 +584,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -628,13 +735,12 @@ function EclairageModal({ terrain, ressources, terrains, onClose, onFait, onErre
 // --------------------------------------------------------------------------------------------
 // Le matériel prêté.
 // --------------------------------------------------------------------------------------------
-function MaterielSection({ etabActif, droits }) {
+function MaterielSection({ etabActif, droits, params = {}, majParams }) {
   const [locations, setLocations] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [retour, setRetour] = useState(null)
-  const [sortie, setSortie] = useState(false)
 
   // ⚠ CE BLOC ETAIT GARDE PAR DEUX CODES QUI N'EXISTENT PAS.
   //
@@ -664,17 +770,42 @@ function MaterielSection({ etabActif, droits }) {
 
   const dehors = locations.filter((l) => !l.dateRetour)
 
+  // ── SORTIR DU MATÉRIEL, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND (`padel.materiel_gerer`). Le
+  // formulaire lit lui-même catalogue et réservations, et dit déjà leurs échecs. L'échec d'ENVOI,
+  // lui, remontait à la bannière de la section, derrière la modale : elle est rendue ici.
+  if (params.sortie) {
+    const fermerSortie = () => majParams({ sortie: '' }, { pousser: true })
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerSortie}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au matériel prêté
+        </button>
+        {!peutGerer ? (
+          <div className="banner banner-warn">
+            Sortir du matériel demande le droit de gérer le matériel prêté, que ce compte n’a pas.
+          </div>
+        ) : (
+          <>
+            {erreur && <div className="banner banner-error">{erreur}</div>}
+            <SortieMateriel
+              open
+              onClose={fermerSortie}
+              onFait={(message) => { fermerSortie(); setSucces(message); recharger() }}
+              onErreur={setErreur}
+            />
+          </>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
-
-      <SortieMateriel
-        open={sortie}
-        onClose={() => setSortie(false)}
-        onFait={(message) => { setSortie(false); setSucces(message); recharger() }}
-        onErreur={setErreur}
-      />
 
       <section className="card">
         <div className="card-h">
@@ -685,7 +816,7 @@ function MaterielSection({ etabActif, droits }) {
               className="btn primary sm"
               type="button"
               style={{ marginLeft: 'auto' }}
-              onClick={() => setSortie(true)}
+              onClick={() => { setErreur(null); setSucces(null); majParams({ sortie: '1' }, { pousser: true }) }}
             >
               Sortir du matériel
             </button>
@@ -894,8 +1025,11 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Créer un terrain">
+    <>
+      <h2>Créer un terrain</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
@@ -966,7 +1100,7 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -988,6 +1122,8 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
  * reservation ni un agent.
  */
 function SortieMateriel({ open, onClose, onFait, onErreur }) {
+  // Vocabulaire padel (#100, lot 3) : t('deposit', 'padel', …) rend « Caution matériel ».
+  const { t } = useVocabulaireVerticales()
   const [articles, setArticles] = useState(null)
   const [reservations, setReservations] = useState(null)
   const [article, setArticle] = useState('')
@@ -1033,8 +1169,11 @@ function SortieMateriel({ open, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Sortir du matériel" taille="sm">
+    <>
+      <h2>Sortir du matériel</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div className="sub">
           Le prêt est rattaché à une réservation : c’est ce qui permet de savoir qui a la raquette,
@@ -1099,7 +1238,7 @@ function SortieMateriel({ open, onClose, onFait, onErreur }) {
         </label>
 
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-          <span className="sub">Caution — facultative</span>
+          <span className="sub">{t('deposit', 'padel', 'Caution')} — facultative</span>
           <input
             className="input"
             inputMode="decimal"
@@ -1117,6 +1256,6 @@ function SortieMateriel({ open, onClose, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

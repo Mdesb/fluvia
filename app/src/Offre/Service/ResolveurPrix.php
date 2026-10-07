@@ -12,6 +12,8 @@ use App\Offre\Enum\Canal;
 /**
  * Résolveur de prix (RG-M1-01/06/07). Le prix est déterminé par produit × type de tarif × saison
  * (+ tranche de QF). En cas de chevauchement de saisons, la priorité supérieure l'emporte (CA-12).
+ * Une case SANS saison vaut toute l'année ; une case d'une saison qui contient la date l'emporte
+ * toujours sur elle, quelle que soit sa priorité (la priorité ne départage que des saisons).
  * Un prix null vaut « non commercialisé » (CA-5). Un tarif non visible sur le canal demandé n'est
  * pas retenu (RG-M1-07 / CA-15).
  */
@@ -30,6 +32,20 @@ final class ResolveurPrix
         ?Canal $canal = null,
         ?float $qf = null,
     ): ?string {
+        return $this->grilleRetenue($produit, $typeTarif, $date, $canal, $qf)?->getPrix();
+    }
+
+    /**
+     * La case de grille qui fixe le prix (son prix peut être null : non commercialisé). La saison
+     * d'une ligne de vente se lit sur elle, pour ne jamais nommer une autre case que celle appliquée.
+     */
+    public function grilleRetenue(
+        Produit $produit,
+        TypeTarif $typeTarif,
+        \DateTimeImmutable $date,
+        ?Canal $canal = null,
+        ?float $qf = null,
+    ): ?GrilleTarifaire {
         // RG-M1-07 / CA-15 : le tarif doit être visible sur le canal demandé.
         if ($canal !== null && !$typeTarif->estVisibleSur($canal)) {
             return null;
@@ -40,12 +56,12 @@ final class ResolveurPrix
             if (!$this->correspond($grille, $typeTarif, $date, $qf)) {
                 continue;
             }
-            if ($meilleure === null || $this->prioriteDe($grille) > $this->prioriteDe($meilleure)) {
+            if ($meilleure === null || $this->rangDe($grille) > $this->rangDe($meilleure)) {
                 $meilleure = $grille;
             }
         }
 
-        return $meilleure?->getPrix();
+        return $meilleure;
     }
 
     /**
@@ -66,8 +82,9 @@ final class ResolveurPrix
         if ($grille->getTypeTarif() === null || !$grille->getTypeTarif()->getId()->equals($typeTarif->getId())) {
             return false;
         }
+        // Sans saison : toute l'année.
         $saison = $grille->getSaison();
-        if ($saison === null || !$saison->isActif() || !$saison->contient($date)) {
+        if ($saison !== null && (!$saison->isActif() || !$saison->contient($date))) {
             return false;
         }
         $tranche = $grille->getTrancheQf();
@@ -80,8 +97,16 @@ final class ResolveurPrix
         return true;
     }
 
-    private function prioriteDe(GrilleTarifaire $grille): int
+    /**
+     * [a une saison, priorité], comparé élément par élément : une saison l'emporte toujours sur
+     * « toute l'année », même de priorité nulle ou négative.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function rangDe(GrilleTarifaire $grille): array
     {
-        return $grille->getSaison()?->getPriorite() ?? 0;
+        $saison = $grille->getSaison();
+
+        return $saison === null ? [0, 0] : [1, $saison->getPriorite()];
     }
 }

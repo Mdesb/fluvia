@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace App\Audit\Doctrine;
 
 use App\Audit\Entity\EntreeAudit;
+use App\Audit\Service\AuditEstablishmentResolver;
 use App\Audit\Service\InstantaneEntiteBuilder;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
 use Symfony\Bundle\SecurityBundle\Security;
-use Symfony\Component\Uid\Uuid;
 
 /**
  * Journalise automatiquement les créations/modifications/suppressions des entités sensibles
@@ -96,8 +97,8 @@ final class AuditWriteSubscriber
         // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, événements SOS) —
         // plan-sport.md §5, T15. La politique/les incidents anti-impayés ont été extraits vers le
         // moteur de recouvrement partagé (§ ci-dessous, refactor extraction).
-        \App\Sport\Entity\AbonnementFitness::class,
-        \App\Sport\Entity\Resiliation::class,
+        \App\Membership\Entity\Membership::class,
+        \App\Membership\Entity\Resiliation::class,
         \App\Sport\Entity\EvenementSOS::class,
         // Module SEPA partagé (plan-sepa.md §2) : mandat, configuration créancier, remise — IBAN
         // (jetons) exclus de l'instantané (CHAMPS_SENSIBLES ci-dessous, §4 spec).
@@ -171,6 +172,7 @@ final class AuditWriteSubscriber
     public function __construct(
         private readonly Security $security,
         private readonly InstantaneEntiteBuilder $instantane,
+        private readonly AuditEstablishmentResolver $rattachement,
     ) {
     }
 
@@ -182,13 +184,13 @@ final class AuditWriteSubscriber
 
         $entrees = [];
         foreach ($uow->getScheduledEntityInsertions() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'creation', $auteur, null);
+            $entrees[] = $this->creerEntree($em, $entity, 'creation', $auteur, null);
         }
         foreach ($uow->getScheduledEntityUpdates() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'modification', $auteur, $uow->getEntityChangeSet($entity));
+            $entrees[] = $this->creerEntree($em, $entity, 'modification', $auteur, $uow->getEntityChangeSet($entity));
         }
         foreach ($uow->getScheduledEntityDeletions() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'suppression', $auteur, null);
+            $entrees[] = $this->creerEntree($em, $entity, 'suppression', $auteur, null);
         }
 
         $entrees = array_filter($entrees);
@@ -204,7 +206,7 @@ final class AuditWriteSubscriber
     }
 
     /** @param array<string, array{0: mixed, 1: mixed}>|null $changeSet */
-    private function creerEntree(object $entity, string $action, ?string $auteur, ?array $changeSet): ?EntreeAudit
+    private function creerEntree(EntityManagerInterface $em, object $entity, string $action, ?string $auteur, ?array $changeSet): ?EntreeAudit
     {
         if ($entity instanceof EntreeAudit) {
             return null;
@@ -219,7 +221,8 @@ final class AuditWriteSubscriber
         $entree->setAction($action);
         $entree->setCibleType($entity::class);
         $entree->setCibleId($this->cibleId($entity));
-        $entree->setEtablissement($this->etablissement($entity));
+        // Sans établissement, l'entrée n'est lue que par l'éditeur : voir AuditEstablishmentResolver.
+        $entree->setEtablissement($this->rattachement->forEntity($entity, $em));
         $entree->setAuteur($auteur);
 
         // RG-M8-05 (CA-14) : valeurs avant/après (champs scalaires uniquement, sensibles exclus).
@@ -244,26 +247,6 @@ final class AuditWriteSubscriber
             $id = $entity->getId();
 
             return $id === null ? null : (string) $id;
-        }
-
-        return null;
-    }
-
-    private function etablissement(object $entity): ?Uuid
-    {
-        if ($entity instanceof Etablissement) {
-            return $entity->getId();
-        }
-        // Deux orthographes cohabitent dans le dépôt : `etablissement` sur les entités d'avant D5,
-        // `establishment` sur celles d'après. N'en lire qu'une laissait les secondes SANS
-        // rattachement — donc hors de tout cloisonnement du journal, sans que rien ne le signale.
-        foreach (['getEtablissement', 'getEstablishment'] as $accesseur) {
-            if (method_exists($entity, $accesseur)) {
-                $etab = $entity->{$accesseur}();
-                if ($etab instanceof Etablissement) {
-                    return $etab->getId();
-                }
-            }
         }
 
         return null;

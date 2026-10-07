@@ -266,6 +266,18 @@ class Produit
     #[Groups(['produit:read'])]
     private Collection $grilles;
 
+    /**
+     * Autorisation parentale exigée pour un bénéficiaire mineur, à l'achat en ligne (#101).
+     *
+     * ⚠ UN CHOIX MÉTIER DE L'ÉTABLISSEMENT, PAS UNE EXIGENCE DU RGPD. L'avis juridique du 04/10 l'a
+     * dit : rien n'impose de faire cocher une autorisation pour acheter un billet à un mineur. C'est
+     * le règlement intérieur qui peut l'exiger (mineur non accompagné). Décoché par défaut : la
+     * boutique ne pose la question que là où l'exploitant l'a voulue.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['produit:read', 'produit:write'])]
+    private bool $parentalConsentRequired = false;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['produit:read', 'produit:list'])]
     private \DateTimeImmutable $creeLe;
@@ -287,6 +299,18 @@ class Produit
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function isParentalConsentRequired(): bool
+    {
+        return $this->parentalConsentRequired;
+    }
+
+    public function setParentalConsentRequired(bool $parentalConsentRequired): self
+    {
+        $this->parentalConsentRequired = $parentalConsentRequired;
+
+        return $this;
     }
 
     /** @return array<string, string> */

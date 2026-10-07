@@ -8,7 +8,7 @@ use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
-use App\Sport\Entity\StatutAccesFitness;
+use App\Membership\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -95,7 +95,7 @@ final class AccesHorsLigneTest extends SportApiTestCase
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
         $abonnement = $this->abonnementDemo();
-        $echeance = $em->getRepository(\App\Sport\Entity\EcheanceSepa::class)->findOneBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
+        $echeance = $em->getRepository(\App\Membership\Entity\EcheanceSepa::class)->findOneBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
 
         $client->request('POST', '/api/sport/echeances/' . $echeance->getId() . '/simuler-rejet', $entete + [
             'json' => ['codeRetour' => 'AM04'],

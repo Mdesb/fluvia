@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Sepa\Validator;
 
 use App\Sepa\Entity\ConfigCreancierSepa;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Enum\PeriodiciteAbonnementFitness;
+use App\Sepa\Service\DebitPreNotifier;
+use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipPeriodicity;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
@@ -37,13 +38,26 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
             return;
         }
 
-        if ($value instanceof AbonnementFitness) {
+        if ($value instanceof Membership) {
             $this->validerAbonnement($value, $constraint);
         }
     }
 
     private function validerCreancier(ConfigCreancierSepa $config, NoticeDelayCoversPeriod $c): void
     {
+        // D115 : un délai sous le minimum SEPA (14 j) exige une clause de préavis réduit déclarée sur le
+        // créancier. Indépendant des abonnements du site — une config à 10 jours sans clause est invalide
+        // même avant la première vente, donc AVANT la logique de période ci-dessous (qui, elle, sort tôt
+        // quand le site n'a aucun abonnement).
+        if ($config->getPreNotificationDelayDays() < DebitPreNotifier::DEFAULT_DELAY_DAYS
+            && !$config->isPreavisReduitContractuel()) {
+            $this->context->buildViolation($c->messagePreavisReduit)
+                ->setParameter('{{ delai }}', (string) $config->getPreNotificationDelayDays())
+                ->setParameter('{{ minimum }}', (string) DebitPreNotifier::DEFAULT_DELAY_DAYS)
+                ->atPath('preNotificationDelayDays')
+                ->addViolation();
+        }
+
         $etablissement = $config->getEtablissement();
         if ($etablissement === null) {
             return;
@@ -59,7 +73,7 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
         $this->comparer($config->getPreNotificationDelayDays(), $periode, $c->messageCreditor, 'preNotificationDelayDays');
     }
 
-    private function validerAbonnement(AbonnementFitness $abonnement, NoticeDelayCoversPeriod $c): void
+    private function validerAbonnement(Membership $abonnement, NoticeDelayCoversPeriod $c): void
     {
         $etablissement = $abonnement->getEtablissement();
         if ($etablissement === null) {
@@ -99,8 +113,8 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
     /** La plus courte période d'abonnement du site, en jours, ou `null` s'il n'y en a aucun. */
     private function plusCourtePeriodeDuSite(mixed $etablissementId): ?int
     {
-        /** @var list<AbonnementFitness> $abonnements */
-        $abonnements = $this->em->getRepository(AbonnementFitness::class)
+        /** @var list<Membership> $abonnements */
+        $abonnements = $this->em->getRepository(Membership::class)
             ->findBy(['etablissement' => $etablissementId]);
 
         $plusCourte = null;
@@ -121,14 +135,14 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
      * février — un défaut d'un cycle par an, que personne ne relierait au paramétrage. On prend le
      * mois le plus court : ce qui passe ici passe toute l'année.
      */
-    private static function enJours(PeriodiciteAbonnementFitness $periodicite): int
+    private static function enJours(MembershipPeriodicity $periodicite): int
     {
         return match ($periodicite) {
-            PeriodiciteAbonnementFitness::Hebdomadaire => 7,
-            PeriodiciteAbonnementFitness::Mensuel => 28,
+            MembershipPeriodicity::Hebdomadaire => 7,
+            MembershipPeriodicity::Mensuel => 28,
             // 365, pas 366 : même raison que le 28 ci-dessus. On prend l'année la plus courte, pour
             // que ce qui passe ici passe aussi une année bissextile.
-            PeriodiciteAbonnementFitness::Annuel => 365,
+            MembershipPeriodicity::Annuel => 365,
         };
     }
 }

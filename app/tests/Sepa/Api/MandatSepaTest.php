@@ -26,7 +26,7 @@ final class MandatSepaTest extends SepaApiTestCase
         $client->request('POST', '/api/sepa/mandats', $entete + ['json' => [
             'client' => '/api/clients/' . $client_->getId(),
             'etablissement' => '/api/etablissements/' . $idA,
-            'iban' => 'FR7630006000099876543210987',
+            'iban' => 'FR7630006000011234567890189',
             'bicDebiteur' => 'AGRIFRPPXXX',
             'debiteurNom' => 'Test Nouveau Mandat',
         ]]);
@@ -34,7 +34,7 @@ final class MandatSepaTest extends SepaApiTestCase
         $mandat = $client->getResponse()->toArray();
 
         self::assertSame('actif', $mandat['statut']);
-        self::assertSame('0987', $mandat['iban4Derniers']);
+        self::assertSame('0189', $mandat['iban4Derniers']);
         self::assertArrayNotHasKey('ibanToken', $mandat);
         self::assertArrayNotHasKey('ibanChiffre', $mandat);
         self::assertArrayNotHasKey('iban', $mandat);
@@ -42,16 +42,16 @@ final class MandatSepaTest extends SepaApiTestCase
 
         $mandatEntite = $em->getRepository(MandatSepa::class)->find($mandat['id']);
         self::assertNotNull($mandatEntite);
-        self::assertStringNotContainsString('FR7630006000099876543210987', $mandatEntite->getIbanToken());
-        self::assertNotSame('FR7630006000099876543210987', $mandatEntite->getIbanToken());
+        self::assertStringNotContainsString('FR7630006000011234567890189', $mandatEntite->getIbanToken());
+        self::assertNotSame('FR7630006000011234567890189', $mandatEntite->getIbanToken());
 
         // Coffre IBAN réversible : l'IBAN chiffré est bien stocké (permet à Pain008Generator de
         // reconstruire le vrai IBAN), mais n'est jamais l'IBAN en clair ni exposé en API (ci-dessus).
         self::assertNotNull($mandatEntite->getIbanChiffre());
-        self::assertStringNotContainsString('FR7630006000099876543210987', (string) $mandatEntite->getIbanChiffre());
+        self::assertStringNotContainsString('FR7630006000011234567890189', (string) $mandatEntite->getIbanChiffre());
         /** @var \App\Sepa\Service\ChiffreurIbanInterface $chiffreur */
         $chiffreur = static::getContainer()->get(\App\Sepa\Service\ChiffreurIbanInterface::class);
-        self::assertSame('FR7630006000099876543210987', $chiffreur->dechiffrer((string) $mandatEntite->getIbanChiffre()));
+        self::assertSame('FR7630006000011234567890189', $chiffreur->dechiffrer((string) $mandatEntite->getIbanChiffre()));
     }
 
     public function testIbanJamaisExposeSurLesReponsesMandatDeDemo(): void

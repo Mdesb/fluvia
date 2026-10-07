@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Sport\Api;
 
 use App\Offre\Entity\Formule;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Enum\StatutEcheanceSepa;
-use App\Sport\Service\SubscriptionTermHandler;
+use App\Membership\Entity\Membership;
+use App\Membership\Entity\EcheanceSepa;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Service\SubscriptionTermHandler;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -88,7 +88,7 @@ final class ReconductionTarifTest extends SportApiTestCase
         $em = $this->em();
         $demo = $this->abonnementDemo();
 
-        $abonnement = (new AbonnementFitness())
+        $abonnement = (new Membership())
             ->setAdherent($demo->getAdherent())
             ->setPayeur($demo->getPayeur())
             ->setFormule($demo->getFormule())
@@ -127,7 +127,7 @@ final class ReconductionTarifTest extends SportApiTestCase
      * déjà au-delà de la nouvelle fin, rien n'est créé — ce qui est le comportement voulu. Mon
      * premier jet lisait « 12 est-il supérieur à 12 » et accusait le correctif.
      */
-    private function auTerme(AbonnementFitness $abonnement): void
+    private function auTerme(Membership $abonnement): void
     {
         $derniere = $this->em()->getRepository(EcheanceSepa::class)
             ->createQueryBuilder('e')
@@ -143,7 +143,7 @@ final class ReconductionTarifTest extends SportApiTestCase
         $abonnement->setDateFinEngagement($derniere->getDateProgrammee()->modify('+2 months'));
     }
 
-    private function compteEcheances(AbonnementFitness $abonnement): int
+    private function compteEcheances(Membership $abonnement): int
     {
         return (int) $this->em()->getRepository(EcheanceSepa::class)
             ->createQueryBuilder('e')

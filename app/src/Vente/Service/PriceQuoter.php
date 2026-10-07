@@ -74,8 +74,12 @@ final class PriceQuoter
         $baseCentimes = $prix !== null ? $this->calculateur->centimes($prix) : 0;
         $groupes = $this->optionsDuProduit($produit, $etablissement, $baseCentimes, $optionsRetenues);
 
+        // Calculées une fois : elles sont rendues à l'écran ET déduites du montant annoncé.
+        $promotions = $prix === null ? [] : $this->promotionsAuto($produit, $date);
+
         $totalUnitaire = null;
         $totalLigne = null;
+        $montantLigne = null;
         if ($prix !== null) {
             $cumul = $baseCentimes;
             foreach ($groupes as $groupe) {
@@ -88,7 +92,17 @@ final class PriceQuoter
                 }
             }
             $totalUnitaire = $this->calculateur->decimal($cumul);
-            $totalLigne = $this->calculateur->decimal($cumul * max(1, $quantite));
+            $brutLigne = $cumul * max(1, $quantite);
+            $totalLigne = $this->calculateur->decimal($brutLigne);
+            // ⚠ LE MÊME CALCUL QUE CELUI QUI FACTURERA, PAS UN SECOND.
+            //
+            // `PanierCalculateur::recalculerLigne()` retire cette réduction du montant de la ligne.
+            // Tant que l'estimation ne la retirait pas, l'écran annonçait le brut : la caisse disait
+            // « Encaisser 8,44 € » puis réclamait 7,60 € au paiement, sans que rien ne nomme la
+            // promotion responsable. Le prix bougeait à l'instant où le caissier venait de l'annoncer.
+            $montantLigne = $this->calculateur->decimal(
+                max(0, $brutLigne - $this->calculateur->reductionPromotions($promotions, $brutLigne)),
+            );
         }
 
         return new PriceQuote(
@@ -98,12 +112,13 @@ final class PriceQuoter
             saison: $saison !== null ? (string) $saison : null,
             canal: $canal->value,
             date: $date->format(\DATE_ATOM),
-            promotions: $prix === null ? [] : $this->promotionsAuto($produit, $date),
+            promotions: $promotions,
             motif: $this->motif($produit, $typeTarif, $date, $canal, $prix, $saison, $qf),
             options: $groupes,
             quantite: max(1, $quantite),
             totalUnitaire: $totalUnitaire,
             totalLigne: $totalLigne,
+            montantLigne: $montantLigne,
         );
     }
 
@@ -212,6 +227,8 @@ final class PriceQuoter
         if ($saison !== null) {
             $nom = $this->nomSaison($produit, $saison);
             $raisons[] = $nom !== null ? sprintf('saison « %s »', $nom) : 'saison en cours';
+        } else {
+            $raisons[] = 'toute l\'année';
         }
         if ($qf !== null) {
             $raisons[] = sprintf('quotient familial %s', rtrim(rtrim(number_format($qf, 2, ',', ' '), '0'), ','));
@@ -264,21 +281,19 @@ final class PriceQuoter
      *
      * Déplacée ici depuis `AjoutLigneHandler`, où elle était privée : c'est précisément le genre de
      * calcul qu'une estimation aurait dû réécrire, et donc le genre qui diverge.
+     *
+     * Lue sur la case que le résolveur a RETENUE : elle cherchait auparavant la première case de
+     * saison qui contenait la date, qui n'était pas forcément celle du prix appliqué. null pour un
+     * prix « toute l'année » (case sans saison).
      */
     public function saison(Produit $produit, TypeTarif $typeTarif, \DateTimeImmutable $date, ?float $qf): ?Uuid
     {
-        foreach ($produit->getGrilles() as $grille) {
-            $gt = $grille->getTypeTarif();
-            $saison = $grille->getSaison();
-            if ($gt === null || $saison === null || !$gt->getId()->equals($typeTarif->getId())) {
-                continue;
-            }
-            if ($saison->isActif() && $saison->contient($date) && $grille->getPrix() !== null) {
-                return $saison->getId();
-            }
+        $grille = $this->resolveurPrix->grilleRetenue($produit, $typeTarif, $date, null, $qf);
+        if ($grille === null || $grille->getPrix() === null) {
+            return null;
         }
 
-        return null;
+        return $grille->getSaison()?->getId();
     }
 
     /**

@@ -333,6 +333,70 @@ export function membres(collection) {
   return collection.member || collection['hydra:member'] || []
 }
 
+// ── LIRE UNE COLLECTION JUSQU'AU BOUT ────────────────────────────────────────────────────────
+//
+// Mesuré le 15/09/2026 sur GI-ONE FITNESS : `/api/article_stocks` annonce 422 articles, l'écran Stock
+// en lisait 200 et affichait « 200 références » — sans un mot. Les articles 201 à 422 ne pouvaient
+// être ni cherchés, ni commandés, ni inventoriés, ni réintégrés, et le journal ne savait pas les
+// nommer. Une liste qui sert à CHOISIR, à COMPTER ou à RETROUVER un nom ne se lit pas sur une page.
+//
+// On suit donc `view.next` page après page, au plafond du serveur (500 par page,
+// `pagination_maximum_items_per_page`), jusqu'à `totalItems`.
+//
+// ⚠ LA COLLECTION RENDUE GARDE LE `totalItems` DU SERVEUR, JAMAIS LE NOMBRE DE LIGNES LUES. Si la
+// lecture s'arrête avant (plafond de pages atteint, collection modifiée entre deux pages), la
+// comparaison des deux le montre, exactement comme sur une page unique — c'est ce que font déjà
+// les écrans qui gardent la troncature. Pour ceux qui ne la gardent pas, `complete: true` refuse de
+// rendre une liste partielle : la lecture ÉCHOUE, et l'écran dit « n'a pas pu être lue » au lieu
+// d'afficher un compte qui n'est que celui des lignes reçues.
+//
+// Les lignes sont dédoublonnées par identifiant : une ligne créée entre deux pages décale
+// l'offset et ferait lire deux fois la dernière de la page précédente.
+const PAGES_MAX = 40
+
+function nextPageOf(collection) {
+  const view = collection?.view || collection?.['hydra:view']
+  return view?.next || view?.['hydra:next'] || null
+}
+
+async function requestAll(path, { query = {}, complete = false, ...options } = {}) {
+  const first = await request(path, { ...options, query: { itemsPerPage: 500, ...query } })
+  const announced = first?.totalItems ?? first?.['hydra:totalItems']
+  const seen = new Set()
+  const rows = []
+  const add = (page) => {
+    for (const row of membres(page)) {
+      const key = row?.['@id'] ?? row?.id
+      if (key !== undefined && key !== null) {
+        if (seen.has(key)) continue
+        seen.add(key)
+      }
+      rows.push(row)
+    }
+  }
+  add(first)
+  let next = nextPageOf(first)
+  let pages = 1
+  while (next && pages < PAGES_MAX && !(typeof announced === 'number' && rows.length >= announced)) {
+    const page = await request(next, options)
+    const before = rows.length
+    add(page)
+    pages += 1
+    // Une page qui n'apporte rien de neuf ne fera pas mieux à la suivante.
+    if (rows.length === before) break
+    next = nextPageOf(page)
+  }
+  if (complete && typeof announced === 'number' && rows.length < announced) {
+    throw new ApiError(
+      `Cette liste compte ${announced} éléments et seuls ${rows.length} ont pu être lus : `
+        + 'elle n’est pas affichée, pour ne pas présenter une partie comme le tout.',
+      0,
+      null,
+    )
+  }
+  return { ...first, member: rows, totalItems: announced, view: undefined, 'hydra:member': undefined }
+}
+
 // Les routes des gestes d'une pièce commerciale (FAC-1). Aucune ne prend de corps : tout est dans
 // la route, et le serveur les déclare `input: false`.
 const GESTES_PIECE = {
@@ -929,6 +993,8 @@ export const api = {
   // abonnements de l'ecran, jamais avec cette reponse.
   echeancesSepaSport: (params = {}) =>
     request('/api/echeance_sepas', { query: { itemsPerPage: 200, ...params } }),
+  // Une échéance par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  echeanceSepa: (id) => request(`/api/echeance_sepas/${id}`),
   // LE MOTIF EST EXIGE PAR LE SERVEUR : blanc ou vide, il rend 422. Ce n'est pas de la
   // bureaucratie — une echeance annulee est une somme que le club n'encaissera jamais, et la seule
   // question posee six mois plus tard sera « pourquoi ». Operation SUR MESURE, donc pas de
@@ -1014,6 +1080,26 @@ export const api = {
     request(`/api/sport/abonnements/${id}/pauses`, { method: 'POST', body: corps }),
   resilierAbonnement: (id, corps) =>
     request(`/api/sport/abonnements/${id}/resiliations`, { method: 'POST', body: corps }),
+  // ── LES DEMANDES DE RESILIATION, ET LEUR VALIDATION ───────────────────────────────────────────
+  //
+  // ⚠ SANS CES DEUX APPELS, LA FICHE ABONNEMENT PROMETTAIT UN GESTE QUI N'EXISTAIT NULLE PART.
+  //
+  // Pendant l'engagement, une demande de resiliation reste `refusee` ; un MOTIF LEGITIME declare
+  // (demenagement, perte d'emploi, raison medicale) la met en attente d'une validation manuelle par
+  // un responsable (§4.3). La fiche le dit mot pour mot -- « un responsable doit valider le motif
+  // legitime pour que le preavis commence. Tant qu'il ne l'a pas fait, l'abonnement reste actif et
+  // preleve. »
+  //
+  // Ce responsable n'avait AUCUN ecran. La route existait, aucun client ne l'appelait, et la demande
+  // dormait indefiniment pendant que l'adherent continuait d'etre preleve.
+  //
+  // La collection ne declare AUCUN filtre serveur : on lit large et on trie a l'ecran, en le disant.
+  // Le cloisonnement, lui, est serveur (`PerimetreSportExtension` passe par `abonnement`).
+  resiliationsSport: (params = {}) =>
+    request('/api/resiliations', { query: { itemsPerPage: 200, ...params } }),
+  // `input: false` cote serveur, aucun corps : tout est dans la route.
+  validerMotifLegitimeResiliation: (id) =>
+    request(`/api/sport/resiliations/${id}/valider-motif-legitime`, { method: 'POST', body: {} }),
   // SOUSCRIRE : le premier pas de la chaine souscription -> echeance -> prelevement -> rejet ->
   // impaye -> recouvrement. Tout l'aval avait ete construit ; l'entree, non.
   // `input: false` cote serveur, le processeur lit le corps brut : pas de `ld: true`.
@@ -1134,6 +1220,8 @@ export const api = {
 
   // Réservation / Planning (M5).
   reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
+  // Vocabulaire des verticales (#100) : table par verticale + « default », résolue côté serveur.
+  vocabulary: () => request('/api/vocabulary'),
   // LA JAUGE D'UNE RESSOURCE ETAIT AFFICHEE A DEUX ENDROITS ET MODIFIABLE NULLE PART.
   //
   // `capacitePropre` porte deja la jauge par ressource -- un terrain de padel a 4, un court de
@@ -1142,7 +1230,9 @@ export const api = {
   // << jauge differente padel/tennis >>, et il ne manquait que ceci.
   majRessourceReservation: (id, corps) =>
     request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
-  reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+  // ⚠ LUS EN ENTIER, OU PAS DU TOUT. Lus sur 200 et sans ordre, ils laissaient hors du planning des
+  // créneaux pris au hasard : 23 sur 223 à Piscine A le 15/09/2026, dont un de la semaine en cours.
+  reservationCreneaux: () => requestAll('/api/reservation_creneaus', { complete: true }),
 
   // --- Sejours (App\Stay) ---
   //
@@ -1150,6 +1240,9 @@ export const api = {
   // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
   // que personne ne pouvait lire.
   sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // Un séjour par son identifiant : 404 s'il n'existe pas OU s'il appartient à un autre
+  // établissement (mesuré le 15/09/2026 : SEJ-TEST-B de Patinoire B, lu depuis Piscine A).
+  sejour: (id) => request(`/api/stays/${id}`),
   // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
   // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
   ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
@@ -1236,9 +1329,9 @@ export const api = {
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
   // LES CRENEAUX D'UNE ACTIVITE, A PARTIR D'UN INSTANT.
   //
-  // `reservationCreneaux()` (plus haut) rend les 200 premiers creneaux de l'etablissement, tous
-  // confondus : la fiche produit y aurait cherche les siens a l'aveugle, et un etablissement actif
-  // en aurait rempli la page avant d'arriver a l'activite demandee.
+  // `reservationCreneaux()` (plus haut) rend TOUS les creneaux de l'etablissement, toutes activites
+  // confondues : la fiche produit y aurait cherche les siens dans une liste qui grossit avec chaque
+  // recurrence, et lu des annees de planning pour une seule activite.
   //
   // ⚠ LES DEUX FILTRES SONT DECLARES SUR L'ENTITE, ET C'EST CE QUI LES REND SURS :
   // `SearchFilter(activite: exact)` et `DateFilter(debut)`. Un parametre non declare est ignore en
@@ -1485,6 +1578,11 @@ export const api = {
     }),
 
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
+  // Les réservations « à confirmer », toutes : elles marquent au planning les places qui peuvent se
+  // libérer à l'échéance. `statut` est un filtre DÉCLARÉ sur `Reservation` (SearchFilter exact) ;
+  // lues dans les 200 premières réservations, elles disparaissaient dès que l'historique grossissait.
+  reservationsAConfirmer: () =>
+    requestAll('/api/reservations', { query: { statut: 'a_confirmer' }, complete: true }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
   exonererNoShow: (id, corps) =>
@@ -1972,6 +2070,8 @@ export const api = {
   // --- Achats & tresorerie ---
   facturesFournisseur: () =>
     request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // Une facture par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  factureFournisseur: (id) => request(`/api/supplier_invoices/${id}`),
   // ON POUVAIT APPROUVER UNE FACTURE FOURNISSEUR, ON NE POUVAIT PAS EN ENREGISTRER UNE.
   //
   // Maxime : << Achats & tresorerie -- on ne peut pas enregistrer une facture fournisseur, il faut
@@ -2458,6 +2558,14 @@ export const api = {
   // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
   // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
   majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
+  // Le logo de la boutique — le fichier part en multipart, SANS en-tete Content-Type : le navigateur
+  // pose lui-meme la frontiere du corps, et l'ecrire a la main la casse (meme idiome que les photos
+  // de produit). Le serveur valide les octets et repond la vitrine avec son `logo` (URL /media/...).
+  televerserLogoVitrine: (id, fichier) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    return request(`/api/boutique/vitrines/${id}/logo`, { method: 'POST', formData: corps })
+  },
   // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
   // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
   accepterRemboursement: (id, montant) =>
@@ -2598,6 +2706,8 @@ export const api = {
     request(`/api/personnel/affectations/${id}/annuler`, { method: 'POST', body: {} }),
   creneauxTravail: (params) =>
     request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  // Un créneau par son identifiant : un lien ne dépend pas de la borne de 200 de la liste.
+  creneauTravail: (id) => request(`/api/creneau_travails/${id}`),
   creerCreneauTravail: (corps) =>
     request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
   annulerCreneauTravail: (id) =>
@@ -2685,6 +2795,8 @@ export const api = {
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>
     request('/api/patinoire_location_patins', { query: { itemsPerPage: 100 } }),
+  // Une location par son identifiant : un lien ne dépend pas de la borne de 100 de la liste.
+  patinoireLocation: (id) => request(`/api/patinoire_location_patins/${id}`),
   patinoireAffutages: () =>
     request('/api/patinoire_affutages', { query: { itemsPerPage: 100 } }),
   // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
@@ -2741,22 +2853,31 @@ export const api = {
   // `articleStock` ne porte AUCUNE quantite : le stock reel vit dans les lots, un article pouvant en
   // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
   // sont chargees ensemble et agregees a l'ecran.
-  stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  //
+  // ⚠ LUE EN ENTIER (`requestAll`) : elle sert à compter, à chercher, à choisir et à nommer. Lue sur
+  // 200, elle affichait « 200 références » pour 422. Pas de `complete` : l'écran Stock compare
+  // lui-même `totalItems` aux lignes reçues et le dit, comme pour les lots.
+  stockArticles: () => requestAll('/api/article_stocks'),
+  // Un article par son identifiant : un lien ne doit pas dépendre d'une liste, dont la lecture peut
+  // échouer ou s'arrêter au plafond de pages.
+  stockArticle: (id) => request(`/api/article_stocks/${id}`),
   // LES TRANSFERTS ENTRE SITES — trois routes, aucun ecran jusqu'ici.
   //
   // ⚠ LE CLOISONNEMENT DU TRANSFERT EST UN « OU » : source OU destination = etablissement actif.
   // On voit donc ses transferts DANS LES DEUX SENS, alors que les articles, eux, sont limites a
   // l'etablissement actif. Un seul des deux articles d'un transfert est donc lisible — celui qui
   // est chez soi — et c'est ce qui donne la direction.
+  // L'en-tête de l'écran en affiche le nombre : lue en entier, ou pas du tout.
   stockTransferts: () =>
-    request('/api/stock_transferts', { query: { itemsPerPage: 200, 'order[dateDemande]': 'desc' } }),
+    requestAll('/api/stock_transferts', { query: { 'order[dateDemande]': 'desc' }, complete: true }),
   // ⚠ 409 SI L'ETAT NE S'Y PRETE PAS : `expedier` exige `demande`, `recevoir` exige `expedie`.
   // Et le serveur restreint l'un a l'etablissement SOURCE, l'autre a la DESTINATION (RG-STOCK-14).
   expedierTransfertStock: (id) =>
     request(`/api/stock/transferts/${id}/expedier`, { method: 'POST', body: {} }),
   recevoirTransfertStock: (id) =>
     request(`/api/stock/transferts/${id}/recevoir`, { method: 'POST', body: {} }),
-  stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
+  // Lus en entier ; l'écran garde son contrôle de troncature pour le cas où la lecture s'arrête.
+  stockLots: () => requestAll('/api/stock_lots'),
   stockMouvements: () =>
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
@@ -2764,7 +2885,8 @@ export const api = {
   //
   // ⚠ PAS D'`order[...]` ICI : `Avoir` ne declare AUCUN filtre. Un parametre d'ordre serait ignore
   // en silence et la liste aurait l'air triee. Le tri se fait dans le composant, qui le sait.
-  avoirs: () => request('/api/avoirs', { query: { itemsPerPage: 200 } }),
+  // Lus en entier : un avoir au-delà de la page ne pouvait pas être réintégré, et rien ne le disait.
+  avoirs: () => requestAll('/api/avoirs', { complete: true }),
   // Sert a savoir ce qui a DEJA ete reintegre : le mouvement genere porte `referenceType: 'Avoir'`
   // et `referenceId`. `type` est l'un des trois seuls filtres declares sur `MouvementStock` — il
   // n'y en a aucun sur la reference, d'ou la lecture large et le controle de troncature.
@@ -2799,8 +2921,10 @@ export const api = {
   // Inventaire.
   stockInventaires: () =>
     request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  // Lignes de TOUS les inventaires, filtrées à l'écran sur celui en cours : lues en entier, sinon
+  // les lignes de l'inventaire ouvert pouvaient tomber hors de la page sans que rien ne le dise.
   stockLignesInventaire: () =>
-    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+    requestAll('/api/stock_ligne_inventaires', { complete: true }),
   // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
   // suivantes sont sur mesure et n'en ont pas besoin.
   stockLancerInventaire: (corps) =>
@@ -2813,14 +2937,20 @@ export const api = {
     request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
 
   // Cycle d'achat : fournisseur -> commande -> envoi -> confirmation -> reception -> validation.
+  // Les quatre listes des achats sont lues en entier, ou pas du tout : l'écran en tire des comptes
+  // (« 3 en cours »), un choix de fournisseur, et les lignes d'une commande — « aucune ligne » sur
+  // une commande dont les lignes sont hors de la page serait faux.
   stockFournisseurs: () =>
-    request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
+    requestAll('/api/stock_fournisseurs', { complete: true }),
   stockCommandesAchat: () =>
-    request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
+    requestAll('/api/stock_commande_achats', { complete: true }),
+  // Une commande par son identifiant : un lien ne doit pas dépendre d'une liste, dont la lecture peut
+  // échouer.
+  stockCommandeAchat: (id) => request(`/api/stock_commande_achats/${id}`),
   stockLignesCommandeAchat: () =>
-    request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
+    requestAll('/api/stock_ligne_commande_achats', { complete: true }),
   stockReceptions: () =>
-    request('/api/stock_reception_achats', { query: { itemsPerPage: 100 } }),
+    requestAll('/api/stock_reception_achats', { complete: true }),
   // Operations STANDARD : elles deserialisent, donc `ld: true`.
   //
   // `etablissement` n'est JAMAIS envoye, bien que le modele l'accepte en ecriture : le serveur le
@@ -2859,6 +2989,8 @@ export const api = {
   // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
   // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
   padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
+  // Un terrain par son identifiant : un lien ne dépend pas de la borne de 100 de la liste.
+  padelTerrain: (id) => request(`/api/padel_terrains/${id}`),
   // ⚠ LA CREATION N'EST PAS SUR LA COLLECTION : elle porte un `uriTemplate` a elle,
   // `/padel/terrains`. Un POST sur `/api/padel_terrains` rend 405 — mesure du 30/08, faite avant
   // d'ecrire cette ligne.
@@ -3028,6 +3160,14 @@ export const api = {
   // part est un accès que personne ne referme.
   editorSupportAccesses: () => request('/api/editor/support-accesses'),
 
+  // ── ACCÈS PARTENAIRES, CÔTÉ EXPLOITANT (`api.gerer`) ────────────────────────────────────────
+  // Toujours pour l'établissement ACTIF (en-tête) : l'identifiant est celui de l'application.
+  accesPartenaires: () => request('/api/partner-accesses'),
+  accorderAccesPartenaire: (id, scopes) =>
+    request(`/api/partner-accesses/${id}/grant`, { method: 'POST', body: { scopes } }),
+  retirerAccesPartenaire: (id) =>
+    request(`/api/partner-accesses/${id}/withdraw`, { method: 'POST', body: {} }),
+
   // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
   //
   // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
@@ -3042,6 +3182,30 @@ export const api = {
   // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
   revoquerAccesAssistance: (id) =>
     request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
+
+  // ── API PARTENAIRE, CÔTÉ ÉDITEUR (spec API partenaire v1, §3.1) ─────────────────────────────
+  //
+  // Corps JSON simple (`input: false` côté serveur, comme les accès d'assistance). Le secret d'une
+  // clé n'arrive QUE dans la réponse d'`emettreClePartenaire` (`issuedSecret`) : la liste ne le rend
+  // jamais, le serveur n'en garde que l'empreinte.
+  editorPartnerApplications: () => request('/api/editor/partner-applications'),
+  creerApplicationPartenaire: (corps) =>
+    request('/api/editor/partner-applications', { method: 'POST', body: corps }),
+  desactiverApplicationPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/deactivate`, { method: 'POST', body: {} }),
+  // Corps : { expiresAt? } (AAAA-MM-JJ). Sans date, la clé n'expire pas : on la révoque.
+  emettreClePartenaire: (id, corps = {}) =>
+    request(`/api/editor/partner-applications/${id}/credentials`, { method: 'POST', body: corps }),
+  revoquerClePartenaire: (id) =>
+    request(`/api/editor/partner-credentials/${id}/revoke`, { method: 'POST', body: {} }),
+  // Webhooks d'une application. Corps : { url (https), events: [noms du catalogue fermé] }. Le secret
+  // de signature n'arrive que dans la réponse qui le crée ou le régénère (`issuedWebhookSecret`).
+  configurerWebhookPartenaire: (id, corps) =>
+    request(`/api/editor/partner-applications/${id}/webhook`, { method: 'POST', body: corps }),
+  regenererSecretWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/rotate-secret`, { method: 'POST', body: {} }),
+  couperWebhookPartenaire: (id) =>
+    request(`/api/editor/partner-applications/${id}/webhook/disable`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :

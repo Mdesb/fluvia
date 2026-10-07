@@ -10,7 +10,7 @@ use App\Sepa\Entity\RemiseSepa;
 
 /**
  * Port fourni PAR une verticale (Sport, Piscine…) AU module SEPA partagé (plan §3/§5) : chaque
- * verticale possède son propre échéancier métier (ex. `App\Sport\Entity\EcheanceSepa`) que le module
+ * verticale possède son propre échéancier métier (ex. `App\Membership\Entity\EcheanceSepa`) que le module
  * SEPA ne connaît pas. `App\Sepa\Service\GenerationRemiseHandler` reçoit une implémentation de ce port
  * en paramètre (jamais injectée globalement : plusieurs verticales peuvent coexister).
  */

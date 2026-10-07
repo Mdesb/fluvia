@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useEtatUrl } from '../api/url.js'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
+import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut, CANAUX_PRODUIT } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
-import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
+import ProduitOptions from '../components/ProduitOptionsModal.jsx'
 import ProduitFiche from '../components/ProduitFiche.jsx'
 import PromotionsCatalogue from '../components/PromotionsCatalogue.jsx'
 import GrillesTarifaires from '../components/GrillesTarifaires.jsx'
@@ -16,7 +16,7 @@ import { confirmer } from '../components/Confirmation.jsx'
 // filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
 // `nouveau` vit dans l'URL comme `fiche` : recharger la page ne doit pas faire perdre le formulaire
 // commence, et le bouton « precedent » du navigateur doit ramener au catalogue.
-const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '' }
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '', options: '' }
 
 /**
  * LA FICHE VIERGE — ce qu'on voit apres « Nouveau produit », avant que le produit n'existe.
@@ -35,10 +35,12 @@ const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouve
 function NouveauProduit({ types = [], onAnnule, onCree }) {
   const [libelle, setLibelle] = useState('')
   const [typeId, setTypeId] = useState('')
+  // Le guichet est coché d'office, mais visible et décochable : il était imposé sans le dire.
+  const [canaux, setCanaux] = useState(['guichet'])
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
-  const pret = libelle.trim() !== '' && typeId !== ''
+  const pret = libelle.trim() !== '' && typeId !== '' && canaux.length > 0
 
   async function creer() {
     setEnCours(true)
@@ -47,7 +49,7 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
       await onCree({
         libelle: { fr: libelle.trim() },
         type: `/api/type_produits/${typeId}`,
-        canaux: ['guichet'],
+        canaux,
       })
     } catch (e) {
       setErreur(e?.message || 'La création n’a pas abouti.')
@@ -92,6 +94,23 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
         <span className="badge mut">Nouveau</span>
       </div>
 
+      <fieldset className="field" style={{ marginTop: 'var(--esp-normal)', border: 0, padding: 0 }}>
+        <legend>Où ce produit sera vendu *</legend>
+        <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          {CANAUX_PRODUIT.map((c) => (
+            <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={canaux.includes(c.valeur)}
+                onChange={(ev) => setCanaux((l) => (ev.target.checked ? [...l, c.valeur] : l.filter((x) => x !== c.valeur)))}
+              />
+              {c.libelle}
+            </label>
+          ))}
+        </div>
+        {canaux.length === 0 && <p className="hint">Cochez au moins un endroit où le vendre.</p>}
+      </fieldset>
+
       <div className="banner" style={{ marginTop: 'var(--esp-normal)' }}>
         Donnez-lui un nom et un type : le produit sera créé, et tout le reste de cette fiche
         deviendra modifiable. Il naîtra en <b>brouillon</b> — invisible du guichet et de la boutique
@@ -123,10 +142,13 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
+  // Le droit de creer se lit ICI et plus dans `OngletProduits` : le bouton qu'il commande vit
+  // desormais sur la ligne des onglets, qui appartient a cet ecran-ci.
+  const peutCreerProduit = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   // ⚠ ET IL EFFACE LES ECRANS DE NIVEAU 2. Un `promo` ou un `fiche` laisse dans l'adresse
   // rouvrirait un formulaire d'un AUTRE onglet des qu'on y revient — un ecran surgi de nulle
   // part, sur des donnees qu'on ne regardait plus.
-  const setTab = (v) => majParams({ tab: v, fiche: '', nouveau: '', promo: '' })
+  const setTab = (v) => majParams({ tab: v, fiche: '', nouveau: '', promo: '', options: '' })
 
   // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
   // avant que la liste ne tente de l'ouvrir.
@@ -158,7 +180,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
   // vierge (`nouveau=1`) gardait le titre et les onglets au-dessus d'elle, et le formulaire
   // d'une promotion aurait fait pareil : le meme defaut que celui decrit ci-dessus, aux memes
   // endroits, pour n'avoir nomme qu'un seul cas.
-  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1'))
+  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1' || !!params.options))
     || (tab === 'promotions' && !!params.promo)
 
   return (
@@ -181,6 +203,15 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
             ]}
             actif={tab}
             onChange={setTab}
+            actions={tab === 'produits' && peutCreerProduit ? (
+              <button
+                className="btn primary"
+                type="button"
+                onClick={() => majParams({ nouveau: '1' }, { pousser: true })}
+              >
+                ＋ Nouveau produit
+              </button>
+            ) : null}
           />
         </>
       )}
@@ -209,10 +240,6 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
 /* ------------------------------------------------------------------ Produits */
 
 function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], params, majParams }) {
-  // ⚠ DECLARE ICI, ET PAS DANS `Catalogue`. La liste, le formulaire et la fiche vivent dans CE
-  // composant ; une declaration dans le parent est invisible d'ici, et le build ne le dit pas —
-  // seul le rendu le dit, en cassant l'ecran.
-  const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, ce tableau affichait
   // « Aucun produit. » — un exploitant lit alors que son catalogue est vide. Le message du serveur
   // etait bien la, mais dans un bandeau separe que rien ne relie a la ligne du tableau.
@@ -225,7 +252,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
   const [succes, setSucces] = useState(null)
 
 
-  const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
   const selId = params.fiche || null
 
@@ -312,6 +338,52 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     } finally {
       setActionEnCours(null)
     }
+  }
+
+  // ── LES OPTIONS D'UN PRODUIT, EN ÉCRAN ──────────────────────────────────────────────────────
+  //
+  // Le produit se lit par son identifiant : la liste est filtrée et paginée, un lien ne doit pas en
+  // dépendre. Seul un 404 dit « n'existe pas » ; « pas encore lu » se déduit de la clé, qui porte
+  // l'établissement (#172). Le bouton « Options » n'a pas de condition : l'écran n'en reprend aucune.
+  const [lectureOptions, setLectureOptions] = useState(null)
+  const cleOptions = params.options ? `${params.options}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.options) { setLectureOptions(null); return undefined }
+    const cle = `${params.options}|${etabActif}`
+    let vivant = true
+    api.produit(params.options)
+      .then((v) => { if (vivant) setLectureOptions({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureOptions({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.options, etabActif])
+  const lectureOptionsCourante = lectureOptions?.cle === cleOptions ? lectureOptions : null
+
+  if (params.options) {
+    const fermerOptions = () => majParams({ options: '' }, { pousser: true })
+    const produitLu = lectureOptionsCourante?.valeur ?? null
+    let contenu
+    if (lectureOptionsCourante === null) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!produitLu) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureOptionsCourante.echouee
+            ? 'Ce produit n’a pas pu être lu. Ce n’est pas la même chose que « il n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Ce produit n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else {
+      contenu = <ProduitOptions key={cleOptions} produit={produitLu} />
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerOptions}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour au catalogue
+        </button>
+        {contenu}
+      </>
+    )
   }
 
   // La fiche prend la page entiere : on n'affiche ni la liste ni le formulaire de creation derriere.
@@ -422,20 +494,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         </div>
       </section>
 
-      {/* ⚠ LE FORMULAIRE EST DEVENU UN BOUTON. Pose entre les filtres et la liste qu'ils
-          filtrent, il separait les deux et cessait d'etre utile des la deuxieme visite. En bouton,
-          la liste remonte et le catalogue redevient ce qu'on vient y chercher. */}
-      {peutCreer && (
-        <button
-          className="btn primary"
-          type="button"
-          style={{ marginBottom: 'var(--esp-bloc)' }}
-          onClick={() => majParams({ nouveau: '1' }, { pousser: true })}
-        >
-          ＋ Nouveau produit
-        </button>
-      )}
-
       <div className="card">
         {chargement ? (
           <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
@@ -506,7 +564,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                           </button>
                           )
                         })}
-                        <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
+                        <button className="btn ghost sm" type="button" onClick={() => majParams({ options: String(p.id) }, { pousser: true })}>
                           Options
                         </button>
                       </div>
@@ -528,11 +586,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         )}
       </div>
 
-      <ProduitOptionsModal
-        open={!!produitOptions}
-        produit={produitOptions}
-        onClose={() => setProduitOptions(null)}
-      />
 
     </>
   )

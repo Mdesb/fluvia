@@ -60,6 +60,15 @@ final class NoticeDelayCoversPeriod extends Constraint
         . 'SEPA de cet établissement ({{ delai }} jours) : chaque échéance de cet abonnement serait '
         . 'écartée de la remise.';
 
+    /**
+     * D115 : la règle SEPA Core fixe {{ minimum }} jours de préavis par défaut, réductibles seulement si
+     * le contrat du créancier porte une clause de préavis réduit. Sans cette clause déclarée, un délai
+     * sous le minimum est refusé — un préavis plus court ne serait pas opposable au débiteur.
+     */
+    public string $messagePreavisReduit = 'Un préavis de {{ delai }} jours est inférieur au minimum SEPA de '
+        . '{{ minimum }} jours : il exige que le contrat du créancier porte une clause de préavis réduit '
+        . '(case « préavis réduit contractuel »).';
+
     public function getTargets(): string
     {
         return self::CLASS_CONSTRAINT;

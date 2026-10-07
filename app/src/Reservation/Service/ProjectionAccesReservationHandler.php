@@ -18,7 +18,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * Construction directe d'un `App\Acces\Entity\DroitAcces` (`sourceType = TypeDroitAcces::Booking`), hors
  * `ProjectionDroitInterface` — même patron que `App\Personnel\Service\EmissionBadgeStaffHandler`
  * (`TypeDroitAcces::Personnel`). Révocation symétrique via `revoquerSiProjete()`, même patron que
- * `App\Recouvrement\Service\PropagationAccesHandler` / `App\Sport\Service\PropagationAccesFitnessHandler`
+ * `App\Recouvrement\Service\PropagationAccesHandler` / `App\Membership\Service\PropagationAccesFitnessHandler`
  * — aucun fichier `App\Acces\*` n'est modifié pour ce comportement.
  */
 final class ProjectionAccesReservationHandler

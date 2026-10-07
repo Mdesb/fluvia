@@ -12,6 +12,7 @@ use App\Securite\Enum\StatutDelegation;
 use App\Securite\Port\NoSupportAccessScope;
 use App\Securite\Port\SupportAccessScopeInterface;
 use App\Securite\Service\EstablishmentReachability;
+use App\Securite\Service\PlatformScope;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use PHPUnit\Framework\TestCase;
@@ -113,6 +114,8 @@ final class EstablishmentReachabilityTest extends TestCase
             }
         };
 
-        return new EstablishmentReachability($em, $scope);
+        // Un `PlatformScope` réel : les utilisateurs de ce test ne sont pas marqués « plateforme »,
+        // donc `isGlobal()` rend false et le comportement de cloisonnement testé ici est inchangé.
+        return new EstablishmentReachability($em, $scope, new PlatformScope());
     }
 }

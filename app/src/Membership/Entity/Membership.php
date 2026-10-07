@@ -4,109 +4,249 @@ declare(strict_types=1);
 
 namespace App\Membership\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
-use App\Membership\Enum\MembershipPeriodicity;
-use App\Membership\Enum\MembershipStatus;
+use App\Membership\Repository\SubscriptionRepository;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Sepa\Entity\MandatSepa;
+use App\Membership\Enum\MembershipPeriodicity;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\State\DemanderPauseProcessor;
+use App\Membership\State\DemanderResiliationProcessor;
+use App\Membership\State\RattacherDroitAccesProcessor;
+use App\Membership\State\ReengagerProcessor;
+use App\Membership\State\SouscrireAbonnementProcessor;
+use ApiPlatform\Metadata\Post;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Serializer\Attribute\Groups;
+use App\Membership\Validator\ConsumerNoticeCap;
+use App\Sepa\Validator\NoticeDelayCoversPeriod;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * L'abonnement d'un adhérent, sorti du module Sport — **socle du lot 0**.
+ * L'abonnement d'un adhérent — sorti de `App\Sport` le 10/09 (lot 1 de la bascule transverse).
  *
- * Structure reprise de `App\Sport\Entity\AbonnementFitness` : mêmes treize colonnes, mêmes
- * cardinalités, mêmes cibles de relation. Ce qui change est le nom des choses (D5) et le module qui
- * les porte.
+ * ── ⚠ DEUX NOMS N'ONT PAS SUIVI LA CLASSE, ET LES DEUX SONT DÉLIBÉRÉS ─────────────────────────
  *
- * ── ⚠ CE QUE CETTE ENTITÉ N'EST PAS ENCORE ─────────────────────────────────────────────────────
+ * **La table s'appelle toujours `sport_abonnement_fitness`.** Arbitrage de Maxime : « déplace sans
+ * renommer ». Ce n'est pas de la paresse, c'est un comptage : **sept clés étrangères** pointent sur
+ * cette table — échéances, mouvements comptables, pauses, résiliations, les deux du réengagement,
+ * statuts d'accès. Un renommage les emmène toutes, et impose un déploiement où le code et le schéma
+ * basculent au même instant. Le renommage reste possible plus tard, isolé, décidé pour lui-même.
  *
- * Elle n'est **pas exposée par l'API** et ne porte aucun groupe de sérialisation. Ce n'est pas un
- * oubli : la spec dit « aucune bascule encore » au lot 0, et une ressource exposée que rien
- * n'appelle EST une bascule, à moitié. Le garde-fou d'écart client/serveur mesure par ailleurs 504
- * opérations inatteignables pour un plafond de 521 — dix-sept crans de marge, qu'on ne dépense pas
- * pour un lot qui n'a pas d'écran.
+ * **La ressource d'API s'appelle toujours `AbonnementFitness`**, donc la route reste
+ * `/api/abonnement_fitnesses`. La renommer casserait le frontal, et deux branches front touchent ces
+ * écrans en ce moment. Même raison, même report.
  *
- * Elle ne porte **aucun comportement** non plus. Ce que fait un abonnement — s'échelonner, se
- * mettre en pause, se résilier, couper un accès — vit dans les handlers Sport, qui se recâblent au
- * lot 1. Les recopier ici poserait deux implémentations de la même règle, dont une que personne
- * n'appelle.
+ * ⚠ CONSÉQUENCE À CONNAÎTRE AVANT DE « CORRIGER » QUOI QUE CE SOIT ICI : la classe, la table et la
+ * ressource portent trois noms différents. C'est un état de transition assumé. Aligner l'un des
+ * trois sans les deux autres casse soit les clés étrangères, soit l'écran.
  *
- * ── ⚠ `etablissement` EST EN FRANÇAIS, ET IL DOIT L'ÊTRE ───────────────────────────────────────
+ * **Les valeurs d'énumération restent en français** — `actif`, `mensuel`… Ce sont des codes
+ * PERSISTÉS, et la table ne bouge pas. `MembershipStatus::Echu` documente déjà ce choix à
+ * contre-courant de D5 ; il vaut pour toute la famille.
  *
- * Seule entorse à D5 de tout le module, et elle est imposée par l'outillage : les extensions de
- * périmètre écrivent `IDENTITY(%s.etablissement)` EN DUR. Une entité qui nommerait cette relation
- * `establishment` sortirait du filtre de cloisonnement **sans aucune erreur Doctrine** — donc sans
- * symptôme, jusqu'au jour où un exploitant lit les données d'un autre. Le garde-fou n°28 refuse
- * cette combinaison précisément pour ça. `App\Group`, module au nommage anglais, fait le même choix.
+ * ── CE QUE L'ENTITÉ EST ────────────────────────────────────────────────────────────────────────
  *
- * Le garde-fou de nommage ne s'y oppose pas : les propriétés sont hors de son périmètre, et
- * `#[ORM\JoinColumn(name: …)]` n'est pas contrôlé — seul `#[ORM\Column(name: …)]` l'est.
- *
- * ── ⚠ LE MANDAT EST UN `ManyToOne`, ET SON INDEX N'EST PAS UNIQUE ──────────────────────────────
- *
- * La migration d'origine de `sport_abonnement_fitness` (`Version20260815114107`) avait posé un
- * `UNIQUE INDEX` sur `mandat_sepa_id`. Il a fallu le retirer le 01/09 : **un même mandat porte
- * plusieurs abonnements** — un parent qui paie pour deux enfants signe un mandat, pas deux. La table
- * neuve ne refait pas l'erreur.
+ * Abonnement récurrent (US-SPORT-01, RG-M1-03). Instancie une `Formule` M1 (existante, lue non
+ * modifiée) en fixant périodicité SEPA/engagement/mandat. Pilote la projection d'accès L3 (§0 du
+ * plan) via `StatutAccesFitness` et `PropagationAccesFitnessHandler` — jamais d'écriture directe sur
+ * `DroitAcces` depuis les handlers métier. Porte aussi les sous-ressources de transition d'état
+ * (pause, résiliation, réengagement, rattachement du droit d'accès) — même patron que
+ * `Consentement`/`PorteMonnaieVirtuel` en M4 : éviter un `{id}` d'URI ambigu sur l'enfant.
  */
-#[ORM\Entity]
-#[ORM\Table(name: 'membership')]
+#[ORM\Entity(repositoryClass: SubscriptionRepository::class)]
+#[ORM\Table(name: 'sport_abonnement_fitness')]
+#[ORM\UniqueConstraint(name: 'uniq_abo_source_sale_line', columns: ['source_sale_line_id'])]
+#[ApiResource(
+    shortName: 'AbonnementFitness',
+    operations: [
+        new GetCollection(security: "is_granted('PERM', 'sport.lire')"),
+        new Get(security: "is_granted('PERM', 'sport.lire') or (is_granted('PERM', 'sport.lire_soi') and object.estLieA(user))"),
+        new Post(
+            uriTemplate: '/sport/abonnements/souscrire',
+            read: false,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement')",
+            processor: SouscrireAbonnementProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/sport/abonnements/{id}/rattacher-droit-acces',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement') or is_granted('PERM', 'acces.appairer')",
+            processor: RattacherDroitAccesProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/sport/abonnements/{id}/reengager',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement')",
+            processor: ReengagerProcessor::class,
+            output: Reengagement::class,
+            normalizationContext: ['groups' => ['reengagement:read']],
+        ),
+        new Post(
+            uriTemplate: '/sport/abonnements/{id}/pauses',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement') or (is_granted('PERM', 'sport.pause_demander_soi') and object.estLieA(user))",
+            processor: DemanderPauseProcessor::class,
+            output: PauseAbonnement::class,
+            normalizationContext: ['groups' => ['pause:read']],
+        ),
+        new Post(
+            uriTemplate: '/sport/abonnements/{id}/resiliations',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement') or (is_granted('PERM', 'sport.resilier_demander_soi') and object.estLieA(user))",
+            processor: DemanderResiliationProcessor::class,
+            output: Resiliation::class,
+            normalizationContext: ['groups' => ['resiliation:read']],
+        ),
+    ],
+    normalizationContext: ['groups' => ['abonnement:read']],
+    // Fermeture **declaree** de la denormalisation (D41). Aucune propriete ne porte
+    // `abonnement:write` : rien n'est ecrivable depuis le corps. Les creations portent deja
+    // `input: false`, qui suffit techniquement — mais le garde-fou n12 ne sait pas le lire
+    // et compterait l'entite comme exposee indefiniment. Une fermeture qu'aucun outil ne
+    // voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
+    denormalizationContext: ['groups' => ['abonnement:write']],
+)]
+#[NoticeDelayCoversPeriod]
+#[ConsumerNoticeCap]
+/*
+ * ⚠ UN FILTRE NON DECLARE EST IGNORE EN SILENCE, ET L'ENDPOINT REND TOUT.
+ *
+ *    Un client doit retrouver, sur sa fiche, les abonnements qu'il PAIE et ceux qui sont a SON
+ * nom : deux questions differentes, deux relations differentes. Sans filtre declare, l'ecran
+ * devrait tout charger et trier lui-meme -- ce qui marche a onze abonnements et ment a mille.
+ *
+ * Ca ressemble a des donnees, ca arrive, ca a la bonne forme -- et personne ne le remet en
+ * cause. C'est le motif que `bin/garde-fou-filtres-declares.php` surveille.
+ */
+#[ApiFilter(SearchFilter::class, properties: ['payeur' => 'exact', 'adherent' => 'exact', 'etablissement' => 'exact', 'statut' => 'exact'])]
 class Membership
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
+    #[Groups(['abonnement:read', 'pause:read', 'resiliation:read', 'incident:read', 'echeance:read', 'statut_acces:read'])]
     private Uuid $id;
 
-    /** Celui qui entre. Distinct du payeur : deux questions différentes, deux types différents. */
+    /**
+     * La ligne de vente (`LigneVente`) qui a créé cet abonnement au comptoir. UNIQUE (nullable,
+     * contrainte `uniq_abo_source_sale_line`) : idempotence de la création au comptoir (une ligne
+     * ne crée qu'un abonnement, même si la reprise est rejouée) ET lien retour Vente → abonnement.
+     * `null` pour tout abonnement né ailleurs (en ligne, réengagement). Renseigné dans le même
+     * flush que l'abonnement (via `SouscriptionAbonnementHandler::souscrire()`).
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $sourceSaleLineId = null;
+
     #[ORM\ManyToOne(targetEntity: Beneficiaire::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Beneficiaire $member = null;
+    #[Groups(['abonnement:read'])]
+    private ?Beneficiaire $adherent = null;
 
-    /** Celui qui règle. C'est lui que le mandat SEPA débite. */
     #[ORM\ManyToOne(targetEntity: Client::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Client $payer = null;
+    #[Groups(['abonnement:read'])]
+    private ?Client $payeur = null;
 
-    /**
-     * L'offre du catalogue. C'est elle — et non l'appelant — qui décide du prix et de la cadence :
-     * arbitrage « pas de prix libre » du 01/09.
-     */
+    // Pas de #[Groups] ici : `Formule` (M1) n'est pas un `#[ApiResource]` indépendant (facette de
+    // `Produit`, cf. plan §1 en-tête) — une IRI ne peut pas être générée. Seul l'identifiant est
+    // exposé (`getFormuleId()` ci-dessous), l'objet complet reste consultable via `GET /produits`.
     #[ORM\ManyToOne(targetEntity: Formule::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Formule $formula = null;
+    private ?Formule $formule = null;
 
     #[ORM\Column(length: 12, enumType: MembershipPeriodicity::class)]
-    private MembershipPeriodicity $periodicity = MembershipPeriodicity::Monthly;
+    #[Groups(['abonnement:read'])]
+    private MembershipPeriodicity $periodicite = MembershipPeriodicity::Mensuel;
 
-    #[ORM\Column(length: 12, enumType: MembershipStatus::class, options: ['default' => 'active'])]
-    private MembershipStatus $status = MembershipStatus::Active;
-
-    #[ORM\Column(type: 'date_immutable')]
-    private \DateTimeImmutable $subscribedOn;
-
-    #[ORM\Column(type: 'date_immutable')]
-    private \DateTimeImmutable $commitmentStartsOn;
+    #[ORM\Column(length: 12, enumType: MembershipStatus::class, options: ['default' => 'actif'])]
+    #[Groups(['abonnement:read'])]
+    private MembershipStatus $statut = MembershipStatus::Actif;
 
     #[ORM\Column(type: 'date_immutable')]
-    private \DateTimeImmutable $commitmentEndsOn;
+    #[Groups(['abonnement:read'])]
+    private \DateTimeImmutable $dateSouscription;
 
-    #[ORM\Column(type: 'smallint', options: ['default' => 30])]
-    private int $noticePeriodDays = 30;
+    #[ORM\Column(type: 'date_immutable')]
+    #[Groups(['abonnement:read'])]
+    private \DateTimeImmutable $dateDebutEngagement;
 
-    /** En centimes entiers. Un flottant sur de l'argent produit des écarts bien réels sur un relevé. */
+    #[ORM\Column(type: 'date_immutable')]
+    #[Groups(['abonnement:read'])]
+    private \DateTimeImmutable $dateFinEngagement;
+
+    #[ORM\Column(type: 'smallint')]
+    #[Groups(['abonnement:read'])]
+    private int $preavisResiliationJours = 30;
+
+    /**
+     * LE MONTANT COURANT DE L'ABONNEMENT, EN CENTIMES.
+     *
+     * ── ⚠ ET L'ÉCHÉANCE FAIT FOI, PAS CE CHAMP ────────────────────────────────────────────────
+     *
+     * Le prix vivait DÉJÀ quelque part avant ce champ : `GenerateurEcheancierHandler` l'estampille
+     * sur chaque `EcheanceSepa` au moment de la souscription, et il n'est jamais relu ensuite.
+     * Poser un montant ici crée donc une SECONDE source pour le même fait, et il faut dire laquelle
+     * gagne avant qu'elles ne divergent — sans quoi personne ne saura laquelle est fausse le jour
+     * d'un changement de tarif.
+     *
+     * **L'échéance fait foi.** Elle est datée, émise, et opposable : c'est elle qui sera prélevée.
+     * Ce champ ne porte que le montant COURANT — ce qu'on facturera la prochaine fois, ce qu'un
+     * écran affiche quand on demande « combien coûte cet abonnement », et ce qu'on compare pour
+     * décider d'un changement de tarif. Il ne réécrit jamais une échéance déjà générée.
+     *
+     * ⚠ CONSÉQUENCE À TENIR : changer ce montant ne change PAS les échéances futures déjà posées.
+     * Le jour où un écran le modifiera, il devra régénérer explicitement ce qui n'est pas encore
+     * remis en banque — et ce geste-là se décide, il ne se déduit pas d'une écriture de champ.
+     *
+     * ⚠ `DEFAULT` DÉCLARÉ AU MAPPING, et pas seulement dans la migration : le déploiement migre
+     * avant de redémarrer PHP, donc il existe une fenêtre où le schéma porte la colonne et où le
+     * code ancien insère sans la renseigner. Sans défaut, cette fenêtre rend des erreurs SQL.
+     *
+     * ⚠ ET LA FORMULE NE PROPOSE RIEN, aujourd'hui : `Offre\Entity\Formule` ne porte AUCUN prix —
+     * ni champ, ni relation vers un tarif. Le montant est donc entièrement à la charge de
+     * l'appelant, comme il l'était déjà. Faire de la formule la source du défaut demanderait de
+     * lui ajouter un prix, ce qui est une décision distincte et une troisième source.
+     */
     #[ORM\Column(options: ['default' => 0])]
-    private int $amountCents = 0;
+    #[Groups(['abonnement:read'])]
+    private int $montantCentimes = 0;
 
+    /**
+     * ⚠ `ManyToOne` ET NON `OneToOne` : un même mandat porte plusieurs abonnements.
+     *
+     * Un adulte et son enfant, deux formules dans la même famille — le payeur donne son IBAN une
+     * fois. Deux mandats pour le même débiteur chez le même créancier ne sont pas la logique SEPA :
+     * un mandat autorise à prélever, il n'est pas attaché à ce qu'on facture. Le mandat était déjà
+     * générique de son côté (rattaché au client et à l'établissement) ; c'est ce lien-ci qui
+     * imposait l'unicité.
+     *
+     * ⚠ ET CE CHANGEMENT SEUL SERAIT UN DÉFAUT. `DemanderResiliationHandler::executerEffet()`
+     * révoquait le mandat sans condition, ce qui était correct tant qu'il n'appartenait qu'à un
+     * abonnement. La révocation conditionnelle est partie dans le même commit : les séparer aurait
+     * arrêté les prélèvements du second abonnement sans erreur ni message.
+     */
     #[ORM\ManyToOne(targetEntity: MandatSepa::class)]
-    #[ORM\JoinColumn(name: 'sepa_mandate_id', nullable: false)]
-    private ?MandatSepa $sepaMandate = null;
+    #[ORM\JoinColumn(name: 'mandat_sepa_id', nullable: false)]
+    #[Groups(['abonnement:read'])]
+    private ?MandatSepa $mandatSepa = null;
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['abonnement:read'])]
     private ?Etablissement $etablissement = null;
 
     public function __construct()
@@ -119,134 +259,152 @@ class Membership
         return $this->id;
     }
 
-    public function getMember(): ?Beneficiaire
+    public function getSourceSaleLineId(): ?Uuid
     {
-        return $this->member;
+        return $this->sourceSaleLineId;
     }
 
-    public function setMember(?Beneficiaire $member): self
+    public function setSourceSaleLineId(?Uuid $sourceSaleLineId): self
     {
-        $this->member = $member;
+        $this->sourceSaleLineId = $sourceSaleLineId;
 
         return $this;
     }
 
-    public function getPayer(): ?Client
+    public function getAdherent(): ?Beneficiaire
     {
-        return $this->payer;
+        return $this->adherent;
     }
 
-    public function setPayer(?Client $payer): self
+    public function setAdherent(?Beneficiaire $adherent): self
     {
-        $this->payer = $payer;
+        $this->adherent = $adherent;
 
         return $this;
     }
 
-    public function getFormula(): ?Formule
+    public function getPayeur(): ?Client
     {
-        return $this->formula;
+        return $this->payeur;
     }
 
-    public function setFormula(?Formule $formula): self
+    public function setPayeur(?Client $payeur): self
     {
-        $this->formula = $formula;
+        $this->payeur = $payeur;
 
         return $this;
     }
 
-    public function getPeriodicity(): MembershipPeriodicity
+    public function getFormule(): ?Formule
     {
-        return $this->periodicity;
+        return $this->formule;
     }
 
-    public function setPeriodicity(MembershipPeriodicity $periodicity): self
+    public function setFormule(?Formule $formule): self
     {
-        $this->periodicity = $periodicity;
+        $this->formule = $formule;
 
         return $this;
     }
 
-    public function getStatus(): MembershipStatus
+    #[Groups(['abonnement:read'])]
+    public function getFormuleId(): ?string
     {
-        return $this->status;
+        return $this->formule?->getId() !== null ? (string) $this->formule->getId() : null;
     }
 
-    public function setStatus(MembershipStatus $status): self
+    public function getPeriodicite(): MembershipPeriodicity
     {
-        $this->status = $status;
+        return $this->periodicite;
+    }
+
+    public function setPeriodicite(MembershipPeriodicity $periodicite): self
+    {
+        $this->periodicite = $periodicite;
 
         return $this;
     }
 
-    public function getSubscribedOn(): \DateTimeImmutable
+    public function getStatut(): MembershipStatus
     {
-        return $this->subscribedOn;
+        return $this->statut;
     }
 
-    public function setSubscribedOn(\DateTimeImmutable $subscribedOn): self
+    public function setStatut(MembershipStatus $statut): self
     {
-        $this->subscribedOn = $subscribedOn;
+        $this->statut = $statut;
 
         return $this;
     }
 
-    public function getCommitmentStartsOn(): \DateTimeImmutable
+    public function getDateSouscription(): \DateTimeImmutable
     {
-        return $this->commitmentStartsOn;
+        return $this->dateSouscription;
     }
 
-    public function setCommitmentStartsOn(\DateTimeImmutable $commitmentStartsOn): self
+    public function setDateSouscription(\DateTimeImmutable $dateSouscription): self
     {
-        $this->commitmentStartsOn = $commitmentStartsOn;
+        $this->dateSouscription = $dateSouscription;
 
         return $this;
     }
 
-    public function getCommitmentEndsOn(): \DateTimeImmutable
+    public function getDateDebutEngagement(): \DateTimeImmutable
     {
-        return $this->commitmentEndsOn;
+        return $this->dateDebutEngagement;
     }
 
-    public function setCommitmentEndsOn(\DateTimeImmutable $commitmentEndsOn): self
+    public function setDateDebutEngagement(\DateTimeImmutable $dateDebutEngagement): self
     {
-        $this->commitmentEndsOn = $commitmentEndsOn;
+        $this->dateDebutEngagement = $dateDebutEngagement;
 
         return $this;
     }
 
-    public function getNoticePeriodDays(): int
+    public function getDateFinEngagement(): \DateTimeImmutable
     {
-        return $this->noticePeriodDays;
+        return $this->dateFinEngagement;
     }
 
-    public function setNoticePeriodDays(int $noticePeriodDays): self
+    public function setDateFinEngagement(\DateTimeImmutable $dateFinEngagement): self
     {
-        $this->noticePeriodDays = $noticePeriodDays;
+        $this->dateFinEngagement = $dateFinEngagement;
 
         return $this;
     }
 
-    public function getAmountCents(): int
+    public function getPreavisResiliationJours(): int
     {
-        return $this->amountCents;
+        return $this->preavisResiliationJours;
     }
 
-    public function setAmountCents(int $amountCents): self
+    public function setPreavisResiliationJours(int $preavisResiliationJours): self
     {
-        $this->amountCents = $amountCents;
+        $this->preavisResiliationJours = $preavisResiliationJours;
 
         return $this;
     }
 
-    public function getSepaMandate(): ?MandatSepa
+    public function getMontantCentimes(): int
     {
-        return $this->sepaMandate;
+        return $this->montantCentimes;
     }
 
-    public function setSepaMandate(?MandatSepa $sepaMandate): self
+    public function setMontantCentimes(int $montantCentimes): self
     {
-        $this->sepaMandate = $sepaMandate;
+        $this->montantCentimes = $montantCentimes;
+
+        return $this;
+    }
+
+    public function getMandatSepa(): ?MandatSepa
+    {
+        return $this->mandatSepa;
+    }
+
+    public function setMandatSepa(?MandatSepa $mandatSepa): self
+    {
+        $this->mandatSepa = $mandatSepa;
 
         return $this;
     }
@@ -261,5 +419,23 @@ class Membership
         $this->etablissement = $etablissement;
 
         return $this;
+    }
+
+    /** Vrai si l'utilisateur connecté correspond à l'adhérent ou au payeur (permissions `_soi`). */
+    public function estLieA(mixed $user): bool
+    {
+        if (!$user instanceof Utilisateur) {
+            return false;
+        }
+        $lie = $user->getClientLie();
+        if ($lie === null) {
+            return false;
+        }
+        $adherentClient = $this->adherent?->getClient();
+        if ($adherentClient !== null && (string) $adherentClient->getId() === (string) $lie) {
+            return true;
+        }
+
+        return $this->payeur !== null && (string) $this->payeur->getId() === (string) $lie;
     }
 }

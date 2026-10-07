@@ -7,7 +7,7 @@ namespace App\Recouvrement\Event;
 /**
  * Dispatché par `PropagationAccesHandler` à chaque bascule d'accès décidée par le moteur de
  * recouvrement (valide/dévalidé). Permet à la verticale propriétaire du contrat de tenir à jour sa
- * propre projection d'accès (ex. `App\Sport\Entity\StatutAccesFitness.actif/motifInactivite`) — le
+ * propre projection d'accès (ex. `App\Membership\Entity\StatutAccesFitness.actif/motifInactivite`) — le
  * `DroitAcces` L3 est déjà écrit par `PropagationAccesHandler` lui-même avant ce dispatch.
  *
  * **C12 (RG-PLAT-03) — établissement porté pour rendre l'événement pontable.** `etablissementId` est

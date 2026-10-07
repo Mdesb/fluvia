@@ -10,15 +10,17 @@ use App\Boutique\Entity\Vitrine;
 use App\Boutique\Entity\LigneCommandeMeta;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
+use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sepa\Entity\MandatSepa;
-use App\Sport\Service\SouscriptionAbonnementHandler;
+use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sepa\Service\ChiffreurIbanInterface;
+use App\Sepa\Service\IbanFormatValidator;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Paiement;
@@ -29,6 +31,7 @@ use App\Vente\Service\PanierCalculateur;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -49,6 +52,8 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly SubscriptionPriceResolver $resolveurAbonnement,
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SouscriptionAbonnementHandler $souscription,
+        private readonly VitrineAccessibleGuard $vitrineGuard,
+        private readonly IbanFormatValidator $ibanValidator,
     ) {
     }
 
@@ -88,6 +93,22 @@ final class SouscriptionAbonnementEnLigneHandler
             throw new UnprocessableEntityHttpException('Ce produit ne porte pas la facette SEPA (RG-M3-17).');
         }
 
+        // ── LE PRODUIT DOIT ÊTRE PROPOSÉ EN LIGNE (revue sécurité) ────────────────────────────────
+        // `isSepaActif()` ne dit RIEN du canal : un produit GUICHET-ONLY avec un tarif visible partout
+        // devenait souscriptible en ligne, car `SubscriptionPriceResolver` résout sur la visibilité du
+        // `TypeTarif`, pas sur `Produit.canaux`. Le catalogue et le tunnel billet imposent déjà
+        // `Canal::EnLigne` ; ce chemin l'oubliait. 404 (D3) : un produit hors ligne n'existe pas ici.
+        if (!$produit->aCanal(Canal::EnLigne)) {
+            throw new NotFoundHttpException('Ce produit n\'est pas proposé en ligne.');
+        }
+
+        // La vitrine où l'achat a lieu doit être publiquement accessible (établissement actif + canal
+        // en_ligne ouvert), comme tout point d'entrée public (`VitrineAccessibleGuard`). `null` =
+        // appelant historique sans vitrine : rien à vérifier, on garde le repli.
+        if ($vitrineAchat instanceof Vitrine) {
+            $this->vitrineGuard->verifier($vitrineAchat);
+        }
+
         $client = $compteClient->getClient();
         \assert($client !== null);
         // L'etablissement du VENDEUR, pas celui ou le compte est ne.
@@ -99,6 +120,9 @@ final class SouscriptionAbonnementEnLigneHandler
         if (trim($iban) === '' || trim($nomDebiteur) === '') {
             throw new UnprocessableEntityHttpException('« iban » et « debiteurNom » sont requis pour signer le mandat SEPA.');
         }
+        // Format de l'IBAN (structure pays + clé mod-97) avant tokenisation/chiffrement — mêmes règles
+        // qu'au guichet : un IBAN mal saisi ne doit pas n'échouer qu'au rejet bancaire.
+        $this->ibanValidator->valider($iban);
         $dateSignature = isset($donnees['dateSignature']) && \is_string($donnees['dateSignature'])
             ? new \DateTimeImmutable($donnees['dateSignature'])
             : new \DateTimeImmutable('today');
@@ -175,7 +199,7 @@ final class SouscriptionAbonnementEnLigneHandler
          * ── ET MAINTENANT LE CONTRAT, QUI MANQUAIT ─────────────────────────────────────────────
          *
          * ⚠ TOUT CE QUI PRÉCÈDE NE FAISAIT PAS UN ABONNÉ. Mandat signé, vente validée, QR posé — et
-         *   ni `AbonnementFitness`, ni échéancier, ni statut d'accès. Le client lisait « Abonnement
+         *   ni `Membership`, ni échéancier, ni statut d'accès. Le client lisait « Abonnement
          *   souscrit » et n'était ni abonné ni jamais prélevé : aucune source SEPA ne lit une
          *   `Vente`, et le drapeau `differe` n'a qu'un lecteur, qui sert à autoriser un reste dû.
          *

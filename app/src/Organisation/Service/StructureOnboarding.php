@@ -10,11 +10,11 @@ use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Legal\Entity\LegalIdentity;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Service\AccountingChartSeeder;
+use App\Compta\Service\VatRateSeeder;
+use App\Facturation\Service\BillingSettingsSeeder;
 use App\Offre\Service\AccountingCategorySeeder;
-use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
-use App\Compta\Enum\VatCategory;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -59,25 +59,6 @@ final readonly class StructureOnboarding
     private const MOYENS_PAR_DEFAUT = ['especes', 'cb'];
 
     /**
-     * LES TAUX DE TVA FRANÇAIS, POSÉS D'OFFICE.
-     *
-     * C'est de la base légale : un exploitant n'a pas à la saisir, et le lui demander autorise 17,3 %
-     * ou un « taux normal » à 5,5 %. Il masque ce qu'il n'utilise pas — `TauxTva::$actif` existe déjà
-     * pour cela — au lieu de créer ce qu'il connaît mal.
-     *
-     * ⚠ France seulement. `Etablissement` ne porte aucun pays : le jour où un client belge arrivera,
-     * ce tableau ne saura pas quoi proposer. C'est un préalable de modèle, pas un oubli d'ici.
-     *
-     * @var list<array{0: string, 1: string}>
-     */
-    private const TAUX_TVA_FRANCE = [
-        ['20.00', 'Taux normal 20 %'],
-        ['10.00', 'Taux intermédiaire 10 %'],
-        ['5.50', 'Taux réduit 5,5 %'],
-        ['2.10', 'Taux particulier 2,1 %'],
-    ];
-
-    /**
      * Le métier déduit du code NAF publié par l'annuaire.
      *
      * Poser la question quand la réponse est déjà connue est une question de trop. Le NAF n'est pas
@@ -98,6 +79,8 @@ final readonly class StructureOnboarding
         private Fonctionnalites $presets,
         private readonly AccountingChartSeeder $chartSeeder,
         private readonly AccountingCategorySeeder $categorySeeder,
+        private readonly VatRateSeeder $vatRateSeeder,
+        private readonly BillingSettingsSeeder $billingSettingsSeeder,
     ) {
     }
 
@@ -139,6 +122,7 @@ final readonly class StructureOnboarding
         $this->entityManager->persist($region);
 
         $etablissement = (new Etablissement())->setNom($nom)->setRegion($region);
+        $this->paysEtTerritoire($donnees, $etablissement);
         $this->entityManager->persist($etablissement);
 
         // Sans affectation, l'auteur ne verrait pas ce qu'il vient de créer : la liste des
@@ -281,30 +265,15 @@ final readonly class StructureOnboarding
 
         $this->entityManager->persist($profil);
 
-        foreach (self::TAUX_TVA_FRANCE as [$taux, $libelle]) {
-            $this->entityManager->persist(
-                (new TauxTva())
-                    ->setProfilExploitant($profil)
-                    ->setTaux($taux)
-                    ->setLibelle($libelle)
-                    ->setActif(true)
-                    // Tous les taux positifs français relèvent de la catégorie EN 16931 « Standard »
-                    // (BT-151) — c'est le taux qui distingue 20 % de 5,5 %, pas la catégorie.
-                    ->setVatCategory(VatCategory::Standard)
-            );
-        }
-
-        // Le hors-champ n'est pas un taux à zéro parmi d'autres : il dit « cette opération n'entre
-        // pas dans le champ de la TVA ». Le confondre avec une exonération fausse la déclaration.
-        $this->entityManager->persist(
-            (new TauxTva())
-                ->setProfilExploitant($profil)
-                ->setTaux('0.00')
-                ->setLibelle(TauxTva::LIBELLE_HORS_CHAMP)
-                ->setActif(true)
-                // « Hors du champ de la TVA » = catégorie EN 16931 « O », et non une exonération.
-                ->setVatCategory(VatCategory::OutOfScope)
-        );
+        // ── LES TAUX VIENNENT DU PAYS DE LA STRUCTURE, PLUS D'UNE CONSTANTE ─────────────────────
+        //
+        // Ici se trouvait `TAUX_TVA_FRANCE` : 20 / 10 / 5,5 / 2,1, libellés français, posés à tout
+        // le monde. Son propre commentaire portait l'aveu — « France seulement. `Etablissement` ne
+        // porte aucun pays […] c'est un préalable de modèle, pas un oubli d'ici ». Ce préalable est
+        // levé : `Etablissement::pays` et `::fiscalTerritory` sont des colonnes réelles, et le
+        // référentiel légal porte 62 taux sur 29 pays. Voir {@see VatRateSeeder} pour ce qui se
+        // passe quand un pays n'y figure pas — on ne retombe PAS sur la France.
+        $tauxNormal = $this->vatRateSeeder->seed($profil);
 
         // ⚠ LE PROFIL ET LES TAUX NE SUFFISENT PAS : SANS PLAN DE COMPTES NI JOURNAUX, LA
         // GÉNÉRATION D'ÉCRITURES NE DÉMARRE PAS.
@@ -329,6 +298,71 @@ final readonly class StructureOnboarding
         // sienne localement (D51). La CORRESPONDANCE, elle, reste un choix d'exploitant : elle
         // depend de son plan de comptes et des habitudes de son comptable.
         $this->categorySeeder->poser();
+
+        // ── ET LE PARAMÉTRAGE DE FACTURATION, QUI VIENT EN DERNIER PARCE QU'IL LIT CE QUI PRÉCÈDE ─
+        //
+        // Sans lui, une structure ouverte n'avait AUCUN paramétrage de facturation : le lookup rend
+        // `null`, chaque lecture retombe sur `?->`, et rien ne le signale jusqu'à la première
+        // facture — c'est ce qui a bloqué le rattrapage de cinq échéances le 14/09.
+        //
+        // ⚠ CE FLUSH N'EST PAS DÉCORATIF, ET LE RETIRER NE CASSERAIT AUCUN TEST DE L'OUVERTURE.
+        //
+        // `BillingSettingsSeeder` résout le compte de produit par une REQUÊTE, et une requête ne
+        // voit pas les comptes que `chartSeeder` vient de `persist()`. Sans ce flush, le défaut
+        // resterait `null` en silence, et la première facture serait refusée pour « compte de
+        // produit indéterminable » — le même genre de trou, un cran plus loin.
+        //
+        // Il n'ouvre aucune fenêtre : il écrit exactement ce que le `flush()` de `ouvrir()` allait
+        // écrire trois lignes plus bas, au même endroit de la même transaction.
+        $this->entityManager->flush();
+        $this->billingSettingsSeeder->seed($profil, $tauxNormal);
+    }
+
+    /**
+     * LE PAYS ET LE TERRITOIRE FISCAL, DEMANDÉS À L'OUVERTURE.
+     *
+     * ⚠ SANS EUX, LE RESTE DE CE FICHIER EST INATTEIGNABLE. `VatRateSeeder` interroge le référentiel
+     * légal sur le pays de l'établissement — mais l'ouverture ne posait aucun pays, donc la colonne
+     * gardait son défaut `FR` et le semeur ne voyait jamais qu'un seul pays. Un code correct que
+     * rien ne peut atteindre a exactement la même valeur qu'un code faux, et il est plus difficile
+     * à repérer : les tests passent, la revue passe, et le premier client belge découvre le trou.
+     *
+     * ⚠ ILS RESTENT FACULTATIFS, ET `FR` RESTE LE DÉFAUT (D66-ter). Le produit n'est commercialisé
+     * qu'en France à ce jour : rendre le pays obligatoire ajouterait une question à tout le monde
+     * pour servir un cas qui n'existe pas encore. C'est `ONB-1`, le tunnel de première connexion,
+     * qui devra le DEMANDER — et sa fiche le dit déjà : « le tunnel doit demander le PAYS avant les
+     * taux ».
+     *
+     * ⚠ UN PAYS MAL FORMÉ EST REFUSÉ, PAS CORRIGÉ. L'entité porte bien un `Assert\Regex`, mais elle
+     * est persistée à la main : aucun validateur ne tourne sur ce chemin. Sans ce refus, `« France »`
+     * serait stocké tel quel, `inForce()` ne trouverait rien, et la structure s'ouvrirait sans aucun
+     * taux — silencieusement.
+     *
+     * @param array<string, mixed> $donnees
+     */
+    private function paysEtTerritoire(array $donnees, Etablissement $etablissement): void
+    {
+        $pays = strtoupper(trim((string) ($donnees['pays'] ?? '')));
+        if ($pays !== '') {
+            if (1 !== preg_match('/^[A-Z]{2}$/', $pays)) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'Le pays s’écrit en code ISO à deux lettres (FR, BE, ES) : « %s » n’en est pas un.',
+                    $pays,
+                ));
+            }
+            $etablissement->setPays($pays);
+        }
+
+        $territoire = strtoupper(trim((string) ($donnees['territoireFiscal'] ?? '')));
+        if ($territoire !== '') {
+            if (1 !== preg_match('/^[A-Z0-9-]{1,20}$/', $territoire)) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'Le territoire fiscal s’écrit en majuscules, chiffres et tirets : « %s » n’en est pas un.',
+                    $territoire,
+                ));
+            }
+            $etablissement->setFiscalTerritory($territoire);
+        }
     }
 
     private function identiteLegale(array $donnees, string $raisonSociale, Etablissement $etablissement): LegalIdentity
