@@ -273,8 +273,20 @@ export default function ConsolidationPerimetre({ etabActif, etablissements }) {
                           {l.statutCompletude === null || l.statutCompletude === undefined ? (
                             <span className="hint">—</span>
                           ) : (
-                            <span className={l.statutCompletude === 'complet' ? 'badge good' : 'badge warn'}>
-                              {l.statutCompletude}
+                            /* ⚠ TROIS ÉTATS, TROIS TONS. `non_instrumente` n'est pas un défaut
+                               — le site n'a pas de source pour cet indicateur (arbitrage n°7) : un
+                               badge d'alerte le ferait chercher une panne. Et on n'affiche plus la
+                               valeur brute de l'enum. */
+                            <span className={{
+                              complet: 'badge good',
+                              partiel: 'badge warn',
+                              non_instrumente: 'badge',
+                            }[l.statutCompletude] || 'badge warn'}>
+                              {{
+                                complet: 'complet',
+                                partiel: 'partiel',
+                                non_instrumente: 'non instrumenté',
+                              }[l.statutCompletude] || l.statutCompletude}
                             </span>
                           )}
                         </td>

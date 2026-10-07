@@ -40,9 +40,13 @@ function jour(iso) {
 }
 
 export default function RapportsPlanifies({ etabActif, droits, versionTableaux }) {
-  const [rapportsLus, setRapportsLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [rapportsLus, setRapportsLus] = useState()
   const rapports = rapportsLus || []
-  const [tableauxLus, setTableauxLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [tableauxLus, setTableauxLus] = useState()
   const tableaux = tableauxLus || []
 
   const [nom, setNom] = useState('')
@@ -59,6 +63,9 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
   const [raisonNonLu, setRaisonNonLu] = useState(null)
 
   const peutPlanifier = aLeDroit(droits, 'reporting.planifier')
+  // Qui peut COMPOSER un tableau de bord — pas le meme droit que planifier un
+  // rapport, et la spec le veut ainsi (§1.5 : `configurer` = administrateur seul).
+  const peutComposer = aLeDroit(droits, 'reporting.configurer')
 
   const recharger = useCallback(() => {
     api.rapportsPlanifies()
@@ -135,7 +142,9 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
           <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{erreur}</div>
         )}
 
-        {rapportsLus === null ? (
+        {rapportsLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : rapportsLus === null ? (
           <div className="banner banner-warn">
             La liste des rapports planifiés n’a pas pu être lue. Ce qui existe déjà n’est pas
             affiché ici — ce n’est pas une absence, c’est une lecture qui a échoué.
@@ -253,15 +262,26 @@ export default function RapportsPlanifies({ etabActif, droits, versionTableaux }
               </button>
             </div>
 
-            {tableauxLus === null ? (
+            {tableauxLus === undefined ? (
+              <p className="hint">Lecture…</p>
+            ) : tableauxLus === null ? (
               <div className="banner banner-warn" style={{ marginTop: 'var(--esp-normal)' }}>
                 La liste des tableaux de bord n’a pas pu être lue : impossible de choisir sur quoi
                 porte le rapport.
               </div>
             ) : tableaux.length === 0 && (
               <div className="banner banner-warn" style={{ marginTop: 'var(--esp-normal)' }}>
+                {/* ⚠ LE REMÈDE DÉPEND DE QUI LIT. Composer un tableau exige
+                    `reporting.configurer`, réservé à l'administrateur par la spec (§1.5) ; le
+                    formulaire de composition n'est pas rendu sans ce droit. Dire « composez-en un
+                    ci-dessus » à un rôle qui ne peut pas le fait chercher un formulaire absent, et
+                    conclure que l'écran est cassé. */}
                 Aucun tableau de bord actif : un rapport porte toujours sur un tableau (RG-M7-06).
-                Composez-en un ci-dessus avant de planifier.
+                {peutComposer
+                  ? ' Composez-en un ci-dessus avant de planifier.'
+                  : ' Votre rôle permet de planifier un rapport, pas de composer le tableau sur'
+                    + ' lequel il porte (droit reporting.configurer) : demandez-en un à un'
+                    + ' administrateur du reporting.'}
               </div>
             )}
           </form>

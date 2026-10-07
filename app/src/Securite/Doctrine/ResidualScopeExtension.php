@@ -16,8 +16,10 @@ use App\Legal\Entity\LegalIdentity;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Region;
+use App\Organisation\Service\EditorTenantResolver;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -62,6 +64,13 @@ use Symfony\Bundle\SecurityBundle\Security;
  * aurait OUBLIÉ de poser son établissement se lit comme une ligne globale. Le rattachement est donc
  * une responsabilité de l'écriture, pas de la lecture.
  *
+ * **Le journal d'audit fait exception depuis le 01/10/2026.** La contrepartie ci-dessus s'y était
+ * réalisée à grande échelle : 32 classes auditées n'avaient pas d'accesseur d'établissement, et leurs
+ * entrées (fiches clients, paiements, connexions — 76 912 pour les seuls utilisateurs en préprod) se
+ * lisaient de tous les clients. Une entrée d'audit sans établissement n'est désormais lue que depuis
+ * l'établissement éditeur (`EDITOR_TENANT_ID`) ; l'écriture rattache tout ce qui peut l'être
+ * (`AuditEstablishmentResolver`), et `AuditTenantIsolationTest` refuse une classe auditée sans décision.
+ *
  * ── LA SOUS-REQUÊTE EST AUTONOME ────────────────────────────────────────────────────────────────
  *
  * `FilterEagerLoadingExtension` reconstruit la requête et perd silencieusement les jointures libres
@@ -105,7 +114,11 @@ final readonly class ResidualScopeExtension implements QueryCollectionExtensionI
         Region::class => 'groupe',
     ];
 
-    public function __construct(private Security $security)
+    public function __construct(
+        private Security $security,
+        private EditorTenantResolver $editeur,
+        private ContexteEtablissement $contexte,
+    )
     {
     }
 
@@ -152,12 +165,14 @@ final readonly class ResidualScopeExtension implements QueryCollectionExtensionI
         $alias = $queryBuilder->getRootAliases()[0];
         $porteur = $alias . '.' . $this->propriete($resourceClass);
 
+        // Non rattachée : elle n'est d'aucun établissement, elle n'est donc cachée à aucun — SAUF une
+        // entrée d'audit, qui n'est lue que par l'éditeur (voir l'en-tête et AuditEstablishmentResolver).
+        $nonRattacheeVisible = $resourceClass !== EntreeAudit::class
+            || $this->editeur->isEditor($this->contexte->etablissementActif());
         $queryBuilder
-            ->andWhere($queryBuilder->expr()->orX(
-                // Non rattachée : elle n'est d'aucun établissement, elle n'est donc cachée à aucun.
-                $queryBuilder->expr()->isNull($porteur),
-                $queryBuilder->expr()->exists($condition),
-            ))
+            ->andWhere($nonRattacheeVisible
+                ? $queryBuilder->expr()->orX($queryBuilder->expr()->isNull($porteur), $queryBuilder->expr()->exists($condition))
+                : $queryBuilder->expr()->exists($condition))
             ->setParameter('perimetre_residuel_utilisateur', $utilisateur->getId(), 'uuid');
     }
 

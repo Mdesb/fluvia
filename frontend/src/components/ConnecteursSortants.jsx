@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import Modal from './Modal.jsx'
 
 /**
  * LES DESTINATIONS SORTANTES — Slack, Teams, Discord, et l'automate maison.
@@ -15,11 +14,12 @@ import Modal from './Modal.jsx'
  * le même sens que l'éligibilité des promotions, et l'écran l'écrit là où l'on coche — pas dans un
  * message qui arriverait après.
  */
-export default function ConnecteursSortants({ droits, etabActif }) {
+export default function ConnecteursSortants({ droits, etabActif, params = {}, majParams }) {
+  const ouvert = params.destination || ''
+  const fermer = () => majParams({ destination: '' }, { pousser: true })
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   const [destinations, setDestinations] = useState(null)
   const [evenements, setEvenements] = useState(null)
-  const [edition, setEdition] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
 
@@ -58,6 +58,74 @@ export default function ConnecteursSortants({ droits, etabActif }) {
     }
   }
 
+  // ── LA DESTINATION, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // ⚠ `nouvelle` NE VEUT PAS DIRE « objet vide ». Le bouton pré-remplissait `kind: 'slack'` et
+  // une liste d'événements vide : c'est ce défaut-là qu'il faut reconstruire, sinon le
+  // formulaire s'ouvrirait sans service choisi là où il en proposait un.
+  //
+  // ⚠ TROIS ÉTATS, et le fichier les nomme en tête : `null` = on lit, `undefined` = on n'a pas
+  // pu lire, un tableau = on a lu. On les consulte avant de conclure « elle n'existe pas ».
+  if (ouvert) {
+    const creation = ouvert === 'nouvelle'
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux connecteurs
+      </button>
+    )
+    if (!creation && destinations === null) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="empty">Lecture des destinations…</div>
+        </div></section>
+      )
+    }
+    if (!creation && destinations === undefined) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            Les destinations n’ont pas pu être lues, donc celle-ci non plus. Ce n’est pas la même
+            chose que « elle n’existe pas ».
+          </div>
+        </div></section>
+      )
+    }
+    const d = creation ? null : (destinations || []).find((x) => String(x.id) === String(ouvert))
+    if (!creation && !d) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            Cette destination n’est plus dans la liste — elle a sans doute été supprimée depuis
+            que ce lien a été copié. Revenez à la liste plutôt que d’en recréer une.
+          </div>
+        </div></section>
+      )
+    }
+    // ⚠ `url` REPART TOUJOURS VIDE, en création comme en modification : le serveur ne la relit
+    // pas, et l'afficher donnerait à croire qu'on la conserve. C'était déjà le cas avant.
+    const valeurs = creation
+      ? { kind: 'slack', libelle: '', url: '', evenements: [], actif: true }
+      : { id: d.id, kind: d.kind, libelle: d.libelle, url: '', evenements: [...(d.evenements || [])], actif: d.actif }
+    return (
+      <section className="card"><div className="card-b">
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <EditionDestination
+          key={ouvert}
+          valeurs={valeurs}
+          evenements={evenements}
+          onFermer={fermer}
+          onFait={(m) => { fermer(); setSucces(m); setErreur(null); charger() }}
+          onErreur={setErreur}
+        />
+      </div></section>
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-h">
@@ -70,7 +138,7 @@ export default function ConnecteursSortants({ droits, etabActif }) {
             type="button"
             className="btn primary sm"
             style={{ marginLeft: 'auto' }}
-            onClick={() => setEdition({ kind: 'slack', libelle: '', url: '', evenements: [], actif: true })}
+            onClick={() => majParams({ destination: 'nouvelle' }, { pousser: true })}
           >
             Ajouter une destination
           </button>
@@ -158,14 +226,7 @@ export default function ConnecteursSortants({ droits, etabActif }) {
                         <button
                           type="button"
                           className="btn ghost sm"
-                          onClick={() => setEdition({
-                            id: d.id,
-                            kind: d.kind,
-                            libelle: d.libelle,
-                            url: '',
-                            evenements: [...(d.evenements || [])],
-                            actif: d.actif,
-                          })}
+                          onClick={() => majParams({ destination: String(d.id) }, { pousser: true })}
                         >
                           Modifier
                         </button>
@@ -189,14 +250,6 @@ export default function ConnecteursSortants({ droits, etabActif }) {
           qui doit être complet.
         </div>
       </div>
-
-      <EditionDestination
-        valeurs={edition}
-        evenements={evenements}
-        onFermer={() => setEdition(null)}
-        onFait={(m) => { setEdition(null); setSucces(m); setErreur(null); charger() }}
-        onErreur={setErreur}
-      />
     </section>
   )
 }
@@ -264,7 +317,8 @@ function EditionDestination({ valeurs, evenements, onFermer, onFait, onErreur })
   }
 
   return (
-    <Modal open onClose={onFermer} titre={creation ? 'Nouvelle destination' : 'Modifier la destination'}>
+    <>
+      <h2>{creation ? 'Nouvelle destination' : 'Modifier la destination'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Service *</span>
@@ -356,6 +410,6 @@ function EditionDestination({ valeurs, evenements, onFermer, onFait, onErreur })
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

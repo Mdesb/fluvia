@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import Modal from './Modal.jsx'
 import { api, tokenStore, etablissementStore } from '../api/client.js'
 
 /**
@@ -227,7 +226,8 @@ export default function FactureRendu({ facture, onClose }) {
     && !rendu.mentionAcquittee
 
   return (
-    <Modal open={Boolean(facture)} onClose={onClose} titre={`Facture ${facture?.numero || ''}`} taille="lg">
+    <>
+      <h2>Facture {facture?.numero || ''}</h2>
       {chargement ? (
         <div className="center"><div className="spinner" /></div>
       ) : erreur ? (
@@ -402,7 +402,7 @@ export default function FactureRendu({ facture, onClose }) {
               L’envoi par courriel n’est pas branché dans cette version&nbsp;: imprimez le document
               ou enregistrez-le en PDF depuis la fenêtre d’impression, puis remettez-le vous-même.
             </span>
-            <button className="btn ghost" type="button" onClick={onClose}>Fermer</button>
+            <button className="btn ghost" type="button" onClick={onClose}>Retour</button>
             <button className="btn" type="button" onClick={() => window.print()}>
               Imprimer
             </button>
@@ -415,7 +415,7 @@ export default function FactureRendu({ facture, onClose }) {
           )}
         </>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -502,4 +502,31 @@ function dateFr(v) {
   if (!v) return '—'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
+}
+
+// ── UNE FACTURE D'ÉCRAN SE LIT PAR SON IDENTIFIANT ────────────────────────────────────────────
+//
+// Les deux écrans qui montrent ce document — la liste des factures et la caisse — partagent cette
+// lecture. La liste est filtrée et paginée : un lien ne doit pas en dépendre. Seul un 404 dit
+// « elle n'existe pas » ; tout le reste est une lecture qui a échoué. « Pas encore lu » se déduit
+// de la clé (#172), qui porte l'établissement — sinon une bascule laisserait la facture d'un site
+// affichée sous un autre.
+export function useFactureLue(id, etabActif) {
+  const [lecture, setLecture] = useState(null)
+  const cle = id ? `${id}|${etabActif}` : null
+  useEffect(() => {
+    if (!id) { setLecture(null); return undefined }
+    const cleLue = `${id}|${etabActif}`
+    let vivant = true
+    api.facture(id)
+      .then((v) => { if (vivant) setLecture({ cle: cleLue, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLecture({ cle: cleLue, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [id, etabActif])
+  const courante = lecture?.cle === cle ? lecture : null
+  return {
+    chargement: cle !== null && courante === null,
+    facture: courante?.valeur ?? null,
+    echouee: courante?.echouee ?? false,
+  }
 }

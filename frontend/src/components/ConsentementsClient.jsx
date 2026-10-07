@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import Modal from './Modal.jsx'
 
 /**
  * LES CONSENTEMENTS D'UN CLIENT — on pouvait les écrire, jamais les relire ni les poser.
@@ -24,7 +23,9 @@ const ETATS = [
 ]
 
 const LIB_CANAL = Object.fromEntries(CANAUX)
-const LIB_ETAT = Object.fromEntries(ETATS)
+// `invalide` (#101) : posé par une reprise, jamais saisi — il s'affiche, il ne se choisit pas, d'où
+// son absence de `ETATS`, qui alimente le sélecteur du formulaire.
+const LIB_ETAT = { ...Object.fromEntries(ETATS), invalide: 'Invalidé' }
 
 function jour(v) {
   if (!v) return '—'
@@ -32,13 +33,12 @@ function jour(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
 }
 
-export default function ConsentementsClient({ client, droits = [] }) {
+export default function ConsentementsClient({ client, droits = [], onOuvrir, enEcran = false, onFermer, onEnregistre }) {
   // ⚠ TROIS ÉTATS. `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
   // Une liste vide affichée sur un refus dirait « ce client n'a jamais rien accepté », ce qui est
   // exactement la conclusion inverse de « je n'en sais rien » — et sur du consentement, la
   // différence est juridique avant d'être ergonomique.
   const [liste, setListe] = useState(null)
-  const [ouvert, setOuvert] = useState(false)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
 
@@ -55,6 +55,33 @@ export default function ConsentementsClient({ client, droits = [] }) {
 
   useEffect(charger, [client?.id, peutLire])
 
+  // ── EN ÉCRAN : LE FORMULAIRE SEUL ─────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LA CONDITION DU BOUTON ET L'ÉCRAN LA REPREND (la lecture CRM, et elle seule :
+  // le bouton n'en exigeait pas d'autre). L'échec d'envoi a sa bannière ici, celle de la carte n'y
+  // étant pas rendue.
+  if (enEcran) {
+    if (!peutLire) {
+      return (
+        <div className="banner banner-warn">
+          Enregistrer un consentement demande l’accès au fichier client, que ce compte n’a pas.
+        </div>
+      )
+    }
+    return (
+      <>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <EnregistrerConsentement
+          client={client}
+          open
+          onClose={onFermer}
+          onFait={(message) => onEnregistre(message)}
+          onErreur={setErreur}
+        />
+      </>
+    )
+  }
+
   if (!peutLire) return null
 
   return (
@@ -65,7 +92,7 @@ export default function ConsentementsClient({ client, droits = [] }) {
           className="btn ghost sm"
           type="button"
           style={{ marginLeft: 'auto' }}
-          onClick={() => { setOuvert(true); setErreur(null); setSucces(null) }}
+          onClick={() => { setErreur(null); setSucces(null); onOuvrir() }}
         >
           Enregistrer un consentement
         </button>
@@ -107,6 +134,9 @@ export default function ConsentementsClient({ client, droits = [] }) {
                     <span className={`badge ${c.etat === 'accorde' ? 'good' : c.etat === 'refuse' ? 'crit' : 'warn'}`}>
                       {LIB_ETAT[c.etat] || c.etat}
                     </span>
+                    {c.etat === 'invalide' && c.invalidationReason && (
+                      <span className="sub" style={{ marginLeft: 'var(--esp-normal)' }}>{c.invalidationReason}</span>
+                    )}
                     {c.recueilliParRepresentant && (
                       <span className="sub" style={{ marginLeft: 6 }}>par le représentant légal</span>
                     )}
@@ -120,14 +150,6 @@ export default function ConsentementsClient({ client, droits = [] }) {
           </table>
         </div>
       )}
-
-      <EnregistrerConsentement
-        client={client}
-        open={ouvert}
-        onClose={() => setOuvert(false)}
-        onFait={(message) => { setOuvert(false); setSucces(message); charger() }}
-        onErreur={setErreur}
-      />
     </section>
   )
 }
@@ -178,8 +200,11 @@ function EnregistrerConsentement({ client, open, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Enregistrer un consentement" taille="sm">
+    <>
+      <h2>Enregistrer un consentement</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div className="sub">
           Ce que ce client accepte de recevoir, par quel canal, et depuis quand. C’est cette trace
@@ -249,6 +274,6 @@ function EnregistrerConsentement({ client, open, onClose, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

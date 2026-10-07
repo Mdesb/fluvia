@@ -227,6 +227,8 @@ final class PriceQuoter
         if ($saison !== null) {
             $nom = $this->nomSaison($produit, $saison);
             $raisons[] = $nom !== null ? sprintf('saison « %s »', $nom) : 'saison en cours';
+        } else {
+            $raisons[] = 'toute l\'année';
         }
         if ($qf !== null) {
             $raisons[] = sprintf('quotient familial %s', rtrim(rtrim(number_format($qf, 2, ',', ' '), '0'), ','));
@@ -279,21 +281,19 @@ final class PriceQuoter
      *
      * Déplacée ici depuis `AjoutLigneHandler`, où elle était privée : c'est précisément le genre de
      * calcul qu'une estimation aurait dû réécrire, et donc le genre qui diverge.
+     *
+     * Lue sur la case que le résolveur a RETENUE : elle cherchait auparavant la première case de
+     * saison qui contenait la date, qui n'était pas forcément celle du prix appliqué. null pour un
+     * prix « toute l'année » (case sans saison).
      */
     public function saison(Produit $produit, TypeTarif $typeTarif, \DateTimeImmutable $date, ?float $qf): ?Uuid
     {
-        foreach ($produit->getGrilles() as $grille) {
-            $gt = $grille->getTypeTarif();
-            $saison = $grille->getSaison();
-            if ($gt === null || $saison === null || !$gt->getId()->equals($typeTarif->getId())) {
-                continue;
-            }
-            if ($saison->isActif() && $saison->contient($date) && $grille->getPrix() !== null) {
-                return $saison->getId();
-            }
+        $grille = $this->resolveurPrix->grilleRetenue($produit, $typeTarif, $date, null, $qf);
+        if ($grille === null || $grille->getPrix() === null) {
+            return null;
         }
 
-        return null;
+        return $grille->getSaison()?->getId();
     }
 
     /**

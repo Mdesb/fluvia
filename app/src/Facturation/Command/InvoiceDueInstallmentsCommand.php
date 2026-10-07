@@ -39,9 +39,20 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *     d'arriéré dans la remise suivante ». On ne rattrape donc l'arriéré que par `--depuis`, c'est-à-dire
  *     par une décision explicite, jamais par défaut.
  *
- *  2. **`--dry-run`**, qui compte et nomme sans rien écrire. ⚠ Il sort **après** les mêmes gardes que
- *     le mode réel, jamais avant : un mode à blanc qui court-circuite ce qu'il simule annonce des
- *     résultats que le mode réel ne produira pas.
+ *  2. **`--dry-run`**, qui compte et nomme sans rien écrire.
+ *
+ *     ⚠ CETTE PHRASE A ÉTÉ FAUSSE PENDANT SIX JOURS, ET C'EST ELLE QUI A FAIT LE DÉGÂT. Elle disait
+ *     « il sort après les mêmes gardes que le mode réel » — le code, lui, faisait `continue` juste
+ *     après le plancher de date, sans résoudre ni le taux de TVA, ni le client, ni le montant, ni
+ *     même si l'échéance était déjà facturée. Le 14/09 le mode à blanc a annoncé « 5 à facturer,
+ *     0 refus » sur cinq échéances que le passage réel a toutes refusées. Un commentaire qui décrit
+ *     un contrôle absent est pire qu'un silence : il fait lancer le vrai passage en confiance.
+ *
+ *     Désormais il appelle `InstallmentInvoicer::verifier()`, qui rejoue **la même méthode de
+ *     résolution** que l'émission — pas une copie. ⚠ Et il s'arrête au seuil de l'émission : la
+ *     numérotation, la période comptable ouverte et le scellement NF525 n'existent que dans une
+ *     transaction qui écrit. Un `--dry-run` vert dit « la configuration est résolvable », jamais
+ *     « ça marchera ». La commande l'écrit à l'écran, pour qu'on ne lise pas l'un pour l'autre.
  *
  * ⚠ `safeOnFirstRun: false` au catalogue : l'ordonnanceur ne lancera JAMAIS cette commande de
  * lui-même tant qu'un humain ne l'a pas exécutée une première fois. C'est voulu, et c'est la
@@ -132,7 +143,33 @@ final class InvoiceDueInstallmentsCommand extends Command
                     continue;
                 }
 
+                // ⚠ ON DEMANDE AVANT, PAS APRÈS. `facturer()` rend la même réservation qu'elle vienne
+                //    d'être créée ou qu'elle existât déjà — c'est ce qui la rend idempotente, et c'est
+                //    aussi ce qui rend les deux cas indiscernables après coup. Ma première version
+                //    tranchait sur `issuedAt < aujourd'hui`, ce qui recomptait comme « émise » une
+                //    échéance déjà facturée LE JOUR MÊME. Sur une tâche d'argent, un compteur faux est
+                //    pire que pas de compteur : il rassure.
+                //
+                // ⚠ ET C'EST LE MÊME TEST POUR LES DEUX MODES, désormais. Le mode à blanc l'ignorait :
+                //    il comptait « à facturer » des échéances déjà facturées, donc un second passage
+                //    à blanc annonçait exactement le même travail que le premier, indéfiniment.
+                $dejaConnue = $this->em->getRepository(InstallmentInvoice::class)
+                    ->findOneBy(['originReference' => $due->referenceOrigine]) !== null;
+
                 if ($simulation) {
+                    if ($dejaConnue) {
+                        ++$deja;
+                        continue;
+                    }
+
+                    // Les MÊMES refus que le mode réel, par la MÊME méthode de résolution.
+                    try {
+                        $this->invoicer->verifier($due, $etablissement);
+                    } catch (\Throwable $echec) {
+                        $refus[] = sprintf('%s : %s', $due->referenceOrigine, $echec->getMessage());
+                        continue;
+                    }
+
                     $io->text(sprintf(
                         'à facturer : %s — %s € pour le %s',
                         $due->libelle,
@@ -142,15 +179,6 @@ final class InvoiceDueInstallmentsCommand extends Command
                     ++$emises;
                     continue;
                 }
-
-                // ⚠ ON DEMANDE AVANT, PAS APRÈS. `facturer()` rend la même réservation qu'elle vienne
-                //    d'être créée ou qu'elle existât déjà — c'est ce qui la rend idempotente, et c'est
-                //    aussi ce qui rend les deux cas indiscernables après coup. Ma première version
-                //    tranchait sur `issuedAt < aujourd'hui`, ce qui recomptait comme « émise » une
-                //    échéance déjà facturée LE JOUR MÊME. Sur une tâche d'argent, un compteur faux est
-                //    pire que pas de compteur : il rassure.
-                $dejaConnue = $this->em->getRepository(InstallmentInvoice::class)
-                    ->findOneBy(['originReference' => $due->referenceOrigine]) !== null;
 
                 try {
                     $reservation = $this->invoicer->facturer($due, $etablissement, $this->auteurSysteme());
@@ -177,6 +205,19 @@ final class InvoiceDueInstallmentsCommand extends Command
             $anterieures,
             \count($refus),
         ));
+
+        // ⚠ DIRE CE QUE LE MODE À BLANC N'A PAS PU MESURER. Sans cette ligne, « 5 à facturer,
+        //    0 refus » se lit comme « 5 factures vont sortir » — alors qu'il se lit « rien ne bloque
+        //    dans la configuration ». La numérotation, la période comptable et le scellement ne se
+        //    jouent pas à blanc : ils n'existent que dans la transaction qui écrit.
+        if ($simulation && $emises > 0) {
+            $io->note(
+                'Mode à blanc : la configuration de ces échéances est résolvable (taux, client, '
+                . 'destinataire complet, montant, pas de doublon). Il reste l\'émission elle-même — '
+                . 'numérotation, compte de produit, période comptable ouverte, scellement NF525 — '
+                . 'qui ne se vérifie qu\'en écrivant.',
+            );
+        }
 
         if ($refus !== []) {
             // ⚠ NOMMER, PAS COMPTER. « 12 refus » n'a jamais permis de corriger quoi que ce soit.

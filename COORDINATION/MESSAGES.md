@@ -1,3 +1,5 @@
+> ⛔ **ARCHIVE — canal retiré.** L'ancienne coordination artisanale (`ORDRES/`, `RAPPORTS/`, `TASKS.md`, `MESSAGES.md`, battement de 15 min) est **remplacée par branches + PR + Issues** — voir `CLAUDE.md`, section « Ce qui a été retiré ». Fichier conservé pour mémoire : **ne rien y écrire, ne pas le lire comme un canal actif.**
+
 # MESSAGES — tableau d'échange async entre Claude
 
 Pas de canal live entre les sessions Claude → on se parle **ici**. **Commit = envoyer, `git pull` =
@@ -7049,3 +7051,148 @@ Arbitrage Maxime « absorption complète » exécuté (commit `62f772d8`) :
 - **Tests** : `GratuiteScolaireTest` retiré ; CA-5/CA-6 sont couverts côté Groupes.
 
 Vert : Musée 22/156, Groupes 20/167, garde-fous 54/54 (écart 524→518, entités exposées 279→276). **Reste B4** : retirer les entités/tables dépréciées après une période de validation — non urgent, les tables ne gênent personne. Je le ferai sur ton feu, ou la session musée peut le prendre.
+
+## 2026-09-21 — Abonnement : billet d'accès QR émis à la souscription (livré)
+PR #242 (squash 682e402f) mergée + déployée (double-boucle OK sur 682e402f). Corrige
+« pas de billet généré » : la souscription ouvrait un StatutAccesFitness SANS support
+(droitAcces = null) => aucun QR et la porte fermée (le terminal lit un SUPPORT, jamais
+l'abonnement). Nouveau MembershipQrAccessIssuer (nom EN, D5) : à la souscription, crée un
+Acces\DroitAcces (sourceType=Abonnement) et lui appaire un support QR SIGNÉ, en réutilisant
+AppairageHandler + GenerateurCodeSupport (le même que le terminal vérifie) SANS toucher
+App\Acces. Même patron que Personnel\EmissionBadgeStaffHandler. Zones du produit (D87)
+appliquées (ProductAccessZoneResolver) — un droit d'abonnement N'EST PAS exempté de zone :
+si le produit ne déclare aucune zone, le support existe mais n'ouvre AUCUNE porte (donnée
+à renseigner sur la fiche produit). Colonne StatutAccesFitness.support_identifiant
+(migration Version20260921130000, appliquée en préprod, colonne interrogeable) : code du
+billet dénormalisé pour l'afficher/réimprimer. Fiche abonnement (onglet Accès) : QR + code
++ bouton imprimer. Effets induits GRATUITS : (1) l'appairage d'une CARTE physique marche
+via « Badges & terminaux » (le droit apparaît dans les droits libres) ; (2) pause/résiliation
+coupent réellement l'accès (PropagationAccesFitnessHandler ne faisait rien tant que droitAcces
+était null). Création client à la volée : DÉJÀ en place (onglet « Créer un client » du
+sélecteur, payeur ET adhérent, seul le nom requis) — rien à ajouter. Vérifié EN EXÉCUTANT :
+SouscriptionTest 4/4 (80 assertions) dont le nouveau témoin filtré par nom (souscription =>
+droit rattaché + support QR signé ET vérifiable par GenerateurCodeSupport). Reste (noté, hors
+ce lot) : affichage immédiat du QR en fin de modale de souscription comptoir ; action
+d'appairage carte directe depuis la fiche abonnement ; renseigner les zones d'accès sur les
+produits d'abonnement (sinon QR muet aux portes, D87).
+
+## 2026-09-21 — Front : appel mort etatEcheance() sur la bannière de rejet (corrigé)
+PR #243 (squash 15cfdcdb) mergée + déployée (double-boucle OK sur 15cfdcdb). Trouvé en
+voulant commiter le journal ci-dessus : le garde-fou n40 « Portée des identifiants » a refusé
+le commit sur Sport.jsx:451 — etatEcheance(e.statut)?.mot appelait une fonction qui n'existe
+NULLE PART (grep : une seule occurrence, ce site, aucune déclaration ni import). La bannière
+s'affiche sur toute échéance NON prélevée (e.statut !== 'prelevee') => ce chemin plantait en
+Reference: etatEcheance is not defined (écran blanc). Vite ne le voit pas (pas d'analyse de
+portée JSX). Remplacé par mot() — le helper déjà importé (ligne 9) et déjà employé pour le
+statut d'échéance aux lignes 689/1005, qui renvoie une chaîne avec repli. Latent depuis #77
+(5006849f) : n40 ne tourne que sur le checkout principal, pas sur les worktrees — d'où
+l'échappée, et pourquoi les commits de fonctionnalité passaient en worktree. Vérifié EN
+EXÉCUTANT : n40 repassé ✗->✓ sur main (55 garde-fous OK), déploiement OK.
+
+## 2026-09-21 — Abonnement : souscription au comptoir en assistant 3 étapes (livré)
+PR #244 (squash 1faa0395) mergée + déployée (double-boucle OK sur 1faa0395). Refonte de
+SouscriptionAbonnement.jsx (composant PARTAGÉ Caisse/Abonnements/FicheProduit) en assistant
+3 étapes, à la demande de Maxime — avant, tout sur un écran et « IBAN requis » à la FIN.
+Découpage retenu (son choix) : 1) Formule (produit + durée + prorata) ; 2) Client & mandat
+(payeur + adhérent + IBAN + titulaire) ; 3) Validation (récapitulatif + signatures + encaissement
++ Souscrire). Frise de progression, validation PAR étape (l'erreur IBAN bloque l'étape 2, pas la
+fin), Précédent/Suivant. AUCUNE logique changée : mêmes états, même corps api.souscrireAbonnement,
+même ordonnancement encaissement (annulation 1re échéance EN DERNIER). Props inchangées, les 3
+appelants ne bougent pas. Vérifié EN EXÉCUTANT : build frontend OK ; garde-fous 55/55 (n40 portée
++ contrastes) ; parcours live sur préprod (validation étape 1 démontrée, passage étape 1->2 avec ✓).
+Contexte : fait après une souscription Gold de test réelle bout-en-bout (client créé à la volée,
+billet QR signé QRC-RSWYJGGZBS0R4YTN-F851C539A8, zone « Entrée salle fitness » rattachée au droit).
+
+## 2026-09-23 — Revue feature abonnement + durcissement (3 critiques livrés)
+Revue complète (comptoir + en ligne). Correction d'un faux que j'avais dit : la vente
+d'abonnement EN LIGNE fonctionne bien (SouscriptionAbonnementEnLigneHandler appelle le
+souscrire() canonique ; échéancier collecté par SportEcheanceSepaSource) — le commentaire de
+FicheProduit.jsx était périmé. Corrigés + déployés (09d95b16) :
+- PR #245 (0c9b5750) — durcissement souscription : (1) CLOISONNEMENT payeur (constat 5) :
+  SouscrireAbonnementProcessor résolvait le payeur par find() sans assertReachable → un groupe A
+  souscrivait au nom du client d'un groupe B (écriture cross-tenant + fuite PII). Ajout de
+  CustomerReachability->assertReachable(payeur), 404 (D3). (2) ATOMICITÉ : souscrire() écrivait en
+  ~5 flushes sans transaction ; appairer() flushe en interne → QR committé avec statutAcces.droitAcces
+  = null possible → résiliation ne coupait pas. Enveloppé dans wrapInTransaction. (3) RÉVOCATION :
+  RattacherDroitAccesProcessor écrasait droitAcces sans révoquer l'ancien → après appairage badge,
+  l'ancien QR ouvrait toujours, même résilié. Dévalidation + révocation des appairages actifs avant
+  remplacement.
+- PR #246 (60ffbe92) — témoin de révocation rendu déterministe (idDroitAccesDemo = findOneBy([])
+  sur PK UUID pouvait tirer le QR lui-même → no-op).
+- PR #247 (09d95b16) — message de souscription EN LIGNE honnête : disait « commande enregistrée »
+  alors qu'un abonnement + prélèvements sont réellement créés. Dit désormais « Abonnement souscrit »
+  + prélèvements à venir.
+Vérifié EN EXÉCUTANT : SouscriptionTest 6/6 (dont 2 nouveaux témoins : payeur hors périmètre → 404
+sans rien créer ; rattachement → ancien QR dévalidé + appairage révoqué) + suites
+abonnement/en-ligne/cloisonnement/hors-ligne/collecte 13/13 ; build frontend + garde-fous 55/55 ;
+double-boucle OK.
+Reste (revue, non retenu par Maxime dans ce lot « 3 critiques ») : idempotence double-submit au
+comptoir ; garde canal en_ligne + VitrineAccessibleGuard sur l'endpoint de souscription en ligne
+(un produit guichet-only devient souscriptible en ligne) ; visibilité abonnement/échéance/mandat
+dans MonCompte ; périmètre de commercialisation de la formule ; validation format IBAN (mod-97).
+
+## 2026-09-23 — Boutique : garde canal en_ligne sur la souscription en ligne (sécurité, suite revue)
+PR #248 (squash 1c8990c6) mergée + déployée. SouscriptionAbonnementEnLigneHandler ne vérifiait que
+formule->isSepaActif(), jamais produit->aCanal(EnLigne) ni l'accessibilité de la vitrine. Or
+SubscriptionPriceResolver résout sur la visibilité du TypeTarif, pas sur canaux : un produit
+GUICHET-ONLY à tarif visible devenait souscriptible en ligne (recette/mandat à un établissement dont
+la vente en ligne pouvait être fermée). Ajout : aCanal(EnLigne) requis (404, D3) +
+VitrineAccessibleGuard->verifier(vitrineAchat) quand une vitrine est fournie ; null = repli
+historique. Vérifié EN EXÉCUTANT AVANT FUSION (tree principal) : AbonnementSepaTest 2/2 dont le
+nouveau témoin (produit sans en_ligne → 404, titulaire de compte inclus) ; garde-fous OK ;
+double-boucle OK.
+Reste de la revue (hors périmètre demandé jusqu'ici) : idempotence double-submit comptoir ;
+visibilité abonnement/échéance/mandat dans MonCompte ; périmètre de commercialisation de la formule
+au comptoir ; validation format IBAN (mod-97).
+
+## 2026-09-23 — Suite revue abonnement : idempotence, validation IBAN, visibilité MonCompte
+- PR #249 (8af70a54) — durcissement souscription : IDEMPOTENCE comptoir (double-POST → même abo
+  renvoyé, aucun doublon ; cloisonnement porté sur l'entité résolue) ; VALIDATION IBAN (nouveau
+  IbanFormatValidator, délègue à la contrainte Iban de Symfony) aux 3 voies mandat : souscription
+  guichet, souscription en ligne, CreerMandatSepaProcessor. Au passage MandatSepaTest corrigé (il
+  utilisait un IBAN aux chiffres de contrôle faux). Vérifié AVANT FUSION : suites
+  souscription/abo-en-ligne/mandats 20/20 (test-stack).
+- PR #250 (cafb2ce7) — « Mes abonnements » dans MonCompte (boutique en ligne) : MySubscriptionsProvider
+  + GET /boutique/comptes/me/abonnements (cloisonné par payeur DÉRIVÉ du compte connecté, pas d'un
+  paramètre ; IBAN jamais exposé, 4 derniers chiffres) + onglet front. Vérifié AVANT FUSION :
+  AbonnementSepaTest 4/4 (dont le témoin me/abonnements).
+- NON FAIT — périmètre de commercialisation de la formule au comptoir (revue #5) : PARQUÉ, à arbitrer
+  par Maxime. (a) C'est une règle métier : une formule doit-elle lister l'établissement actif parmi
+  les établissements de son produit pour y être souscriptible ? (b) le contrôle se heurte au garde-fou
+  de cloisonnement, qui ne reconnaît que `->getEtablissement()` SINGULIER comme contrôle sur l'entité
+  résolue, or un Produit a PLUSIEURS établissements. Faible sévérité (le prix vient du TypeTarif, les
+  zones d'accès sont déjà scopées à l'établissement).
+Bilan revue : 3 critiques (#245) + idempotence + IBAN (#249) + visibilité MonCompte (#250) livrés et
+déployés. Seul le périmètre formule (#5) reste, sur décision de Maxime.
+
+## 2026-09-23 — Périmètre de commercialisation de la formule au comptoir (livré, #5)
+PR #251 (squash 7eb6e6bf) mergée + déployée. Dernier point de la revue, sur ARBITRAGE de Maxime
+(« un produit est assigné à un site, il ne doit pas être vendable partout »). SouscrireAbonnementProcessor
+résolvait la formule par find() → court-circuitait PerimetreProduitExtension. Nouveau
+ProductSaleScopeGuard::assertSoldAt() : convention socle (liste d'établissements VIDE = vendu partout ;
+non vide = uniquement ces sites), 404 sinon — même règle que catalogue/caisse/créneaux. Nommé « Guard »
+pour que le garde-fou C19 reconnaisse le contrôle sur l'entité résolue. Vérifié AVANT FUSION :
+garde-fous 55/55 (dont C19) ; SouscriptionTest 9/9 (dont le témoin : Gold réassigné au seul
+établissement C → 404 pour un admin de A ; Gold-sur-A reste vert).
+REVUE ABONNEMENT CLOSE — tous les points livrés : #245 (3 critiques : cloisonnement payeur, atomicité,
+révocation QR), #248 (garde canal en ligne), #249 (idempotence + validation IBAN), #250 (Mes
+abonnements dans MonCompte), #251 (périmètre formule). Préprod = 7eb6e6bf.
+
+## 2026-09-23 — Refonte gestion des sites, P1 : rôle « équipe plateforme » (livré)
+PR #252 (squash 7caa1534) mergée + déployée (migration plateforme appliquée, colonne présente,
+préprod saine — 401 sur les routes authentifiées). Niveau plateforme, déploiement MONO-PROPRIÉTAIRE
+(arbitrage Maxime : tous les sites lui appartiennent → exception assumée à RG-ED-07).
+Utilisateur.plateforme (NOT NULL DEFAULT 0) + PlatformScope::isGlobal (seul lecteur) + 3 coutures
+early-return : EstablishmentReachability (atteint tout site), PerimetreEtablissementExtension (voit
+tous les sites), CalculateurDroits (*.*). ~30 autres extensions inchangées → accès PAR SITE (P1).
+AUCUN compte marqué plateforme (défaut sûr) — à poser sur les comptes de l'équipe. Vérifié AVANT
+FUSION : Securite + Subscription 161/161.
+⚠ INCIDENT préprod pendant le dev : avoir stagé le mapping de la nouvelle colonne dans l'arbre du
+checkout PRINCIPAL (pour test-stack) a cassé la préprod (« Unknown column t0.plateforme ») — FPM sert
+l'arbre principal contre la VRAIE base, qui n'avait pas encore la colonne ; aggravé par un
+cache:clear lancé en root (permissions var/cache). Corrigé par revert + deploy. LEÇON : ne jamais
+stager dans le principal un changement d'ENTITÉ qui modifie le schéma pour le tester ; tester depuis
+un worktree, ou fusionner-puis-migrer.
+Reste refonte sites : P2 vues agrégées multi-sites ; niveau réseau/groupe (affectation Groupe/Région,
+inexistante) ; consolidation identité légale UNIQUE par site (aujourd'hui éclatée LegalIdentity +
+ProfilExploitant + ConfigCreancierSepa, avec SIRET/raison sociale/TVA en double).

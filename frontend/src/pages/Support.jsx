@@ -35,7 +35,7 @@ const PRIORITES = {
   critique: { libelle: 'Critique', cls: 'crit' },
 }
 
-const DEFAUTS = { tab: 'tickets', statut: '', priorite: '' }
+const DEFAUTS = { tab: 'tickets', statut: '', priorite: '', article: '' }
 
 export default function Support({ droits = [], etabActif, me = null }) {
   // ⚠ `droits.includes(code)` NE VOIT PAS LE JOKER, et le garde-fou n°13 me l'a refuse a raison.
@@ -57,7 +57,9 @@ export default function Support({ droits = [], etabActif, me = null }) {
   // caisse et refait son tri.
   const [params, majParams] = useEtatUrl('support', DEFAUTS)
   const onglet = params.tab
-  const setOnglet = (v) => majParams({ tab: v })
+  const setOnglet = (v) => majParams({ tab: v, article: '' })
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.article)
   const filtreStatut = params.statut
   const filtrePriorite = params.priorite
   const setFiltreStatut = (v) => majParams({ statut: v })
@@ -103,6 +105,7 @@ export default function Support({ droits = [], etabActif, me = null }) {
 
   return (
     <div className="view">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Assistance</h1>
@@ -120,6 +123,7 @@ export default function Support({ droits = [], etabActif, me = null }) {
         actif={onglet}
         onChange={setOnglet}
       />
+      </>)}
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -139,7 +143,7 @@ export default function Support({ droits = [], etabActif, me = null }) {
           onOuvrirNouveau={() => setNouveau(true)}
         />
       ) : (
-        <BaseConnaissances droits={droits} etabActif={etabActif} />
+        <BaseConnaissances droits={droits} etabActif={etabActif} params={params} majParams={majParams} />
       )}
 
       <OuvrirDemande
@@ -274,7 +278,15 @@ function OuvrirDemande({ open, onFermer, onOuvert }) {
  * quelqu'un décide de le publier. C'est ce qui permet d'écrire à moitié sans que ça parte chez
  * l'usager.
  */
-function BaseConnaissances({ droits = [], etabActif }) {
+// ⚠ UNE CONSTANTE DE MODULE, PAS UN `{}` EN LIGNE : l'effet de `RedactionArticle` remet les
+// champs à zéro à chaque changement d'identité de `article`. Un objet recréé à chaque rendu
+// effacerait la frappe à chaque caractère.
+const ARTICLE_NEUF = Object.freeze({})
+
+function BaseConnaissances({ droits = [], etabActif, params = {}, majParams }) {
+  // `nouveau`, ou l'identifiant de l'article qu'on modifie.
+  const ouvert = params.article || ''
+  const fermer = () => majParams({ article: '' }, { pousser: true })
   const peutEcrire = aLeDroit(droits, 'support.gerer_kb_globale') || aLeDroit(droits, 'support.gerer_kb_locale')
   const seulementLocal = !aLeDroit(droits, 'support.gerer_kb_globale') && aLeDroit(droits, 'support.gerer_kb_locale')
 
@@ -286,7 +298,6 @@ function BaseConnaissances({ droits = [], etabActif }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [lu, setLu] = useState(null)
-  const [edite, setEdite] = useState(null)
   const [busy, setBusy] = useState(false)
 
   const recharger = useCallback(async () => {
@@ -340,6 +351,51 @@ function BaseConnaissances({ droits = [], etabActif }) {
     ? articles.filter((a) => `${a.titre} ${a.resume || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
     : articles
 
+  // ── L'ARTICLE, EN ÉCRAN ─────────────────────────────────────────────────────────────────
+  //
+  // ⚠ `articles` part à [] : c'est `chargement` puis `erreur` qui disent si on a lu. Et comme
+  // il n'existe pas de route unitaire, l'article se cherche dans la liste CHARGÉE — que le filtre
+  // de catégorie restreint. « Absent » ne veut donc pas dire « supprimé ».
+  if (ouvert) {
+    const creation = ouvert === 'nouveau'
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour à la base de connaissances
+      </button>
+    )
+    if (!creation && chargement) {
+      return <div>{retour}<div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div></div>
+    }
+    const article = creation ? ARTICLE_NEUF : articles.find((a) => String(a.id) === String(ouvert))
+    if (!creation && !article) {
+      return (
+        <div>
+          {retour}
+          <div className="banner banner-warn">
+            {erreur
+              ? 'Les articles n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Cet article n’est pas dans la liste chargée — il a pu être archivé, ou le filtre de catégorie l’écarte. Revenez à la liste pour le retrouver.'}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div>
+        {retour}
+        <RedactionArticle
+          key={ouvert}
+          article={article}
+          categories={categories}
+          etabActif={etabActif}
+          seulementLocal={seulementLocal}
+          onFerme={fermer}
+          onEnregistre={async (message) => { fermer(); setSucces(message); await recharger() }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="card">
       <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -368,7 +424,7 @@ function BaseConnaissances({ droits = [], etabActif }) {
         />
 
         {peutEcrire && (
-          <button className="btn primary sm" type="button" onClick={() => setEdite({})}>
+          <button className="btn primary sm" type="button" onClick={() => majParams({ article: 'nouveau' }, { pousser: true })}>
             + Nouvel article
           </button>
         )}
@@ -415,7 +471,7 @@ function BaseConnaissances({ droits = [], etabActif }) {
 
               {peutEcrire && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button className="btn ghost sm" type="button" disabled={busy} onClick={() => setEdite(a)}>
+                  <button className="btn ghost sm" type="button" disabled={busy} onClick={() => majParams({ article: String(a.id) }, { pousser: true })}>
                     Modifier
                   </button>
                   {a.statut !== 'publie' && (
@@ -449,14 +505,6 @@ function BaseConnaissances({ droits = [], etabActif }) {
         {lu && <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{lu.contenu}</div>}
       </Modal>
 
-      <RedactionArticle
-        article={edite}
-        categories={categories}
-        etabActif={etabActif}
-        seulementLocal={seulementLocal}
-        onFerme={() => setEdite(null)}
-        onEnregistre={async (message) => { setEdite(null); setSucces(message); await recharger() }}
-      />
     </div>
   )
 }
@@ -524,13 +572,11 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
     }
   }
 
+  if (!ouvert) return null
+
   return (
-    <Modal
-      open={ouvert}
-      onClose={onFerme}
-      titre={existant ? 'Modifier l’article' : 'Nouvel article'}
-      taille="lg"
-    >
+    <>
+      <h2>{existant ? 'Modifier l’article' : 'Nouvel article'}</h2>
       <div style={{ display: 'grid', gap: 12 }}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -605,6 +651,6 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

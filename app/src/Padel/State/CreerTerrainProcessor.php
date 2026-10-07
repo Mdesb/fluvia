@@ -6,6 +6,7 @@ namespace App\Padel\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Fonctionnalite\Enum\Metier;
 use App\Padel\Entity\TerrainPadel;
 use App\Padel\Enum\CourtSport;
 use App\Padel\Enum\CourtSurface;
@@ -67,6 +68,7 @@ final class CreerTerrainProcessor implements ProcessorInterface
         $ressource = new Ressource();
         $ressource->setEtablissement($etablissement)
             ->setCodeType('terrain_padel')
+            ->setVerticale(Metier::Padel->value)
             ->setLibelle($libelle)
             ->setCapacitePropre(4)
             ->setOuvreAcces(true);

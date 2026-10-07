@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import EcartsCaisse from '../components/EcartsCaisse.jsx'
+import { useEtatUrl } from '../api/url.js'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
@@ -71,7 +72,13 @@ function Kpi({ label, valeur, accent }) {
 
 // Écran Reporting / Pilotage (M7) : dashboard établissement (lecture directe des modules
 // producteurs). En l'absence de périmètre Reporting, repli sur la supervision accès accessible.
+// ⚠ CETTE PAGE N'A PAS D'ONGLETS : elle empile sept sections, et les écarts de caisse en sont
+// la dernière. Un écran de niveau 2 doit donc remplacer TOUTE la page — lire un formulaire
+// d'écart avec les jauges d'occupation au-dessus n'aurait aucun sens.
+const DEFAUTS_URL = { ecart: '' }
+
 export default function Pilotage({ etabActif, etablissements, droits }) {
+  const [params, majParams] = useEtatUrl('pilotage', DEFAUTS_URL)
   // Un compteur, pas une liste partagee : chaque ecran garde SA lecture et son etat
   // « pas lu ». Ce signal dit seulement « la liste a bouge, relis-la ».
   const [versionTableaux, setVersionTableaux] = useState(0)
@@ -143,6 +150,20 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
   const fmiMax = jauges.reduce((m, j) => Math.max(m, j.valeurCourante || 0), 0)
   const frequentation = dash?.entreesJour ?? jauges.reduce((s, j) => s + (j.cumulJour || 0), 0)
   const enAlerte = jauges.filter((j) => j.seuil > 0 && j.valeurCourante >= j.seuil).length
+
+
+  // ── L'ÉCRAN D'UN ÉCART, SEUL EN PAGE ────────────────────────────────────────────────────
+  //
+  // Un retour anticipé plutôt qu'une enveloppe autour des sept sections : une enveloppe mal
+  // fermée casse la page entière, et son ancre serait fragile sur cent vingt lignes de JSX.
+  // `EcartsCaisse` sait se rendre en écran ou en liste selon le même paramètre.
+  if (params.ecart) {
+    return (
+      <div className="view">
+        <EcartsCaisse etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
+      </div>
+    )
+  }
 
   return (
     <div className="view">
@@ -267,7 +288,7 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
       <ExportsAnalyse etabActif={etabActif} etablissements={etablissements} />
       <ReferentielIndicateurs droits={droits} />
 
-      <EcartsCaisse etabActif={etabActif} droits={droits} />
+      <EcartsCaisse etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
 
       <p className="hint" style={{ marginTop: 14 }}>
         Les absences non prévenues et les impayés sont calculés à l'échelle du groupe : ils apparaîtront ici dès qu'une mesure existe pour ce périmètre. Non affichés tant

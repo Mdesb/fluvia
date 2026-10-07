@@ -18,7 +18,7 @@ import ReferentielEditable from './ReferentielEditable.jsx'
 // de référentiel : elle coupe le rattachement de sites entiers. Renommer suffit à corriger une
 // erreur de saisie ; effacer demande un geste dédié qui n'existe pas encore.
 
-export default function RegionsSection({ peutEcrire, onChange }) {
+export default function RegionsSection({ peutEcrire, onChange, params, majParams }) {
   const descripteur = {
     titre: 'Régions',
     aQuoiCaSert:
@@ -47,5 +47,5 @@ export default function RegionsSection({ peutEcrire, onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire={peutEcrire} onChange={onChange} params={params} majParams={majParams} />
 }

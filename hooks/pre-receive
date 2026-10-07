@@ -397,6 +397,14 @@ while read -r ancien nouveau ref; do
         sh "$ARBRE/bin/garde-fou-migrations-immuables.sh" "--contre=$BASE" || ECHEC_REF=1
     fi
 
+    # app/config/reference.php regenere par les tests ne se commite pas (n°56). Verification git,
+    # donc en shell et directement (comme n°50). Compare le commite a la base, pas l'arbre.
+    if [ -f "$ARBRE/bin/garde-fou-reference-php.sh" ]; then
+        echo "── reference.php non commite (n°56)"
+        LANCES="$LANCES garde-fou-reference-php.sh"
+        sh "$ARBRE/bin/garde-fou-reference-php.sh" "--contre=$BASE" || ECHEC_REF=1
+    fi
+
 
     # Lier un OBJET a un parametre de requete sans dire son type (D58).
     if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then

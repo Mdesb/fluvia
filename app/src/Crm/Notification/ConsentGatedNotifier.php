@@ -31,7 +31,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
  * `Platform` porte le contrat, `Crm` porte la règle — chacun ce qu'il possède.
  *
  * **Échec fermé, y compris sur l'absence.** `accorde` sur le canal visé, et non expiré, passe. Tout le
- * reste — `refuse`, `a_renouveler`, consentement absent, client introuvable — est **refusé**. L'absence
+ * reste — `refuse`, `a_renouveler`, `invalide`, consentement absent, client introuvable — est **refusé**. L'absence
  * de consentement n'est pas un « peut-être » : c'est un non.
  *
  * ⚠ **Le chemin CONTRACTUEL ne vérifie pas que le destinataire existe** — mesuré le 07/09. Il sort
@@ -97,8 +97,12 @@ final readonly class ConsentGatedNotifier implements ClientNotifierInterface
             return NotificationOutcome::Refusee;
         }
 
+        // ⚠ LA LIGNE LA PLUS RÉCENTE, PAS LA PREMIÈRE VENUE. `Consentement` est append-only : l'état
+        // courant d'un canal est sa DERNIÈRE ligne (`ConsentementResolver`). Sans ordre, `findOneBy`
+        // rendait celle que la base voulait bien, sans garantie que ce soit la dernière : un accord
+        // suivi d'un refus, ou d'une invalidation (#101), pouvait laisser passer les campagnes. Même ordre que le résolveur, pour que l'écran et l'envoi disent pareil.
         $consentement = $this->entityManager->getRepository(Consentement::class)
-            ->findOneBy(['client' => $client, 'canal' => $canal]);
+            ->findOneBy(['client' => $client, 'canal' => $canal], ['dateRecueil' => 'DESC']);
 
         if (!$consentement instanceof Consentement) {
             return NotificationOutcome::Refusee;

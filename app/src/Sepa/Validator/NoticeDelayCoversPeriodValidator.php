@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Sepa\Validator;
 
 use App\Sepa\Entity\ConfigCreancierSepa;
+use App\Sepa\Service\DebitPreNotifier;
 use App\Membership\Entity\Membership;
 use App\Membership\Enum\MembershipPeriodicity;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,6 +45,19 @@ final class NoticeDelayCoversPeriodValidator extends ConstraintValidator
 
     private function validerCreancier(ConfigCreancierSepa $config, NoticeDelayCoversPeriod $c): void
     {
+        // D115 : un délai sous le minimum SEPA (14 j) exige une clause de préavis réduit déclarée sur le
+        // créancier. Indépendant des abonnements du site — une config à 10 jours sans clause est invalide
+        // même avant la première vente, donc AVANT la logique de période ci-dessous (qui, elle, sort tôt
+        // quand le site n'a aucun abonnement).
+        if ($config->getPreNotificationDelayDays() < DebitPreNotifier::DEFAULT_DELAY_DAYS
+            && !$config->isPreavisReduitContractuel()) {
+            $this->context->buildViolation($c->messagePreavisReduit)
+                ->setParameter('{{ delai }}', (string) $config->getPreNotificationDelayDays())
+                ->setParameter('{{ minimum }}', (string) DebitPreNotifier::DEFAULT_DELAY_DAYS)
+                ->atPath('preNotificationDelayDays')
+                ->addViolation();
+        }
+
         $etablissement = $config->getEtablissement();
         if ($etablissement === null) {
             return;

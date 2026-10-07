@@ -56,18 +56,31 @@ final class AjouterBeneficiairesPanierProcessor implements ProcessorInterface
             /** @var array<string, mixed>|null $beneficiaireSimple */
             $beneficiaireSimple = \is_array($entree['beneficiaireSimple'] ?? null) ? $entree['beneficiaireSimple'] : null;
 
+            // L'autorisation parentale n'est exigée que si LE PRODUIT l'exige (#101, décision CP-1) :
+            // c'est un choix métier de l'établissement, pas une règle du RGPD. Un mineur sur un
+            // produit qui ne l'exige pas passe sans case.
+            $produitExige = $ligne->getProduit()?->isParentalConsentRequired() ?? false;
+
             if ($beneficiaireRef instanceof Beneficiaire) {
                 // Revue de sécurité — faille majeure : un bénéficiaire référencé doit appartenir au
                 // foyer du payeur identifié du panier (RG-M4-02), sinon fuite de PII d'un tiers.
                 $this->beneficiaireGuard->verifier($data, $beneficiaireRef);
                 $ligne->setBeneficiaireRef($beneficiaireRef)->setBeneficiaireSimple(null);
-                $ligne->setAutorisationParentaleRequise($beneficiaireRef->getClient()?->estMineur() ?? false);
+                $ligne->setAutorisationParentaleRequise($produitExige && ($beneficiaireRef->getClient()?->estMineur() ?? false));
             } elseif ($beneficiaireSimple !== null) {
                 $ligne->setBeneficiaireRef(null)->setBeneficiaireSimple($beneficiaireSimple);
                 $dateStr = \is_string($beneficiaireSimple['dateNaissance'] ?? null) ? $beneficiaireSimple['dateNaissance'] : null;
                 $mineur = $dateStr !== null && new \DateTimeImmutable($dateStr) > new \DateTimeImmutable('-18 years');
-                $ligne->setAutorisationParentaleRequise($mineur);
+                $ligne->setAutorisationParentaleRequise($produitExige && $mineur);
+            } else {
+                continue;
             }
+
+            // ⚠ UNE AUTORISATION VAUT POUR UN BÉNÉFICIAIRE, PAS POUR UNE LIGNE. L'écran renvoie les
+            // trois appels à chaque tentative (#101, §4) : sans cette remise à zéro, l'autorisation
+            // donnée pour un enfant restait acquise à la ligne après qu'on y eut mis un autre enfant.
+            // L'appel `consentement` qui suit la repose si la case est cochée.
+            $ligne->setAutorisationParentaleHorodatage(null);
         }
 
         $this->em->flush();

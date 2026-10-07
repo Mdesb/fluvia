@@ -44,6 +44,15 @@ const FICHIERS = [
   // absentes — `dashboard`, `personal-data`, `social` et `legal`. Une icône définie deux fois ne
   // casse rien : la seconde gagne, et le dessin qu'on croit voir n'est pas celui qui s'affiche.
   'src/components/Icon.jsx',
+  // ⚠ Ajouté le 10/09 : `vocabulaire.js` portait TROIS clés en double que ce contrôle annonçait
+  // absentes, parce qu'il ne lisait pas ce fichier. `draft` et `cloturee` étaient inoffensives (même
+  // mot des deux côtés), mais `cancelled` valait « Annulé » puis « Annulée » : la seconde gagnait, et
+  // l'écran des pièces commerciales affichait « Devis — Annulée ».
+  //
+  // C'est le fichier le plus exposé au défaut que ce contrôle décrit : une carte plate de 140 mots,
+  // rangée par module, où chaque session ajoute sa section sans relire les autres. Deux sections
+  // peuvent nommer le même code sans jamais se croiser dans un diff.
+  'src/api/vocabulaire.js',
 ]
 
 let objetsLus = 0

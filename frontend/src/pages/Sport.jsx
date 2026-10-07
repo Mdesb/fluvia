@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import FicheAbonnement from '../components/FicheAbonnement.jsx'
+import FicheAbonnement, { GesteAbonnement } from '../components/FicheAbonnement.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
 import { useEtatUrl } from '../api/url.js'
+import { mot } from '../api/vocabulaire.js'
+import { tonStatutAbonnement } from '../api/abonnement.js'
+import { tonEcheance } from '../api/sepa.js'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -48,42 +51,25 @@ function etatDuTerme(iso) {
   return { classe: 'mut', texte: `dans ${Math.round(jours / 30)} mois`, urgent: false }
 }
 
-// Le statut ne se lit pas pareil selon ce qu'il implique : « echu » veut dire que l'acces est
-// coupe, et un badge gris comme les autres le noierait dans la liste.
-// ⚠ CETTE FONCTION RENDAIT `ok` ET `err`, QUI NE SONT PAS DES CLASSES.
+// LE STATUT D'UN ABONNEMENT SE LIT DANS `api/abonnement.js`, ET LE MOT DANS `mot()`.
 //
-// `styles.css` ne declare que `.badge.good`, `.warn`, `.crit`, `.info` et `.mut` (ligne 371,
-// enumeration complete). `badge ok` et `badge err` ne peignaient donc RIEN : un abonnement `actif`
-// et un abonnement `echu` s'affichaient a l'identique, sans couleur, pendant que seul
-// « resilie/impaye » etait colore. La distinction la plus importante du tableau ne portait rien.
+// La `tonStatut` locale qui vivait ici avait deja ete corrigee une fois — elle rendait `ok` et `err`,
+// qui ne sont pas des classes de `styles.css` (`.good`, `.warn`, `.crit`, `.info`, `.mut`), et ne
+// peignaient donc RIEN. Le garde-fou des classes CSS ne peut pas l'attraper puisque le nom est
+// calcule ; cette garde-la est reprise en tete de `api/abonnement.js`.
 //
-// Le garde-fou des classes CSS ne pouvait pas l'attraper : il lit les litteraux, et ici le nom est
-// calcule (`badge ${tonStatut(...)}`).
-function tonStatut(statut) {
-  if (statut === 'echu') return 'crit'
-  if (statut === 'resilie' || statut === 'impaye') return 'warn'
-  if (statut === 'actif') return 'good'
-  return 'mut'
-}
+// Elle est partie parce qu'elle n'etait pas seule : trois autres ecrans peignaient les memes cinq
+// statuts, et pas de la meme couleur — `impaye` valait `warn` ici et `crit` sur la fiche. Et le mot
+// lui-meme n'etait pas traduit : la colonne affichait « impaye » et « echu » en code brut.
 
-// ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER.
+// ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER — et c'est toujours vrai, mais
+// l'arbitrage a demenage. `Gelee` veut dire que l'adherent a demande une suspension : l'echeance
+// REVIENDRA a la reprise. `Annulee` veut dire qu'elle ne sera jamais collectee. Le mot (« En pause »,
+// jamais « Gelée ») est dans `api/vocabulaire.js`, la couleur dans `api/sepa.js`.
 //
-// `Gelee` veut dire que l'adherent a demande une suspension : l'echeance REVIENDRA a la reprise.
-// `Annulee` veut dire qu'elle ne sera jamais collectee. Les afficher pareil ferait croire qu'un
-// abonne en pause a perdu son echeancier. Elles different donc par la couleur ET par le mot — on
-// ecrit « en pause », jamais « gelee », parce que le mot du modele ne dit pas au lecteur ce qui
-// va se passer.
-const ETAT_ECHEANCE = {
-  a_venir: { mot: 'à venir', classe: 'info' },
-  prelevee: { mot: 'prélevée', classe: 'good' },
-  rejetee: { mot: 'rejetée', classe: 'crit' },
-  gelee: { mot: 'en pause', classe: 'warn' },
-  annulee: { mot: 'annulée', classe: 'mut' },
-}
-
-function etatEcheance(statut) {
-  return ETAT_ECHEANCE[statut] || { mot: statut || '—', classe: 'mut' }
-}
+// La table `ETAT_ECHEANCE` qui vivait ici etait la SEULE correcte des deux qui existaient : la fiche
+// d'un abonnement peignait toutes ses echeances du meme gris, rejets compris. Elle est partie la-bas
+// pour que les deux ecrans montrent la meme chose.
 
 // ⚠ `adherent` ET `payeur` — PAS `beneficiaire` NI `client`.
 //
@@ -149,7 +135,8 @@ function nomEspace(espace) {
 // ⚠ CETTE PAGE N'AVAIT AUCUN ÉTAT D'URL. On lui en pose un, avec le seul paramètre dont elle a
 // besoin : la souscription ouverte. Tout le reste de l'écran reste en état local, parce que
 // rien d'autre n'a de raison d'être partagé, mis en signet, ni retrouvé après un F5.
-const DEFAUTS_URL = { souscrire: '' }
+// `geste` : `pause` ou `resiliation` ; `abonnement` : celui sur lequel il porte.
+const DEFAUTS_URL = { souscrire: '', rejet: '', geste: '', abonnement: '' }
 
 export default function Sport({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('sport', DEFAUTS_URL)
@@ -205,7 +192,6 @@ export default function Sport({ etabActif, droits = [] }) {
     setDetection(false)
   }
   const [echeances, setEcheances] = useState(null)
-  const [rejet, setRejet] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
   const [abonnementOuvert, setAbonnementOuvert] = useState(null)
   const [annulation, setAnnulation] = useState(null)
@@ -293,6 +279,31 @@ export default function Sport({ etabActif, droits = [] }) {
     recharger()
   }, [recharger, etabActif])
 
+  // ⚠ L'ÉCHÉANCE D'UN REJET SE LIT PAR SON IDENTIFIANT, PAS DANS L'ÉCHÉANCIER : celui-ci est
+  // borné à 200 et lu avec six autres listes. Seul un 404 dit « elle n'existe pas » ; tout le
+  // reste est une lecture qui a échoué.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET. Un drapeau de chargement levé par
+  // l'effet ne l'est qu'APRÈS le premier rendu avec `params.rejet` : ce rendu-là n'avait ni échéance
+  // ni chargement, et affirmait « n'existe pas » le temps d'une trame — une absence jamais mesurée.
+  // La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas à l'adresse, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir la même échéance la relit au lieu d'afficher un
+  // statut d'avant le rejet.
+  const [lectureRejet, setLectureRejet] = useState(null)
+  const cleRejet = params.rejet ? `${params.rejet}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.rejet) { setLectureRejet(null); return undefined }
+    const cle = `${params.rejet}|${etabActif}`
+    let vivant = true
+    api.echeanceSepa(params.rejet)
+      .then((e) => { if (vivant) setLectureRejet({ cle, echeance: e, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureRejet({ cle, echeance: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.rejet, etabActif])
+  const lectureRejetCourante = lectureRejet?.cle === cleRejet ? lectureRejet : null
+  const chargementRejet = cleRejet !== null && lectureRejetCourante === null
+  const echeanceRejet = lectureRejetCourante?.echeance ?? null
+  const lectureRejetEchouee = lectureRejetCourante?.echouee ?? false
+
   useEffect(() => {
     const t = setInterval(() => setTic((n) => n + 1), 60000)
     return () => clearInterval(t)
@@ -340,6 +351,61 @@ export default function Sport({ etabActif, droits = [] }) {
   // ses propres listes (bénéficiaires, clients, produits) et n'a besoin de rien de ce que la page
   // lit pour elle-même — attendre les alertes et les abonnements ne ferait que retarder un écran
   // qui n'en dépend pas.
+  // ── METTRE EN PAUSE OU RÉSILIER, EN ÉCRAN ───────────────────────────────────────────────────
+  //
+  // ⚠ L'ABONNEMENT VIENT DE LA LISTE LUE PAR LA PAGE, et `null` y veut dire « lecture échouée »
+  // (les trois lectures tolérées de cet écran gardent cette distinction). Absent de la liste, on le
+  // dit — on ne suppose pas un abonnement pour ouvrir un formulaire qui résilie.
+  //
+  // Fermer rouvre la fiche d'où l'on venait : la fiche vit dans l'état de la page, qui reste montée.
+  if (params.geste) {
+    const connu = params.geste === 'pause' || params.geste === 'resiliation'
+    const ab = (abonnements || []).find((a) => String(a.id) === String(params.abonnement)) || null
+    const fermerGeste = () => {
+      if (ab) setAbonnementOuvert(ab)
+      majParams({ geste: '', abonnement: '' }, { pousser: true })
+    }
+    let contenu
+    if (!connu) {
+      contenu = <div className="banner banner-warn">Ce geste n’existe pas sur cet écran.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (abonnements === null) {
+      contenu = (
+        <div className="banner banner-error">
+          La liste des abonnements n’a pas pu être lue : on ne sait pas sur quoi porterait ce geste.
+        </div>
+      )
+    } else if (!params.abonnement) {
+      contenu = <div className="banner banner-warn">Aucun abonnement n’est désigné dans l’adresse.</div>
+    } else if (!ab) {
+      contenu = (
+        <div className="banner banner-warn">
+          Cet abonnement n’est pas dans la liste lue pour cet établissement.
+        </div>
+      )
+    } else {
+      contenu = (
+        <GesteAbonnement
+          key={`${params.geste}|${params.abonnement}`}
+          geste={params.geste}
+          abonnement={ab}
+          onClose={fermerGeste}
+          onFait={() => { fermerGeste(); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerGeste}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux abonnements
+        </button>
+        {contenu}
+      </div>
+    )
+  }
+
   if (params.souscrire === '1') {
     return (
       <div className="view">
@@ -348,6 +414,62 @@ export default function Sport({ etabActif, droits = [] }) {
           onClose={() => majParams({ souscrire: '' }, { pousser: true })}
           onFait={() => { majParams({ souscrire: '' }, { pousser: true }); recharger() }}
         />
+      </div>
+    )
+  }
+
+  // ── LE REJET BANCAIRE, EN ÉCRAN ────────────────────────────────────────────────────────────
+  //
+  // Même place que la souscription, et pour la même raison : il lit son échéance lui-même.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES DEUX CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND. La seconde est la
+  // plus grave : le processeur ne refuse AUCUN état. Un rejet déclaré sur une échéance qui n'est
+  // pas prélevée ouvrirait un impayé imaginaire — et le serveur l'accepterait.
+  if (params.rejet) {
+    const fermerRejet = () => majParams({ rejet: '' }, { pousser: true })
+    const e = echeanceRejet
+    let contenu
+    if (!peutPiloterRecouvrement) {
+      contenu = (
+        <div className="banner banner-warn">
+          Enregistrer un rejet bancaire demande le droit de piloter le recouvrement, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargementRejet) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!e) {
+      contenu = (
+        <div className="banner banner-warn">
+          {lectureRejetEchouee
+            ? 'Cette échéance n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette échéance n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    } else if (e.statut !== 'prelevee') {
+      contenu = (
+        <div className="banner banner-warn">
+          Cette échéance est « {mot(e.statut)} » : un rejet bancaire ne se
+          déclare que sur une échéance prélevée. Un prélèvement qui n’est jamais parti ne peut pas
+          revenir impayé.
+        </div>
+      )
+    } else {
+      contenu = (
+        <RejetEcheanceModal
+          key={params.rejet}
+          echeance={e}
+          onClose={fermerRejet}
+          onFait={() => { fermerRejet(); recharger() }}
+        />
+      )
+    }
+    return (
+      <div className="view">
+        <button className="btn ghost sm" type="button" onClick={fermerRejet}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à Sport &amp; fitness
+        </button>
+        {contenu}
       </div>
     )
   }
@@ -564,7 +686,7 @@ export default function Sport({ etabActif, droits = [] }) {
                           {nomAdherent(a, beneficiaires)}
                         </button>
                       </td>
-                      <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
+                      <td><span className={`badge ${tonStatutAbonnement(a.statut)}`}>{mot(a.statut)}</span></td>
                       <td className="num">
                         {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
                       </td>
@@ -587,6 +709,7 @@ export default function Sport({ etabActif, droits = [] }) {
         {abonnementOuvert && (
           <FicheAbonnement
             abonnement={abonnementOuvert}
+            onGeste={(g) => majParams({ geste: g, abonnement: String(abonnementOuvert.id) }, { pousser: true })}
             nomAdherent={nomAdherent(abonnementOuvert, beneficiaires)}
             nomPayeur={nomPayeur(abonnementOuvert)}
             onFerme={() => setAbonnementOuvert(null)}
@@ -608,14 +731,9 @@ export default function Sport({ etabActif, droits = [] }) {
         peutGerer={peutGererAbonnement}
         onAnnuler={setAnnulation}
         peutPiloterRecouvrement={peutPiloterRecouvrement}
-        onRejet={setRejet}
+        onRejet={(e) => majParams({ rejet: String(e.id) }, { pousser: true })}
       />
 
-      <RejetEcheanceModal
-        echeance={rejet}
-        onClose={() => setRejet(null)}
-        onFait={() => { setRejet(null); recharger() }}
-      />
 
       <AnnulationEcheanceModal
         echeance={annulation}
@@ -879,13 +997,12 @@ function Echeancier({
               </thead>
               <tbody>
                 {rangees.map((e) => {
-                  const etat = etatEcheance(e.statut)
                   return (
                     <tr key={e.id}>
                       <td>{adherent(e)}</td>
                       <td>{dateFr(e.dateProgrammee)}</td>
                       <td className="num">{euroCentimes(e.montantCentimes)}</td>
-                      <td><span className={`badge ${etat.classe}`}>{etat.mot}</span></td>
+                      <td><span className={`badge ${tonEcheance(e.statut)}`}>{mot(e.statut)}</span></td>
                       <td>
                         {/* ⚠ C'EST ICI QUE « EN PAUSE » ET « ANNULEE » SE SEPARENT POUR DE BON.
                             Le badge donne la couleur ; cette colonne donne la suite. Une pause
@@ -1331,9 +1448,82 @@ const CODES_RETOUR = [
  * `apres_representation_echouee`. Annoncer « l'acces sera coupe » serait donc faux dans le cas
  * courant, et « rien ne se passe » serait faux dans les autres.
  *
+ * ⚠ DEUX CAS COUPENT DES L'ENREGISTREMENT, et c'est ce geste-ci qui les declenche :
+ * `apres_1er_echec` (le rejet enregistre EST le premier echec) et toute politique a zero
+ * representation (rien a attendre). Voir `MoteurRecouvrementHandler::detecterRejet()`.
+ *
  * La fenetre LIT la politique de l'etablissement et nomme la consequence. Quand elle n'a pas pu la
  * lire, elle le dit — plutot que d'afficher la version rassurante par defaut.
  */
+// ⚠ UNE LISTE VIDE N'EST PAS UNE LECTURE ÉCHOUÉE, ET « AUCUNE POLITIQUE » N'EST PAS « ON NE SAIT PAS ».
+// Sans politique paramétrée, `MoteurRecouvrementHandler::politiquePour()` en construit une par
+// défaut, dont l'entité fixe `momentRefusAcces` à `apres_representation_echouee`. L'écran affichait
+// « n'a pas pu être lue » sur un 200 sans membre : c'était la valeur de l'échec.
+const POLITIQUE_PAR_DEFAUT = Object.freeze({
+  momentRefusAcces: 'apres_representation_echouee',
+  nbRepresentationsMax: 1,
+  calendrierRepresentationJours: [5],
+  parDefaut: true,
+})
+
+// Les mots de l'écran de la politique (ImpayesRecouvrement) : les deux écrans nomment la même règle
+// de la même façon. Le code brut ne s'affiche que s'il est inconnu ici.
+const MOMENTS_REFUS = Object.freeze({
+  apres_1er_echec: 'dès le premier échec',
+  apres_representation_echouee: 'après une représentation échouée',
+  apres_n_representations_echouees: 'après N représentations échouées',
+})
+
+const representationsEchouees = (n) => `${n} représentation${n > 1 ? 's' : ''} échouée${n > 1 ? 's' : ''}`
+
+function libelleMomentRefus(politique) {
+  const moment = politique.momentRefusAcces
+  if (moment === 'apres_n_representations_echouees' && politique.nReprAvantBlocage != null) {
+    return `après ${representationsEchouees(Math.max(politique.nReprAvantBlocage, 1))}`
+  }
+  return MOMENTS_REFUS[moment] || moment || 'non renseignée'
+}
+
+// ⚠ CETTE PHRASE RECOPIE `MoteurRecouvrementHandler` : `detecterRejet()` pour ce qui se passe à
+// l'enregistrement, `enregistrerResultatRepresentation()` pour la suite. Une règle changée côté
+// serveur la rend fausse sans rien casser d'autre.
+//
+// ⚠ ELLE COMPARAIT À `'immediat'`, QUI N'EST PAS UNE VALEUR DE `MomentRefusAcces`. La branche
+// « refusé dès l'enregistrement » était morte, et `apres_1er_echec` — qui coupe bien à
+// l'enregistrement — s'annonçait « pas refusé tout de suite ».
+function consequenceRejet(politique) {
+  const nbMax = politique.nbRepresentationsMax ?? 1
+  const exemption = ' Un adhérent exempté de blocage garde son accès.'
+  if (nbMax === 0) {
+    return 'aucune représentation n’est prévue : l’impayé passe directement en recouvrement et '
+      + 'l’accès de l’adhérent est refusé dès l’enregistrement.' + exemption
+  }
+  switch (politique.momentRefusAcces) {
+    case 'apres_1er_echec':
+      return 'ce rejet est le premier échec : l’accès de l’adhérent est refusé dès l’enregistrement.' + exemption
+    case 'apres_representation_echouee': {
+      const delai = politique.calendrierRepresentationJours?.[0] ?? 5
+      return `l’accès n’est pas refusé tout de suite : le prélèvement est représenté ${delai} jour${delai > 1 ? 's' : ''} `
+        + 'après la date du rejet, et l’accès est refusé si cette représentation échoue.' + exemption
+    }
+    case 'apres_n_representations_echouees': {
+      const n = politique.nReprAvantBlocage
+      // Le moteur compare au seuil sans plancher (`>=`) : un seuil nul coupe à la première représentation échouée.
+      if (n == null) {
+        return 'l’accès n’est pas refusé tout de suite, ni plus tard : la politique ne fixe aucun nombre de '
+          + 'représentations avant blocage, et le recouvrement ne refusera pas l’accès de lui-même.'
+      }
+      if (n > nbMax) {
+        return `l’accès n’est pas refusé tout de suite, ni plus tard : la politique attend ${representationsEchouees(n)} `
+          + `mais n’en prévoit que ${nbMax}, et le recouvrement ne refusera pas l’accès de lui-même.`
+      }
+      return `l’accès n’est pas refusé tout de suite : il le sera après ${representationsEchouees(Math.max(n, 1))}.` + exemption
+    }
+    default:
+      return 'cet écran ne connaît pas ce moment de refus : il ne peut pas dire quand l’accès sera refusé.'
+  }
+}
+
 function RejetEcheanceModal({ echeance, onClose, onFait }) {
   const [code, setCode] = useState('AM04')
   const [codeLibre, setCodeLibre] = useState('')
@@ -1349,7 +1539,7 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
     let annule = false
     setPolitique(null)
     api.politiquesRecouvrement()
-      .then((r) => { if (!annule) setPolitique(membres(r)[0] ?? undefined) })
+      .then((r) => { if (!annule) setPolitique(membres(r)[0] ?? POLITIQUE_PAR_DEFAUT) })
       .catch(() => { if (!annule) setPolitique(undefined) })
     return () => { annule = true }
   }, [echeance])
@@ -1374,8 +1564,11 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
     }
   }
 
+  if (!echeance) return null
+
   return (
-    <Modal open={!!echeance} onClose={onClose} titre="Enregistrer un rejet bancaire" taille="sm">
+    <>
+      <h2>Enregistrer un rejet bancaire</h2>
       <form onSubmit={envoyer} style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <div className="banner banner-warn">
           <b>Ce geste n’est pas un essai.</b> L’échéance passe en « rejetée » et un impayé est ouvert
@@ -1390,10 +1583,9 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
             l’accès de l’adhérent sera refusé. Ce n’est pas la même chose que « il ne le sera pas ».</>
           )}
           {politique && (
-            <>Selon la politique en vigueur (<b>{politique.momentRefusAcces || 'non renseignée'}</b>),
-            {politique.momentRefusAcces === 'immediat'
-              ? ' l’accès de l’adhérent sera refusé dès l’enregistrement.'
-              : ' l’accès n’est pas refusé tout de suite — il le sera au moment que la politique désigne.'}</>
+            <>Selon la politique en vigueur (refus d’accès <b>{libelleMomentRefus(politique)}</b>
+            {politique.parDefaut ? ' — aucune n’est paramétrée ici, c’est le défaut du serveur' : ''}),
+            {' ' + consequenceRejet(politique)}</>
           )}
         </div>
 
@@ -1448,6 +1640,6 @@ function RejetEcheanceModal({ echeance, onClose, onFait }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }

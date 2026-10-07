@@ -197,10 +197,10 @@ final class ScheduleCatalog
                 order: 20,
             ),
             // Addendum FIN-4 (alertes de trésorerie proactives, §0.9 de `plan-treasury-cash-alerts.md`,
-            // RG-TRE-16). ⚠ Constat repris de la spec, non corrigé ici : `finance:treasury:
-            // detecter-ecarts`/`finance:treasury:suggerer-rapprochements` (déjà codées et livrées) sont
-            // toujours ABSENTES de ce catalogue — hors périmètre de cet addendum, mais la commande
-            // ci-dessous ne doit pas reproduire cet oubli.
+            // RG-TRE-16). Les trois commandes de trésorerie sont désormais cataloguées et autorisées
+            // (arbitrage de Maxime du 15/09) : `verifier-seuils` ci-dessous, puis `suggerer-rapprochements`
+            // et `detecter-ecarts` — l'oubli que la spec signalait est corrigé. Chacune porte son propre
+            // verdict de premier passage : seule `suggerer-rapprochements` est sûre à sec (statut interne).
             new ScheduledTask(
                 'finance:treasury:verifier-seuils',
                 1440,
@@ -213,6 +213,30 @@ final class ScheduleCatalog
                 // sur un parc ou le seuil serait active apres coup, sur des etablissements deja en
                 // tension, enverrait une salve d'alertes simultanees a superviser, pas a lancer en
                 // silence (RG-TRE-16).
+                safeOnFirstRun: false,
+            ),
+            new ScheduledTask(
+                'finance:treasury:suggerer-rapprochements',
+                1440,
+                "Une ligne de releve sans ambiguite (exactement un candidat de rapprochement) reste "
+                . "'unmatched' tant que personne ne la traite a la main. Ce passage la fait passer a "
+                . "'suggested' avec sa contrepartie proposee, sans jamais confirmer le rapprochement "
+                . "lui-meme (section 0.7 du plan) : un humain tranche, l'ecran n'invente rien.",
+                // SÛRE AU PREMIER PASSAGE : n'ecrit qu'un statut interne ('suggested'), ne notifie
+                // personne. Un premier passage sur un arriere de lignes non appariees ne fait que
+                // proposer, jamais executer ni alerter -- aucun effet visible au dehors.
+                safeOnFirstRun: true,
+            ),
+            new ScheduledTask(
+                'finance:treasury:detecter-ecarts',
+                1440,
+                "Une ligne de releve non appariee depuis plus de quinze jours n'alerte personne : "
+                . "l'ecart entre la banque et les comptes vit sans que quiconque le sache. Ce passage "
+                . "emet un evenement par ligne concernee (garde d'idempotence sur discrepancyNotifiedAt, "
+                . "sinon chaque cycle re-notifierait la meme ligne indefiniment), section 0.9, RG-TRE-09.",
+                // JAMAIS SÛR AU PREMIER PASSAGE — comme verifier-seuils, la commande notifie (cas 3) :
+                // un premier passage sur un arriere de lignes non appariees emettrait une salve
+                // d'evenements de discrepance a superviser, pas a lancer en silence.
                 safeOnFirstRun: false,
             ),
             new ScheduledTask(
@@ -473,6 +497,25 @@ final class ScheduleCatalog
                 // et c'est irreversible. `--simuler` liste ce qui partirait sans rien envoyer ni
                 // estampiller : c'est par la que se regarde le premier passage.
                 safeOnFirstRun: false,
+            ),
+            new ScheduledTask(
+                'public-api:webhooks:alerter',
+                15,
+                "Un webhook partenaire qui ne part plus ne fait aucun bruit : le worker s'est arrêté, "
+                . "l'interrupteur est resté fermé, ou l'abonné refuse tout — et le partenaire croit "
+                . "qu'il ne se passe rien.",
+                // SÛR AU PREMIER PASSAGE : elle ne fait que compter et rendre un code d'échec.
+                safeOnFirstRun: true,
+            ),
+            new ScheduledTask(
+                'public-api:webhooks:requeue',
+                15,
+                "Une livraison de webhook écrite mais jamais mise en file (processus mort, file "
+                . "indisponible, réessais Messenger épuisés) reste « en attente » pour toujours : le "
+                . "partenaire ne la reçoit jamais.",
+                // SÛR AU PREMIER PASSAGE : elle ne fait que remettre en file ce qui attend ; le handler
+                // revérifie l'interrupteur et le consentement, et le partenaire déduplique par id.
+                safeOnFirstRun: true,
             ),
         ];
     }

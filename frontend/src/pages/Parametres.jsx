@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
@@ -15,6 +15,7 @@ import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
 import ConnecteursSortants from '../components/ConnecteursSortants.jsx'
+import PartnerAccessSettings from '../components/PartnerAccessSettings.jsx'
 import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
@@ -51,6 +52,9 @@ const SOUS = [
   // une fois, puis on n'y revient que le jour ou un canal se tait. Leur place est ici, a cote des
   // modules en service -- c'est le meme geste, activer et brancher.
   ['connecteurs', 'Connecteurs sortants'],
+  // Ce que l'établissement ouvre aux applications tierces par l'API — un réglage de branchement,
+  // voisin des connecteurs : on l'ouvre une fois, on n'y revient que pour le retirer.
+  ['partenaires', 'Accès partenaires'],
 ]
 
 // Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
@@ -516,7 +520,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-const DEFAUTS_URL = { sousOnglet: 'entites', structure: '' }
+const DEFAUTS_URL = { sousOnglet: 'entites', structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' }
 
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
@@ -537,7 +541,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   const sousOnglet = params.sousOnglet
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
-  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '' })
+  const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' })
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -611,8 +615,15 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
     )
   }
 
+  // ⚠ L'EN-TÊTE SE RETIRE DEVANT UN ÉCRAN RENDU PAR UN COMPOSANT D'ONGLET. L'écran de la
+  // structure est un retour anticipé de cette page : il n'atteint jamais ce bloc. Celui d'une
+  // destination est rendu SOUS l'onglet, donc le titre et les onze sous-onglets restaient
+  // au-dessus de lui — vu à l'écran, pas déduit.
+  const ecranSousOnglet = Boolean(params.destination || params.invitation || params.moyen || params.topologie || params.role)
+
   return (
     <div className="view">
+      {!ecranSousOnglet && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Paramètres</h1>
@@ -626,12 +637,15 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
           conditions sont remplies. */}
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
+      </>)}
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
-      {sousOnglet === 'connecteurs' && <ConnecteursSortants droits={droits} etabActif={etabActif} />}
+      {sousOnglet === 'connecteurs'
+        && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
+      {sousOnglet === 'partenaires' && <PartnerAccessSettings droits={droits} etabActif={etabActif} />}
 
       {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
-      {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}
+      {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique params={params} majParams={majParams} />}
 
       {/* Le composant porte ses propres gardes (`compta.lire` / `compta.gerer`) : quelqu'un qui a
           acces aux parametres sans droit comptable voit son refus, pas ses donnees. */}
@@ -668,8 +682,8 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           {/* Au-dessus des régions, parce que la hiérarchie se lit de haut en bas :
               Groupe → Région → Établissement. Les deux du dessous avaient leur section, le sommet
               n'en avait aucune (R18). */}
-          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
-          <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
+          <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
           {/* ⚠ ON NE RETIRE QUE LA GESTION, PAS L'ACCES. Un exploitant multi-sites continue de voir
               ses etablissements et d'en changer : le selecteur vit dans la barre du haut
               (`AppShell`, `aria-label="Etablissement actif"`), sans garde ni permission, et il n'a
@@ -692,7 +706,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               un exploitant. Le selecteur vit dans la barre du haut (`AppShell`,
               `aria-label="Etablissement actif"`), sans garde ni permission. Ce qui partait etait le
               panneau de gestion, pas l'acces. */}
-          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} params={params} majParams={majParams} />
           {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
               << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
               dans un onglet << apparence >> le ferait chercher ailleurs : c'est un reglage de
@@ -719,11 +733,15 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               lui dit pas. */}
           <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurTypesTarif(api)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurTva(api, profils)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
@@ -748,10 +766,14 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               incertain. Les deux étaient faux — l'axe est une énumération de trois valeurs, et le
               format `AAAA-MM-JJ` est celui qu'utilise la suite de tests du serveur. */}
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurCategories(api)}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurSaisons(api)}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
@@ -761,12 +783,14 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
+            params={params}
+            majParams={majParams}
             descripteur={descripteurPointsDeVente(api, etabActif, moyens, regies)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
-          <MoyensPaiement etabActif={etabActif} />
+          <MoyensPaiement etabActif={etabActif} params={params} majParams={majParams} />
           {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
               Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
               elle, ne se declarait a AUCUN endroit. `POST /api/regie_recettes` existait, et le
@@ -779,7 +803,8 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       )}
 
       {sousOnglet === 'droits' && (
-        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} envoiCourriel={envoiCourriel} />
+        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} envoiCourriel={envoiCourriel}
+          params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
@@ -813,13 +838,19 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
 //
 // Le libellé « Exige une référence (TPE) » décrivait donc mal la troisième : elle ne demande pas une
 // saisie à l'agent, elle branche l'encaissement sur le TPE. Renommée en conséquence.
-function MoyensPaiement({ etabActif }) {
+// ⚠ UNE CONSTANTE DE MODULE : l'effet du formulaire recharge ses champs à chaque nouvel objet
+// `edition`. Un `{ moyen: null }` écrit en ligne effacerait la frappe à chaque rendu.
+const EDITION_NOUVEAU_MOYEN = Object.freeze({ moyen: null })
+
+function MoyensPaiement({ etabActif, params = {}, majParams }) {
+  // `nouveau`, ou l'identifiant du moyen qu'on modifie.
+  const ouvert = params.moyen || ''
+  const fermer = () => majParams({ moyen: '' }, { pousser: true })
   const [rows, setRows] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null) // id en cours de bascule
-  const [edition, setEdition] = useState(null) // { moyen: null } = création, { moyen } = modification
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -838,6 +869,12 @@ function MoyensPaiement({ etabActif }) {
     charger()
   }, [charger])
 
+  // L'objet d'édition, mémorisé sur l'identité du moyen retrouvé : stable tant que `rows` ne
+  // recharge pas, donc l'effet du formulaire ne remet pas la saisie à zéro.
+  const moyenOuvert = ouvert && ouvert !== 'nouveau' ? rows.find((m) => String(m.id) === String(ouvert)) : null
+  const editionModif = useMemo(() => (moyenOuvert ? { moyen: moyenOuvert } : null), [moyenOuvert])
+  const editionOuverte = ouvert === 'nouveau' ? EDITION_NOUVEAU_MOYEN : editionModif
+
   async function basculerActif(m) {
     const actif = m.actif !== false
     setBusy(m.id)
@@ -854,13 +891,62 @@ function MoyensPaiement({ etabActif }) {
     }
   }
 
+  // ── LE MOYEN DE PAIEMENT, EN ÉCRAN ──────────────────────────────────────────────────────
+  //
+  // ⚠ `rows` part à [] et RETOMBE à [] sur un échec : sa longueur ne dit rien. C'est
+  // `chargement` puis `erreur` qui disent si on a lu, avant de conclure « introuvable ».
+  //
+  // ⚠ `edition` doit garder son identité : l'effet du formulaire recharge ses champs à chaque
+  // nouvel objet. D'où la constante en création, et `useMemo` en modification.
+  if (ouvert) {
+    const retour = (
+      <button className="btn ghost sm" type="button" onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}>
+        ← Retour aux moyens de paiement
+      </button>
+    )
+    if (ouvert !== 'nouveau' && chargement) {
+      return <section className="card"><div className="card-b">{retour}<div className="center"><div className="spinner" /></div></div></section>
+    }
+    if (!editionOuverte) {
+      return (
+        <section className="card"><div className="card-b">
+          {retour}
+          <div className="banner banner-warn">
+            {erreur
+              ? 'Les moyens de paiement n’ont pas pu être lus, donc celui-ci non plus. Ce n’est pas la même chose que « il n’existe pas ».'
+              : 'Ce moyen de paiement n’est plus dans la liste — il a sans doute été retiré depuis que ce lien a été copié.'}
+          </div>
+        </div></section>
+      )
+    }
+    return (
+      <section className="card"><div className="card-b">
+        {retour}
+        <ModalMoyenPaiement
+          key={ouvert}
+          edition={editionOuverte}
+          onClose={fermer}
+          onEnregistre={async (corps) => {
+            const existant = editionOuverte.moyen
+            if (existant) await api.majMoyenPaiement(existant.id, corps)
+            else await api.creerMoyenPaiement({ ...corps, actif: true })
+            fermer()
+            setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
+            await charger()
+          }}
+        />
+      </div></section>
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-h">
         <h3>Moyens de paiement</h3>
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
+          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); majParams({ moyen: 'nouveau' }, { pousser: true }) }}>+ Ajouter</button>
           <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
@@ -908,7 +994,7 @@ function MoyensPaiement({ etabActif }) {
                     <td><span className={`badge ${actif ? 'good' : 'mut'}`}>{actif ? 'actif' : 'inactif'}</span></td>
                     <td className="num">
                       <div style={{ display: 'inline-flex', gap: 6 }}>
-                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: m }) }}>Modifier</button>
+                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); majParams({ moyen: String(m.id) }, { pousser: true }) }}>Modifier</button>
                         <button
                           className="btn ghost sm"
                           onClick={() => basculerActif(m)}
@@ -928,18 +1014,6 @@ function MoyensPaiement({ etabActif }) {
         )}
       </div>
 
-      <ModalMoyenPaiement
-        edition={edition}
-        onClose={() => setEdition(null)}
-        onEnregistre={async (corps) => {
-          const existant = edition?.moyen
-          if (existant) await api.majMoyenPaiement(existant.id, corps)
-          else await api.creerMoyenPaiement({ ...corps, actif: true })
-          setEdition(null)
-          setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
-          await charger()
-        }}
-      />
     </section>
   )
 }
@@ -1204,12 +1278,11 @@ function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
     && !CODES_FIDUCIAIRES.includes(codeNettoye)
     && /(cheque|chèque|espece|espèce|liquide|ticket|bon)/.test(codeNettoye + ' ' + libelle.toLowerCase())
 
+  if (!edition) return null
+
   return (
-    <Modal
-      open={!!edition}
-      onClose={onClose}
-      titre={creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}
-    >
+    <>
+      <h2>{creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
 
@@ -1270,7 +1343,7 @@ function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -1440,7 +1513,9 @@ function MonMfa({ moi, actif, onChange }) {
   )
 }
 
-function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envoiCourriel = false }) {
+function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envoiCourriel = false, params = {}, majParams }) {
+  const invitationOuverte = params.invitation === '1'
+  const fermerInvitation = () => majParams({ invitation: '' }, { pousser: true })
   const [utilisateurs, setUtilisateurs] = useState([])
   const [roles, setRoles] = useState([])
   const [affectations, setAffectations] = useState([])
@@ -1449,7 +1524,6 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
   const [statut, setStatut] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [modalInvit, setModalInvit] = useState(false)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -1504,6 +1578,101 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
     )
   }
 
+  // ── L'INVITATION, EN ÉCRAN ──────────────────────────────────────────────────────────
+  //
+  // ⚠ LE GESTE EST DÉPLACÉ, PAS RÉÉCRIT : création du compte, affectation optionnelle d'un
+  // rôle, et le message qui suit l'état réel de l'expéditeur de courriel. Seules ses deux
+  // fermetures passent désormais par l'adresse.
+  //
+  // ⚠ LES RÔLES SE LISENT APRÈS COUP : on attend `chargement` avant de monter le formulaire,
+  // sinon un F5 à froid le montrerait avec une liste de rôles vide.
+  if (invitationOuverte) {
+    return (
+      <div>
+        <button className="btn ghost sm" type="button" onClick={fermerInvitation}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux comptes
+        </button>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {chargement ? (
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        ) : (
+          <ModalInvitation
+            envoiCourriel={envoiCourriel}
+            open
+            roles={roles}
+            etablissements={etablissements}
+            etabActif={etabActif}
+            onClose={fermerInvitation}
+            onInvite={async (payload) => {
+              // Création du compte (invitation) puis, si un rôle + établissement sont choisis,
+              // affectation du rôle sur ce périmètre.
+              // LE SERVEUR ACCEPTE LES DEUX CHEMINS, ET L'ECRAN N'EN OFFRAIT QU'UN.
+              //
+              // `UtilisateurProcessor` : si `motDePasseClair` est fourni, il le hache, efface la
+              // valeur en clair et active le compte immediatement — aucun jeton d'invitation n'est
+              // genere. Sinon il cree un jeton et appelle `InvitationMailer`.
+              //
+              // La modale n'exposait pas ce champ : le seul chemin restant passait donc par un
+              // courriel, et `MAILER_DSN` vaut `null://null`. Aucun utilisateur nouveau ne pouvait se
+              // connecter — ni caissier, ni comptable. Le logiciel ne savait inscrire personne.
+              const cree = await api.creerUtilisateur({
+                email: payload.email,
+                nom: payload.nom,
+                ...(payload.motDePasse ? { motDePasseClair: payload.motDePasse } : {}),
+              })
+              if (payload.roleId && payload.etabId) {
+                await api.creerAffectation({
+                  utilisateur: cree['@id'] || `/api/utilisateurs/${cree.id}`,
+                  role: `/api/roles/${payload.roleId}`,
+                  etablissement: `/api/etablissements/${payload.etabId}`,
+                })
+              }
+              fermerInvitation()
+              // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
+              // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
+              // partage — souvent une caisse en libre-service.
+              // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
+              //
+              // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
+              // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
+              // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
+              // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
+              // laisser ici.
+              //
+              // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
+              // suit l'état réel de l'instance et se corrigera toute seule.
+              setMsg(payload.motDePasse
+                ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
+                : envoiCourriel
+                  ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
+                  : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
+                    + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
+                    + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
+              await charger()
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── CRÉER OU MODIFIER UN RÔLE, EN ÉCRAN ────────────────────────────────────────────────────
+  // La carte des rôles lit ses listes : ComptesDroits lui cède la place, et reçoit son message de
+  // succès — la carte, remontée au retour, le perdrait.
+  if (params.role) {
+    return (
+      <RolesSection
+        droits={droits}
+        peutGerer={aLeDroit(droits, 'securite.gerer')}
+        onChange={charger}
+        params={params}
+        majParams={majParams}
+        onEnregistre={(message) => { setErreur(null); setMsg(message) }}
+      />
+    )
+  }
+
   return (
     <div>
       {msg && <div className="banner" style={{ background: 'var(--good-bg, var(--panel-2))', color: 'var(--good)', marginBottom: 12 }}>{msg}</div>}
@@ -1514,7 +1683,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
           <h3>Comptes utilisateurs</h3>
           <span className="sub">{utilisateurs.length} compte(s)</span>
           <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalInvit(true) }}>+ Inviter un utilisateur</button>
+            <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); majParams({ invitation: '1' }, { pousser: true }) }}>+ Inviter un utilisateur</button>
             <button title="Actualiser" className="btn ghost sm" onClick={charger}>↻</button>
           </div>
         </div>
@@ -1576,7 +1745,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
         onChange={charger}
       />
 
-      <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} />
+      <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} params={params} majParams={majParams} />
 
       <MatriceDroits roles={roles} etabActif={etabActif} affectations={affectations} utilisateurs={utilisateurs} />
 
@@ -1601,61 +1770,6 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
         </div>
       </section>
 
-      <ModalInvitation
-        envoiCourriel={envoiCourriel}
-        open={modalInvit}
-        roles={roles}
-        etablissements={etablissements}
-        etabActif={etabActif}
-        onClose={() => setModalInvit(false)}
-        onInvite={async (payload) => {
-          // Création du compte (invitation) puis, si un rôle + établissement sont choisis,
-          // affectation du rôle sur ce périmètre.
-          // LE SERVEUR ACCEPTE LES DEUX CHEMINS, ET L'ECRAN N'EN OFFRAIT QU'UN.
-          //
-          // `UtilisateurProcessor` : si `motDePasseClair` est fourni, il le hache, efface la
-          // valeur en clair et active le compte immediatement — aucun jeton d'invitation n'est
-          // genere. Sinon il cree un jeton et appelle `InvitationMailer`.
-          //
-          // La modale n'exposait pas ce champ : le seul chemin restant passait donc par un
-          // courriel, et `MAILER_DSN` vaut `null://null`. Aucun utilisateur nouveau ne pouvait se
-          // connecter — ni caissier, ni comptable. Le logiciel ne savait inscrire personne.
-          const cree = await api.creerUtilisateur({
-            email: payload.email,
-            nom: payload.nom,
-            ...(payload.motDePasse ? { motDePasseClair: payload.motDePasse } : {}),
-          })
-          if (payload.roleId && payload.etabId) {
-            await api.creerAffectation({
-              utilisateur: cree['@id'] || `/api/utilisateurs/${cree.id}`,
-              role: `/api/roles/${payload.roleId}`,
-              etablissement: `/api/etablissements/${payload.etabId}`,
-            })
-          }
-          setModalInvit(false)
-          // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
-          // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
-          // partage — souvent une caisse en libre-service.
-          // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
-          //
-          // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
-          // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
-          // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
-          // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
-          // laisser ici.
-          //
-          // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
-          // suit l'état réel de l'instance et se corrigera toute seule.
-          setMsg(payload.motDePasse
-            ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
-            : envoiCourriel
-              ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
-              : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
-                + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
-                + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
-          await charger()
-        }}
-      />
     </div>
   )
 }
@@ -1991,8 +2105,12 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
     }
   }
 
+  // ⚠ CE N'EST PLUS UNE MODALE — le nom `ModalInvitation` est historique.
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} titre="Donner accès à quelqu’un">
+    <>
+      <h2>Donner accès à quelqu’un</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
         <div className="field">
@@ -2081,7 +2199,7 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 

@@ -30,7 +30,9 @@ import { aLeDroit } from '../api/droits.js'
 const UNITES = { euro: '€', nombre: 'nombre', pourcentage: '%', ratio: 'ratio' }
 
 export default function ReferentielIndicateurs({ droits }) {
-  const [indicateursLus, setIndicateursLus] = useState(null)
+  // `undefined` = pas encore demande ; `null` = demande et echoue ; tableau = lu.
+  // Sans ce troisieme etat, le rendu affirmait un echec avant la premiere reponse.
+  const [indicateursLus, setIndicateursLus] = useState()
   const indicateurs = indicateursLus || []
   const [edition, setEdition] = useState(null)
   const [enCours, setEnCours] = useState(false)
@@ -95,7 +97,9 @@ export default function ReferentielIndicateurs({ droits }) {
       <div className="card-h">
         <h2>Référentiel des indicateurs</h2>
         <span className="hint">
-          {indicateursLus === null
+          {indicateursLus === undefined
+            ? 'lecture…'
+            : indicateursLus === null
             ? 'non lu'
             : `${indicateurs.length} indicateur(s), dont ${indicateurs.filter((i) => i.actif !== false).length} actif(s)`}
         </span>
@@ -111,7 +115,9 @@ export default function ReferentielIndicateurs({ droits }) {
         )}
         {succes && <div className="banner banner-ok" style={{ marginBottom: 'var(--esp-normal)' }}>{succes}</div>}
 
-        {indicateursLus === null ? (
+        {indicateursLus === undefined ? (
+          <p className="hint">Lecture…</p>
+        ) : indicateursLus === null ? (
           <div className="banner banner-warn">
             Le référentiel n’a pas pu être lu. Ce qui existe n’est pas affiché ici — n’en concluez
             pas qu’aucun indicateur n’est défini.

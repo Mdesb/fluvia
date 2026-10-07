@@ -5,7 +5,6 @@ import { mot } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
 // `texte` lit un libelle multilingue : le libelle fige d'une ligne est un objet `{ fr: '...' }`.
 import { texte } from './Liste.jsx'
-import Modal from './Modal.jsx'
 
 // Historique des ventes — `GET /api/ventes` existait et n'était appelé nulle part. Un caissier ne
 // pouvait pas retrouver une vente d'hier, ni même celle d'il y a dix minutes.
@@ -35,7 +34,9 @@ const ETATS = [
 
 const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
 
-export default function HistoriqueVentesModal({ open, onClose, droits = [], onDuplicata, onFacture }) {
+// L'historique des ventes du guichet : un écran de la caisse (#caisse?historique=1), plus une
+// modale (le nom du fichier est resté). Le détail d'une vente s'ouvre DANS cet écran.
+export default function HistoriqueVentes({ onClose, droits = [], onDuplicata, onFacture }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [du, setDu] = useState('')
@@ -103,12 +104,8 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      titre={detail ? `Vente ${detail.numero}` : 'Historique des ventes'}
-      taille="lg"
-    >
+    <>
+      <h2>{detail ? `Vente ${detail.numero}` : 'Historique des ventes'}</h2>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {detail ? (
@@ -215,7 +212,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [], onDu
           )}
         </>
       )}
-    </Modal>
+    </>
   )
 }
 
