@@ -16,8 +16,11 @@ final class CreneauxProduitAccessibiliteTest extends BoutiqueApiTestCase
     public function testCreneauxDUnProduitBrouillonRepond404(): void
     {
         // Produit `PRD-ENTREE01` (OffreFixtures) : rattaché à l'établissement A, canal `en_ligne`
-        // inclus, mais reste volontairement en statut `brouillon` (jamais publié).
+        // inclus. Publié par les fixtures depuis le 06/10/2026 (la caisse le vend) : on le remet
+        // ici en `brouillon`, explicitement — c'est la précondition de ce test.
         $produitBrouillon = $this->entite(Produit::class, ['code' => 'PRD-ENTREE01']);
+        $produitBrouillon->setStatut(\App\Offre\Enum\StatutProduit::Brouillon);
+        $this->em()->flush();
 
         $client = static::createClient();
         $client->request('GET', '/api/boutique/produits/' . (string) $produitBrouillon->getId() . '/creneaux');

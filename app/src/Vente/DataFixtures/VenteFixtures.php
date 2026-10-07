@@ -140,7 +140,9 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
                 ->setCode('PRD-CADENAS01')
                 ->setCanaux(['guichet'])
                 ->setStock($stock)
-                ->setStatut(StatutProduit::Brouillon);
+                // Publié : c'est le STOCK que ce produit sert à tester (CA-6), pas le statut. En
+                // brouillon, la caisse le refuserait désormais avant même de regarder le stock.
+                ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $rupture->addEtablissement($etabA);
             }
@@ -158,7 +160,7 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
                 ->setCode('PRD-PLACE01')
                 ->setCanaux(['guichet'])
                 ->setStock($stockUn)
-                ->setStatut(StatutProduit::Brouillon);
+                ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $limite->addEtablissement($etabA);
             }

@@ -29,6 +29,7 @@ use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeTarif;
 use App\Offre\Enum\Canal;
+use App\Offre\Enum\StatutProduit;
 use App\Offre\Service\ResolveurPrix;
 use App\Organisation\Entity\Espace;
 use App\Reservation\Entity\Reservation;
@@ -164,6 +165,11 @@ final class ConfirmerCommandeHandler
             // panier, `AjouterLignePanierProcessor`), au cas où une ligne aurait été insérée par un
             // autre chemin que le processeur public.
             $this->etablissementGuard->verifier($ligne->getProduit(), $etablissement);
+            // Statut et canal revérifiés ici, comme à l'ajout (`AjouterLignePanierProcessor`) : un
+            // produit archivé ou retiré du canal en ligne APRÈS sa mise au panier se vendait encore.
+            if ($ligne->getProduit()->getStatut() !== StatutProduit::Publie || !$ligne->getProduit()->aCanal(Canal::EnLigne)) {
+                throw new UnprocessableEntityHttpException('Produit non publié ou non visible au canal en ligne (RG-M1-07/09).');
+            }
             [$typeTarif, $prix] = $this->resoudrePrix($ligne->getProduit());
 
             $ligneVente = new LigneVente();
