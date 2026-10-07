@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
@@ -8,11 +8,15 @@ import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
-import ScansEnDirect from '../components/ScansEnDirect.jsx'
+// Chargé à part : le paquet principal frôlait les 500 kB et le bundler l'aurait signalé (n51) —
+// le bandeau des scans se dessine un instant après la caisse, sans rien changer à l'encaissement.
+const ScansEnDirect = lazy(() => import('../components/ScansEnDirect.jsx'))
 import RechercheBillet from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
+import DeclarationReglement from '../components/DeclarationReglement.jsx'
+import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
@@ -113,6 +117,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [tpeSimule, setTpeSimule] = useState('accepte')
   const [busy, setBusy] = useState(false)
   const [avis, setAvis] = useState(null) // message TPE refusé, etc.
+  // Le règlement sans issue de la vente en cours (`paymentIntent.js`), et la tentative à déclarer.
+  const [attente, setAttente] = useState(null)
+  const [declaration, setDeclaration] = useState(null) // { venteId, tentative, erreur? }
+  // Un double clic arrive avant que `busy` ne grise le bouton : le second ouvrirait une seconde vente.
+  const reglementEnCours = useRef(false)
 
   const nomEtab = etablissements.find((e) => e.id === etabActif)?.nom || ''
 
@@ -148,6 +157,14 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     return () => {
       annule = true
     }
+  }, [etabActif])
+
+  // ⚠ UN RÈGLEMENT SANS ISSUE SURVIT AU F5 (G-2 du ticket opposable). Son intention est restée dans
+  // l'onglet : la vente est rouverte et le règlement redemandé avec la même clé — sinon le caissier
+  // recommençait une vente et le client payait deux fois. Le mode strict de développement joue cet
+  // effet deux fois : sans danger, la même clé rend la même issue.
+  useEffect(() => {
+    reprendreReglement()
   }, [etabActif])
 
   const total = useMemo(
@@ -763,68 +780,161 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   // Ajoute un règlement (paiement scindé). CB/chèque exigeant une référence => passage TPE simulé.
+  //
+  // ⚠ PAR L'INTENTION DE RÈGLEMENT (G-2 du ticket opposable, `paymentIntent.js`). Une clé est écrite
+  // dans l'onglet AVANT l'envoi et gardée jusqu'à une issue définitive : un délai dépassé, un F5, un
+  // nouveau clic redemandent le MÊME règlement, avec la même clé. Tant qu'il attend, « Régler » le
+  // vérifie, quoi qu'on ait saisi depuis. Un terminal muet ne repart pas : on le fait déclarer.
   async function encaisserMoyen(venteObj, moyen, montantStr, tpe, paiementsPrecedents) {
     if (!venteObj || !moyen) return
+    const corps = { moyen: moyen.code }
+    const m = parseFloat(montantStr)
+    if (!Number.isNaN(m) && m > 0) corps.montant = m.toFixed(2)
+    const intention = intentFor(sessionStorage, {
+      saleId: venteObj.id,
+      saleNumber: venteObj.numero ?? null,
+      establishment: etabActif,
+      body: corps,
+      headers: moyen.exigeReference ? { 'X-Tpe-Simule': tpe } : null,
+    })
+    await reglerIntention(venteObj, intention, paiementsPrecedents)
+  }
+
+  async function reglerIntention(venteObj, intention, paiementsPrecedents) {
     setBusy(true)
     setErreur(null)
     setAvis(null)
-    // Renseigne uniquement si CE règlement solde la vente ; consommé après le bloc ci-dessous, hors
-    // de son `catch`, pour qu'un échec de validation ne se dise jamais « règlement refusé ».
-    let aSolde = null
-    try {
-      const corps = { moyen: moyen.code }
-      const m = parseFloat(montantStr)
-      if (!Number.isNaN(m) && m > 0) corps.montant = m.toFixed(2)
-      const headers = moyen.exigeReference ? { 'X-Tpe-Simule': tpe } : undefined
-      const res = await api.payer(venteObj.id, corps, headers)
+    setAttente(intention)
+    const issue = await settle(api, sessionStorage, intention, {
+      onRetry: () => setAvis('Paiement en cours de vérification — le même règlement est redemandé, sans nouvel encaissement.'),
+    })
+    setBusy(false)
+    setAttente(pendingIntent(sessionStorage, venteObj.id))
+    if (issue.outcome === 'paid') {
+      setAvis(null)
+      await apresReglement(venteObj, issue.response, paiementsPrecedents)
+    } else if (issue.outcome === 'unknown') {
+      setAvis(issue.message)
+      setDeclaration({ venteId: venteObj.id, tentative: issue.attempt })
+    } else if (issue.outcome === 'refused') {
+      setAvis(`Transaction ${libelleMoyen(intention.body.moyen)} ${issue.response?.statutTPE || 'refusée'} — aucun règlement enregistré.`)
+    } else if (issue.outcome === 'rejected') {
+      setErreur(issue.message)
+    } else {
+      setAvis(issue.message)
+    }
+  }
 
-      if (!res.reglementEnregistre) {
-        // TPE refusé / timeout : aucun règlement ajouté, reste inchangé.
-        setAvis(`Transaction ${moyen.libelle} ${res.statutTPE || 'refusée'} — aucun règlement enregistré.`)
+  const libelleMoyen = (code) => moyens.find((x) => x.code === code)?.libelle || code
+
+  // La vente telle que le serveur la tient — règlements et reste dû — après un F5, un rejeu ou une
+  // déclaration : un règlement rejoué est peut-être déjà affiché, le serveur fait foi.
+  async function relireVente(venteId) {
+    const v = await api.vente(venteId)
+    const reglements = (v.paiements || []).map((p) => ({
+      moyen: p.moyenCode, libelle: libelleMoyen(p.moyenCode), montant: p.montant, rendu: p.rendu, statutTPE: p.statutTPE,
+    }))
+    setPaiements(reglements)
+    setVente((x) => ({ ...(x || {}), id: v.id, numero: v.numero ?? null, reste: v.resteAPayer, total: v.total }))
+    setMontant(parseFloat(v.resteAPayer) > 0 ? parseFloat(v.resteAPayer).toFixed(2) : '')
+    return { v, reglements }
+  }
+
+  // Un règlement écrit (encaissé, ou déclaré « accepté ») : la liste, le reste, et la validation s'il solde.
+  async function apresReglement(venteObj, res, paiementsPrecedents) {
+    let reglements
+    let reste = res.resteAPayer ?? '0.00'
+    if (res.dejaEnregistre) {
+      const lu = await relireVente(venteObj.id).catch(() => null)
+      if (!lu) {
+        setAvis("Le règlement est enregistré, mais la vente n'a pas pu être relue : rechargez la page avant de continuer.")
         return
       }
-      setPaiements((p) => [
-        ...p,
-        { moyen: res.moyen, libelle: moyen.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
-      ])
-      const nouveauReste = res.resteAPayer ?? '0.00'
-      setVente((v) => ({ ...v, reste: nouveauReste }))
-      setMontant(parseFloat(nouveauReste) > 0 ? parseFloat(nouveauReste).toFixed(2) : '')
-
-      // ── LE RESTE EST A ZERO : PLUS RIEN A DECIDER, SAUF S'IL Y A UNE CARTE ─────────────────
-      //
-      // Un reglement qui solde la vente ne laisse aucune autre issue que valider. Le clic de
-      // confirmation n'apprenait donc rien — sauf quand une carte est en jeu, et c'est precisement
-      // la que la popup s'intercale. Un paiement PARTIEL garde les deux etapes.
-      //
-      // ⚠ ON NOTE, ON N'AGIT PAS ENCORE. Enchaîner ici mettrait la validation dans le `try` de ce
-      // règlement — dont le `catch` annonce « Règlement refusé ». Or à cet instant l'argent EST
-      // encaissé : le caissier lirait un refus sur une vente payée et réencaisserait le client.
-      if (parseFloat(nouveauReste) <= 0) {
-        aSolde = [
-          ...paiementsPrecedents,
-          { moyen: res.moyen, libelle: moyen.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
-        ]
-      }
-    } catch (e) {
-      setErreur(e.message || 'Règlement refusé.')
-      return
-    } finally {
-      setBusy(false)
+      reglements = lu.reglements
+      reste = lu.v.resteAPayer
+    } else {
+      reglements = [
+        ...paiementsPrecedents,
+        { moyen: res.moyen, libelle: libelleMoyen(res.moyen), montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
+      ]
+      setPaiements(reglements)
+      setVente((v) => ({ ...v, reste }))
+      setMontant(parseFloat(reste) > 0 ? parseFloat(reste).toFixed(2) : '')
     }
 
-    // ── HORS DU `catch` DU REGLEMENT ────────────────────────────────────────────────────────
+    // ── LE RESTE EST A ZERO : PLUS RIEN A DECIDER, SAUF S'IL Y A UNE CARTE ─────────────────
     //
-    // La validation porte son propre message d'échec — « Échec de la validation » — qui est vrai et
-    // qui n'invite pas à réencaisser. Le `return` du `catch` ci-dessus garantit qu'on n'arrive ici
-    // que si le règlement a réellement abouti.
-    if (!aSolde) return
-
+    // Un reglement qui solde la vente ne laisse aucune autre issue que valider. Le clic de
+    // confirmation n'apprenait donc rien — sauf quand une carte est en jeu, et c'est precisement
+    // la que la popup s'intercale. Un paiement PARTIEL garde les deux etapes.
+    //
+    // ⚠ La validation porte son propre message d'échec — « Échec de la validation » — qui est vrai et
+    // qui n'invite pas à réencaisser : à cet instant l'argent EST encaissé.
+    if (parseFloat(reste) > 0) return
     const { proposables, horsPortee } = trierAppairables(panier)
     if (proposables.length > 0 || horsPortee.length > 0) {
-      setAppairageEnAttente({ venteId: venteObj.id, reglements: aSolde, proposables, horsPortee })
+      setAppairageEnAttente({ venteId: venteObj.id, reglements, proposables, horsPortee })
     } else {
-      await validerVente(null, { venteId: venteObj.id, paiements: aSolde })
+      await validerVente(null, { venteId: venteObj.id, paiements: reglements })
+    }
+  }
+
+  // Au montage (F5) et au retour de la souscription : un règlement sans issue dans cet onglet rouvre
+  // sa vente, et se redemande avec la même clé. Une vente close (validée, annulée) a son issue écrite.
+  async function reprendreReglement() {
+    const [intention] = pendingIntents(sessionStorage, etabActif)
+    if (!intention) return
+    let v
+    try {
+      v = await api.vente(intention.saleId)
+    } catch (e) {
+      setErreur(`Un règlement de la vente ${intention.saleNumber ? `n° ${intention.saleNumber} ` : ''}attend son issue, `
+        + `mais la vente n'a pas pu être relue (${e.message || 'refus du serveur'}). Rechargez la page : ne l'encaissez pas une seconde fois.`)
+      return
+    }
+    if (v.statut !== 'en_cours') {
+      forgetIntent(sessionStorage, intention.saleId)
+      return
+    }
+    setPanier((v.lignes || []).map((l) => ({
+      cle: l.id,
+      ligneServeurId: l.id,
+      produit: { libelle: l.libelleProduit },
+      quantite: l.quantite,
+      prix: (parseFloat(l.prixUnitaire) + parseFloat(l.impactOptionsUnitaire ?? '0')).toFixed(2),
+      montant: l.montantLigne,
+      tarifLibelle: l.libelleTypeTarif || null,
+    })))
+    const { reglements } = await relireVente(v.id)
+    await reglerIntention({ id: v.id, numero: v.numero ?? null }, intention, reglements)
+  }
+
+  // « Qu'affiche le terminal ? » : la déclaration du caissier clôt le règlement sans issue.
+  async function declarer(choix) {
+    const { venteId, tentative } = declaration
+    setBusy(true)
+    try {
+      const res = await declareOutcome(api, sessionStorage, venteId, { attemptId: tentative?.id, ...choix })
+      setDeclaration(null)
+      setAttente(null)
+      if (res.reglementEnregistre) {
+        setAvis(null)
+        await apresReglement({ id: venteId, numero: vente?.numero ?? null }, { ...res, dejaEnregistre: true }, paiements)
+      } else {
+        await relireVente(venteId).catch(() => null)
+        setAvis("Déclaré « non passé » : rien n'a été encaissé. Le règlement peut être relancé.")
+      }
+    } catch (e) {
+      if (e?.payload?.code === 'payment_outcome_known') {
+        setDeclaration(null)
+        setAttente(null)
+        await relireVente(venteId).catch(() => null)
+        setAvis(e.message)
+      } else {
+        setDeclaration((d) => d && { ...d, erreur: e.message || 'La déclaration a échoué.' })
+      }
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -840,15 +950,21 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // ⚠ ON PASSE LE CONTEXTE RENVOYÉ, PAS L'ÉTAT : `demarrerPaiement` vient de faire ses
   // `setVente`/`setMontant`, pas encore lus dans ce tick. Régler d'après l'état paierait `null`.
   async function reglerUnMoyen() {
-    let venteObj = vente
-    let paiementsPrec = paiements
-    if (!venteObj) {
-      const ctx = await demarrerPaiement()
-      if (!ctx) return
-      venteObj = ctx.vObj
-      paiementsPrec = []
+    if (reglementEnCours.current) return
+    reglementEnCours.current = true
+    try {
+      let venteObj = vente
+      let paiementsPrec = paiements
+      if (!venteObj) {
+        const ctx = await demarrerPaiement()
+        if (!ctx) return
+        venteObj = ctx.vObj
+        paiementsPrec = []
+      }
+      await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
+    } finally {
+      reglementEnCours.current = false
     }
-    await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
   }
 
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
@@ -974,6 +1090,8 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       setClient(null)
       setBesoinClient(false)
     } catch (e) {
+      // D-4 : un règlement tient encore la vente (terminal muet, ou en cours) — on le fait déclarer.
+      if (e?.payload?.code === 'payment_outcome_unknown') setDeclaration({ venteId, tentative: e.payload.tentative })
       setErreur(e.message || 'Échec de la validation.')
     } finally {
       setBusy(false)
@@ -1082,11 +1200,13 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           onAnnuler={() => setSouscriptionOuverte(false)}
           onCree={() => {
             // Souscription aboutie (et 1re échéance encaissée par le composant lui-même) : on solde
-            // le panier et on repart propre. On ne rejoue rien.
+            // le panier et on repart propre. On ne rejoue rien — sauf un règlement resté sans issue,
+            // que la caisse rouvre et vérifie avec sa clé (G-2).
             setSouscriptionOuverte(false)
             setPanier([])
             setClient(null)
             setBesoinClient(false)
+            reprendreReglement()
           }}
         />
       )}
@@ -1212,8 +1332,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           </div>
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
-        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif}
-          onVerifier={(numero) => majParams({ verifier: String(numero || '1') }, { pousser: true })} />
+        <Suspense fallback={null}>
+          <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif}
+            onVerifier={(numero) => majParams({ verifier: String(numero || '1') }, { pousser: true })} />
+        </Suspense>
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -1255,7 +1377,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       {/* La clé remonte le bandeau au changement de site : une interrogation partie avant la
           bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
           du nouveau. */}
-      <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
+      <Suspense fallback={null}>
+        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
+      </Suspense>
 
       {/* Elle s'ouvre seule : `appairageEnAttente` n'est renseigné que par un règlement qui solde
           la vente alors qu'une ligne porte une carte. */}
@@ -1440,6 +1564,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       onValider={validerVente}
                       onAbandon={abandonner}
                       montrerAbandon={!!vente}
+                      attente={attente && attente.saleId === vente?.id ? { ...attente.body, libelle: libelleMoyen(attente.body.moyen) } : null}
                     />
                   )}
                 </>
@@ -1456,6 +1581,16 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               onAfficher={() => { setTicket(finVente.ticket); setFinVente(null) }}
               onBillet={() => { setBilletSeul(finVente.ticket); setFinVente(null) }}
               onSansTicket={() => setFinVente(null)}
+            />
+          )}
+
+          {declaration && (
+            <DeclarationReglement
+              tentative={declaration.tentative}
+              busy={busy}
+              erreur={declaration.erreur}
+              onDeclarer={declarer}
+              onFermer={() => setDeclaration(null)}
             />
           )}
 
@@ -1740,6 +1875,7 @@ function AppairageModal({ etat, onValider, onIgnorer, busy }) {
 function PanneauPaiement({
   moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
   tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon, montrerAbandon = true,
+  attente = null,
 }) {
   const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
   const paye = solde <= 0.0001
@@ -1764,7 +1900,25 @@ function PanneauPaiement({
 
       {avis && <div className="banner banner-error" style={{ margin: 0 }}>{avis}</div>}
 
-      {!paye && (
+      {/* UN RÈGLEMENT SANS ISSUE TIENT LE PAVÉ (G-2). Tant qu'il attend, « Régler » le redemande avec
+          sa clé : proposer un autre moyen ou un autre montant ferait payer deux fois. */}
+      {attente && (
+        <>
+          <div className="banner banner-warn" style={{ margin: 0 }}>
+            Règlement en attente : {attente.libelle} {attente.montant ? euros(attente.montant) : '(reste dû)'} — résultat
+            inconnu. Ne l'encaissez pas une seconde fois.
+          </div>
+          <button className="btn primary lg" onClick={onRegler} disabled={busy}>
+            {busy ? 'Vérification…' : 'Vérifier le règlement en attente'}
+          </button>
+          <div className="hint" style={{ margin: 0, textAlign: 'center' }}>
+            Le même règlement est redemandé, avec sa clé. Si le terminal est resté muet, on vous demande
+            ce qu'il affiche.
+          </div>
+        </>
+      )}
+
+      {!paye && !attente && (
         <>
           <div className="pay-moyens">
             {moyensDispo.map((m) => (
