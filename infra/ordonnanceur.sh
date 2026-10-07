@@ -204,7 +204,18 @@ set -eu
 #                                     prétend réutiliser EffacementRgpdHandler mais anonymise en propre,
 #                                     sans ses garde-fous — revue par la session CRM avant tout premier
 #                                     passage (signalé le 15/09).
-TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation"
+# public-api:webhooks:alerter        L'ALERTE DES WEBHOOKS PARTENAIRES (spec API partenaire v1, §3.5).
+#                                     Livraisons en attente depuis plus de 15 min (worker arrete,
+#                                     interrupteur PARTNER_WEBHOOKS_ENABLED ferme) et echecs definitifs
+#                                     sur 24 h : code d'echec, donc « ECHEC » dans ce journal et dans
+#                                     `--status`. SURE AU PREMIER PASSAGE : elle ne fait que LIRE.
+#
+# public-api:webhooks:requeue        Remet en file les livraisons « pending » qu'aucun message ne porte
+#                                     depuis 30 min (mise en file perdue, reessais Messenger epuises).
+#                                     SURE AU PREMIER PASSAGE : le handler revérifie interrupteur et
+#                                     consentement ; le partenaire deduplique par Idempotency-Key.
+#
+TACHES_AUTORISEES="vente:cloture:journee securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:resiliations:appliquer sport:abonnements:traiter-terme sepa:echeances:facturer sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai reservation:confirmations:expirer reservation:no-show:basculer smart-flow:waitlist:expirer revenue-recovery:attempts:send reporting:agreger dms:purge-expired-documents finance:treasury:verifier-seuils finance:treasury:detecter-ecarts finance:treasury:suggerer-rapprochements reporting:executer-rapports personnel:traiter-echeances-sortie crm:rgpd:appliquer-conservation public-api:webhooks:alerter public-api:webhooks:requeue"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
