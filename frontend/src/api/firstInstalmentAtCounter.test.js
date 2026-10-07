@@ -17,7 +17,6 @@ function serveur(pannes = {}, { scelle = true } = {}) {
     appels,
     creerVente: () => repondre('creerVente', { id: 'v1', numero: 'T1' }),
     rattacherClientVente: () => repondre('rattacherClientVente', {}),
-    annulerVente: () => repondre('annulerVente', {}),
     ajouterLigne: () => repondre('ajouterLigne', {}),
     payer: () => repondre('payer', { reglementEnregistre: true }),
     valider: () => {
@@ -42,11 +41,10 @@ test('tout aboutit : vente rattachée, réglée, validée, puis première éché
   ])
 })
 
-test('rattachement du client refusé : on s’arrête avant d’encaisser, la vente vide est annulée', async () => {
+test('rattachement du client refusé : on s’arrête avant d’encaisser', async () => {
   const api = serveur({ rattacherClientVente: 'Délai dépassé' })
   const message = await payFirstInstalmentAtCounter(api, parametres)
   for (const geste of ['ajouterLigne', 'payer', 'valider']) assert.ok(!api.appels.includes(geste), geste)
-  assert.ok(api.appels.includes('annulerVente'))
   assert.match(message, /rien n'a été encaissé/)
 })
 

@@ -41,15 +41,15 @@ export async function payFirstInstalmentAtCounter(
 
   // ⚠ SANS CLIENT, ON N'ENCAISSE PAS. Une vente d'abonnement anonyme est scellée PUIS refusée
   // (pas de débiteur pour le mandat, G-5) : l'argent entre, l'écran voyait un échec, et un second
-  // encaissement suivait (mesuré le 07/10, PR #276). On s'arrête donc ici, la vente encore vide.
+  // encaissement suivait (mesuré le 07/10, PR #276). On s'arrête donc ici, la vente encore vide
+  // (elle reste ouverte : seule une vente validée s'annule).
   try {
     await api.rattacherClientVente(vente.id, { client: payeurId })
   } catch (e) {
-    const annulee = await api.annulerVente(vente.id).then(() => true, () => false)
     return `L'abonnement est souscrit, mais la vente ${numero} n'a pas pu être rattachée au client (`
       + (e?.message || 'refus du serveur')
-      + `) : rien n'a été encaissé${annulee ? '' : ` (annulez cette vente vide depuis la caisse)`}, `
-      + `et la première échéance sera prélevée normalement.`
+      + `) : rien n'a été encaissé (elle reste ouverte, vide), et la première échéance sera `
+      + `prélevée normalement.`
   }
 
   // Ce que le serveur a répondu APRÈS avoir validé (donc encaissé) la vente : un échec de l'appel
