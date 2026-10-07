@@ -49,6 +49,7 @@ The first-class events published on the bus by the core and the modules. An even
 | `access.recorded` | Access control | door, credential | Reporting, Smart Flow (footfall) |
 | `access.denied` | Access control | reason | Supervision |
 | `access.card_recharged` | Access control (`CardRechargeHandler`, CQ-1) | droitId, supportId, creditsAdded, creditBalanceAfter, newExpiryAt?, saleId | Reporting, CRM, Smart Flow |
+| `access.capacity_exceeded` | Access control (`SynchroPassageHandler`, D121 — offline entries counted over a full FMI gauge, one per space and batch) | space_label, offline_entries, occupancy, threshold | **Notifications** (cloche) |
 | `quote.sent` | Quote | amount, due_date | Revenue Recovery |
 | `quote.expired` | Quote | amount | **Revenue Recovery** |
 | `quote.accepted` | Quote | amount | Invoicing |
