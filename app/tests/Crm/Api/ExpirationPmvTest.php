@@ -14,6 +14,7 @@ use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Crm\CrmApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -55,5 +56,45 @@ final class ExpirationPmvTest extends CrmApiTestCase
         self::assertNotEmpty($expirations, 'CA-12 : MouvementPmv(expiration) daté/motivé/exportable.');
         // CA-12 : le solde annulé reste consultable dans l'historique (mouvement jamais supprimé).
         self::assertSame('-50.00', array_values($expirations)[0]['montant']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function fuseaux(): iterable
+    {
+        // À toute heure, l'un des deux (UTC+14, UTC-11) n'a pas le jour UTC.
+        yield 'UTC+14' => ['Pacific/Kiritimati'];
+        yield 'UTC-11' => ['Pacific/Pago_Pago'];
+    }
+
+    /**
+     * LE PORTE-MONNAIE EXPIRE LE LENDEMAIN DE SON ÉCHÉANCE, AU JOUR DE L'ÉTABLISSEMENT.
+     *
+     * Mesuré le 07/10/2026 : la commande comparait l'échéance au jour UTC. À l'ouest de Greenwich,
+     * le porte-monnaie expirait le soir de son dernier jour ; à l'est, il passait la nuit suivante.
+     */
+    #[DataProvider('fuseaux')]
+    public function testLePmvExpireAuJourDeLEtablissement(string $fuseau): void
+    {
+        $this->adminSurA();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        foreach ($em->getRepository(Etablissement::class)->findAll() as $etablissement) {
+            $etablissement->setFuseauHoraire($fuseau);
+        }
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+
+        foreach (['today' => StatutPmv::Actif, 'yesterday' => StatutPmv::Expire] as $echeance => $statut) {
+            $jour = (new \DateTimeImmutable($echeance, new \DateTimeZone($fuseau)))->format('Y-m-d');
+            $this->entite(PorteMonnaieVirtuel::class, ['client' => $payeur])->setDateEcheance(new \DateTimeImmutable($jour));
+            $em->flush();
+
+            $application = new Application(static::$kernel);
+            $application->setAutoExit(false);
+            $tester = new CommandTester($application->find('crm:rgpd:expirer-pmv'));
+            self::assertSame(0, $tester->execute([]));
+
+            $em->clear();
+            self::assertSame($statut, $this->entite(PorteMonnaieVirtuel::class, ['client' => $payeur])->getStatut(), 'Échéance ' . $jour);
+        }
     }
 }
