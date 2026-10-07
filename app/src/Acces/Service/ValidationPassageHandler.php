@@ -277,11 +277,15 @@ final class ValidationPassageHandler
                 }
 
                 // Le SGBD reste la source de vérité (UPDATE atomique, seuil comparé sous verrou de ligne).
+                $depassementFmi = null;
                 $jauge = $this->em->getRepository(JaugeFmi::class)->findOneBy(['espace' => $espace]);
                 if ($jauge instanceof JaugeFmi) {
                     $hexJauge = bin2hex($jauge->getId()->toBinary());
                     if ($sens === SensPassage::Entree) {
-                        if ($jauge->getMode() === ModeSeuil::Blocage) {
+                        // D121 : une entrée HORS LIGNE a déjà eu lieu, la borne coupée ne connaissait
+                        // pas la jauge. La refuser au rejeu laissait la jauge sous la réalité : elle est
+                        // comptée, même au-delà du seuil, et signalée. Seule l'entrée en ligne est bloquée.
+                        if ($jauge->getMode() === ModeSeuil::Blocage && !$evt->origineHorsLigne) {
                             $affectees = (int) $this->connection->executeStatement(
                                 'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + 1, cumul_jour = cumul_jour + 1 WHERE id = UNHEX(:hex) AND valeur_courante < seuil',
                                 ['hex' => $hexJauge],
@@ -308,12 +312,22 @@ final class ValidationPassageHandler
                     // était le plus exposé (même instance d'un bout à l'autre du lot). `refresh()` relit
                     // notre propre ligne, verrouillée par l'UPDATE : le flush n'a plus rien à y écrire.
                     $this->em->refresh($jauge);
+                    // Au-delà du seuil après NOTRE incrément = jauge déjà pleine avant : en ligne, cette
+                    // entrée aurait été refusée. Lu sous le verrou de ligne pris par l'UPDATE.
+                    if ($evt->origineHorsLigne && $sens === SensPassage::Entree && $jauge->getMode() === ModeSeuil::Blocage && $jauge->getValeurCourante() > $jauge->getSeuil()) {
+                        $depassementFmi = sprintf('Entrée hors ligne comptée au-delà du seuil FMI (%d/%d) : la borne ne connaissait pas la jauge.', $jauge->getValeurCourante(), $jauge->getSeuil());
+                    }
                 }
 
                 $passage = $this->construirePassage($espace, $controleur, $equipement, $support, $droit, $sens, $evt);
                 $passage->setResultat(ResultatPassage::Valide);
                 $passage->setEnConflit($enConflit || $enConflitCredit);
-                if ($enConflitCredit) {
+                if ($depassementFmi !== null) {
+                    // Même dérogation que le litige de crédit ci-dessous : un code sur un passage
+                    // ACCEPTÉ. `SynchroPassageHandler` le lit pour prévenir l'exploitant (D121).
+                    $passage->setCodeMotif(CodeMotifRefus::SeuilFmiDepasseHorsLigne);
+                    $passage->setMotif($depassementFmi);
+                } elseif ($enConflitCredit) {
                     // Dérogation documentée (§4.2 du plan) : `Passage.codeMotif` est en temps normal
                     // réservé aux refus (`refuser()`), positionné ici sur un passage ACCEPTÉ pour
                     // caractériser le litige (Risque R-6, non activé par défaut — cf. flag ci-dessus).

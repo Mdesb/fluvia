@@ -47,6 +47,12 @@ enum CodeMotifRefus: string
      *  `EvenementPassageDto::autoriserCreditNegatifSiHorsLigne` (désactivé par défaut). */
     case CreditEpuiseHorsLigneLitige = 'credit_epuise_hors_ligne_litige';
     /**
+     * Entrée HORS LIGNE comptée au-delà du seuil FMI (D121) : la borne coupée ne connaissait pas la
+     * jauge, la personne est entrée. Posé sur un passage ACCEPTÉ, comme le litige de crédit ci-dessus ;
+     * en ligne, la même jauge pleine refuse toujours (`SeuilFmi`).
+     */
+    case SeuilFmiDepasseHorsLigne = 'seuil_fmi_depasse_hors_ligne';
+    /**
      * Le site est fermé à cette heure-là, d'après son planning d'ouverture (module App\Ouverture,
      * 28/08) — et ce planning est déclaré « faisant loi » sur cet établissement.
      *

@@ -129,6 +129,11 @@ export const MOTIF_REFUS = {
     quoi: 'Le passage a été accepté hors ligne alors que le crédit était épuisé — accepté, puis constaté à la synchronisation.',
     geste: 'Rien à faire dans l’instant : c’est une trace, pas un refus.',
   },
+  seuil_fmi_depasse_hors_ligne: {
+    libelle: 'Jauge dépassée (hors ligne)',
+    quoi: 'Entrée faite sur une borne hors ligne, remontée jauge pleine : comptée quand même, la personne est entrée.',
+    geste: 'Vérifiez la fréquentation sur place : l’espace dépasse son seuil de sécurité.',
+  },
   hors_horaires_ouverture: {
     libelle: 'Site fermé',
     quoi: 'Le passage tombe hors des heures d’ouverture, et le refus hors horaires est activé.',
