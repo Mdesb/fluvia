@@ -183,6 +183,8 @@ fi
 [ -f "$RACINE/bin/garde-fou-blocs-orphelins.php" ] && { lancer_gf garde-fou-blocs-orphelins.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-numeros-de-decision.php" ] && { lancer_gf garde-fou-numeros-de-decision.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-metiers-sans-ligne.php" ] && { lancer_gf garde-fou-metiers-sans-ligne.php || ECHEC=1; }
+# Classes PHP disparues (n°57) : une classe supprimee, toujours citee. Tout l'arbre, comme le n°41.
+[ -f "$RACINE/bin/garde-fou-classes-php-disparues.php" ] && { lancer_gf garde-fou-classes-php-disparues.php || ECHEC=1; }
 
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"

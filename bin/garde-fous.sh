@@ -245,6 +245,10 @@ executer "Numeros de decision (n°46)" php_racine bin/garde-fou-numeros-de-decis
 #     jamais, un metier de plus est une LIGNE EN BASE.
 executer "Metiers sans ligne (n°55)" php_racine bin/garde-fou-metiers-sans-ligne.php
 
+# 57. Une classe PHP supprimee ou renommee, toujours citee ailleurs (#30). PHP ne dit rien avant
+#     d'executer la ligne, et la CI ne lance pas PHPUnit. Ce n'est PAS le n°37 (classes CSS).
+executer "Classes PHP disparues (n°57)" php_racine bin/garde-fou-classes-php-disparues.php
+
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
