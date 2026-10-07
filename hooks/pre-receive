@@ -504,6 +504,15 @@ while read -r ancien nouveau ref; do
         (cd "$ARBRE" && ./bin/garde-fou-marqueurs-de-conflit.sh) || ECHEC=1
     fi
 
+    # D95 : la tache no-show facture des absences tant qu'aucune presence n'est ecrite. Lit un
+    # fichier de l'arbre recu, rien d'autre : sans condition.
+    # ⚠ ECHEC_REF, PAS ECHEC : ce hook ne lit jamais `ECHEC`. Copie d'abord du bloc du dessus, ce
+    # controle laissait passer la tache remise dans la liste — le banc l'a vu (n°57, cas rouge).
+    if [ -x "$ARBRE/bin/garde-fou-no-show-hors-liste.sh" ]; then
+        echo "── No-show hors liste (n°57)"
+        (cd "$ARBRE" && ./bin/garde-fou-no-show-hors-liste.sh) || ECHEC_REF=1
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
         echo "── Classes fantomes (n°37)"
         lancer garde-fou-classes-fantomes.php
