@@ -104,11 +104,11 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
     }
 
     /**
-     * TÉMOIN DE CE QUE L'ÉCRAN LIT. Une vente d'abonnement anonyme est scellée PUIS refusée (G-5,
-     * voulu) : la réponse de `/valider` est un échec, mais la vente se relit `validee`. C'est ce
-     * second signal que l'écran consulte avant de dire « rien n'est encaissé ».
+     * UNE VENTE D'ABONNEMENT ANONYME EST REFUSÉE AVANT D'ÊTRE SCELLÉE (décision de Maxime du 07/10,
+     * qui revoit G-5). Jusque-là, elle était scellée PUIS refusée : l'argent entrait, sans abonnement
+     * possible ni reprise. Elle reste maintenant ouverte, et on peut lui rattacher le client.
      */
-    public function testAnAnonymousSubscriptionSaleIsRefusedAfterSealingAndReadsBackValidated(): void
+    public function testAnAnonymousSubscriptionSaleIsRefusedBeforeSealing(): void
     {
         [$client, $entete] = $this->adminSurA();
         $produit = $this->nonNominativeGold();
@@ -119,8 +119,15 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         self::assertSame(422, $parcours['valider'], $parcours['corps']);
 
         $relue = $client->request('GET', '/api/ventes/' . $parcours['vente'], $entete)->toArray();
-        self::assertSame('validee', $relue['statut']);
-        self::assertSame(1, (int) $this->em()->getRepository(OperationScellee::class)->count([]));
+        self::assertSame('en_cours', $relue['statut']);
+        self::assertSame(0, (int) $this->em()->getRepository(OperationScellee::class)->count([]));
+
+        // Et la vente se reprend : client rattaché, elle se valide et relie l'abonnement du jour.
+        $client->request('POST', '/api/ventes/' . $parcours['vente'] . '/client', $entete + ['json' => ['client' => (string) $payeur->getId()]]);
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/api/ventes/' . $parcours['vente'] . '/valider', $entete + ['json' => []]);
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $this->subscriptionsOf($payeur, $produit));
     }
 
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────

@@ -28,6 +28,9 @@ use Doctrine\ORM\EntityManagerInterface;
  *   refus du port laisse ici la vente SCELLÉE et VALIDE (pas de rollback) : l'exception remonte
  *   telle quelle, la reprise se fait hors de cette transaction (G-5).
  *
+ * ⚠ SAUF LE PAYEUR MANQUANT, REFUSÉ AVANT LE SCELLEMENT (décision de Maxime du 07/10, qui revoit
+ *   G-5) : `assertSubscribable()` répond 422 et la vente reste ouverte, rien n'est scellé.
+ *
  * @implements ProcessorInterface<Vente, Vente>
  */
 final class ValiderVenteProcessor implements ProcessorInterface
@@ -54,6 +57,7 @@ final class ValiderVenteProcessor implements ProcessorInterface
             }
         }
 
+        $this->abonnements->assertSubscribable($data);
         $this->service->valider($data, $overrides);
         $this->em->flush();
 
