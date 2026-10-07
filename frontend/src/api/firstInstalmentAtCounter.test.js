@@ -17,7 +17,10 @@ function serveur(pannes = {}, { scelle = true } = {}) {
     appels,
     creerVente: () => repondre('creerVente', { id: 'v1', numero: 'T1' }),
     rattacherClientVente: () => repondre('rattacherClientVente', {}),
-    ajouterLigne: () => repondre('ajouterLigne', {}),
+    ajouterLigne(vente, ligne) {
+      this.ligne = ligne
+      return repondre('ajouterLigne', {})
+    },
     payer: () => repondre('payer', { reglementEnregistre: true }),
     valider: () => {
       if (scelle) statut = 'validee'
@@ -30,7 +33,7 @@ function serveur(pannes = {}, { scelle = true } = {}) {
 }
 
 const parametres = {
-  abonnementId: 'a1', sessionId: 's1', payeurId: 'c1', produitId: 'p1', tarif: 't1', moyen: 'especes', montant: '39.90', prixForce: false,
+  abonnementId: 'a1', sessionId: 's1', payeurId: 'c1', beneficiaireId: 'c2', produitId: 'p1', tarif: 't1', moyen: 'especes', montant: '39.90', prixForce: false,
 }
 
 test('tout aboutit : vente rattachée, réglée, validée, puis première échéance annulée', async () => {
@@ -39,6 +42,12 @@ test('tout aboutit : vente rattachée, réglée, validée, puis première éché
   assert.deepEqual(api.appels, [
     'creerVente', 'rattacherClientVente', 'ajouterLigne', 'payer', 'valider', 'echeancesSepaSport', 'annulerEcheanceSepa',
   ])
+})
+
+test('la ligne nomme le bénéficiaire : sans lui, une formule nominative est refusée (422)', async () => {
+  const api = serveur()
+  await payFirstInstalmentAtCounter(api, parametres)
+  assert.equal(api.ligne?.beneficiaire, 'c2')
 })
 
 test('rattachement du client refusé : on s’arrête avant d’encaisser', async () => {
