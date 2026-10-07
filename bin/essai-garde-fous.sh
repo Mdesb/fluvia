@@ -575,7 +575,18 @@ ecrire_metiers "$CINQ" "$CINQ bowling"
 commiter "banc : une entree de repli sans son cas de Metier"
 essai "métiers — une entrée de repli sans cas dans l'énumération" refus "sans cas dans"
 
-# --- garde-fou n°57 : une classe PHP citée qu'aucun fichier ne déclare ------------------------
+# --- n°57 : `reservation:no-show:basculer` hors de la liste blanche de l'ordonnanceur (D95) ------
+# Rouge : la tâche revient dans TACHES_AUTORISEES. Vert : absente de la liste, mais nommée en
+# commentaire — un contrôle qui mordrait sur l'en-tête s'apprendrait à sauter.
+sed -i 's/^TACHES_AUTORISEES="/&reservation:no-show:basculer /' infra/ordonnanceur.sh
+commiter "banc : la tache no-show revient dans la liste blanche"
+essai "n°57 — no-show dans la liste blanche (D95)" refus "est dans TACHES_AUTORISEES"
+
+printf '# reservation:no-show:basculer : nommee ici en commentaire, hors liste (banc n°57).\n' >> infra/ordonnanceur.sh
+commiter "banc : la tache no-show nommee en commentaire seulement"
+essai "n°57 — no-show absente de la liste, nommée en commentaire" acceptation
+
+# --- garde-fou n°58 : une classe PHP citée qu'aucun fichier ne déclare ------------------------
 # Comme pour le n°55, on écrit plutôt qu'on ne retire : un appelant minimal vers une classe qui
 # n'existe pas est, pour le contrôle, l'état exact d'une classe supprimée et toujours citée.
 mkdir -p app/src/Offre/Service
@@ -593,7 +604,7 @@ final class GhostCaller
 }
 PHP
 commiter "banc : une classe citee dont le fichier n'existe pas"
-essai "classes PHP — citée, déclarée nulle part" refus "qu'aucun fichier ne déclare"
+essai "n°58 — classe PHP citée, déclarée nulle part" refus "qu'aucun fichier ne déclare"
 
 # --- le filet de complétude lui-même ----------------------------------------------------------
 # C'est le mécanisme qui protège tous les autres : un garde-fou ajouté sans être appelé par le

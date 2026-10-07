@@ -5,7 +5,7 @@ import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
-import HistoriqueVentes from '../components/HistoriqueVentesModal.jsx'
+import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
 import ScansEnDirect from '../components/ScansEnDirect.jsx'
@@ -955,7 +955,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
       const t = construireTicket(infoTicket, reglements, support, true)
       if (infoTicket.impressionAutomatique) setTicket(t)
-      else setFinVente({ info: infoTicket, ticket: t })
+      else setFinVente({ info: infoTicket, ticket: t, vente: venteValidee })
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -1138,6 +1138,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         <HistoriqueVentes
           onClose={fermerHistorique}
           droits={droits}
+          sessionId={session?.id}
           onDuplicata={async (vente) => {
             setErreur(null)
             try {
@@ -1437,7 +1438,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 
           {finVente && (
             <FinDeVente
+              key={finVente.vente?.id}
               info={finVente.info}
+              vente={finVente.vente}
+              droits={droits}
               onAfficher={() => { setTicket(finVente.ticket); setFinVente(null) }}
               onBillet={() => { setBilletSeul(finVente.ticket); setFinVente(null) }}
               onSansTicket={() => setFinVente(null)}
@@ -1838,7 +1842,23 @@ function PanneauPaiement({
 // mensonge le plus cher du lot : le client repart sans rien, le caissier croit l'avoir servi, et
 // personne ne s'en apercoit avant la reclamation. On garde les boutons — Maxime les a demandes, et
 // les effacer ferait oublier la demande — mais ils disent leur etat.
-function FinDeVente({ info, onAfficher, onBillet, onSansTicket }) {
+function FinDeVente({ info, vente, droits, onAfficher, onBillet, onSansTicket }) {
+  const [annulation, setAnnulation] = useState(null) // null | 'formulaire' | { numero }
+  if (annulation?.numero) {
+    return (
+      <div className="card" style={{ marginTop: 'var(--esp-large)' }}>
+        <div className="card-b">
+          <div className="nm">Vente annulée. Avoir n° {annulation.numero} émis.</div>
+          <button className="btn primary sm" type="button" style={{ marginTop: 'var(--esp-normal)' }} onClick={onSansTicket}>
+            Retour à la caisse
+          </button>
+        </div>
+      </div>
+    )
+  }
+  if (annulation === 'formulaire') {
+    return <FormulaireAnnulation vente={vente} onAnnulee={setAnnulation} onFermer={() => setAnnulation(null)} />
+  }
   // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
   // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
   if (info.venteGratuite) {
@@ -1873,6 +1893,9 @@ function FinDeVente({ info, onAfficher, onBillet, onSansTicket }) {
 
         <div className="row" style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           <button className="btn primary" type="button" onClick={onAfficher}>Afficher le ticket</button>
+          {vente && aLeDroit(droits, 'vente.annuler') && (
+            <button className="btn ghost" type="button" onClick={() => setAnnulation('formulaire')}>Annuler cette vente</button>
+          )}
           {/* « Sans ticket » fermait sans rien remettre. Le client repart quand même avec son
               accès : c'est le billet, sans aucun montant dessus (R5). */}
           <button className="btn" type="button" onClick={onBillet}>Le billet seul</button>

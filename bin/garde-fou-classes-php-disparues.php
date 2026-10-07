@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Garde-fou n°57 — une classe PHP citée qu'aucun fichier ne déclare.
+ * Garde-fou n°58 — une classe PHP citée qu'aucun fichier ne déclare.
  *
  * ── CE QU'IL EMPÊCHE ──────────────────────────────────────────────────────────────────────────
  *
