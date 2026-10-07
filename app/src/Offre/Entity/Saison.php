@@ -183,12 +183,24 @@ class Saison
         return $this;
     }
 
-    /** Vrai si la date fournie tombe dans l'intervalle [dateDebut, dateFin] (bornes incluses). */
+    /**
+     * Vrai si le JOUR de la date, à l'heure de l'établissement, tombe dans [dateDebut, dateFin]
+     * (bornes incluses) : le premier et le dernier jour se vendent en entier.
+     */
     public function contient(\DateTimeImmutable $date): bool
     {
         if ($this->dateDebut === null || $this->dateFin === null) {
             return false;
         }
+
+        // ⚠ UNE SAISON SE COMPTE EN JOURS DE L'ETABLISSEMENT, PAS EN INSTANTS DU SERVEUR.
+        //
+        // Les bornes sont des colonnes `date` : Doctrine les rend a 00:00, dans le fuseau du conteneur
+        // (UTC). Comparer l'instant de la vente a ces minuits arretait la vente du dernier jour a
+        // 00:00 UTC (01:00 ou 02:00 a Paris) et ouvrait le premier une ou deux heures en retard.
+        // Mesure le 07/10/2026 (`SeasonLastDayTest`). Sans etablissement (lignes anterieures a D51),
+        // le defaut d'`Etablissement::$fuseauHoraire`.
+        $date = $date->setTimezone(new \DateTimeZone($this->etablissement?->getFuseauHoraire() ?? 'Europe/Paris'));
 
         // ⚠ « CHAQUE ANNEE » ETAIT COCHABLE, S'ENREGISTRAIT, ET PERSONNE NE LA LISAIT.
         //
@@ -207,7 +219,9 @@ class Saison
             return self::dansSegments(self::moisJour($date), self::segmentsMoisJour($this->dateDebut, $this->dateFin));
         }
 
-        return $date >= $this->dateDebut && $date <= $this->dateFin;
+        $jour = $date->format('Y-m-d');
+
+        return $jour >= $this->dateDebut->format('Y-m-d') && $jour <= $this->dateFin->format('Y-m-d');
     }
 
     /** Vrai si les intervalles de dates se recouvrent (bornes incluses). */
