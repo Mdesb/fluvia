@@ -9,6 +9,7 @@ use App\Crm\Service\BeneficiaryResolver;
 use App\Membership\Entity\Membership;
 use App\Membership\Enum\MembershipStatus;
 use App\Membership\Repository\SubscriptionRepository;
+use App\Membership\Service\DemanderResiliationHandler;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\Produit;
@@ -53,7 +54,23 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SubscriptionRepository $abonnements,
         private readonly AppairageAccesInterface $acces,
+        private readonly DemanderResiliationHandler $resiliations,
     ) {
+    }
+
+    /**
+     * Les abonnements des lignes de la vente annulée sont résiliés avec elle : celui que la caisse a
+     * créé, celui qu'elle a relié au comptoir (#288), celui de la vente en ligne. Sans quoi il resterait
+     * un abonnement fantôme, son mandat et ses prélèvements (décision de Maxime du 07/10).
+     */
+    public function terminateSubscriptionsFromSale(Vente $vente, string $motif): void
+    {
+        foreach ($vente->getLignes() as $ligne) {
+            $abonnement = $this->abonnements->findOneBySourceSaleLine($ligne->getId());
+            if ($abonnement instanceof Membership) {
+                $this->resiliations->terminateForCancelledSale($abonnement, $motif);
+            }
+        }
     }
 
     /**

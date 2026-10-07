@@ -235,6 +235,8 @@ final class SouscriptionAbonnementEnLigneHandler
             dureeEngagementMois: 12,
             canal: Canal::EnLigne,
             mandatExistant: $mandat,
+            // Le lien retour vente → abonnement : annuler la vente le résilie (décision du 07/10).
+            sourceSaleLineId: $ligneVente->getId(),
             // Le QR affiché au client est celui de la vente : il devient l'accès de l'abonnement et
             // il est coupé avec lui (décision de Maxime du 07/10), au lieu d'un second QR jamais remis.
             saleTicketCode: $support instanceof BilletSupport ? $support->getIdentifiantSupport() : null,

@@ -70,6 +70,34 @@ final class DemanderResiliationHandler
         return $resiliation;
     }
 
+    /**
+     * LA VENTE QUI A CRÉÉ L'ABONNEMENT EST ANNULÉE : IL EST RÉSILIÉ AVEC ELLE (décision de Maxime du 07/10).
+     *
+     * Sans frais : ni engagement ni préavis. L'effet est posé la veille du premier jour d'engagement,
+     * puisque le contrat n'a jamais pris effet. `executerEffet()` annule donc toutes les échéances
+     * encore à venir, la première comprise. Le reste est la résiliation ordinaire : mandat révoqué
+     * s'il ne sert plus, accès coupé par la propagation, et cette résiliation reste comme trace.
+     */
+    public function terminateForCancelledSale(Membership $abonnement, string $motifVente): ?Resiliation
+    {
+        if ($abonnement->getStatut() === MembershipStatus::Resilie) {
+            return null;
+        }
+
+        $resiliation = new Resiliation();
+        $resiliation->setAbonnement($abonnement)
+            ->setDateDemande(new \DateTimeImmutable('today'))
+            ->setMotif(sprintf('Vente annulée (%s)', $motifVente))
+            ->setMotifLegitime(true)
+            ->setPreavisAppliqueJours(0)
+            ->setDateEffet($abonnement->getDateDebutEngagement()->modify('-1 day'))
+            ->setStatut(StatutResiliation::EnPreavis);
+        $this->em->persist($resiliation);
+        $this->executerEffet($resiliation);
+
+        return $resiliation;
+    }
+
     /** Exécute l'effet de la résiliation à sa date d'effet : mandat révoqué, accès coupé (§4.3/§4.7). */
     public function executerEffet(Resiliation $resiliation): void
     {
