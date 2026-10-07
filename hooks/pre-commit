@@ -173,6 +173,8 @@ fi
 [ -f "$RACINE/bin/garde-fou-classes-fantomes.php" ] && { lancer_gf garde-fou-classes-fantomes.php || ECHEC=1; }
 # ⚠ Un .md casse se lit comme si de rien n'etait : aucun compilateur ne le voit.
 [ -x "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" ] && { echo "── Marqueurs de conflit (n°38)"; "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" || ECHEC=1; }
+# D95 : la tache no-show facture des absences tant qu'aucune presence n'est ecrite.
+[ -x "$RACINE/bin/garde-fou-no-show-hors-liste.sh" ] && { echo "── No-show hors liste (n°57)"; "$RACINE/bin/garde-fou-no-show-hors-liste.sh" || ECHEC=1; }
 
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.

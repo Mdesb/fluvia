@@ -448,6 +448,11 @@ else
     executer "reference.php non commite (n°56)" "$RACINE/bin/garde-fou-reference-php.sh"
 fi
 
+# 13 quater. `reservation:no-show:basculer` reste hors de la liste blanche de l'ordonnanceur (n°57,
+#     D95). L'en-tête d'`infra/ordonnanceur.sh` l'interdisait et la liste la contenait quand même :
+#     du 04/09 au 07/10 elle a facturé des absences sans qu'aucune présence ne soit jamais écrite.
+executer "No-show hors liste (n°57)" "$RACINE/bin/garde-fou-no-show-hors-liste.sh"
+
 # 16. Lier un OBJET à un paramètre de requête sans dire son type (D58).
 #     Doctrine passe l'identifiant SANS son type `uuid` : la requête reste valide et compte zéro,
 #     sans exception ni avertissement. Deux modules en sont morts en silence le 28/08 — le solde
