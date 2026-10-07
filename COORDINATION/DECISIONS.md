@@ -3438,6 +3438,149 @@ et prouvé **avant** le redémarrage, et non l'inverse.
 
 ---
 
+## D111 — Le cap « l'API d'abord » (D101/D102) tient : une Issue le porte, l'ordre des gestes en découle
+
+**Contexte.** L'audit du 14/09 (docs/audits/2026-09-14-audit-complet.md) constate que D101/D102, actées le
+31/08, n'ont aucune Issue depuis deux semaines : les commits et les douze Issues ouvertes portent sur la caisse,
+les abonnements et les garde-fous. IT Cotation, seul intégrateur potentiel, attend une spécification.
+
+**Décision.** Le cap tient. Une Issue étiquetée porte la première surface tiers : clé d'API, webhook sortant,
+spécification pour IT Cotation. Les autres gestes de l'audit s'ordonnent derrière, et toute nouvelle Issue de
+confort dit en une ligne pourquoi elle passe devant.
+
+**Alternatives écartées.** Suspendre D102 par écrit : Maxime ne le souhaite pas. Le laisser dériver en
+silence : c'est l'état constaté, et il n'est plus acceptable.
+
+**Contrepartie acceptée.** Des correctifs caisse et membership attendront.
+
+**Contradiction.** Le contradicteur de l'audit : « la liste des dix gestes ordonne par gravité technique,
+pas par le cap acté ; l'API n'y figure qu'au titre de trancher le cap » — Réponse : retenue, le cap devient le
+premier geste et commande les autres. Tranché par Maxime le 14/09 (QCM).
+
+**Comment on le voit tenir.** L'Issue existe et est assignée ; le point-projet la cite en tête.
+
+---
+
+## D112 — Paiement à distance : les bouchons carte et SEPA restent tels quels jusqu'à un client daté
+
+**Contexte.** `PspCbStubAdapter` signe ses propres reçus, `CollecteurSepaStubAdapter` ne remet rien en banque,
+`CardDebitFallback` n'est appelé par rien (PAY-3 jamais livré). L'audit recommandait au moins un interrupteur
+de gel explicite pour que le bouchon ne passe pas pour un paiement réel.
+
+**Décision.** Rien ne bouge : ni intégration réelle, ni interrupteur. Le PSP carte, le collecteur SEPA et la
+relance PAY-3 se décident avec le premier client qui réclame l'encaissement à distance ou le prélèvement réel.
+Jusque-là, la vente se fait au guichet.
+
+**Alternatives écartées.** Signer un PSP réel maintenant (commission inconnue, intégration L). Poser un
+interrupteur de gel (S) : jugé inutile tant qu'aucune démo ni aucun client n'utilise le paiement à distance.
+
+**Contrepartie acceptée.** Le risque nommé par l'audit demeure : une démo ou un environnement de préprod peut
+laisser croire qu'un paiement est réel. Il est porté par la parole, pas par le code.
+
+**Contradiction.** Perspective finance et contradicteur : « le stub se fait passer pour un paiement réel, il
+faut le neutraliser quel que soit le cap » — Réponse : **écartée par Maxime** (« Garder le bouchon tel quel »,
+« À décider avec le premier client », « On attend pour le moment »). L'objection reste consignée ici pour le
+jour où un client daté existera.
+
+**Comment on le voit tenir.** Aucune Issue d'intégration bancaire n'est ouverte sans référence à un client
+nommé ; la fiche support de la boutique dit que le paiement en ligne n'est pas ouvert.
+
+---
+
+## D113 — Abonnés : particuliers et collectivités, deux jeux de CGV
+
+**Contexte.** La spec d'abonnement transverse généralise engagement, pause, résiliation, réengagement et
+prélèvement SEPA récurrent sans fixer durée d'engagement, préavis, reconduction ni rétractation. La boutique en
+ligne ouvre la souscription à des particuliers.
+
+**Décision.** Deux profils payeurs : le particulier passe par la boutique et relève du droit de la
+consommation (reconduction tacite L215-1, information et préavis de résiliation, rétractation L221-28 sauf
+exécution demandée expressément) ; la collectivité relève de son marché. La spec d'abonnement fixe, par
+profil, durée d'engagement, préavis, régime de reconduction et rétractation, et le code les porte comme des
+règles, pas comme des textes.
+
+**Alternatives écartées.** Particuliers seuls (un seul jeu de CGV, mais les collectivités sont le premier
+client) ; B2B seul (non-conformité immédiate au premier particulier).
+
+**Contrepartie acceptée.** Deux jeux de clauses à maintenir et à faire porter par le profil payeur.
+
+**Contradiction.** Perspective juridique : « aucune ligne de spec ne fixe ces régimes » — Réponse : retenue,
+tranchée par Maxime (droit) le 14/09.
+
+**Comment on le voit tenir.** Un test par profil sur la reconduction et la résiliation ; la spec abonnement
+porte une section « régime par profil ».
+
+---
+
+## D114 — Registre RGPD des données d'abonnement : constitué maintenant
+
+**Contexte.** IBAN, mandat SEPA, historique de paiement : aucun registre de traitement identifié dans le
+dépôt, aucune durée de conservation écrite.
+
+**Décision.** Le registre est constitué maintenant, une entrée par traitement : finalité, base légale, durée
+(mandats SEPA conservés après résiliation sur la durée comptable, historique de paiement aligné), destinataires,
+mesures. L'IBAN est traité comme donnée sensible. Livrable de `perspective-juridique` au niveau 1, relu par
+Maxime.
+
+**Alternatives écartées.** Registre supposé tenu ailleurs (aucun n'est identifié) ; plus tard avec le premier
+client (l'obligation court dès qu'une donnée est traitée, même en préprod).
+
+**Contrepartie acceptée.** Un document de plus à tenir à jour à chaque traitement nouveau.
+
+**Contradiction.** Aucune objection ; retenue telle quelle par Maxime (droit).
+
+**Comment on le voit tenir.** `docs/juridique/registre-traitements.md` existe et le coherence-reviewer le
+compare aux entités qui portent des données personnelles.
+
+---
+
+## D115 — Préavis de prélèvement SEPA : 14 jours par défaut, réductible si le mandat le prévoit
+
+**Contexte.** Le délai de pré-notification avant prélèvement est un paramètre libre du code. La règle SEPA
+Core prévoit 14 jours calendaires par défaut, réductibles par accord contractuel avec le débiteur.
+
+**Décision.** La valeur par défaut passe à 14 jours. Un établissement ne peut descendre en dessous que si son
+mandat SEPA porte la clause de préavis réduit ; un garde-fou refuse une valeur inférieure à 14 sans cette clause
+déclarée sur le mandat.
+
+**Alternatives écartées.** Valeur libre (préavis non opposable en cas de contestation) ; 14 jours fixes (des
+clients professionnels veulent un préavis court).
+
+**Contrepartie acceptée.** Un champ « préavis réduit contractuel » sur le mandat et un garde-fou de plus.
+
+**Contradiction.** Perspective juridique : « le délai codé est-il inférieur à 14 sans clause ? » — Réponse :
+retenue, tranchée par Maxime (droit et finance) le 14/09.
+
+**Comment on le voit tenir.** Un test : établissement sans clause, préavis 10 → refus ; avec clause → accepté.
+
+---
+
+## D120 — La protection de `main` vaut aussi pour les administrateurs ; le secours est une commande
+
+**Décidé par Maxime le 07/10/2026 (QCM), ticket #253.** Numéro D120 et non D111 : D111–D115 (arbitrages du
+14/09, branche `maxime`) et D116–D119 (PR #93) sont déjà cités ailleurs. Un numéro est une poignée (garde-fou n°46).
+
+**Ce qui était mesuré le 07/10.** La protection de `main` exigeait deux checks et une branche à jour, mais pas
+pour les administrateurs (`enforce_admins: false`). Or les sessions du VPS poussent avec le compte `Mdesb`,
+administrateur : dix commits sont entrés sur `main` sans PR du 16/09 au 23/09, et onze PR (#243 à #259) ont été
+fusionnées sans aucun check. Depuis le retour de la CI le 01/10, les PR #260 à #274 sont toutes passées par la
+fusion automatique, checks verts.
+
+**Ce qui change.** `enforce_admins` est activé dès que la PR qui corrige `CLAUDE.md` (#272) est fusionnée :
+plus d'envoi direct sur `main`, plus de `gh pr merge --admin` qui passe outre des checks rouges ou absents.
+La fusion automatique n'est pas touchée : son jeton n'est pas administrateur, elle subissait déjà la règle.
+
+**Le prix, et le secours.** Si la CI retombe en panne (E-10), plus aucune PR ne fusionne, même par Maxime.
+Le secours tient en une commande, à lancer par Maxime seul, puis à annuler dès que la CI revient :
+
+```
+gh api -X DELETE repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # suspendre
+gh api -X POST   repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # rétablir
+gh api repos/Mdesb/fluvia/branches/main/protection/enforce_admins --jq .enabled
+```
+
+---
+
 ## D121 — Une entrée hors ligne remontée sur une jauge pleine est comptée, et l'exploitant est prévenu
 
 **Tranché par Maxime le 07/10, sur QCM : « compter et signaler ».**
