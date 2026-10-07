@@ -101,6 +101,18 @@ final readonly class AuditEstablishmentResolver
         \App\Autorisation\Entity\OperationSensible::class,
     ];
 
+    /**
+     * Chemin déclaré, mais qui peut ne pas aboutir PAR NATURE : l'entrée prend alors l'établissement
+     * actif de son auteur, comme le cas 3. Une case de grille SANS saison (prix « toute l'année »,
+     * 06/10/2026) n'a pas d'établissement à suivre ; sans ce repli, son audit sortait à NULL, lisible
+     * du seul éditeur. Le chemin reste prioritaire : une case avec saison suit sa saison.
+     *
+     * @var list<class-string>
+     */
+    public const PATH_OR_ACTOR = [
+        \App\Offre\Entity\GrilleTarifaire::class,
+    ];
+
     public function __construct(
         private Security $security,
         private ContexteEtablissement $contexte,
@@ -133,7 +145,9 @@ final readonly class AuditEstablishmentResolver
     public function forEntity(object $entity, EntityManagerInterface $em): ?Uuid
     {
         $etablissement = $this->resolve($entity, $em);
-        if ($etablissement === null && \in_array($this->classeDe($entity, $em), self::WITHOUT_ESTABLISHMENT, true)) {
+        $classe = $this->classeDe($entity, $em);
+        if ($etablissement === null
+            && (\in_array($classe, self::WITHOUT_ESTABLISHMENT, true) || \in_array($classe, self::PATH_OR_ACTOR, true))) {
             return $this->actorEstablishment();
         }
 

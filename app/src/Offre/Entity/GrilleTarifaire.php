@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\Post;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
@@ -23,12 +24,23 @@ use App\Offre\State\PriceGridProcessor;
 /**
  * Case de grille tarifaire : un prix déterminé par le triplet produit × type de tarif × saison
  * (+ tranche de QF éventuelle) — RG-M1-01. Le triplet est unique. Un prix null vaut
- * « non commercialisé » (≠ gratuit) — CA-5. Toute modification de prix est historisée
+ * « non commercialisé » (≠ gratuit) — CA-5.
+ *
+ * Sans saison, le prix vaut TOUTE L'ANNÉE (décision de Maxime, 06/10/2026) ; un prix d'une saison
+ * précise l'emporte sur lui pendant cette saison (`ResolveurPrix`). L'unicité est vérifiée par
+ * l'application et non par la seule contrainte SQL : `uniq_grille_triplet` laisse passer deux lignes
+ * dont la saison (ou la tranche) est NULL, puisque NULL n'est égal à rien. Toute modification de prix est historisée
  * (PrixHistorique, append-only) et non rétroactive (US-L1-03).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'off_grille_tarifaire')]
 #[ORM\UniqueConstraint(name: 'uniq_grille_triplet', columns: ['produit_id', 'type_tarif_id', 'saison_id', 'tranche_qf_id'])]
+#[UniqueEntity(
+    fields: ['produit', 'typeTarif', 'saison', 'trancheQf'],
+    ignoreNull: false,
+    errorPath: 'typeTarif',
+    message: 'Ce tarif a déjà un prix pour cette période.',
+)]
 #[ApiResource(
     shortName: 'GrilleTarifaire',
     operations: [
@@ -63,9 +75,9 @@ class GrilleTarifaire
     #[Groups(['grille:read', 'grille:write', 'produit:read'])]
     private ?TypeTarif $typeTarif = null;
 
+    /** null = toute l'année. */
     #[ORM\ManyToOne(targetEntity: Saison::class)]
-    #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
+    #[ORM\JoinColumn(nullable: true)]
     #[Groups(['grille:read', 'grille:write', 'produit:read'])]
     private ?Saison $saison = null;
 
