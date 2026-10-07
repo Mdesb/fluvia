@@ -151,6 +151,10 @@ final class SynchroOperationsProcessor implements ProcessorInterface
         }
         foreach ($op['paiements'] ?? [] as $paiement) {
             if (\is_array($paiement)) {
+                // Q-A2 : la synchronisation reste SANS clé de règlement jusqu'à son lot dédié. Une clé
+                // venue du poste n'est ni contrôlée ni enregistrée, comme avant le lot 1 du ticket
+                // opposable ; seule la clé de l'OPÉRATION (plus haut) protège du rejeu.
+                unset($paiement['cleIdempotence']);
                 $this->paiement->encaisser($vente, $paiement);
             }
         }
