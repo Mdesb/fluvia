@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
+import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 // Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
@@ -24,12 +24,6 @@ import { confirmer } from './Confirmation.jsx'
 // options — on affiche donc immédiatement ce qu'on sait, et on complète. Une modale qui tourne une
 // seconde sur un fond vide alors qu'on avait déjà 80 % de la réponse est une seconde perdue à chaque
 // ouverture.
-
-const CANAUX_PRODUIT = [
-  { valeur: 'guichet', libelle: 'Au guichet' },
-  { valeur: 'en_ligne', libelle: 'En ligne' },
-  { valeur: 'borne', libelle: 'Sur borne' },
-]
 
 // Les trois règles de produit constaté d'avance du socle (`Offre\Enum\ReglePca`), dites en clair :
 // le code brut « etalement » ne dit pas ce qui est étalé ni pourquoi.
@@ -64,6 +58,17 @@ function valeursModifiables(p) {
     couleurCaisse: p?.couleurCaisse || '',
     noteInterne: p?.noteInterne || '',
     description: descriptionFr(p || {}),
+    // Bénéficiaire obligatoire (RG-M2-04) : décoché par défaut. Vit dans `champsPerso`, la
+    // convention du dépôt pour les drapeaux produit ad hoc. Le serveur lit `beneficiaireRequis`
+    // (`AjoutLigneHandler::estNominatif`) ; un produit de type « accès » l'exige de toute façon,
+    // et la case le montrera cochée-verrouillée plutôt que de laisser croire le contraire.
+    beneficiaireRequis: (p?.champsPerso?.beneficiaireRequis ?? false) === true,
+    // Abonnement vendu comme produit simple (sans souscription) : décoché par défaut. Ne concerne
+    // que les produits à formule ; ailleurs il est sans effet.
+    venteSansSouscription: (p?.champsPerso?.venteSansSouscription ?? false) === true,
+    // Autorisation parentale pour les mineurs, à l'achat en ligne (#101) : décochée par défaut.
+    // Un vrai champ du produit (`parentalConsentRequired`), pas un drapeau de `champsPerso`.
+    parentalConsentRequired: p?.parentalConsentRequired === true,
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
@@ -489,6 +494,14 @@ export default function ProduitFiche({
   if (!produit) return null
 
   const p = detail || produit
+  // Un produit dont le TYPE porte la facette « accès » exige toujours un bénéficiaire, drapeau
+  // produit ou non (même règle que `AjoutLigneHandler::estNominatif` côté serveur). La case le
+  // montrera alors cochée et verrouillée : la laisser décochable ferait croire qu'on peut lever
+  // une obligation qui ne dépend pas d'elle.
+  const typeExigeBeneficiaire = Array.isArray(p?.type?.facettes) && p.type.facettes.includes('acces')
+  // Un produit d'abonnement (porteur d'une formule) : seul cas où « vendre comme produit simple »
+  // a un sens (ailleurs le drapeau ne changerait rien).
+  const estAbo = !!p?.formule
   const st = statutProduit(p)
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
@@ -518,7 +531,8 @@ export default function ProduitFiche({
     libelle: 'Présentation', description: 'Présentation',
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
-    formule: 'Vente', carte: 'Vente',
+    formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
+    parentalConsentRequired: 'Vente',
     noteInterne: 'Comptabilité',
   }
   const changements = useMemo(() => {
@@ -568,6 +582,7 @@ export default function ProduitFiche({
         // traduction existante disparaitrait sans que personne ne l'ait demande.
         libelle: { ...(p.libelle && typeof p.libelle === 'object' ? p.libelle : {}), fr: edition.libelle.trim() },
         canaux: edition.canaux,
+        parentalConsentRequired: !!edition.parentalConsentRequired,
         couleurCaisse: edition.couleurCaisse || null,
         noteInterne: edition.noteInterne.trim() || null,
         // Multilingue comme le libellé : on ne remplace que le français, sinon une traduction
@@ -610,6 +625,18 @@ export default function ProduitFiche({
             nbPaye: edition.carte.nbPaye === '' ? null : Number(edition.carte.nbPaye),
             nbCredite: edition.carte.nbCredite === '' ? null : Number(edition.carte.nbCredite),
             rechargeValidityMode: edition.carte.rechargeValidityMode,
+          },
+        } : {}),
+        // ⚠ ON N'ENVOIE `champsPerso` QUE SI LE DRAPEAU A CHANGÉ, et on recompose l'objet ENTIER.
+        // `champsPerso` est une colonne JSON qu'un envoi partiel remplace : d'autres écrans y
+        // rangent leurs propres clés (créneaux horaires, visuel…). Écrire à chaque enregistrement
+        // les effacerait ; ne l'écrire que sur un changement réel du drapeau, en repartant des clés
+        // déjà présentes, ne touche que `beneficiaireRequis`.
+        ...((changements.includes('beneficiaireRequis') || changements.includes('venteSansSouscription')) ? {
+          champsPerso: {
+            ...(p.champsPerso && typeof p.champsPerso === 'object' ? p.champsPerso : {}),
+            beneficiaireRequis: !!edition.beneficiaireRequis,
+            venteSansSouscription: !!edition.venteSansSouscription,
           },
         } : {}),
       })
@@ -949,7 +976,7 @@ export default function ProduitFiche({
       <>
       <Section
         titre="Zones d'accès"
-        aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
+        aide="Les portes que ce produit ouvre aux tourniquets. Sans zone choisie, il n’ouvre aucune porte."
       >
         <ZonesAccesProduit produitId={produitId} droits={droits} />
       </Section>
@@ -1026,6 +1053,67 @@ export default function ProduitFiche({
           Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
         </div>
       </div>
+      {/* ⚠ BÉNÉFICIAIRE OBLIGATOIRE — décoché par défaut (demande de Maxime). Coché, la vente exige
+          qu'on nomme la personne à qui le produit est destiné (RG-M2-04) ; au comptoir, le
+          sélecteur de client s'ouvre dès l'ajout au panier, pas au moment de payer. Le serveur lit
+          ce drapeau dans `champsPerso.beneficiaireRequis`. Un produit de type « accès » l'exige
+          déjà par nature : la case est alors cochée et verrouillée. */}
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={typeExigeBeneficiaire || edition.beneficiaireRequis}
+            disabled={typeExigeBeneficiaire}
+            onChange={(ev) => setEdition((s) => ({ ...s, beneficiaireRequis: ev.target.checked }))}
+          />
+          Bénéficiaire obligatoire
+        </label>
+        <div className="hint">
+          {typeExigeBeneficiaire
+            ? 'Ce produit est de type « accès » : il exige toujours un bénéficiaire, cette case ne peut pas être décochée.'
+            : 'Coché, la vente réclame de nommer le bénéficiaire du produit — au guichet, dès l’ajout au panier plutôt qu’au paiement.'}
+        </div>
+      </div>
+      {/* AUTORISATION PARENTALE (#101) — un choix de l'établissement (règlement intérieur, mineur non
+          accompagné), pas une exigence du RGPD : décochée par défaut. Cochée, la boutique en ligne
+          demande, pour chaque bénéficiaire mineur, « J'autorise cet achat pour … », et le serveur
+          refuse le paiement sans elle. */}
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={edition.parentalConsentRequired}
+            onChange={(ev) => setEdition((s) => ({ ...s, parentalConsentRequired: ev.target.checked }))}
+          />
+          Autorisation parentale pour les mineurs
+        </label>
+        <div className="hint">
+          Cochée, l’achat en ligne pour un bénéficiaire mineur demande l’autorisation d’un parent (ou
+          d’une personne agissant avec son accord).
+        </div>
+      </div>
+      {/* ⚠ VENDRE UN ABONNEMENT COMME PRODUIT SIMPLE (sauf paramétrage contraire). Par défaut un
+          abonnement se souscrit partout de la même façon (mandat SEPA + contrat signés, échéancier).
+          Coché, ce produit se vend comme un article ordinaire : au comptoir il n'ouvre plus la modale
+          de souscription, et il ne crée ni abonnement ni mandat. N'a de sens que pour un produit à
+          formule — masqué ailleurs. */}
+      {estAbo && (
+      <div className="field">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+          <input
+            type="checkbox"
+            checked={edition.venteSansSouscription}
+            onChange={(ev) => setEdition((s) => ({ ...s, venteSansSouscription: ev.target.checked }))}
+          />
+          Vendre comme produit simple (sans souscription)
+        </label>
+        <div className="hint">
+          Par défaut, cet abonnement se souscrit (mandat SEPA + contrat signés, échéancier). Coché,
+          il se vend comme un article ordinaire — aucune souscription, aucun mandat, ni au comptoir
+          ni en ligne.
+        </div>
+      </div>
+      )}
       <div className="field">
         <label htmlFor="pr-etabs">Sites de commercialisation</label>
         <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
@@ -1049,10 +1137,8 @@ export default function ProduitFiche({
             « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
             geste correspondant : on constatait, on ne pouvait pas agir. */}
         <div className="hint">
-          Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
-          signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
-          l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
-          se corrige.
+          Cochez les sites où ce produit se vend. <b>Sans site coché, il ne peut pas être
+          publié.</b>
         </div>
         {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
             Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
@@ -1383,7 +1469,7 @@ export default function ProduitFiche({
                   </select>
                   <p className="hint">
                     {tauxTva.length > 0
-                      ? 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'
+                      ? 'Ce taux sert aux factures des échéances d’abonnement. Pour les ventes, la comptabilité prend le taux de la catégorie choisie dans « Axe comptable » (onglet Vente).'
                       : tvaRefusee
                         ? 'Les taux déclarés n’ont pas pu être lus : ce compte peut régler la comptabilité d’un produit, mais pas lire le référentiel de TVA (droit compta.lire). Il en existe peut-être — n’en déclarez pas un double ; le taux saisi ici reste enregistré.'
                         : 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'}

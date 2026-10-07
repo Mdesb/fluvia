@@ -98,7 +98,7 @@ log "Cles de chiffrement (generation au premier deploiement)"
 # Les deux dernieres sont des cles HMAC de signature, pas des cles sodium : elles n’ont pas la
 # contrainte des 32 octets decodes (n’importe quelle chaine signe), mais un base64 de 32 octets
 # en est une valide, donc la meme generation convient. Elles quittent ainsi app/.env versionne.
-for cle in DMS_ENCRYPTION_KEY MFA_ENCRYPTION_KEY SEPA_IBAN_KEY OCR_API_KEY_ENCRYPTION_KEY SOCIAL_TOKEN_ENCRYPTION_KEY INTEGRATIONS_WEBHOOK_KEY NF525_SEAL_KEY NF525_COMPTA_SEAL_KEY NF525_FACTURATION_SEAL_KEY SUPPORT_HMAC_KEY SEPA_IBAN_HMAC_KEY; do
+for cle in DMS_ENCRYPTION_KEY MFA_ENCRYPTION_KEY SEPA_IBAN_KEY OCR_API_KEY_ENCRYPTION_KEY SOCIAL_TOKEN_ENCRYPTION_KEY INTEGRATIONS_WEBHOOK_KEY NF525_SEAL_KEY NF525_COMPTA_SEAL_KEY NF525_FACTURATION_SEAL_KEY SUPPORT_HMAC_KEY SEPA_IBAN_HMAC_KEY PUBLIC_API_SUPPORT_REF_KEY PARTNER_WEBHOOK_KEY; do
     if ! grep -q "^${cle}=." infra/.env.preprod 2>/dev/null; then
         echo "  + $cle (absente, generee)"
         printf '%s=%s\n' "$cle" "$(openssl rand -base64 32)" >> infra/.env.preprod
@@ -216,6 +216,10 @@ log "Contenus du site (blocs editables)"
 
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug
+# Le worker des webhooks partenaires garde l'ANCIEN code en memoire tant qu'il tourne : on lui demande
+# de s'arreter apres son message en cours (signal partage par le cache de `var/`, volume commun), et
+# `restart: always` le relance sur le nouveau code. Sans worker demarre, la commande ne fait rien.
+"${COMPOSE[@]}" exec -T php php bin/console messenger:stop-workers --env=prod --no-debug
 "${COMPOSE[@]}" exec -T php php bin/console cache:warmup --env=prod --no-debug
 
 # Composer et cache:warmup tournent en root dans le conteneur, alors que les

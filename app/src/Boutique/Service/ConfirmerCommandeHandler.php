@@ -20,7 +20,10 @@ use App\Boutique\Security\ProduitEtablissementGuard;
 use App\Crm\Adapter\ClientM4Adapter;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
+use App\Crm\Entity\Consentement;
 use App\Crm\Entity\Famille;
+use App\Crm\Enum\CanalConsentement;
+use App\Crm\Enum\EtatConsentement;
 use App\Crm\Enum\RoleBeneficiaire;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Entity\Produit;
@@ -33,6 +36,7 @@ use App\Reservation\Entity\Creneau;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Entity\LigneVente;
@@ -67,6 +71,7 @@ final class ConfirmerCommandeHandler
         private readonly ClientM4Adapter $clientAdapter,
         private readonly ResolveurPrix $resolveurPrix,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
         private readonly ConfirmationCommandeMailer $mailer,
         private readonly ProduitEtablissementGuard $etablissementGuard,
@@ -92,7 +97,7 @@ final class ConfirmerCommandeHandler
         }
 
         $email = $panier->getContactConnu();
-        $id = $this->clientAdapter->creerRapide(['email' => $email, 'nom' => 'Client boutique']);
+        $id = $this->clientAdapter->creerRapide(['email' => $email, 'nom' => 'Client boutique'], $panier->getEtablissement());
         $panier->setClientResolu($id);
         $client = $this->em->getRepository(Client::class)->find($id);
         \assert($client instanceof Client);
@@ -247,9 +252,15 @@ final class ConfirmerCommandeHandler
         try {
             $this->validerVente->valider($vente, $overrides);
         } catch (ConflictHttpException|UnprocessableEntityHttpException $e) {
-            // La vente n'est pas validée : les places prises plus haut se rendent.
+            // La vente n'est pas validée : les places prises plus haut se rendent — sur le créneau
+            // comme sur la jauge globale de la ressource, sinon le compteur garderait des unités que
+            // plus aucune réservation ne justifie.
             foreach ($reservations as $reservation) {
                 $reservation->setStatut(StatutReservation::AnnuleeLibre);
+                $porteuse = $reservation->getCreneau()?->getRessource();
+                if ($porteuse !== null) {
+                    $this->jaugeMere->decrementer($porteuse, $reservation->getQuantity());
+                }
             }
 
             return $this->demanderRemboursement(
@@ -278,6 +289,15 @@ final class ConfirmerCommandeHandler
         $suivi = $this->em->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['vente' => $vente]);
         if ($suivi instanceof SuiviCommandeEnLigne) {
             $suivi->setStatutTunnel(StatutTunnel::Confirme);
+        }
+
+        // L'accord marketing, s'il a été donné (#101, D2) : UNE ligne, au nom du payeur, d'après l'état
+        // FINAL de la case — pas une par envoi de l'écran, et rien si elle a été décochée entre-temps.
+        $versionMarketing = $panier->getMarketingOptInVersion();
+        if ($versionMarketing !== null) {
+            $accord = new Consentement(CanalConsentement::Email, EtatConsentement::Accorde);
+            $accord->setClient($payeur)->setSource('boutique')->setTextVersion($versionMarketing);
+            $this->em->persist($accord);
         }
         $panier->setStatut(StatutPanier::TransformeEnCommande);
         $this->em->flush();
@@ -344,6 +364,13 @@ final class ConfirmerCommandeHandler
                     ->setMontantDu('0.00')
                     ->setQuantity($quantite);
                 $this->em->persist($reservation);
+                // La jauge globale de la ressource compte ces places comme celles d'une réservation
+                // ordinaire (RG-M5-08) : sans cet incrément, l'annulation de la commande rendrait au
+                // compteur des unités que personne n'y a posées.
+                $porteuse = $creneau->getRessource();
+                if ($porteuse !== null) {
+                    $this->jaugeMere->incrementer($porteuse, $quantite);
+                }
                 $reservations[(string) $ligneVente->getId()] = $reservation;
             }
             $this->em->flush();

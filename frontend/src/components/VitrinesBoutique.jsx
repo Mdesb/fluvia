@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
@@ -173,6 +173,14 @@ export default function VitrinesBoutique({ droits = [] }) {
                       l&rsquo;avoir diffusée.
                     </div>
                   </div>
+                )}
+
+                {peutGerer && (
+                  <LogoVitrine
+                    vitrine={v}
+                    onEnregistre={(msg) => { setSucces(msg); recharger() }}
+                    onErreur={setErreur}
+                  />
                 )}
 
                 <DomainesIntegration
@@ -432,5 +440,70 @@ function VitrineModal({ open, onClose, onFait, onErreur }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+/**
+ * LE LOGO DE LA BOUTIQUE — téléversé par l'exploitant, servi publiquement.
+ *
+ * L'affichage du logo existait déjà (le catalogue lit `vitrine.logo`) ; c'est l'import qui manquait.
+ * Le fichier part en multipart au serveur, qui valide les OCTETS (raster uniquement — pas de SVG,
+ * qui pourrait porter du script sur une page publique), le range dans le DMS, et repose `vitrine.logo`
+ * sur l'URL publique `/media/vitrine-logo/{doc}`. On rafraîchit ensuite pour afficher le nouveau logo.
+ */
+function LogoVitrine({ vitrine, onEnregistre, onErreur }) {
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef(null)
+
+  async function choisir(e) {
+    const fichier = e.target.files && e.target.files[0]
+    if (!fichier) return
+    setBusy(true)
+    try {
+      await api.televerserLogoVitrine(vitrine.id, fichier)
+      onEnregistre('Logo mis à jour.')
+    } catch (err) {
+      onErreur(err.message || 'Le logo n’a pas pu être téléversé.')
+    } finally {
+      setBusy(false)
+      // On vide l'input pour qu'un second choix du MÊME fichier redéclenche bien `onChange`.
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div>
+      <div className="st-lib">Logo de la boutique</div>
+      <div style={{ display: 'flex', gap: 'var(--esp-large)', alignItems: 'center', marginTop: 'var(--esp-serre)', flexWrap: 'wrap' }}>
+        {vitrine.logo ? (
+          <img
+            src={vitrine.logo}
+            alt={`Logo de ${vitrine.etablissement?.nom || 'la boutique'}`}
+            style={{ height: 48, width: 48, objectFit: 'contain', borderRadius: 'var(--esp-normal)', border: '1px solid var(--line, #e2e8f0)', background: '#fff' }}
+          />
+        ) : (
+          <span className="sub">Aucun logo</span>
+        )}
+        <input
+          ref={inputRef}
+          id={`logo-${vitrine.id}`}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/avif"
+          onChange={choisir}
+          disabled={busy}
+          style={{ display: 'none' }}
+        />
+        <label
+          className="btn ghost sm"
+          htmlFor={`logo-${vitrine.id}`}
+          style={busy ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
+        >
+          {busy ? 'Envoi…' : vitrine.logo ? 'Remplacer le logo' : 'Importer un logo'}
+        </label>
+      </div>
+      <div className="hint" style={{ margin: '4px 0 0' }}>
+        PNG, JPEG, WebP ou AVIF, 1&nbsp;Mo maximum. Le SVG n’est pas accepté.
+      </div>
+    </div>
   )
 }

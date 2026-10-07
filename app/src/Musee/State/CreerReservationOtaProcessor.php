@@ -13,6 +13,7 @@ use App\Musee\Port\ConnecteurOtaInterface;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
@@ -36,6 +37,7 @@ final class CreerReservationOtaProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly ConnecteurOtaInterface $connecteur,
     ) {
     }
@@ -88,6 +90,13 @@ final class CreerReservationOtaProcessor implements ProcessorInterface
                 ->setModeDecompte(ModeDecompteReservation::VenteUnite)
                 ->setMontantDu($allocation->getPartenaire()?->getTarifNet() ?? '0.00');
             $this->em->persist($reservation);
+            // La place prise pèse sur la jauge globale de la ressource (RG-M5-08), comme celle d'une
+            // réservation ordinaire : sans cet incrément, l'annulation de cette réservation rendrait
+            // au compteur une unité que personne n'y a posée.
+            $ressource = $creneau->getRessource();
+            if ($ressource !== null) {
+                $this->jaugeMere->incrementer($ressource);
+            }
 
             $allocation->setQuotaConsomme($allocation->getQuotaConsomme() + 1);
 

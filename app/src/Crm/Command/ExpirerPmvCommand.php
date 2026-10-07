@@ -51,6 +51,12 @@ final class ExpirerPmvCommand extends Command
         $traites = 0;
         foreach ($pmvExpires as $pmv) {
             $etablissement = $pmv->getClient()?->getEtablissementCreation();
+            if ($etablissement === null) {
+                // Jamais « le premier établissement venu » (04/10/2026) : on signale et on passe, sans
+                // arrêter l'expiration des autres porte-monnaie.
+                $io->warning(sprintf('PMV %s ignoré : son client n’a pas d’établissement.', $pmv->getId()));
+                continue;
+            }
             $parametre = $etablissement === null
                 ? null
                 : $this->em->getRepository(ParametrePmvEtablissement::class)->findOneBy(['etablissement' => $etablissement]);
@@ -59,7 +65,7 @@ final class ExpirerPmvCommand extends Command
             $soldeAvant = $pmv->getSolde();
             $mouvement = new MouvementPmv(TypeMouvementPmv::Expiration);
             $mouvement->setPmv($pmv);
-            $mouvement->setEtablissement($etablissement ?? $this->em->getRepository(Etablissement::class)->findOneBy([]));
+            $mouvement->setEtablissement($etablissement);
 
             switch ($traitement) {
                 case TraitementSoldeResiduel::Annule:

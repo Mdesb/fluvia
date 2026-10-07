@@ -58,12 +58,24 @@ services:
       SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.preprod}
       # Tokenisation HMAC de l’IBAN (module SEPA partage). Meme regle que ci-dessus.
       SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
+      # Référence opaque des supports servie à l’API partenaire /v1. Meme regle : absente, refus de demarrer.
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.preprod}
+      # Coffre des webhooks partenaires (URL + secret). Meme regle : absente, refus de demarrer.
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Scellement des signatures electroniques (mandat SEPA + contrat d'abonnement, App\Signature).
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
+      # Autorise le prestataire de paiement en ligne de DEMONSTRATION (bouchon qui signe ses propres
+      # recus). 1 en PREPRODUCTION pour tester le tunnel d'achat de bout en bout ; 0 (ou absent) en
+      # PRODUCTION, ou un vrai PSP doit etre branche. Sans cette ligne, la variable de .env.preprod
+      # n'atteint pas le conteneur et POST /api/boutique/paniers/{id}/payer repond 500
+      # (StubPaymentReceiptSigner refuse de servir un faux « accepte »).
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:
       db:
         condition: service_healthy
@@ -130,12 +142,82 @@ services:
       SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.preprod}
       # Tokenisation HMAC de l’IBAN (module SEPA partage). Meme regle que ci-dessus.
       SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
+      # Référence opaque des supports servie à l’API partenaire /v1. Meme regle : absente, refus de demarrer.
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.preprod}
+      # Coffre des webhooks partenaires (URL + secret). Meme regle : absente, refus de demarrer.
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.preprod}
       # Signature du scellement Vente.
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Compta.
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # Scellement des signatures electroniques (blocs php/scheduler maintenus identiques).
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
+      # Meme flag que le service php (blocs maintenus identiques). Voir le commentaire la-haut.
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── LIVRAISON DES WEBHOOKS PARTENAIRES (spec API partenaire v1, §3.5) ────────────────────────
+  #
+  # Le transport `async` (en base) n'avait AUCUN consommateur : un message mis en file y restait.
+  # Deux consommateurs (`scale`), chacun repart toutes les heures ou au-dela de 256 Mo — un worker qui
+  # tourne des jours accumule la memoire de chaque message. `restart: always` le relance.
+  #
+  # ARRET PROPRE : `messenger:consume` traite SIGTERM — il finit le message en cours puis s'arrete ;
+  # `stop_grace_period` lui en laisse le temps (un envoi dure 8 s au plus).
+  #
+  # INTERRUPTEUR : `PARTNER_WEBHOOKS_ENABLED` (0 par defaut). Ferme, rien ne part et les livraisons
+  # restent en file, remises toutes les minutes ; elles repartent a la reouverture.
+  #
+  # DNS : `dns_get_record()` n'a pas de delai propre. `RES_OPTIONS` borne la resolution a 2 s, un
+  # essai (resolveur glibc de l'image Debian) — c'est le delai DNS de l'anti-SSRF.
+  worker:
+    build:
+      context: ../docker/php
+    restart: always
+    scale: 2
+    mem_limit: 384m
+    working_dir: /app
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M", "-vv"]
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+    healthcheck:
+      # Vivant = le processus de consommation tourne dans le conteneur.
+      test: ["CMD-SHELL", "grep -qa messenger:consume /proc/1/cmdline"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      RES_OPTIONS: "timeout:2 attempts:1"
+      PARTNER_WEBHOOKS_ENABLED: ${PARTNER_WEBHOOKS_ENABLED:-0}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.preprod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+      # Les memes cles que `php` : un message peut toucher n'importe quel module (`:?`, jamais de defaut).
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.preprod}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.preprod}
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.preprod}
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.preprod}
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.preprod}
+      INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.preprod}
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.preprod}
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.preprod}
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.preprod}
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.preprod}
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:
       db:
         condition: service_healthy

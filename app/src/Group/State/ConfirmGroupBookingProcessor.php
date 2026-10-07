@@ -16,6 +16,7 @@ use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\JaugeCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
@@ -57,6 +58,7 @@ final class ConfirmGroupBookingProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
     ) {
     }
 
@@ -187,6 +189,12 @@ final class ConfirmGroupBookingProcessor implements ProcessorInterface
                 ->setStatut(StatutReservation::Confirmee)
                 ->setQuantity($quantiteParLigne);
             $this->em->persist($reservation);
+            // La jauge globale de la ressource (RG-M5-08) compte ces entrées comme les autres : sans
+            // cet incrément, l'annulation du groupe rendrait au compteur des unités jamais posées.
+            $porteuse = $creneau->getRessource();
+            if ($porteuse !== null) {
+                $this->jaugeMere->incrementer($porteuse, $quantiteParLigne);
+            }
             $booking->addJaugeReservation($reservation);
         }
     }

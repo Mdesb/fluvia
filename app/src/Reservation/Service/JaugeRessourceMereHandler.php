@@ -18,32 +18,39 @@ use Doctrine\ORM\UnitOfWork;
  * qui dépasserait la jauge globale est refusée même si un Créneau individuel a encore de la place
  * (CA-14).
  *
- * **ACT-1 / D16 point 1** — le compteur bouge de la **quantité** de la réservation, pas de 1. Le
- * défaut `$quantite = 1` n'est pas un confort d'appel : il rend la bascule exactement neutre pour
- * tout appelant antérieur à ce lot, et `jaugeDepassee()` sans argument garde son sens d'origine
- * (`occupation >= capacité` ⟺ `occupation + 1 > capacité`).
+ * **ACT-1 / D16 point 1** — le compteur bouge de la **quantité** de la réservation, pas de 1.
  *
- * ── ⚠ LE COMPTEUR PERDAIT DES UNITÉS, ET CE N'ÉTAIT PAS UN ARRONDI ────────────────────────────────
+ * ── ⚠ LES DEUX SENS S'ÉCRIVENT EN RELATIF, JAMAIS EN VALEUR ABSOLUE ───────────────────────────────
  *
  * Les deux méthodes lisaient la valeur EN MÉMOIRE, la modifiaient, et laissaient le `flush()` écrire
  * la valeur ABSOLUE. Une annulation chargeait « 5 », une réservation concurrente validait « 6 », puis
  * l'annulation écrivait « 4 » : l'unité de la réservation disparaissait du compteur, sans erreur, et
- * la jauge globale acceptait une réservation de trop. Deux annulations simultanées rendaient une place
- * au lieu de deux, dans l'autre sens.
+ * la jauge globale acceptait une réservation de trop. La base calcule donc les deux sens
+ * (`occupation_courante ± quantité`), et la valeur en mémoire est marquée comme DÉJÀ ÉCRITE
+ * (`UnitOfWork::setOriginalEntityProperty`) pour que le `flush()` ne la réécrive pas par-dessus.
  *
- * - **Incrémenter** reste une écriture en mémoire : ses deux appelants (`ReserverProcessor`,
- *   `PromotionListeAttenteHandler`) le font SOUS le verrou posé par `JaugeCreneauGuard::verrouiller()`,
- *   qui a relu la porteuse après l'attente. La valeur écrite part donc d'une lecture à jour. Un
- *   nouvel appelant qui incrémente hors de ce verrou réintroduirait le défaut.
- * - **Décrémenter** devient une écriture RELATIVE, `occupation_courante - quantité`, appliquée par la
- *   base. Elle n'a pas de verrou à prendre : si une réservation tient la ligne, elle attend sa
- *   validation puis retire de la valeur validée.
+ * ── ⚠ LES DEUX SENS NE S'APPLIQUENT PAS AU MÊME MOMENT, ET C'EST LE POINT DÉLICAT ────────────────
  *
- * La décrémentation est appliquée APRÈS le `flush()` de l'appelant (`postFlush`), jamais avant : les
- * annulations écrivent leur statut par ce `flush()`. Appliquée avant, un `flush()` qui échoue aurait
- * rendu une place sans annuler la réservation, et le compteur descendrait sous la réalité. Si c'est
- * la décrémentation qui échoue après coup, le compteur reste trop HAUT : une réservation refusée à
- * tort, jamais une surréservation.
+ * - **Incrémenter est IMMÉDIAT.** Le compteur doit porter la place dès qu'elle est prise : une
+ *   réservation concurrente qui relit la porteuse sous verrou doit la voir. Différée, l'écriture
+ *   laisserait une fenêtre où deux réservations lisent un compteur qui ignore l'autre — la
+ *   surréservation que ce compteur existe pour empêcher. Si l'écriture de la réservation échoue
+ *   ensuite, le compteur reste trop HAUT : une réservation refusée à tort, jamais une de trop.
+ * - **Décrémenter attend le `postFlush`**, donc le `flush()` qui écrit le statut annulé. Appliquée
+ *   avant, une place serait rendue par un `flush()` qui échoue ensuite : le compteur passerait sous
+ *   la réalité, et la jauge accepterait une réservation de trop.
+ *
+ * Dans les deux cas, l'échec laisse le compteur trop haut plutôt que trop bas. `onClear` abandonne
+ * les écritures en attente.
+ *
+ * ── ⚠ TOUT CHEMIN QUI CRÉE UNE RÉSERVATION DOIT INCRÉMENTER ──────────────────────────────────────
+ *
+ * Mesuré le 15/09/2026 : deux chemins sur sept incrémentaient (`ReserverProcessor`, promotion de
+ * liste d'attente), alors que **toutes** les annulations décrémentent. Annuler une réservation créée
+ * par un autre chemin — OTA musée, OTA boutique, commande boutique, confirmation de groupe, padel —
+ * retirait donc une unité que personne n'avait posée. Le compteur dérivait vers le BAS, c'est-à-dire
+ * vers la surréservation, et `GREATEST(…, 0)` le masquait à zéro. Les sept chemins incrémentent
+ * désormais ; `BackfillResourceOccupancyCommand` recalcule un compteur déjà dérivé.
  */
 #[AsDoctrineListener(event: Events::postFlush)]
 #[AsDoctrineListener(event: Events::onClear)]
@@ -57,11 +64,20 @@ final class JaugeRessourceMereHandler
     ) {
     }
 
-    /** À n'appeler que sous `JaugeCreneauGuard::verrouiller()` — voir le docblock de la classe. */
     public function incrementer(Ressource $ressource, int $quantite = 1): void
     {
         $porteuse = $ressource->ressourcePorteuseJauge();
-        $porteuse->setOccupationCourante($porteuse->getOccupationCourante() + $quantite);
+        $nouvelle = $porteuse->getOccupationCourante() + $quantite;
+        $porteuse->setOccupationCourante($nouvelle);
+
+        if (!$this->suivieEnBase($porteuse, $nouvelle)) {
+            return;
+        }
+
+        $this->em->getConnection()->executeStatement(
+            'UPDATE reservation_ressource SET occupation_courante = occupation_courante + ? WHERE id = UNHEX(?)',
+            [$quantite, $this->cle($porteuse)],
+        );
     }
 
     public function decrementer(Ressource $ressource, int $quantite = 1): void
@@ -70,18 +86,11 @@ final class JaugeRessourceMereHandler
         $nouvelle = max(0, $porteuse->getOccupationCourante() - $quantite);
         $porteuse->setOccupationCourante($nouvelle);
 
-        $uow = $this->em->getUnitOfWork();
-        if ($uow->getEntityState($porteuse) !== UnitOfWork::STATE_MANAGED || $uow->isScheduledForInsert($porteuse)) {
-            // Une ressource pas encore en base s'écrit entière à l'insertion : rien à rendre en relatif.
+        if (!$this->suivieEnBase($porteuse, $nouvelle)) {
             return;
         }
 
-        // La valeur en mémoire reste lisible par la suite de la requête, mais le `flush()` doit la
-        // croire DÉJÀ ÉCRITE : sinon il réécrirait une valeur absolue calculée sur une lecture
-        // périmée — exactement le défaut corrigé ici.
-        $uow->setOriginalEntityProperty(spl_object_id($porteuse), 'occupationCourante', $nouvelle);
-
-        $cle = str_replace('-', '', (string) $porteuse->getId());
+        $cle = $this->cle($porteuse);
         $this->decrementsEnAttente[$cle] = ($this->decrementsEnAttente[$cle] ?? 0) + $quantite;
     }
 
@@ -120,5 +129,27 @@ final class JaugeRessourceMereHandler
     public function onClear(OnClearEventArgs $args): void
     {
         $this->decrementsEnAttente = [];
+    }
+
+    /**
+     * La ressource est-elle une ligne existante, dont le compteur se corrige en relatif ?
+     *
+     * Une ressource pas encore en base s'écrit entière à l'insertion : rien à corriger. Sinon, la
+     * valeur en mémoire est marquée comme déjà écrite, pour que le `flush()` ne la réécrive pas.
+     */
+    private function suivieEnBase(Ressource $porteuse, int $valeur): bool
+    {
+        $uow = $this->em->getUnitOfWork();
+        if ($uow->getEntityState($porteuse) !== UnitOfWork::STATE_MANAGED || $uow->isScheduledForInsert($porteuse)) {
+            return false;
+        }
+        $uow->setOriginalEntityProperty(spl_object_id($porteuse), 'occupationCourante', $valeur);
+
+        return true;
+    }
+
+    private function cle(Ressource $porteuse): string
+    {
+        return str_replace('-', '', (string) $porteuse->getId());
     }
 }

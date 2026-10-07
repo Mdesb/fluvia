@@ -41,7 +41,7 @@ import { useEtatUrl } from '../api/url.js'
 // `corriger` : l'identifiant de l'article dont on corrige le stock.
 // `inventaire` : `lancer` quand on lance un inventaire.
 // `commande` : la commande d'achat dont on compose les lignes ; `onglet` : l'onglet de la page.
-const DEFAUTS_URL = { onglet: 'etat', corriger: '', inventaire: '', commande: '' }
+const DEFAUTS_URL = { onglet: 'etat', corriger: '', inventaire: '', commande: '', ref: '' }
 
 export default function Stock({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('stock', DEFAUTS_URL)
@@ -414,7 +414,7 @@ export default function Stock({ etabActif, droits }) {
             nonSuivis={(articles || []).filter((a) => !a.produit).length}
           />
 
-          {peutGererArticle && <ArticlesEdition onChange={recharger} />}
+          {peutGererArticle && <ArticlesEdition onChange={recharger} params={params} majParams={majParams} />}
 
           <RegleEcart parametrage={parametrage} lu={parametrageLu} droits={droits} />
 
@@ -702,7 +702,7 @@ function ArticlesSection({
 // --------------------------------------------------------------------------------------------
 // Créer et modifier un article.
 // --------------------------------------------------------------------------------------------
-function ArticlesEdition({ onChange }) {
+function ArticlesEdition({ onChange, params, majParams }) {
   // Un article se crée et se modifie, mais ne se supprime PAS ici, et l'API ne le propose pas non
   // plus : un article porte des lots, des mouvements et un historique de valorisation. Ce qu'un
   // exploitant veut, c'est le retirer de la circulation — c'est la case « actif ».
@@ -803,7 +803,7 @@ function ArticlesEdition({ onChange }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} />
+      <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} params={params} majParams={majParams} />
     </div>
   )
 }

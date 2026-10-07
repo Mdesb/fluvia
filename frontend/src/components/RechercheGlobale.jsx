@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { allerA } from '../api/url.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
-import RechercheBilletModal from './RechercheBilletModal.jsx'
 
 // Recherche globale de la barre du haut.
 //
@@ -45,7 +45,6 @@ export default function RechercheGlobale({ droits = [], onNav }) {
   const [supports, setSupports] = useState([])
   // Le billet consulte SANS QUITTER L'ECRAN. Une << vue rapide >> qui fait changer de page
   // n'est pas rapide : le caissier a un client devant lui, et son panier a l'ecran.
-  const [billetOuvert, setBilletOuvert] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [indice, setIndice] = useState(0)
   const [panne, setPanne] = useState(false)
@@ -142,7 +141,9 @@ export default function RechercheGlobale({ droits = [], onNav }) {
     champ.current?.blur()
     if (r.type === 'client') onNav('clients', { type: 'client', id: r.id })
     // Pas de navigation : la fiche s'ouvre par-dessus l'ecran courant, et se referme dessus.
-    else if (r.type === 'support') setBilletOuvert(r.item.identifiant)
+    // ⚠ LA VÉRIFICATION A UNE ADRESSE, ET C'EST CELLE DE LA CAISSE. Cette barre est partout et ne
+    // porte aucune adresse : elle emmène là où le geste se fait, avec le numéro déjà rempli.
+    else if (r.type === 'support') allerA('caisse', { verifier: r.item.identifiant })
     else onNav('catalogue', { type: 'produit', id: r.id })
   }
 
@@ -187,13 +188,6 @@ export default function RechercheGlobale({ droits = [], onNav }) {
         onKeyDown={onKeyDown}
       />
       <span className="ts-kbd" aria-hidden="true">/</span>
-
-      <RechercheBilletModal
-        open={!!billetOuvert}
-        numeroInitial={billetOuvert || ''}
-        onClose={() => setBilletOuvert(null)}
-        droits={droits}
-      />
 
       {montrerPanneau && (
         <div className="ts-panel" role="listbox">

@@ -45,6 +45,7 @@ final class EstablishmentReachability
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SupportAccessScopeInterface $supportScope,
+        private readonly PlatformScope $platformScope,
     ) {
     }
 
@@ -62,6 +63,12 @@ final class EstablishmentReachability
 
     public function canReachEstablishment(Utilisateur $user, Etablissement $establishment, \DateTimeImmutable $at): bool
     {
+        // ÉQUIPE PLATEFORME (mono-propriétaire) : atteint n'importe quel établissement (RG-ED-07,
+        // exception assumée — voir `PlatformScope`). L'établissement est déjà résolu et existe ici.
+        if ($this->platformScope->isGlobal($user)) {
+            return true;
+        }
+
         $affectation = $this->em->getRepository(Affectation::class)->findOneBy([
             'utilisateur' => $user,
             'etablissement' => $establishment,

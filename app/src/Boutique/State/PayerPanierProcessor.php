@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * POST /boutique/paniers/{id}/payer — étape 3→4 (US-L8-07, RG-M3-11, CA-9/CA-10). Vérifie
- * consentement (CA-6), bénéficiaires (CA-7), autorisations parentales (CA-8), blocage abonnement
+ * mention d'information (CA-6, #101), bénéficiaires (CA-7), autorisations parentales (CA-8), blocage abonnement
  * invité (CA-13), revérifie la disponibilité (§0 décision n°8) puis initie le paiement commuté
  * (`SelecteurPaiementEnLigne`).
  *
@@ -52,9 +52,11 @@ final class PayerPanierProcessor implements ProcessorInterface
         if ($data->getLignes()->isEmpty()) {
             throw new UnprocessableEntityHttpException('Le panier est vide.');
         }
-        if ($data->getConsentementRgpdHorodatage() === null) {
-            // CA-6 : bouton de paiement bloqué tant que le consentement RGPD n'est pas coché.
-            throw new UnprocessableEntityHttpException('RG-M3-07 : consentement RGPD requis avant paiement.');
+        if ($data->getPrivacyNoticeShownAt() === null) {
+            // CA-6, relu par #101 : on ne paie pas avant que la mention d'information ait été affichée
+            // et horodatée (appel `consentement`). Ce n'est plus une case à cocher : c'est la preuve
+            // que l'acheteur a été informé, que l'on doit pouvoir produire.
+            throw new UnprocessableEntityHttpException('RG-M3-07 : la mention d\'information doit être enregistrée avant paiement.');
         }
 
         foreach ($data->getLignes() as $ligne) {

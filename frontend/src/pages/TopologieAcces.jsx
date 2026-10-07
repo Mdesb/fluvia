@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Modal from '../components/Modal.jsx'
 import { jourLocal } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import TerminauxAcces from '../components/TerminauxAcces.jsx'
@@ -144,7 +143,10 @@ function totalReel(reponse, recus) {
 // clique « Enregistrer », rien ne bouge, et l'explication est cachée dessous. `Controleur` et
 // `Equipement` portent des validations serveur (`TopologieCoherente`, contrôleur obligatoire, sens
 // obligatoire) : un 422 est le cas NORMAL ici, pas l'exception.
-function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmit, onClose, erreur, enCours, aide, enEcran = false }) {
+// Toujours en écran : les trois formulaires de cette page ont une adresse (#169, puis les
+// sous-réseaux). La branche `Modal` et le drapeau `open` ont été retirés faute d'appelant — un
+// drapeau qui ne sert plus se recopie au formulaire suivant.
+function FormulaireTopologie({ titre, champs, valeurs, setValeurs, onSubmit, onClose, erreur, enCours, aide }) {
   const formulaire = (
       <form onSubmit={onSubmit}>
         {aide && <p className="hint" style={{ marginTop: 0 }}>{aide}</p>}
@@ -219,9 +221,7 @@ function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmi
       </form>
   )
 
-  // En écran, la page porte le titre ; en modale — les sous-réseaux —, la fenêtre le porte.
-  if (enEcran) return <><h2>{titre}</h2>{formulaire}</>
-  return <Modal open={open} onClose={onClose} titre={titre}>{formulaire}</Modal>
+  return <><h2>{titre}</h2>{formulaire}</>
 }
 
 // Un nombre facultatif part à `null` et non à `0` : `preAlertePct` vide ne veut pas dire « alerter
@@ -245,6 +245,9 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
   const [controleurs, setControleurs] = useState([])
   const [equipements, setEquipements] = useState([])
   const [reseaux, setReseaux] = useState([])
+  // ⚠ PORTÉ PAR LA PAGE, PAS PAR LA SECTION : il s'affiche après l'enregistrement, donc après le
+  // retour de l'écran à la section — un état de la section aurait disparu avec l'écran.
+  const [avertissementReseaux, setAvertissementReseaux] = useState(null)
   const [espacesSocle, setEspacesSocle] = useState([])
   const [tronques, setTronques] = useState([])
   const [echecs, setEchecs] = useState([])
@@ -788,7 +791,41 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
   // ⚠ L'ADRESSE CONTOURNE LE DROIT DES BOUTONS ET L'ÉCRAN LE REPREND. Et une liste en échec retombe à
   // [] : l'écran nomme celle qui manque, plutôt que de déclarer introuvable un élément qui existe
   // ou de proposer des choix vides.
-  if (params.topologie) {
+  // ── LE SOUS-RÉSEAU, EN ÉCRAN ────────────────────────────────────────────────────────────────
+  //
+  // La section garde sa liste et son enregistrement ; elle ne rend que le formulaire quand l'adresse
+  // la désigne. Le droit de gérer est repris comme pour les autres formulaires de cette page.
+  if (params.topologie && params.topologie.startsWith('sous-reseau:')) {
+    const cleReseau = params.topologie.slice('sous-reseau:'.length)
+    return (
+      <div className={imbrique ? undefined : 'view'}>
+        <button className="btn ghost sm" type="button" onClick={fermerTopologie}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la topologie
+        </button>
+        {peutGerer ? (
+          <SousReseaux
+            reseaux={reseaux}
+            espaces={espaces}
+            peutGerer={peutGerer}
+            chargement={chargement}
+            onChange={() => charger(true)}
+            avertissement={avertissementReseaux}
+            setAvertissement={setAvertissementReseaux}
+            cleEcran={cleReseau}
+            onFermer={fermerTopologie}
+          />
+        ) : (
+          <div className="banner banner-warn">
+            Modifier un sous-réseau demande le droit de gérer l’accès, que ce compte n’a pas.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Les sous-réseaux ont leur propre écran, juste en dessous : cette branche ne les lit pas.
+  if (params.topologie && !params.topologie.startsWith('sous-reseau:')) {
     const [genreOuvert, cibleOuverte] = params.topologie.split(':')
     const creationOuverte = cibleOuverte === 'nouveau'
     // La liste qui porte l'élément, ou — en création — celle d'où viennent ses choix.
@@ -817,7 +854,6 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
     } else {
       contenu = (
         <FormulaireTopologie
-          enEcran
           titre={titreForm}
           champs={champsCourants}
           valeurs={edition.valeurs}
@@ -1168,6 +1204,9 @@ export default function TopologieAcces({ etabActif, droits, onNav, imbrique = fa
           peutGerer={peutGerer}
           chargement={chargement}
           onChange={() => charger(true)}
+          avertissement={avertissementReseaux}
+          setAvertissement={setAvertissementReseaux}
+          onOuvrir={(id) => ouvrirTopologie(`sous-reseau:${id || 'nouveau'}`)}
         />
       )}
 
@@ -1380,9 +1419,28 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
 // Un sous-réseau réunit plusieurs espaces sous une même jauge agrégée et un même anti-passback : le
 // cas type est le complexe aquatique dont le bassin et l'espace bien-être partagent une capacité
 // réglementaire. Sans écran, le champ existait et ne se réglait nulle part.
-function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
+function SousReseaux({
+  reseaux, espaces, peutGerer, chargement, onChange,
+  avertissement, setAvertissement, onOuvrir, cleEcran = null, onFermer,
+}) {
   const [edition, setEdition] = useState(null)
-  const [avertissement, setAvertissement] = useState(null)
+
+  // ⚠ L'ADRESSE OUVRE LE FORMULAIRE UNE FOIS PAR CLÉ. Le rouvrir à chaque rendu effacerait la
+  // saisie en cours — la page se recharge d'elle-même après chaque enregistrement.
+  const cleOuverte = useRef('')
+  useEffect(() => {
+    if (!cleEcran) { cleOuverte.current = ''; return }
+    if (cleOuverte.current === cleEcran) return
+    if (chargement) return
+    cleOuverte.current = cleEcran
+    if (cleEcran === 'nouveau') { ouvrir(null); return }
+    // ⚠ PAS `ouvrir(undefined)` : `ouvrir(ligne = null)` a un défaut, et `undefined` le déclenche —
+    // le sous-réseau absent ouvrait alors le formulaire de CRÉATION. L'effet tranche ici.
+    const ligneDemandee = (reseaux || []).find((r) => String(r.id) === String(cleEcran))
+    if (!ligneDemandee) { setEdition('introuvable'); return }
+    ouvrir(ligneDemandee)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleEcran, chargement, reseaux])
 
   function ouvrir(ligne = null) {
     setEdition({
@@ -1433,6 +1491,7 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
 
       setEdition(null)
       await onChange()
+      onFermer?.()
       if (perdus) {
         setAvertissement(
           voulus.length === 0
@@ -1482,13 +1541,41 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
     },
   ]
 
+  // En écran (l'adresse désigne un sous-réseau), la section n'est que le formulaire : la liste est
+  // derrière, on vient d'en partir.
+  if (cleEcran) {
+    if (chargement) return <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    if (edition === 'introuvable') {
+      return (
+        <div className="banner banner-warn">
+          Ce sous-réseau n’existe pas, ou n’est pas visible depuis cet établissement.
+        </div>
+      )
+    }
+    if (!edition) return <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    return (
+      <FormulaireTopologie
+        titre={edition.ligne ? 'Modifier — sous-réseau' : 'Ajouter — sous-réseau'}
+        champs={champs}
+        valeurs={edition.valeurs}
+        setValeurs={(fn) =>
+          setEdition((s) => ({ ...s, valeurs: typeof fn === 'function' ? fn(s.valeurs) : fn }))
+        }
+        onSubmit={enregistrer}
+        onClose={onFermer}
+        erreur={edition.erreur}
+        enCours={edition.enCours}
+      />
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-h">
         <h3>Sous-réseaux</h3>
         {peutGerer && (
           <div className="r" style={{ marginLeft: 'auto' }}>
-            <button className="btn primary sm" onClick={() => ouvrir(null)}>＋ Sous-réseau</button>
+            <button className="btn primary sm" onClick={() => onOuvrir?.()}>＋ Sous-réseau</button>
           </div>
         )}
       </div>
@@ -1511,7 +1598,7 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
               on n’en a pas besoin.
             </div>
             {peutGerer && espaces.length > 0 && (
-              <button className="btn primary sm" onClick={() => ouvrir(null)}>＋ Créer le premier</button>
+              <button className="btn primary sm" onClick={() => onOuvrir?.()}>＋ Créer le premier</button>
             )}
           </div>
         ) : (
@@ -1548,7 +1635,7 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
                       <td className="num">{duree(r.antiPassbackDelai)}</td>
                       {peutGerer && (
                         <td className="num">
-                          <button className="btn ghost sm" onClick={() => ouvrir(r)}>Modifier</button>
+                          <button className="btn ghost sm" onClick={() => onOuvrir?.(r.id)}>Modifier</button>
                         </td>
                       )}
                     </tr>
@@ -1560,21 +1647,6 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
         )}
       </div>
 
-      {edition && (
-        <FormulaireTopologie
-          open
-          titre={edition.ligne ? 'Modifier — sous-réseau' : 'Ajouter — sous-réseau'}
-          champs={champs}
-          valeurs={edition.valeurs}
-          setValeurs={(fn) =>
-            setEdition((s) => ({ ...s, valeurs: typeof fn === 'function' ? fn(s.valeurs) : fn }))
-          }
-          onSubmit={enregistrer}
-          onClose={() => setEdition(null)}
-          erreur={edition.erreur}
-          enCours={edition.enCours}
-        />
-      )}
     </section>
   )
 }

@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
+import Qr from './Qr.jsx'
 import { jourLocal } from './Liste.jsx'
 import { libelleProduit } from '../api/produit.js'
 import { euros } from '../api/produit.js'
+import { mot } from '../api/vocabulaire.js'
+import { tonStatutAbonnement } from '../api/abonnement.js'
+import { tonEcheance, tonStatutMandat } from '../api/sepa.js'
 
 // LA FICHE D'UN ABONNEMENT — l'écran qui manquait, et que la liste avouait ne pas avoir.
 //
@@ -30,7 +34,10 @@ import { euros } from '../api/produit.js'
 // c'est un formulaire de souscription, pas un bouton. L'afficher désactivé ferait chercher ce qui
 // le débloque ; on ne l'affiche pas, et la fiche dit où il se trouve.
 
-const TONS = { actif: 'good', pause: 'warn', impaye: 'crit', resilie: 'mut' }
+// La table `TONS` qui vivait ici ignorait `echu` — un abonnement arrive a son terme prenait donc
+// le gris du repli, la couleur de « rien a signaler », alors que c'est l'etat qui laisse entrer
+// gratuitement. Les cinq statuts, leur couleur et leurs mots vivent desormais dans un seul
+// endroit : `api/abonnement.js` et `mot()`.
 
 // ⚠ CE NOM MENTAIT : la fonction prend des CENTIMES, et tous ses appelants lui en passent.
 // Elle reimplementait aussi `euros()` a la main — virgule oui, mais ni separateur de milliers ni
@@ -57,11 +64,10 @@ function Champ({ libelle, children, aide }) {
   )
 }
 
-export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie }) {
+export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, onFerme, onModifie, onGeste }) {
   const [onglet, setOnglet] = useState('contrat')
   const [echeances, setEcheances] = useState(null)
   const [reduction, setReduction] = useState(null)
-  const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un objet = trouve ; `false` = lu, aucun
   // statut pour cet abonnement. Quatre etats, parce que « pas de statut » et « pas pu lire » ne se
@@ -212,7 +218,7 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           </div>
         </div>
         <div className="r">
-          <span className={`badge ${TONS[a.statut] || 'mut'}`}>{a.statut || '—'}</span>
+          <span className={`badge ${tonStatutAbonnement(a.statut)}`}>{mot(a.statut)}</span>
           <button className="btn sm" type="button" onClick={onFerme}>Fermer</button>
         </div>
       </div>
@@ -266,10 +272,10 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           <div className="card-h">
             <h3>Gestes</h3>
             <div className="r">
-              <button className="btn sm" type="button" onClick={() => setGeste('pause')}>
+              <button className="btn sm" type="button" onClick={() => onGeste?.('pause')}>
                 Mettre en pause
               </button>
-              <button className="btn sm" type="button" onClick={() => setGeste('resiliation')}>
+              <button className="btn sm" type="button" onClick={() => onGeste?.('resiliation')}>
                 Résilier
               </button>
             </div>
@@ -295,8 +301,8 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
               </Champ>
               <Champ libelle="Signé le">{jour(mandat.dateSignature)}</Champ>
               <Champ libelle="Statut du mandat">
-                <span className={`badge ${mandat.statut === 'actif' ? 'good' : 'mut'}`}>
-                  {mandat.statut || '—'}
+                <span className={`badge ${tonStatutMandat(mandat.statut)}`}>
+                  {mot(mandat.statut)}
                 </span>
               </Champ>
             </>
@@ -347,7 +353,11 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
                           </div>
                         )}
                       </td>
-                      <td><span className="badge mut">{e.statut || '—'}</span></td>
+                      {/* ⚠ TOUTES LES ECHEANCES PORTAIENT `badge mut`, LA COULEUR DE « RIEN A
+                          SIGNALER ». Un prelevement REJETE se lisait donc exactement comme un
+                          prelevement encaisse, sur la fiche meme de l'abonnement concerne. La
+                          couleur vient maintenant de `api/sepa.js`, comme dans le module Sport. */}
+                      <td><span className={`badge ${tonEcheance(e.statut)}`}>{mot(e.statut)}</span></td>
                       <td>
                         {e.statut === 'a_venir' && e.montantInitialCentimes == null && (
                           <button className="btn sm" type="button" onClick={() => setReduction(e)}>
@@ -363,13 +373,6 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           )}
         </div>
       )}
-
-      <GesteModal
-        geste={geste}
-        abonnement={a}
-        onClose={() => setGeste(null)}
-        onFait={() => { setGeste(null); onModifie?.() }}
-      />
 
       <ReductionModal
         echeance={reduction}
@@ -489,7 +492,10 @@ function ReductionModal({ echeance, onClose, onFait }) {
 // Le patron vient de `ImpayesRecouvrement` : une confirmation dit CE QUI VA SE PASSER, jamais
 // « êtes-vous sûr ». Résilier révoque le mandat quand aucun autre abonnement ne s'en sert ; c'est
 // exactement le genre de conséquence qu'on découvre autrement au relevé bancaire.
-function GesteModal({ geste, abonnement, onClose, onFait }) {
+// Le geste d'un abonnement — un écran de Sport (#sport?geste=…&abonnement=…), plus une modale.
+// La fiche le DEMANDE (`onGeste`) ; c'est la page qui l'affiche, parce que c'est elle qui porte
+// l'adresse.
+export function GesteAbonnement({ geste, abonnement, onClose, onFait }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
   const [motif, setMotif] = useState('')
@@ -543,12 +549,8 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
   }
 
   return (
-    <Modal
-      open={!!geste}
-      onClose={onClose}
-      titre={geste === 'pause' ? 'Mettre l’abonnement en pause' : 'Résilier l’abonnement'}
-      taille="md"
-    >
+    <>
+      <h2>{geste === 'pause' ? 'Mettre l’abonnement en pause' : 'Résilier l’abonnement'}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -665,7 +667,7 @@ function GesteModal({ geste, abonnement, onClose, onFait }) {
           )}
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -740,6 +742,23 @@ function OngletAcces({ acces }) {
           <div className="st-lbl">Dernière mise à jour du badge</div>
         </div>
       </div>
+
+      {/* LE BILLET D'ACCÈS — le QR émis à la souscription, réaffichable et réimprimable ici. C'est
+          le support que le terminal lit. `doc-imprimer` l'isole à l'impression (comme le ticket de
+          caisse) ; le bouton, lui, ne s'imprime pas (`noprint`). */}
+      {acces.supportIdentifiant && (
+        <div
+          className="card doc-imprimer"
+          style={{ display: 'grid', gap: 'var(--esp-normal)', justifyItems: 'center', padding: 'var(--esp-bloc)' }}
+        >
+          <b>Billet d’accès de l’adhérent</b>
+          <Qr value={acces.supportIdentifiant} size={120} title="QR du billet d’abonnement" />
+          <span className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{acces.supportIdentifiant}</span>
+          <button type="button" className="btn ghost sm noprint" onClick={() => window.print()}>
+            Imprimer le billet
+          </button>
+        </div>
+      )}
 
       {!rattache && (
         <div className="banner banner-warn">

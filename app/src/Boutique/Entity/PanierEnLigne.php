@@ -199,10 +199,40 @@ class PanierEnLigne
     #[Groups(['panier:read'])]
     private ?Uuid $cgvDocumentRef = null;
 
-    /** RGPD (RG-M3-07) : horodatage du consentement bloquant avant paiement. */
+    /**
+     * ⚠ HISTORIQUE, PLUS JAMAIS ÉCRIT DEPUIS LE TUNNEL EN 3 ÉTAPES (#101). Horodatait la case « j'accepte
+     * que mes données soient traitées pour la gestion de ma commande », qui créait en même temps un
+     * `Consentement(Email, Accordé)` lu comme un accord MARKETING. La colonne reste : c'est elle qui
+     * désigne, à la seconde près, les consentements que la reprise du 04/10 a invalidés.
+     */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['panier:read'])]
     private ?\DateTimeImmutable $consentementRgpdHorodatage = null;
+
+    /**
+     * L'INFORMATION DONNÉE, PAS UN CONSENTEMENT (#101, RGPD art. 13). Le traitement de la commande
+     * repose sur l'exécution du contrat (art. 6.1.b) : on ne demande rien, on informe. Ce qu'on garde,
+     * c'est la preuve de l'information — QUAND la mention a été affichée, et QUEL texte (sa version).
+     * Le paiement est refusé tant qu'elle n'est pas posée.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?\DateTimeImmutable $privacyNoticeShownAt = null;
+
+    #[ORM\Column(length: 40, nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?string $privacyNoticeVersion = null;
+
+    /**
+     * L'ÉTAT DE LA CASE MARKETING, PAS ENCORE UN CONSENTEMENT (relecture #101, D2). La version du texte
+     * si la case est cochée au dernier envoi de l'écran, `null` sinon. Le `Consentement` ne s'écrit
+     * qu'au paiement confirmé (`ConfirmerCommandeHandler`), une fois, avec l'état FINAL de la case :
+     * écrit à chaque envoi, un renvoi case décochée ne retirait rien, et chaque renvoi case cochée
+     * ajoutait un accord de plus.
+     */
+    #[ORM\Column(length: 40, nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?string $marketingOptInVersion = null;
 
     /** Réf. logique Client (M4) résolu au plus tard à l'étape consentement (§0 décision n°4 du plan). */
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
@@ -370,6 +400,37 @@ class PanierEnLigne
     public function setConsentementRgpdHorodatage(?\DateTimeImmutable $consentementRgpdHorodatage): self
     {
         $this->consentementRgpdHorodatage = $consentementRgpdHorodatage;
+
+        return $this;
+    }
+
+    public function getPrivacyNoticeShownAt(): ?\DateTimeImmutable
+    {
+        return $this->privacyNoticeShownAt;
+    }
+
+    public function getPrivacyNoticeVersion(): ?string
+    {
+        return $this->privacyNoticeVersion;
+    }
+
+    /** Les deux se posent ensemble : un horodatage sans version ne dit pas quel texte a été lu. */
+    public function recordPrivacyNotice(string $version, \DateTimeImmutable $shownAt = new \DateTimeImmutable()): self
+    {
+        $this->privacyNoticeVersion = $version;
+        $this->privacyNoticeShownAt = $shownAt;
+
+        return $this;
+    }
+
+    public function getMarketingOptInVersion(): ?string
+    {
+        return $this->marketingOptInVersion;
+    }
+
+    public function setMarketingOptInVersion(?string $marketingOptInVersion): self
+    {
+        $this->marketingOptInVersion = $marketingOptInVersion;
 
         return $this;
     }

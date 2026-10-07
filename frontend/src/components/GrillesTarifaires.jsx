@@ -166,7 +166,7 @@ export default function GrillesTarifaires({ etabActif, majParams }) {
                           )}
                         </td>
                         <td>{g.typeTarif?.libelle || g.typeTarif?.code || <span className="sub">—</span>}</td>
-                        <td>{g.saison?.libelle || g.saison?.nom || <span className="sub">hors saison</span>}</td>
+                        <td>{g.saison?.libelle || g.saison?.nom || <span className="sub">Toute l’année</span>}</td>
                         <td className="num">{g.prix ?? <span className="sub">—</span>}</td>
                         <td>{g.trancheQf?.libelle || <span className="sub">—</span>}</td>
                       </tr>

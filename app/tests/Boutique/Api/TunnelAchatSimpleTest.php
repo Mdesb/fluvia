@@ -52,7 +52,7 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         // CA-7 : chaque article doit porter un bénéficiaire avant paiement.
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', [
             'headers' => $entete,
-            'json' => ['rgpd' => true],
+            'json' => ['mentionVersion' => 'mention-test'],
         ]);
         self::assertResponseIsSuccessful();
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/payer', ['headers' => $entete]);
@@ -125,7 +125,7 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
     public function testConsentementEtBeneficiairesSansJetonSontRefuses(): void
     {
         [$client, $panierId] = $this->ouvrirPanierInviteA();
-        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['json' => ['rgpd' => true]]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['json' => ['mentionVersion' => 'mention-test']]);
         self::assertResponseStatusCodeSame(403, '⚠ Risque n°3 : jeton de panier requis pour manipuler un panier invité.');
     }
 }
