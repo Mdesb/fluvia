@@ -168,6 +168,11 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   // Deux absences, deux remèdes : `absent` se répare en lançant l'agrégation, `non
   // instrumenté` ne se répare pas — le site n'a pas de source. On ne les additionne pas.
   const nonInstrumentes = (points || []).filter((p) => p.etat === 'nonInstrumente').length
+  // ⚠ UN JOUR DONT LA LECTURE A ECHOUE N'ETAIT COMPTE NULLE PART. La legende additionnait
+  // mesures + sans mesure + non instrumentes, et le total ne faisait pas la periode : le lecteur
+  // obtenait 29 sur 30 sans pouvoir savoir ce qu'etait le trentieme. Le bandeau d'erreur, lui, ne
+  // parait que si TOUS les jours echouent — un echec PARTIEL etait donc entierement muet.
+  const nonLus = (points || []).filter((p) => p.etat === 'nonLu').length
 
   // ⚠ OU S'ARRETE LA DONNEE, ET PAS SEULEMENT COMBIEN IL EN MANQUE. Onze trous
   // disperses et onze jours d'arret net s'interpretent de facon opposee : les premiers
@@ -345,7 +350,9 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                       ? `${p.jour} — ${formatValeur(p.valeur, indicateur?.unite)}${p.completude === 'partiel' ? ' (partiel)' : ''}`
                       : p.etat === 'absent'
                         ? `${p.jour} — aucune mesure : l’agrégation n’a pas couvert ce jour`
-                        : `${p.jour} — lecture impossible`
+                        : p.etat === 'nonInstrumente'
+                          ? `${p.jour} — non instrumenté : pas de source sur ce périmètre ; ce n’est pas un zéro`
+                          : `${p.jour} — lecture impossible`
                     return (
                       <div key={p.jour} title={titre} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
                         {p.etat === 'mesure' ? (
@@ -375,6 +382,12 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                     <span>
                       <b>{nonInstrumentes} non instrumenté(s)</b> — cet indicateur n’a pas
                       {' '}de source sur ce périmètre&nbsp;; ce n’est pas un zéro
+                    </span>
+                  )}
+                  {nonLus > 0 && (
+                    <span>
+                      <b>{nonLus} non lu(s)</b> — la lecture a échoué pour ces jours&nbsp;; ce
+                      {' '}n’est ni un zéro, ni une absence de source
                     </span>
                   )}
                   {dernierJourMesure && (
