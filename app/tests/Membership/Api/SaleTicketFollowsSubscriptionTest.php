@@ -12,8 +12,13 @@ use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
 use App\DataFixtures\SocleFixtures;
+use App\Membership\Entity\EcheanceSepa;
 use App\Membership\Entity\Membership;
+use App\Membership\Entity\Resiliation;
 use App\Membership\Entity\StatutAccesFitness;
+use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\StatutEcheanceSepa;
+use App\Membership\Enum\StatutResiliation;
 use App\Membership\Enum\TermRenewalMode;
 use App\Membership\Recouvrement\AbonnementFitnessRedevablePort;
 use App\Membership\Service\DemanderResiliationHandler;
@@ -24,10 +29,13 @@ use App\Organisation\Entity\Etablissement;
 use App\Recouvrement\DataFixtures\RecouvrementFixtures;
 use App\Recouvrement\Service\PropagationAccesHandler;
 use App\Sepa\DataFixtures\SepaFixtures;
+use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\DataFixtures\SportFixtures;
 use App\Tests\Acces\AccesApiTestCase;
 use App\Tests\Acces\SnapshotDeltaTrait;
 use App\Vente\Entity\BilletSupport;
+use App\Vente\Entity\Vente;
+use App\Vente\Enum\StatutVente;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -46,6 +54,9 @@ use Symfony\Component\Uid\Uuid;
 final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
 {
     use SnapshotDeltaTrait;
+
+    /** La dernière vente passée par `sell()`. */
+    private string $saleId = '';
 
     protected function setUp(): void
     {
@@ -78,7 +89,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
      */
     public function testTheTicketStopsOpeningOnceTheSubscriptionIsTerminated(): void
     {
-        [$gold, $entree] = $this->sellGold(withEntrance: true);
+        [$gold, $entree] = $this->sell(entrance: true);
         $abonnement = $this->subscription();
 
         self::assertSame(['valide', null], $this->gate($gold), 'Pendant l\'abonnement, le billet ouvre.');
@@ -100,7 +111,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
      */
     public function testRepairingTheTicketDoesNotReopenATerminatedSubscription(): void
     {
-        [$gold] = $this->sellGold();
+        [$gold] = $this->sell();
         $this->terminate();
         $billet = $this->em()->getRepository(BilletSupport::class)->findOneBy(['identifiantSupport' => $gold]);
         self::assertInstanceOf(BilletSupport::class, $billet);
@@ -118,7 +129,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
     /** IMPAYÉ : le recouvrement coupe le billet, et la régularisation le rouvre. */
     public function testTheTicketIsCutOnUnpaidAndReopensOnceSettled(): void
     {
-        [$gold] = $this->sellGold();
+        [$gold] = $this->sell();
         $reference = (string) $this->subscription()->getId();
 
         // Le service est relu après chaque requête : le noyau redémarre, et celui d'avant aussi.
@@ -133,7 +144,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
     public function testAFixedTermFormulaGivesItsEndToTheTicket(): void
     {
         $this->setTermMode(TermRenewalMode::Suspend);
-        [$gold] = $this->sellGold();
+        [$gold] = $this->sell();
         $abonnement = $this->subscription();
         $fin = $abonnement->getDateFinEngagement();
 
@@ -153,7 +164,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
         // Un mois d'engagement : le tarif de la reconduction doit se résoudre dans la saison des
         // fixtures, qui finit le 31/12/2026.
         $this->setTermMode(TermRenewalMode::Suspend, engagementMonths: 1);
-        [$gold] = $this->sellGold();
+        [$gold] = $this->sell();
         self::assertNotNull($this->terminalEntry($gold)['validiteFin'], 'Témoin : la formule à terme donne une fin au billet.');
 
         $this->setTermMode(TermRenewalMode::Monthly);
@@ -164,25 +175,69 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
         self::assertSame(['valide', null], $this->gate($gold));
     }
 
+    /**
+     * ANNULER LA VENTE RÉSILIE L'ABONNEMENT QU'ELLE A CRÉÉ (décision de Maxime du 07/10). Sans frais,
+     * motif « vente annulée » : plus aucune échéance à venir, mandat révoqué, accès coupé, et la
+     * résiliation reste comme trace.
+     */
+    public function testCancellingTheSaleTerminatesItsSubscription(): void
+    {
+        [$gold] = $this->sell();
+
+        self::assertSame(201, $this->cancelSale('Client parti'));
+
+        $abonnement = $this->subscription();
+        self::assertSame(MembershipStatus::Resilie, $abonnement->getStatut(), 'Vente annulée : l\'abonnement est résilié avec elle.');
+        $resiliation = $this->em()->getRepository(Resiliation::class)->findOneBy(['abonnement' => $abonnement]);
+        self::assertSame([StatutResiliation::Effective, 'Vente annulée (Client parti)'], [$resiliation?->getStatut(), $resiliation?->getMotif()], 'Trace : une résiliation effective, au motif de la vente annulée.');
+        self::assertSame(0, $this->em()->getRepository(EcheanceSepa::class)->count(['abonnement' => $abonnement, 'statut' => StatutEcheanceSepa::AVenir]), 'Plus aucun prélèvement à venir.');
+        self::assertSame(StatutMandatSepa::Revoque, $abonnement->getMandatSepa()?->getStatut());
+        self::assertSame(['refuse', 'droit_invalide'], $this->gate($gold), 'L\'accès tombe avec l\'abonnement.');
+    }
+
+    /** Le motif reste obligatoire (#279) : refusée, l'annulation ne touche pas à l'abonnement. */
+    public function testARefusedCancellationKeepsTheSubscription(): void
+    {
+        [$gold] = $this->sell();
+
+        self::assertSame(422, $this->cancelSale('Bidon'));
+
+        self::assertSame(MembershipStatus::Actif, $this->subscription()->getStatut());
+        self::assertSame(['valide', null], $this->gate($gold));
+    }
+
+    /** Témoin : une vente sans abonnement s'annule comme avant, sans résiliation. */
+    public function testASaleWithoutSubscriptionCancelsAsBefore(): void
+    {
+        $this->sell(gold: false, entrance: true);
+        $resiliations = $this->em()->getRepository(Resiliation::class)->count([]);
+
+        self::assertSame(201, $this->cancelSale('Erreur de saisie'));
+
+        self::assertSame(StatutVente::Annulee, $this->em()->getRepository(Vente::class)->find(Uuid::fromString($this->saleId))?->getStatut());
+        self::assertSame($resiliations, $this->em()->getRepository(Resiliation::class)->count([]), 'Aucune résiliation.');
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Vend le Gold (formule nominative) au payeur, à la caisse classique, et rend le code de son
-     * billet ; avec l'entrée, rend aussi le code du billet d'entrée.
+     * Vend au payeur, à la caisse classique, le Gold (formule nominative) et/ou l'entrée, et rend les
+     * codes de leurs billets dans cet ordre.
      *
      * @return list<string>
      */
-    private function sellGold(bool $withEntrance = false): array
+    private function sell(bool $gold = true, bool $entrance = false): array
     {
         [$client, $entete] = $this->adminSurA();
         $session = $this->ouvrirSession($client, $entete);
         $payeur = (string) $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL])->getId();
         $vente = $this->creerVente($client, $entete, $session['id']);
+        $this->saleId = (string) $vente['id'];
         $client->request('POST', '/api/ventes/' . $vente['id'] . '/client', $entete + ['json' => ['client' => $payeur]]);
         self::assertResponseIsSuccessful();
 
-        $lignes = [OffreFixtures::PRODUIT_GOLD => ['beneficiaire' => $payeur]];
-        if ($withEntrance) {
+        $lignes = $gold ? [OffreFixtures::PRODUIT_GOLD => ['beneficiaire' => $payeur]] : [];
+        if ($entrance) {
             $lignes[OffreFixtures::PRODUIT_ENTREE] = [];
         }
         foreach ($lignes as $produit => $extra) {
@@ -207,6 +262,16 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
         self::assertCount(\count($lignes), $codes, 'Témoin : chaque ligne émet son billet.');
 
         return array_values(array_map(static fn (string $produit): string => $codes[$produit], array_keys($lignes)));
+    }
+
+    /** Annule la dernière vente au guichet (`/ventes/{id}/annuler`) et rend le code HTTP. */
+    private function cancelSale(string $motif): int
+    {
+        [$client, $entete] = $this->adminSurA();
+        $reponse = $client->request('POST', '/api/ventes/' . $this->saleId . '/annuler', $entete + ['json' => ['motif' => $motif]]);
+        $this->em()->clear();
+
+        return $reponse->getStatusCode();
     }
 
     /** Résilie l'abonnement du jour, effet immédiat (demande hors engagement). */
