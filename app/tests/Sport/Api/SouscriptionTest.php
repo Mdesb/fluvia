@@ -16,6 +16,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\StatutProduit;
 use App\Sepa\Entity\MandatSepa;
 use App\Membership\Entity\Membership;
 use App\Membership\Entity\EcheanceSepa;
@@ -473,5 +474,60 @@ final class SouscriptionTest extends SportApiTestCase
             ],
         ]);
         self::assertResponseStatusCodeSame(404, 'une formule non commercialisée sur l\'établissement actif est refusée');
+    }
+
+    /**
+     * UNE FORMULE QUE LE GUICHET NE VEND PAS EST REFUSÉE (07/10/2026).
+     *
+     * Cette route est une vente au guichet : elle suit la règle de la caisse (`CounterSellability`).
+     * Elle vérifiait le site, pas le statut ni le canal : une formule en brouillon, archivée ou
+     * vendue seulement en ligne se souscrivait. Témoin : le même produit, publié au guichet, passe.
+     */
+    public function testLaSouscriptionRefuseUneFormuleNonVendableAuGuichet(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        // Le noyau redémarre entre deux requêtes : le gestionnaire d'entités est relu à chaque fois.
+        $em = static fn (): EntityManagerInterface => static::getContainer()->get('doctrine')->getManager();
+        $gold = static fn (): Produit => $em()->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_GOLD]);
+        $abonnements = static fn (): int => $em()->getRepository(Membership::class)->count(['formule' => $gold()->getFormule()]);
+        $payeur = $em()->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $corps = $entete + [
+            'json' => [
+                'payeur' => '/api/clients/' . $payeur->getId(),
+                'formule' => '/api/formules/' . $gold()->getFormule()->getId(),
+                'dureeEngagementMois' => 12,
+                'iban' => 'FR7630006000011234567890189',
+                'titulaireMandat' => 'Jean Dupont',
+            ],
+        ];
+        // Le témoin passe en dernier : il crée l'abonnement.
+        $cas = [
+            'brouillon' => [StatutProduit::Brouillon, ['guichet', 'en_ligne'], 'pas encore en vente'],
+            'archivé' => [StatutProduit::Archive, ['guichet', 'en_ligne'], 'plus en vente'],
+            'en ligne seulement' => [StatutProduit::Publie, ['en_ligne'], 'pas vendu au guichet'],
+            'témoin publié au guichet' => [StatutProduit::Publie, ['guichet', 'en_ligne'], null],
+        ];
+        $avant = $abonnements();
+        $obtenu = [];
+        foreach ($cas as $nom => [$statut, $canaux, $motif]) {
+            $gold()->setStatut($statut)->setCanaux($canaux);
+            $em()->flush();
+
+            $client->request('POST', '/api/sport/abonnements/souscrire', $corps);
+            $reponse = $client->getResponse();
+            $obtenu[$nom] = [
+                $reponse->getStatusCode(),
+                $motif === null || str_contains($reponse->getContent(false), $motif),
+                $abonnements() - $avant,
+            ];
+        }
+
+        // [statut HTTP, motif dit, abonnements créés depuis le début]
+        self::assertSame([
+            'brouillon' => [422, true, 0],
+            'archivé' => [422, true, 0],
+            'en ligne seulement' => [422, true, 0],
+            'témoin publié au guichet' => [201, true, 1],
+        ], $obtenu);
     }
 }

@@ -18,6 +18,7 @@ use App\Vente\Entity\Vente;
 use App\Vente\Enum\RemiseType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -39,20 +40,62 @@ final class AjoutLigneHandler
         // l estimation a les reecrire, et deux implementations des memes regles ne divergent pas au
         // moment ou on les ecrit : elles divergent au premier correctif applique a une seule des deux.
         private readonly PriceQuoter $tarif,
+        private readonly CounterSellability $sellability,
     ) {
     }
 
     /**
+     * Caisse en ligne : un produit que cette caisse ne peut pas vendre (non publié, hors canal
+     * guichet, hors du site de la vente) est refusé en 422, avant toute écriture.
+     *
      * @param array<string, mixed> $donnees
      */
     public function ajouter(Vente $vente, array $donnees, bool $autoriseForcage): LigneVente
+    {
+        return $this->composerLigne($vente, $donnees, $autoriseForcage, false)[0];
+    }
+
+    /**
+     * Synchro hors ligne : la vente a DÉJÀ eu lieu et l'argent est dans le tiroir. Un produit devenu
+     * invendable (brouillon, archivé, retiré du guichet depuis que le catalogue local a été lu) ne la
+     * fait donc pas refuser — un refus l'enverrait en quarantaine, que rien ne persiste : la recette
+     * disparaîtrait des comptes alors qu'elle est dans la caisse. La ligne est composée, et le motif
+     * est rendu pour que l'appelant trace l'écart.
+     *
+     * ⚠ SAUF LE SITE. Un produit d'un autre site n'a jamais pu être dans le catalogue local de cette
+     * caisse (l'API ne lui sert que son site et le socle) : l'accepter ferait seulement écrire, sur un
+     * ticket de ce site, le libellé et le prix d'un autre catalogue. Celui-là reste refusé (404,
+     * comme un produit inconnu) : la vente part en quarantaine.
+     * Toutes les autres gardes (prix, stock, bénéficiaire, options) restent bloquantes, comme avant.
+     *
+     * @param array<string, mixed> $donnees
+     *
+     * @return array{0: LigneVente, 1: string|null} la ligne, et le motif d'invendabilité éventuel
+     */
+    public function replayOfflineLine(Vente $vente, array $donnees): array
+    {
+        return $this->composerLigne($vente, $donnees, false, true);
+    }
+
+    /**
+     * @param array<string, mixed> $donnees
+     *
+     * @return array{0: LigneVente, 1: string|null}
+     */
+    private function composerLigne(Vente $vente, array $donnees, bool $autoriseForcage, bool $venteDejaEncaissee): array
     {
         if ($vente->estScellee()) {
             throw new ConflictHttpException('Vente validée : le panier est figé (NF525).');
         }
 
-        $produit = $this->resoudre(Produit::class, $donnees['produit'] ?? null, 'produit');
-        \assert($produit instanceof Produit);
+        $produit = $this->produitDuSite($donnees['produit'] ?? null, $vente);
+
+        // Publié, au guichet. Le site est déjà réglé par `produitDuSite()` (404, synchro comprise) ;
+        // ce qui reste est l'état commercial, que la synchro hors ligne trace au lieu de refuser.
+        $invendable = $this->sellability->offerRefusal($produit);
+        if ($invendable !== null && !$venteDejaEncaissee) {
+            throw new UnprocessableEntityHttpException($invendable);
+        }
         $typeTarif = $this->resoudre(TypeTarif::class, $donnees['typeTarif'] ?? null, 'typeTarif');
         \assert($typeTarif instanceof TypeTarif);
 
@@ -124,7 +167,7 @@ final class AjoutLigneHandler
         $this->calculateur->recalculerLigne($ligne);
         $this->calculateur->recalculerVente($vente);
 
-        return $ligne;
+        return [$ligne, $invendable];
     }
 
     private function estNominatif(Produit $produit): bool
@@ -233,6 +276,28 @@ final class AjoutLigneHandler
         }
 
         return [$snapshot, $impactTotal];
+    }
+
+    /**
+     * Le produit, s'il existe ET s'il est au catalogue du site de la vente (D92 : aucun site = socle).
+     *
+     * ⚠ UN SEUL `throw` POUR LES DEUX CAS, ET C'EST LA GARANTIE (D3). Un produit d'un autre site
+     * n'existe pas ici : la réponse doit être indiscernable de celle d'un UUID inconnu — même statut,
+     * même message, même ligne levée. Deux `throw` au texte identique divergeraient au premier
+     * reformulé ; et un 422 « pas vendu sur ce site » confirmait l'existence du produit ailleurs.
+     */
+    private function produitDuSite(mixed $reference, Vente $vente): Produit
+    {
+        $uuid = $this->uuidOuNull($reference);
+        if ($uuid === null) {
+            throw new UnprocessableEntityHttpException('Référence « produit » obligatoire (UUID ou IRI).');
+        }
+        $produit = $this->em->getRepository(Produit::class)->find($uuid);
+        if (!$produit instanceof Produit || !$this->sellability->isSoldAtSite($produit, $vente->getEtablissement())) {
+            throw new NotFoundHttpException('Produit introuvable.');
+        }
+
+        return $produit;
     }
 
     /**
