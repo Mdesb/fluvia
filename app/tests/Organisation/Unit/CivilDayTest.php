@@ -33,4 +33,32 @@ final class CivilDayTest extends TestCase
         self::assertEquals($attendu, Etablissement::jourCivil($paris, new \DateTimeImmutable($instant)));
         self::assertEquals($attendu, Etablissement::jourCivil(null, new \DateTimeImmutable($instant)), 'Sans établissement : Paris.');
     }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function fuseaux(): iterable
+    {
+        // [fuseau, jour local à 02:00 UTC le 01/01/2026]. Deux à l'ouest de Greenwich, deux à l'est.
+        yield 'Martinique' => ['America/Martinique', '2025-12-31'];
+        yield 'Guyane' => ['America/Cayenne', '2025-12-31'];
+        yield 'Nouvelle-Calédonie' => ['Pacific/Noumea', '2026-01-01'];
+        yield 'La Réunion' => ['Indian/Reunion', '2026-01-01'];
+    }
+
+    /**
+     * Une date civile (« AAAA-MM-JJ », une colonne `date`, ce que rend `jourCivil()`) est déjà un
+     * jour : elle reste ce jour-là dans tous les fuseaux. Un instant, lui, se lit à l'heure locale.
+     *
+     * Mesuré le 07/10/2026 : à l'ouest de Greenwich, 2026-01-01 (00:00 UTC) était relu comme le
+     * 31/12/2025, 20:00 en Martinique.
+     */
+    #[DataProvider('fuseaux')]
+    public function testACivilDateStaysTheSameDayInEveryTimeZone(string $fuseau, string $jourA2hUtc): void
+    {
+        $etablissement = (new Etablissement())->setFuseauHoraire($fuseau);
+        $jour = new \DateTimeImmutable('2026-01-01');
+
+        self::assertEquals($jour, Etablissement::jourCivil($etablissement, $jour));
+        self::assertEquals($jour, Etablissement::jourCivil($etablissement, Etablissement::jourCivil($etablissement, $jour)));
+        self::assertEquals(new \DateTimeImmutable($jourA2hUtc), Etablissement::jourCivil($etablissement, new \DateTimeImmutable('2026-01-01T02:00:00+00:00')));
+    }
 }

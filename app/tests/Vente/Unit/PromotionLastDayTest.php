@@ -42,6 +42,24 @@ final class PromotionLastDayTest extends TestCase
     #[DataProvider('instants')]
     public function testPromotionAppliesOnWholeLocalDays(string $fin, string $instant, bool $appliquee): void
     {
+        self::assertCount($appliquee ? 1 : 0, $this->promotions('Europe/Paris', $fin, new \DateTimeImmutable($instant)));
+    }
+
+    /**
+     * Un devis daté « AAAA-MM-JJ » (`?date=`) porte une date civile : elle reste ce jour-là, même à
+     * l'ouest de Greenwich. Mesuré le 07/10/2026 : en Martinique, la promotion manquait son premier
+     * jour et débordait sur le lendemain du dernier.
+     */
+    public function testACivilDateIsTheSameDayInMartinique(): void
+    {
+        foreach (['2025-12-31' => 0, '2026-01-01' => 1, '2026-12-31' => 1, '2027-01-01' => 0] as $jour => $appliquees) {
+            self::assertCount($appliquees, $this->promotions('America/Martinique', '2026-12-31', new \DateTimeImmutable($jour)), $jour);
+        }
+    }
+
+    /** @return list<mixed> les promotions appliquées, pour une promotion du 01/01/2026 à `$fin` */
+    private function promotions(string $fuseau, string $fin, \DateTimeImmutable $date): array
+    {
         $produit = new Produit();
         $promotion = (new Promotion())->setNom('Promo')->setType(TypePromotion::Pourcentage)->setValeur('10.00')
             ->setDateDebut(new \DateTimeImmutable('2026-01-01'))->setDateFin(new \DateTimeImmutable($fin))
@@ -52,10 +70,7 @@ final class PromotionLastDayTest extends TestCase
         $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getRepository')->willReturn($depot);
 
-        $paris = (new Etablissement())->setFuseauHoraire('Europe/Paris');
-        $promotions = (new PriceQuoter($em, new ResolveurPrix(), new PanierCalculateur()))
-            ->promotionsAuto($produit, new \DateTimeImmutable($instant), $paris);
-
-        self::assertCount($appliquee ? 1 : 0, $promotions);
+        return (new PriceQuoter($em, new ResolveurPrix(), new PanierCalculateur()))
+            ->promotionsAuto($produit, $date, (new Etablissement())->setFuseauHoraire($fuseau));
     }
 }
