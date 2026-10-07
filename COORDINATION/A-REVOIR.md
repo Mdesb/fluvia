@@ -101,24 +101,132 @@ ici pour qu'il ne soit pas subi par défaut.
 > |---|---|
 > | `reporting:agreger` | **autorisée**, passé rattrapé |
 > | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
-> | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
-> | `finance:treasury:verifier-seuils` | **absente** — aucune alerte de trésorerie n'existera |
-> | `finance:treasury:suggerer-rapprochements` | **absente** — dégradé |
-> | `finance:treasury:detecter-ecarts` | **absente** — dégradé |
+> | ~~`reporting:executer-rapports`~~ | **AUTORISÉE le 15/09 (#204)**, après que #202 ait rendu l'ajout sûr — et ⚠ **elle n'a encore jamais tourné** : `safeOnFirstRun:false` + garde D109 |
+> | ~~`finance:treasury:verifier-seuils`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
+> | ~~`finance:treasury:suggerer-rapprochements`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
+> | ~~`finance:treasury:detecter-ecarts`~~ | **AUTORISÉE le 15/09 (#193)** — mais ⚠ pas encore en service, voir ci-dessous |
 >
-> Il reste donc **quatre** décisions, dont une seule dans le module d'analyse (`reporting:executer-rapports`).
+> #### ⚠ « Autorisée dans le fichier » n'est pas « tourne » — mesuré le 15/09 à **14h50**
+>
+> Les trois commandes de trésorerie sont dans `TACHES_AUTORISEES` depuis #193. Elles ne
+> tournent pourtant pas, pour **deux** raisons distinctes, et l'ordonnanceur les crie
+> lui-même dans ses traces :
+>
+> ```
+> [ordonnanceur] ✗ LISTE PERIMEE — ce conteneur exécute 17 tâche(s), le fichier en déclare 20.
+> [ordonnanceur]   Tant que ce conteneur n'a pas redémarré, l'écart ne tourne PAS.
+> ```
+>
+> 1. **La liste du conteneur est figée à son démarrage.** Le shell évalue l'affectation une
+>    fois ; ajouter une tâche au fichier ne change rien jusqu'au redémarrage. C'est le défaut
+>    du 31/08 (`personnel:recalculer-fenetres-badges`, neuf heures inerte pendant que le
+>    journal disait « ok »), et le script a été instrumenté pour le dire — il le dit.
+> 2. **Deux des trois attendent un premier passage supervisé** (garde D109) :
+>    `verifier-seuils` et `detecter-ecarts` n'ont jamais tourné et ne sont pas marquées sûres
+>    au premier passage — elles rattraperaient tout leur retard d'un coup. Seule
+>    `suggerer-rapprochements` apparaît exécutée dans les traces.
+>
+> **Donc l'arbitrage est rendu, et son effet ne l'est pas.** Le registre aurait été faux dans
+> un sens en disant « à trancher », et faux dans l'autre en disant « autorisée » tout court.
+>
+> ##### ⚠ TROISIÈME RECTIFICATION, à 21h — et cette fois le fait lui-même était faux
+>
+> **La liste du conteneur n'est PAS périmée : elle porte 20, comme le fichier. En phase.**
+> Mon `17 contre 20` était la plainte **qui a déclenché** le redémarrage, pas l'état courant :
+>
+> ```
+> ligne 185536   ✗ LISTE PERIMEE — ce conteneur exécute 17 tâche(s), le fichier en déclare 20.
+> ligne 185568   [ordonnanceur] démarrage · intervalle 60s · 20 tâche(s)     ← 32 lignes APRÈS
+> ```
+>
+> Le journal porte **quatre** démarrages — 15, 16, 17, puis **20**. Et zéro divergence depuis.
+>
+> ⚠ **J'avais écrit moi-même, dans ce bloc, que cette ligne ne s'imprime qu'au changement.** J'ai
+> pourtant lu sa dernière occurrence comme l'état courant. « La dernière fois qu'il s'est plaint »
+> n'est pas « il se plaint encore » — surtout pour un message qui, par construction, ne se répète
+> pas. Le savoir écrit noir sur blanc n'a pas empêché l'inférence.
+>
+> ⚠ **Et l'instrument juste, je l'ai cherché avec un motif inventé.** `démarrage · [0-9]+ tâche`
+> rend zéro ; la source imprime `démarrage · intervalle ${INTERVALLE}s · N tâche(s)`. Le zéro m'a
+> conforté dans la mauvaise lecture au lieu de me faire ouvrir le script.
+>
+> ⚠ **`RestartCount 0` ne dit rien des vies du script.** Quatre démarrages dans un seul conteneur :
+> le script redémarre à l'intérieur, et les compteurs de `docker inspect` ne comptent que les
+> instances du **conteneur**. C'est ce qui m'a fait croire à une seule vie depuis 14h32.
+>
+> ⚠ **`TACHES_AUTORISEES` n'est pas exportée** : `docker exec printenv` et `/proc/1/environ` la
+> rendent **vide** tous les deux. Faux zéro. Les deux seuls témoins fiables sont le bloc de
+> démarrage que le script s'imprime, et `platform:scheduler:run --status`.
+>
+> **Ce qui reste vrai, remesuré à 21h par `--status` :**
+>
+> ```
+> finance:treasury:suggerer-rapprochements   à jour   15/09 12:32
+> finance:treasury:verifier-seuils           JAMAIS   ← garde D109
+> finance:treasury:detecter-ecarts           JAMAIS   ← garde D109
+> reporting:executer-rapports                JAMAIS   ← cataloguée, HORS liste blanche
+> ```
+>
+> **Les deux portes, établies par allaccess-06 dont c'est le périmètre** — et je ne les avais
+> qu'entrevues : (1) la liste blanche `TACHES_AUTORISEES` du shell, figée au démarrage ; (2) le
+> catalogue applicatif lu à l'exécution par `platform:scheduler:run --only=`. Une tâche ne tourne
+> que si elle est dans **les deux**, que sa cadence tombe, **et** (`safeOnFirstRun` ou
+> `--supervise`). `reporting:executer-rapports` étant hors de la porte 1, elle ne peut pas partir
+> avant que sa correction soit prête.
+>
+> ##### ⚠ Rectifications de ce bloc, le même soir à 20h22
+>
+> **L'heure était fausse.** « 16h » était une estimation, pas une lecture : le conteneur a
+> démarré à **14h32** locales, `RestartCount 0`, et affichait « Up 18 minutes » quand je
+> l'ai lu — donc **14h50**. Une mesure datée d'une heure qu'elle n'a pas ne peut pas être
+> refaite, et c'est tout ce qu'on demande à une mesure consignée.
+>
+> **Et je n'ai pas établi que la liste figée soit la cause.** Les traces portent
+> `ok finance:treasury:suggerer-rapprochements` : **une des trois a tourné**, alors qu'elle
+> n'est pas dans la liste figée de 17. Il y a donc **deux portes distinctes** — la liste
+> blanche du shell, et le catalogue applicatif que lit `platform:scheduler:run` — et je ne
+> sais pas laquelle gouverne une tâche cataloguée. Le point 1 ci-dessus décrit donc un
+> **fait mesuré** (la liste portée vaut 17, le fichier 20) et non un mécanisme établi.
+>
+> **Un piège de lecture, pour la prochaine fois.** `docker logs --tail 400` ne montrait plus
+> aucune ligne de divergence, et j'ai failli conclure qu'elle avait cessé. Elle n'est
+> imprimée **qu'au changement** : 9 fois sur toute la vie du conteneur, `14 vs 15`, puis
+> `16 vs 17`, puis `17 vs 20` — la dernière étant toujours vraie. **Une absence dans un
+> `tail` n'est pas une absence.**
+>
+> Ce qui reste vrai sans réserve, et remesuré à 20h22 : `MAILER_DSN=null://null`, et la
+> garde D109 retient encore `verifier-seuils` et `detecter-ecarts`.
+>
+> ⚠ `finance:treasury` et `infra/` ne sont pas mon périmètre : **mesuré et signalé, non
+> corrigé**. Je n'ai redémarré aucun conteneur et levé aucune garde.
+>
+> ⚠ Au passage, et pour la même raison : les traces portent aussi
+> `✗ DROITS SUR /app/var — l'API répond encore, mais elle est amorcée` (3 entrées de
+> `/app/var` hors `www-data`). Même traitement : signalé, pas touché.
+>
+> **Il ne reste AUCUNE décision à ce point — les six sont autorisées.** Les trois de trésorerie par #193, la dernière (`reporting:executer-rapports`) par #204, dans cet ordre : #202 d'abord, qui a rendu l'ajout sûr.
+>
+> ⚠ **Mais aucune des quatre n'a encore expédié quoi que ce soit**, et c'est mesuré : `report_export` contient **0 ligne** (témoin positif : `report_mesure` en contient 4 136, donc la requête et la base sont les bonnes). Le premier passage de `reporting:executer-rapports` reste un geste humain, que Maxime a explicitement choisi de ne pas faire ce soir.
 
-Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
-périodique entre au dépôt avec sa planification ; D109/D110, que cette liste est une décision
-versionnée. Elles ne pèsent pas la même chose :
+~~Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09).~~ **Faux depuis le 15/09 : cinq des six
+y sont** (`reporting:agreger`, `dms:purge-expired-documents` et les trois `finance:treasury:*`).
+Les **six** y sont désormais (#204 a ajouté la dernière).
 
-| commande | ce qu'il se passe tant qu'elle n'y est pas |
+> ⚠ **Une mesure d'absence ne vieillit pas imprécise, elle s'inverse.** « Aucune » était exact
+> le 06/09 et disait le contraire du vrai le 15/09, sans qu'aucune relecture ne le signale. Le
+> tableau ci-dessous garde donc sa colonne au passé — « ce que son absence coûtait » — parce que
+> c'est ce coût qui a motivé l'arbitrage. On barre, on n'efface pas.
+
+D36 a établi qu'une commande périodique entre au dépôt avec sa planification ; D109/D110, que
+cette liste est une décision versionnée. Elles ne pèsent pas la même chose :
+
+| commande | ce que son absence coûtait — au passé pour les cinq autorisées |
 |---|---|
-| `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
+| ~~`finance:treasury:verifier-seuils`~~ **(autorisée #193)** | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
 | ~~`reporting:agreger`~~ | **AUTORISÉE le 15/09**, et le passé rattrapé (`--depuis=2026-09-05`) : `report_mesure` est passé de 2 068 à 4 136 lignes, et les 40 ventes que le module ne montrait pas sont revenues. Plus rien à décider ici |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
-| `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
-| `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
+| ~~`finance:treasury:suggerer-rapprochements`~~ **(autorisée #193)** | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
+| ~~`finance:treasury:detecter-ecarts`~~ **(autorisée #193)** | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
 
 > ⚠ **Ce point se dégrade pendant qu'il attend.** La version du 06/09 chiffrait « 3 jours sans
 > mesure sur 14 ». Un compte de jours ne vieillit pas en devenant imprécis : il devient faux, et
