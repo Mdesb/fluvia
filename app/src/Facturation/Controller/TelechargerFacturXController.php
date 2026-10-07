@@ -11,11 +11,11 @@ use App\Facturation\Entity\Facture;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
@@ -87,7 +87,21 @@ final class TelechargerFacturXController
         } catch (InvoiceNotEmittableException $refus) {
             // Le fichier européen ne peut pas être produit : on NOMME ce qui manque (le message porte
             // les termes obligatoires absents), au lieu de livrer un document non conforme.
-            throw new UnprocessableEntityHttpException($refus->getMessage());
+            //
+            // ⚠ ON REND LA REPONSE, ON NE LEVE PLUS L'EXCEPTION — ET CE N'EST PAS UN DETAIL DE STYLE.
+            //
+            // `UnprocessableEntityHttpException` porte bien la phrase, mais **en production Symfony
+            // ne la relaie pas** : le client recevait `{"detail":"Unprocessable Content"}`. Le soin
+            // mis a nommer le terme manquant se perdait donc exactement la ou il servait — devant
+            // l'exploitant qui doit corriger la fiche. Verifie sur la preprod le 11/09 : le message
+            // etait juste dans le code, et invisible a l'ecran.
+            //
+            // Une explication qui n'arrive pas est une explication qui n'existe pas.
+            return new JsonResponse([
+                'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                'title' => 'Facture incomplète',
+                'detail' => $refus->getMessage(),
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $nom = $facture->getNumero() ?? (string) $facture->getId();

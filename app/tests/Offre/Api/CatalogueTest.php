@@ -24,12 +24,15 @@ final class CatalogueTest extends OffreApiTestCase
         $parLibelle = $client->request('GET', '/api/produits?libelleRecherche=Gold', $entete)->toArray();
         self::assertSame(1, $this->total($parLibelle));
 
-        // Filtre par statut (les 3 produits des fixtures sont en brouillon).
-        $parStatut = $client->request('GET', '/api/produits?statut=brouillon', $entete)->toArray();
+        // Filtre par statut : les 3 produits des fixtures sont publiés (la caisse les vend), aucun
+        // n'est en brouillon. Les deux valeurs sont lues : un filtre ignoré rendrait 3 aux deux.
+        $parStatut = $client->request('GET', '/api/produits?statut=publie', $entete)->toArray();
         self::assertSame(3, $this->total($parStatut));
+        $brouillons = $client->request('GET', '/api/produits?statut=brouillon', $entete)->toArray();
+        self::assertSame(0, $this->total($brouillons));
 
         // Filtre cumulable type + statut.
-        $cumule = $client->request('GET', '/api/produits?statut=brouillon&typeCode=' . OffreFixtures::TYPE_CARTE, $entete)->toArray();
+        $cumule = $client->request('GET', '/api/produits?statut=publie&typeCode=' . OffreFixtures::TYPE_CARTE, $entete)->toArray();
         self::assertSame(1, $this->total($cumule));
 
         // Tri par code croissant (colonne triable).
@@ -65,7 +68,7 @@ final class CatalogueTest extends OffreApiTestCase
         self::assertSame(2, $reponse->toArray()['nbTraites']);
 
         $carte = $client->request('GET', '/api/produits/' . $idCarte, $entete)->toArray();
-        self::assertSame('brouillon', $carte['statut'], 'La carte non sélectionnée doit rester en brouillon.');
+        self::assertSame('publie', $carte['statut'], 'La carte non sélectionnée doit garder son statut (publié).');
 
         $gold = $client->request('GET', '/api/produits/' . $idGold, $entete)->toArray();
         self::assertSame('archive', $gold['statut']);

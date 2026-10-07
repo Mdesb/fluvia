@@ -21,6 +21,7 @@ use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Membership\Service\SubscriptionContractSigner;
 use App\Sepa\Service\IbanFormatValidator;
 use App\Sepa\Service\SepaMandateSigner;
+use App\Vente\Service\CounterSellability;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -54,6 +55,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         private readonly SubscriptionContractSigner $contractSigner,
         private readonly Security $security,
         private readonly RequestStack $requestStack,
+        private readonly CounterSellability $sellability,
     ) {
     }
 
@@ -108,6 +110,12 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
         // sur l'entité résolue.
         if ($produitFormule instanceof Produit) {
             $this->saleScopeGuard->assertSoldAt($produitFormule, $etablissement);
+            // Cette souscription est une vente au guichet : même règle que la caisse (publié, canal
+            // guichet). Une formule en brouillon ou archivée se souscrivait ici (mesuré le 07/10/2026).
+            $refus = $this->sellability->offerRefusal($produitFormule);
+            if ($refus !== null) {
+                throw new UnprocessableEntityHttpException($refus);
+            }
         }
 
         // ⚠ `periodicite` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
