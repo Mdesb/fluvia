@@ -16,6 +16,7 @@ use App\Offre\Enum\Canal;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
+use App\Vente\Port\AppairageAccesInterface;
 use App\Vente\Port\SaleSubscriptionInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -50,6 +51,7 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
         private readonly SouscriptionAbonnementHandler $souscription,
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SubscriptionRepository $abonnements,
+        private readonly AppairageAccesInterface $acces,
     ) {
     }
 
@@ -137,6 +139,14 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             $dejaSouscrit = $this->abonnements->findOneBy($criteres);
             if ($dejaSouscrit instanceof Membership) {
                 $dejaSouscrit->setSourceSaleLineId($ligne->getId());
+                // ⚠ UN SEUL ACCÈS : CELUI DE L'ABONNEMENT. Une ligne nominative émet aussi son billet,
+                // avec un droit SANS fin de validité (mesuré le 07/10) : il ouvrirait encore après une
+                // résiliation ou un impayé. On le révoque, comme une annulation le ferait.
+                foreach ($vente->getSupports() as $support) {
+                    if ((string) $support->getLigne()?->getId() === (string) $ligne->getId()) {
+                        $this->acces->invalider($support);
+                    }
+                }
                 $this->em->flush();
                 continue;
             }

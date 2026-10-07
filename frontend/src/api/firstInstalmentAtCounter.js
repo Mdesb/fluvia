@@ -23,7 +23,7 @@ import { idDe } from './iri.js'
 // parce que la réparation n'est pas la même selon l'étape.
 export async function payFirstInstalmentAtCounter(
   api,
-  { abonnementId, sessionId, payeurId, produitId, tarif, moyen, montant, prixForce },
+  { abonnementId, sessionId, payeurId, beneficiaireId, produitId, tarif, moyen, montant, prixForce },
 ) {
   if (!tarif) {
     return "L'abonnement est souscrit, mais ce produit n'a aucun tarif au guichet : rien n'a été "
@@ -56,7 +56,9 @@ export async function payFirstInstalmentAtCounter(
   // n'est pas un échec de l'encaissement.
   let apresValidation = null
   try {
-    const ligne = { produit: produitId, typeTarif: tarif, quantite: 1 }
+    // Le bénéficiaire est nommé : sans lui, une formule nominative (facette accès) est refusée
+    // (422) et le premier mois ne pouvait jamais être encaissé ici (mesuré le 07/10).
+    const ligne = { produit: produitId, typeTarif: tarif, quantite: 1, beneficiaire: beneficiaireId }
     if (prixForce) {
       ligne.prixForce = true
       ligne.prixUnitaire = montant
