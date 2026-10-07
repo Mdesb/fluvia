@@ -99,7 +99,7 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         $actions = [
             'lire', 'lire_soi', 'gerer_ressource', 'gerer_creneau', 'parametrer_annulation',
             'reserver', 'reserver_soi', 'annuler', 'annuler_soi', 'emarger', 'exonerer', 'forcer',
-            'arbitrer_recurrence', 'facturer',
+            'arbitrer_recurrence', 'facturer', 'lever_absence',
         ];
         $permissions = [];
         foreach ($actions as $action) {

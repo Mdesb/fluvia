@@ -168,6 +168,7 @@ const LIBELLE_STATUT = {
   annulee_tardive_facturee: 'Annulée hors délai, facturée',
   no_show_facture: 'Absence facturée',
   honoree: 'Honorée',
+  terminee_sans_constat: 'Terminée sans constat',
 }
 
 // `reserver` : le créneau dont on prend une place depuis le planning.
