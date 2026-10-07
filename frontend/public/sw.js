@@ -84,7 +84,7 @@ self.addEventListener('fetch', (evenement) => {
   // ⚠ LA LISTE QUI PROTÈGE CONTRE LA DONNÉE PÉRIMÉE. Tout ce qui parle au serveur métier passe au
   // réseau, sans interception et sans repli. Si le réseau manque, la requête échoue — et l'écran
   // affiche SON message d'erreur, ce qui est la vérité.
-  const versLeServeur = ['/api', '/auth', '/me', '/reporting', '/media', '/dms', '/sepa', '/agenda', '/calendar']
+  const versLeServeur = ['/api', '/auth', '/me', '/reporting', '/media', '/dms', '/sepa', '/agenda', '/calendar', '/factures']
   if (versLeServeur.some((prefixe) => url.pathname === prefixe || url.pathname.startsWith(prefixe + '/'))) {
     return
   }

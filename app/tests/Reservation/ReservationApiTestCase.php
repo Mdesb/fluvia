@@ -195,6 +195,24 @@ abstract class ReservationApiTestCase extends ApiTestCase
         return (string) $this->entite(Utilisateur::class, ['email' => SocleFixtures::ADMIN_EMAIL])->getId();
     }
 
+    /**
+     * Début et fin (ISO 8601, UTC) d'un créneau d'une heure, à 10:00 dans `$jours` jours.
+     *
+     * ⚠ UNE DATE FIXE « LARGEMENT DANS LE FUTUR » FINIT PAR NE PLUS L'ÊTRE. Le délai franc se compare
+     * à l'horloge réelle (`AnnulerReservationProcessor` : `new \DateTimeImmutable()`). Écrits les 16
+     * et 19/08 avec des créneaux au 01/10 et au 08/10, deux tests « annulation dans le délai » sont
+     * passés au rouge le 30/09 puis le 07/10 à 12:00 (Paris), sans qu'une ligne de code ait changé.
+     * Relatif au lancement, l'écart au délai franc (24 h) ne dépend plus ni du jour ni de l'heure.
+     *
+     * @return array{0: string, 1: string}
+     */
+    protected static function creneauDans(int $jours): array
+    {
+        $debut = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify(sprintf('+%d days', $jours))->setTime(10, 0);
+
+        return [$debut->format(\DATE_ATOM), $debut->modify('+1 hour')->format(\DATE_ATOM)];
+    }
+
     protected function idBeneficiaireParPrenom(string $prenom): string
     {
         /** @var EntityManagerInterface $em */

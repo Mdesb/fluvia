@@ -276,9 +276,7 @@ final class ValidationPassageHandler
                     }
                 }
 
-                // Le SGBD reste la source de vérité (UPDATE atomique) ; on mire le résultat sur l'objet
-                // en mémoire pour éviter qu'un appelant relisant $jauge via la map d'identité (même
-                // EntityManager) n'observe une valeur périmée (le raw SQL contourne le suivi ORM).
+                // Le SGBD reste la source de vérité (UPDATE atomique, seuil comparé sous verrou de ligne).
                 $jauge = $this->em->getRepository(JaugeFmi::class)->findOneBy(['espace' => $espace]);
                 if ($jauge instanceof JaugeFmi) {
                     $hexJauge = bin2hex($jauge->getId()->toBinary());
@@ -291,21 +289,25 @@ final class ValidationPassageHandler
                             if ($affectees === 0) {
                                 throw new PassageRefuseException(CodeMotifRefus::SeuilFmi, 'Seuil de jauge FMI atteint.');
                             }
-                            $jauge->setValeurCourante($jauge->getValeurCourante() + 1)->setCumulJour($jauge->getCumulJour() + 1);
                         } else {
                             $this->connection->executeStatement(
                                 'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + 1, cumul_jour = cumul_jour + 1 WHERE id = UNHEX(:hex)',
                                 ['hex' => $hexJauge],
                             );
-                            $jauge->setValeurCourante($jauge->getValeurCourante() + 1)->setCumulJour($jauge->getCumulJour() + 1);
                         }
                     } else {
                         $this->connection->executeStatement(
                             'UPDATE acces_jauge_fmi SET valeur_courante = GREATEST(valeur_courante - 1, 0) WHERE id = UNHEX(:hex)',
                             ['hex' => $hexJauge],
                         );
-                        $jauge->setValeurCourante(max(0, $jauge->getValeurCourante() - 1));
                     }
+                    // RECHARGER, JAMAIS RECALCULER (#267, même remède que le crédit ci-dessus). Recopier
+                    // `valeur_en_mémoire ± 1` sur l'objet faisait réécrire au `flush()` une occupation
+                    // ABSOLUE : un passage compté entre la lecture de la jauge et l'UPDATE était effacé,
+                    // la jauge sous-comptait et laissait entrer au-delà du seuil. Le lot hors ligne y
+                    // était le plus exposé (même instance d'un bout à l'autre du lot). `refresh()` relit
+                    // notre propre ligne, verrouillée par l'UPDATE : le flush n'a plus rien à y écrire.
+                    $this->em->refresh($jauge);
                 }
 
                 $passage = $this->construirePassage($espace, $controleur, $equipement, $support, $droit, $sens, $evt);
