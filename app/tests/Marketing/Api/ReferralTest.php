@@ -14,6 +14,7 @@ use App\Marketing\Entity\ReferralProgram;
 use App\Tests\Marketing\MarketingApiTestCase;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * LE PARRAINAGE — ces tests protègent le programme contre lui-même.
@@ -141,6 +142,46 @@ final class ReferralTest extends MarketingApiTestCase
         ]);
 
         self::assertSame(422, $reponse->getStatusCode());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function fuseaux(): iterable
+    {
+        // À toute heure, l'un des deux (UTC+14, UTC-11) n'a pas le jour UTC.
+        yield 'UTC+14' => ['Pacific/Kiritimati'];
+        yield 'UTC-11' => ['Pacific/Pago_Pago'];
+    }
+
+    /**
+     * **« Déjà client » et « depuis le parrainage » se comptent en jours de l'établissement.**
+     *
+     * Mesuré le 07/10/2026 : le jour du parrainage était le jour UTC. Un achat de la veille au soir
+     * pouvait passer pour un achat du jour et faire parrainer un client acquis ; un achat du matin
+     * pouvait passer pour un achat d'avant et refuser un vrai filleul.
+     */
+    #[DataProvider('fuseaux')]
+    public function testLeJourDuParrainageEstCeluiDeLEtablissement(string $fuseau): void
+    {
+        [$appelant, $entete] = $this->adminSurA();
+        $this->etablissementA()->setFuseauHoraire($fuseau);
+        $this->em()->flush();
+        $this->programme(200, '10.00');
+        $parrain = $this->parrainAvecAchat();
+        $local = static fn (string $quand): string => '@' . (new \DateTimeImmutable($quand, new \DateTimeZone($fuseau)))->getTimestamp();
+
+        $ancien = $this->nouveauClient('Client de la veille');
+        $this->vente($ancien, $local('yesterday 23:59'), '30.00');
+        $code = $appelant->request('GET', '/api/marketing/parrainage/code/' . $parrain->getId(), $entete)->toArray()['code'];
+        $refus = $appelant->request('POST', '/api/marketing/parrainages', $entete + [
+            'json' => ['code' => $code, 'refereeRef' => (string) $ancien->getId()],
+        ]);
+        self::assertSame(422, $refus->getStatusCode(), 'Un achat d’hier à 23:59 fait un client déjà acquis.');
+
+        $filleul = $this->nouveauClient('Filleul du matin');
+        $this->vente($filleul, $local('today 00:01'), '25.00');
+        $lien = $this->declarer($appelant, $entete, $parrain, $filleul);
+        $verse = $appelant->request('POST', '/api/marketing/parrainages/' . $lien . '/recompenser', $entete);
+        self::assertSame(200, $verse->toArray(false)['pointsVerses'] ?? null, 'L’achat d’aujourd’hui à 00:01 compte pour la récompense.');
     }
 
     /** **Un filleul ne se parraine qu'une fois — et c'est la base qui le tient, pas une lecture.** */
