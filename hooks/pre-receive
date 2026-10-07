@@ -504,6 +504,13 @@ while read -r ancien nouveau ref; do
         (cd "$ARBRE" && ./bin/garde-fou-marqueurs-de-conflit.sh) || ECHEC=1
     fi
 
+    # D95 : la tache no-show facture des absences tant qu'aucune presence n'est ecrite. Lit un
+    # fichier de l'arbre recu, rien d'autre : sans condition, comme le precedent.
+    if [ -x "$ARBRE/bin/garde-fou-no-show-hors-liste.sh" ]; then
+        echo "── No-show hors liste (n°57)"
+        (cd "$ARBRE" && ./bin/garde-fou-no-show-hors-liste.sh) || ECHEC=1
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
         echo "── Classes fantomes (n°37)"
         lancer garde-fou-classes-fantomes.php
