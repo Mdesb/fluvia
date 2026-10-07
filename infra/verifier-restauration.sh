@@ -19,8 +19,20 @@ fi
 
 echo "restauration de $DERNIERE dans $BASE_ESSAI"
 
+supprimer_essai() {
+    mariadb --host=db --user=root --password="$DB_ROOT_PASSWORD" \
+        -e "DROP DATABASE IF EXISTS \`$BASE_ESSAI\`" || { echo "✗ $BASE_ESSAI NON supprimee" >&2; exit 1; }
+    echo "base d'essai supprimee"
+}
+
 mariadb --host=db --user=root --password="$DB_ROOT_PASSWORD" \
     -e "CREATE DATABASE \`$BASE_ESSAI\`"
+
+# ⚠ Posé juste après la création, pour TOUTES les sorties (#258) : une table attendue absente fait
+# échouer le SELECT, `set -e` sort, et la base d'essai restait sur le serveur. Un signal passe
+# par `exit` pour que dash exécute aussi le nettoyage.
+trap supprimer_essai EXIT
+trap 'exit 1' HUP INT TERM
 
 gunzip -c "$DERNIERE" | mariadb --host=db --user=root --password="$DB_ROOT_PASSWORD" "$BASE_ESSAI"
 
@@ -31,8 +43,3 @@ mariadb --host=db --user=root --password="$DB_ROOT_PASSWORD" "$BASE_ESSAI" -e "
   UNION ALL SELECT 'produits',       COUNT(*) FROM off_produit
   UNION ALL SELECT 'factures',       COUNT(*) FROM facturation_facture
   UNION ALL SELECT 'passages',       COUNT(*) FROM acces_passage;"
-
-mariadb --host=db --user=root --password="$DB_ROOT_PASSWORD" \
-    -e "DROP DATABASE \`$BASE_ESSAI\`"
-
-echo "base d'essai supprimee"

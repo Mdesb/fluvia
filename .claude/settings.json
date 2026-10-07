@@ -81,7 +81,11 @@
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(./bin/garde-fous.sh:*)",
-      "Bash(./infra/test-stack.sh:*)"
+      "Bash(./infra/test-stack.sh:*)",
+      "WebFetch(domain:symfony.com)",
+      "WebFetch(domain:www.php.net)",
+      "WebFetch(domain:getcomposer.org)",
+      "WebFetch(domain:developer.mozilla.org)"
     ]
   }
 }

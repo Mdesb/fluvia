@@ -33,6 +33,35 @@ final class RechercheClientTest extends CrmApiTestCase
         self::assertSame(1, $page['page']);
     }
 
+    /**
+     * Le filtre `type` : la distinction particulier / personne morale existait dans les données et
+     * sur chaque ligne rendue, mais rien ne permettait d'isoler les unes ou les autres.
+     */
+    public function testFiltreParTypeDeFiche(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', '/api/clients', $entete + [
+            'json' => ['type' => 'morale', 'raisonSociale' => 'Collège Jean Moulin', 'email' => 'gestion@college-jm.test'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $morales = $client->request('GET', '/api/crm/clients/recherche', $entete + ['query' => ['type' => 'morale']])->toArray();
+        self::assertSame(1, $morales['total']);
+        self::assertSame('Collège Jean Moulin', $morales['items'][0]['raisonSociale']);
+
+        $physiques = $client->request('GET', '/api/crm/clients/recherche', $entete + ['query' => ['type' => 'physique']])->toArray();
+        self::assertGreaterThanOrEqual(3, $physiques['total']);
+        foreach ($physiques['items'] as $item) {
+            self::assertSame('physique', $item['type']);
+        }
+
+        // Une valeur inconnue est refusée, et non ignorée : elle tomberait sinon dans le cas « aucun
+        // filtre » et rendrait toutes les fiches sous une étiquette qui n'en annonce qu'une partie.
+        $client->request('GET', '/api/crm/clients/recherche', $entete + ['query' => ['type' => 'entreprise']]);
+        self::assertResponseStatusCodeSame(400);
+    }
+
     /** CA-2 — Filtres combinés (statut, avecPmv, mineur) ; aucune fiche candidate à fusion masquée. */
     public function testCa2FiltresCombinesEtFichesFusionneesVisiblesSurDemande(): void
     {

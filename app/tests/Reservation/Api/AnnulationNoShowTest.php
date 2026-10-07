@@ -21,7 +21,8 @@ final class AnnulationNoShowTest extends ReservationApiTestCase
         $client->disableReboot();
 
         // Créneau largement au-delà du délai franc (24h) : annulation immédiate = dans le délai.
-        $idCreneau = $this->creerCreneau($client, $entete, '2026-10-01T10:00:00+00:00', '2026-10-01T11:00:00+00:00');
+        // Relatif au lancement, pas une date fixe (voir `creneauDans()`).
+        $idCreneau = $this->creerCreneau($client, $entete, ...self::creneauDans(30));
         $idReservation = $this->reserver($client, $entete, $idCreneau, $this->idBeneficiairePayeur());
 
         $client->request('POST', '/api/reservation/reservations/' . $idReservation . '/annuler', $entete);
