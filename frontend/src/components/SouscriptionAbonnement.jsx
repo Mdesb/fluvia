@@ -5,6 +5,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros, libelleProduit, prixIndicatif, typeTarifId } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
+import { payFirstInstalmentAtCounter } from '../api/firstInstalmentAtCounter.js'
 
 // Composant PARTAGÉ de souscription d'abonnement (onglet Abonnements ET modale de caisse). Un
 // abonnement se vend de la même manière partout (demande de Maxime) : même formulaire, mêmes
@@ -144,7 +145,8 @@ function DetailsProduit({ produit }) {
 //    il ne fixe pas un prix — et refuse au-delà. On affiche SON refus, on ne redouble pas sa règle.
 //
 // 3. ELLE SAIT ENCAISSER AU COMPTOIR. Caisse ouverte : l'opérateur encaisse la première échéance tout
-//    de suite au lieu de la faire prélever. Voir la note d'ordonnancement dans `encaisserComptant`.
+//    de suite au lieu de la faire prélever. Voir la note d'ordonnancement dans
+//    `api/firstInstalmentAtCounter.js`.
 export default function SouscriptionAbonnement({
   produits,
   // Modale de caisse : le produit est IMPOSÉ (la ligne de panier) et le payeur pré-rempli (le
@@ -268,96 +270,22 @@ export default function SouscriptionAbonnement({
   }, [comptantPossible, comptant])
 
   // ── ENCAISSEMENT AU COMPTOIR ───────────────────────────────────────────────────────────────────
-  //
-  // ⚠ L'ORDRE DES APPELS EST LA SEULE CHOSE QUI PROTÈGE L'ADHÉRENT D'UN DOUBLE PRÉLÈVEMENT, ET IL SE
-  // LIT À L'ENVERS DE L'INTUITION.
-  //
-  // Encaisser la première échéance au comptoir veut dire qu'elle ne doit PAS être prélevée en plus.
-  // Il faut donc l'annuler — mais l'annuler AVANT d'avoir l'argent laisserait, au moindre refus de
-  // règlement, un abonnement dont la première échéance est annulée et jamais encaissée : une somme
-  // que le club ne réclamerait plus jamais, sans que personne ne s'en aperçoive.
-  //
-  // On annule donc EN DERNIER, une fois l'argent réellement encaissé et la vente validée. Si cette
-  // dernière étape échoue, l'échéance reste « à venir » : l'adhérent risque d'être prélevé deux
-  // fois, ce qui est visible, réclamable et réparable — au contraire du silence.
-  //
-  // ⚠ ET ON NE JETTE PAS. Chaque échec est raconté à l'opérateur avec l'endroit où ça s'est arrêté,
-  // parce que la réparation n'est pas la même selon l'étape.
+  // L'ordre des appels, et ce qu'on dit à chaque échec, vivent dans `payFirstInstalmentAtCounter`
+  // (testé hors du navigateur) : un chemin d'argent ne se vérifie pas à l'œil.
   const encaisserComptant = useCallback(
-    async (abonnement) => {
-      const abonnementId = idDe(abonnement)
-      const tarif = typeTarifId(produit)
-      if (!tarif) {
-        return "L'abonnement est souscrit, mais ce produit n'a aucun tarif au guichet : rien n'a été "
-          + "encaissé. Encaissez depuis la caisse, ou laissez la première échéance se prélever."
-      }
-      let vente
-      try {
-        vente = await api.creerVente({ session: session.id })
-      } catch (e) {
-        return "L'abonnement est souscrit, mais la vente n'a pas pu être ouverte en caisse ("
-          + (e?.message || 'refus du serveur')
-          + ") : rien n'a été encaissé, et la première échéance sera prélevée normalement."
-      }
-      const numero = vente?.numero ? `n° ${vente.numero}` : `id ${vente?.id}`
-      try {
-        if (payeur) {
-          // Le rattachement peut échouer sans empêcher d'encaisser : la vente reste anonyme, ce qui
-          // est moins bien mais pas faux. On ne casse pas un encaissement pour un champ de confort.
-          try {
-            await api.rattacherClientVente(vente.id, { client: idDe(payeur) })
-          } catch {
-            /* vente anonyme : sans conséquence sur l'argent, donc non remonté */
-          }
-        }
-        const ligne = { produit: idDe(produit), typeTarif: tarif, quantite: 1 }
-        if (comptantExigeForcage) {
-          ligne.prixForce = true
-          ligne.prixUnitaire = Number(montantComptant).toFixed(2)
-        }
-        await api.ajouterLigne(vente.id, ligne)
-        const reglement = await api.payer(vente.id, {
-          moyen: moyenSel,
-          montant: Number(montantComptant).toFixed(2),
-        })
-        if (!reglement?.reglementEnregistre) {
-          return `L'abonnement est souscrit. Le règlement a été refusé : la vente ${numero} reste `
-            + `ouverte en caisse, et la première échéance sera prélevée normalement.`
-        }
-        await api.valider(vente.id)
-      } catch (e) {
-        return `L'abonnement est souscrit. L'encaissement s'est arrêté sur la vente ${numero} (`
-          + (e?.message || 'refus du serveur')
-          + `) : reprenez-la depuis la caisse. La première échéance reste programmée.`
-      }
-      // L'argent est encaissé. À partir d'ici, tout échec laisse une échéance de trop — jamais un
-      // encaissement de moins.
-      let echeance = null
-      try {
-        const liste = membres(
-          await api.echeancesSepaSport({ abonnement: abonnementId, statut: 'a_venir', order: 'asc' }),
-        )
-        echeance = Array.isArray(liste) && liste.length > 0 ? liste[0] : null
-      } catch {
-        /* dit par le message ci-dessous */
-      }
-      if (!echeance) {
-        return `Encaissé au comptoir (vente ${numero}). ⚠ La première échéance n'a pas pu être `
-          + `retrouvée : vérifiez l'échéancier et annulez-la, sinon l'adhérent sera prélevé deux fois.`
-      }
-      try {
-        await api.annulerEcheanceSepa(
-          idDe(echeance),
-          `Première échéance encaissée au comptoir (vente ${numero}).`,
-        )
-      } catch (e) {
-        return `Encaissé au comptoir (vente ${numero}). ⚠ La première échéance n'a pas pu être `
-          + `annulée (${e?.message || 'refus du serveur'}) : annulez-la dans l'échéancier, sinon `
-          + `l'adhérent sera prélevé deux fois.`
-      }
-      return null
-    },
-    [produit, session, payeur, moyenSel, montantComptant, comptantExigeForcage],
+    (abonnement) =>
+      payFirstInstalmentAtCounter(api, {
+        abonnementId: idDe(abonnement),
+        sessionId: session.id,
+        payeurId: idDe(payeur),
+        beneficiaireId: idDe(adherent || payeur),
+        produitId: idDe(produit),
+        tarif: typeTarifId(produit),
+        moyen: moyenSel,
+        montant: Number(montantComptant).toFixed(2),
+        prixForce: comptantExigeForcage,
+      }),
+    [produit, session, payeur, adherent, moyenSel, montantComptant, comptantExigeForcage],
   )
 
   const soumettre = useCallback(async () => {
@@ -752,13 +680,15 @@ export default function SouscriptionAbonnement({
           )}
 
           {/* ── NAVIGATION ─────────────────────────────────────────────────────────────────────── */}
+          {/* Abonnement souscrit (avis affiché) : plus de « Souscrire » ni de retour arrière, qui
+              rejoueraient l'encaissement ; « Annuler » sort comme « Retour à la liste ». */}
           <div className="row" style={{ justifyContent: 'space-between', gap: 'var(--esp-serre)', flexWrap: 'wrap' }}>
-            <button type="button" className="btn" onClick={onAnnuler} disabled={envoi}>
+            <button type="button" className="btn" onClick={avis ? onCree : onAnnuler} disabled={envoi}>
               Annuler
             </button>
             <div className="row" style={{ gap: 'var(--esp-serre)' }}>
               {etape > 1 && (
-                <button type="button" className="btn" onClick={allerPrecedent} disabled={envoi}>
+                <button type="button" className="btn" onClick={allerPrecedent} disabled={envoi || avis !== null}>
                   ← Précédent
                 </button>
               )}
@@ -767,7 +697,7 @@ export default function SouscriptionAbonnement({
                   Suivant →
                 </button>
               ) : (
-                <button type="button" className="btn primary" onClick={soumettre} disabled={envoi}>
+                <button type="button" className="btn primary" onClick={soumettre} disabled={envoi || avis !== null}>
                   {envoi ? 'Souscription…' : "Souscrire l'abonnement"}
                 </button>
               )}

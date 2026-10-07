@@ -66,6 +66,7 @@ final readonly class AuditEstablishmentResolver
         \App\Piscine\Entity\ForcageCasier::class => [['getCasier', 'getEtablissement']],
         \App\Sport\Entity\EvenementSOS::class => [['getEspaceAcces', 'getEtablissement']],
         \App\Stock\Entity\TransfertStock::class => [['getArticleStockSource', 'getEtablissement']],
+        \App\Reservation\Entity\FacturationNoShow::class => [['getReservation', 'getEtablissement']],
     ];
 
     /**

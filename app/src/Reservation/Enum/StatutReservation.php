@@ -24,6 +24,13 @@ enum StatutReservation: string
     case Honoree = 'honoree';
 
     /**
+     * ⚠ L'ÉTAT NEUTRE DU 07/10/2026 : ni honorée, ni absente. Le créneau est passé et l'absence a été
+     * levée (`POST /reservation/reservations/{id}/lever-absence`), une fois sa facturation exonérée.
+     * N'occupe aucune place, n'ouvre aucun accès, et le reporting ne la compte pas comme absence.
+     */
+    case TermineeSansConstat = 'terminee_sans_constat';
+
+    /**
      * Vrai si la réservation occupe encore une place sur le créneau (compte pour la jauge).
      *
      * ⚠ `AConfirmer` OCCUPE, ET IL A FALLU UN AUDIT POUR LE VOIR. Ce prédicat servait à QUATRE

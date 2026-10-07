@@ -15,9 +15,23 @@ use Symfony\Component\Uid\Uuid;
  * du moyen est stocké en clair (référentiel M6, pas de FK dure). Le rendu de monnaie n'est possible
  * que sur un moyen autorisant le rendu (espèces, RG-M2-05 / CA-9). La référence TPE est conservée
  * pour les paiements CB (US-L2-07). Immuable une fois la vente validée (NF525).
+ *
+ * ── LA CLÉ D'IDEMPOTENCE, UNIQUE SUR TOUTE LA TABLE ────────────────────────────────────────────
+ *
+ * `Vente` porte déjà la sienne : ouvrir deux fois le même panier ne crée qu'une vente. Le RÈGLEMENT
+ * n'en avait aucune, et c'est lui qui déplace l'argent — le débit du porte-monnaie et l'ordre au
+ * TPE partent tous deux avant qu'une seule ligne soit écrite. Une réponse perdue et un client qui
+ * rejoue encaissaient donc deux fois.
+ *
+ * ⚠ **La portée est la table, pas la vente.** L'`id` fourni par l'appelant vaut clé lui aussi, et
+ * c'est une clé primaire : unique sur toute la table. Une clé « par vente » ne dirait pas la même
+ * chose que lui. `PaiementHandler` cherche donc la clé sur toute la table, avant tout effet, et
+ * refuse celle d'une autre vente : la recherche et la contrainte ont la même portée. Un écart entre
+ * les deux se paierait en 500 au `flush()`, après le débit.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'vente_paiement')]
+#[ORM\UniqueConstraint(name: 'uniq_paiement_cle_idempotence', columns: ['cle_idempotence'])]
 class Paiement
 {
     #[ORM\Id]
@@ -61,6 +75,17 @@ class Paiement
     #[Groups(['vente:read', 'paiement:read'])]
     private bool $differe = false;
 
+    /**
+     * Nullable : les règlements antérieurs n'en portent aucune, et un `NOT NULL` aurait exigé d'en
+     * inventer une pour eux — donc d'écrire dans des lignes que `InalterabiliteListener` protège.
+     * Absente = ce règlement n'a jamais été rejouable, ce qui est la vérité pour tout l'historique.
+     * Plusieurs `NULL` passent l'index unique : mesuré le 07/10 sur une copie de la préprod, où les
+     * 55 règlements existants, tous sans clé, ont reçu l'index sans erreur.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['vente:read', 'paiement:read'])]
+    private ?Uuid $cleIdempotence = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['vente:read', 'paiement:read'])]
     private \DateTimeImmutable $dateHeure;
@@ -79,6 +104,18 @@ class Paiement
     public function setId(Uuid $id): self
     {
         $this->id = $id;
+
+        return $this;
+    }
+
+    public function getCleIdempotence(): ?Uuid
+    {
+        return $this->cleIdempotence;
+    }
+
+    public function setCleIdempotence(?Uuid $cle): self
+    {
+        $this->cleIdempotence = $cle;
 
         return $this;
     }

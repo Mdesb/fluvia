@@ -23,6 +23,7 @@ use App\Reservation\State\AssignResourceProcessor;
 use App\Reservation\State\AnnulerReservationProcessor;
 use App\Reservation\State\ConfirmerReservationProcessor;
 use App\Reservation\State\EmargerProcessor;
+use App\Reservation\State\LiftAbsenceProcessor;
 use App\Reservation\State\ReserverProcessor;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
@@ -97,6 +98,15 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'reservation.reserver') or is_granted('PERM', 'reservation.reserver_soi')",
             processor: ConfirmerReservationProcessor::class,
+        ),
+        // LEVER UNE ABSENCE (07/10/2026) : `no_show_facture` → `terminee_sans_constat`, une fois la
+        // facturation d'absence exonérée. Droit dédié, motif obligatoire lu par le processeur.
+        new Post(
+            uriTemplate: '/reservation/reservations/{id}/lever-absence',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'reservation.lever_absence')",
+            processor: LiftAbsenceProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['reservation:read']],
@@ -247,6 +257,14 @@ class Reservation
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['reservation:read'])]
     private ?\DateTimeImmutable $dateLimiteAnnulation = null;
+
+    /**
+     * Pourquoi l'absence a été levée (`LiftAbsenceProcessor`). Sur la réservation et non dans un
+     * journal à part : l'audit de la réservation porte alors l'auteur, la date et le motif ensemble.
+     */
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?string $absenceLiftReason = null;
 
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['reservation:read'])]
@@ -475,6 +493,18 @@ class Reservation
     public function setDateLimiteAnnulation(?\DateTimeImmutable $dateLimiteAnnulation): self
     {
         $this->dateLimiteAnnulation = $dateLimiteAnnulation;
+
+        return $this;
+    }
+
+    public function getAbsenceLiftReason(): ?string
+    {
+        return $this->absenceLiftReason;
+    }
+
+    public function setAbsenceLiftReason(?string $reason): self
+    {
+        $this->absenceLiftReason = $reason;
 
         return $this;
     }

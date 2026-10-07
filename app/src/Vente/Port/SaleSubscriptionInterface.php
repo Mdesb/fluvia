@@ -17,11 +17,17 @@ use App\Vente\Entity\Vente;
  *   `SouscriptionAbonnementEnLigneHandler` l.171→193) — JAMAIS dans la transaction de scellement
  *   NF525 (D45). C'est la correction du montage de l'ancienne branche `feature/caisse-abonnement`,
  *   qui créait l'abonnement DANS la transaction scellée (un refus y faisait rollback le scel, ce
- *   que G-5 interdit). Un refus ici (ligne à quantité > 1, vente anonyme, bénéficiaire hors
- *   périmètre) lève une exception qui NE FAIT PAS rollback : la vente reste Validée et scellée,
- *   l'API renvoie l'erreur, et la reprise se fait hors de cette transaction.
+ *   que G-5 interdit). Un refus ici (ligne à quantité > 1, bénéficiaire hors périmètre) lève une
+ *   exception qui NE FAIT PAS rollback : la vente reste Validée et scellée, l'API renvoie l'erreur,
+ *   et la reprise se fait hors de cette transaction.
+ *
+ * ⚠ SAUF CE QUI SE SAIT AVANT (décision de Maxime du 07/10, qui revoit G-5) : `assertSubscribable()`
+ *   est appelée AVANT le scellement, et refuse une vente qui ouvre un abonnement sans client payeur.
+ *   Scellée, elle encaissait sans abonnement possible ni reprise (aucun débiteur pour le mandat).
  */
 interface SaleSubscriptionInterface
 {
+    public function assertSubscribable(Vente $vente): void;
+
     public function createSubscriptionsFromSale(Vente $vente): void;
 }

@@ -6,13 +6,17 @@ namespace App\Membership\Adapter;
 
 use App\Crm\Entity\Client;
 use App\Crm\Service\BeneficiaryResolver;
+use App\Membership\Entity\Membership;
+use App\Membership\Enum\MembershipStatus;
 use App\Membership\Repository\SubscriptionRepository;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Organisation\Entity\Etablissement;
+use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
+use App\Vente\Port\AppairageAccesInterface;
 use App\Vente\Port\SaleSubscriptionInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -37,6 +41,8 @@ use Symfony\Component\Uid\Uuid;
  *   refus ci-dessous laisse la vente SCELLÉE et VALIDE, rejouable côté reprise — pas de rollback
  *   (G-5, correction du montage transactionnel faux de l'ancienne branche
  *   `feature/caisse-abonnement`, qui créait l'abonnement DANS la transaction scellée).
+ *   Le payeur manquant, lui, est refusé AVANT le scellement (`assertSubscribable()`, décision de
+ *   Maxime du 07/10).
  */
 final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
 {
@@ -45,7 +51,23 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
         private readonly SouscriptionAbonnementHandler $souscription,
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SubscriptionRepository $abonnements,
+        private readonly AppairageAccesInterface $acces,
     ) {
+    }
+
+    /**
+     * AVANT LE SCELLEMENT (décision de Maxime du 07/10, qui revoit G-5). Une vente anonyme qui ouvre
+     * un abonnement était scellée PUIS refusée : l'argent entrait, sans abonnement possible ni reprise
+     * (aucun débiteur pour le mandat SEPA). On la refuse tant qu'elle est encore ouverte.
+     */
+    public function assertSubscribable(Vente $vente): void
+    {
+        if ($this->subscriptionLines($vente) !== [] && !$this->resoudreClient($vente->getClient()) instanceof Client) {
+            throw new UnprocessableEntityHttpException(
+                'Un abonnement exige un client payeur : rattachez le client à la vente avant de la valider. '
+                . 'Rien n\'a été scellé.'
+            );
+        }
     }
 
     public function createSubscriptionsFromSale(Vente $vente): void
@@ -55,28 +77,7 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             throw new UnprocessableEntityHttpException('Établissement de la vente introuvable : abonnement impossible.');
         }
 
-        foreach ($vente->getLignes() as $ligne) {
-            $produit = $this->em->getRepository(Produit::class)->find($ligne->getProduit());
-            if (!$produit instanceof Produit) {
-                continue;
-            }
-            $formule = $produit->getFormule();
-            // Seules les lignes portant un produit à facette Formule nous concernent (G-1) ; les
-            // autres (billet, carnet, accès simple) sont ignorées, pas refusées.
-            if (!$formule instanceof Formule) {
-                continue;
-            }
-
-            // ── OPT-OUT « VENDU COMME PRODUIT SIMPLE » (sauf paramétrage contraire) ─────────────
-            // Un abonnement se souscrit (mandat + contrat) partout — SAUF si la fiche produit
-            // demande de le vendre comme produit SIMPLE. Alors la ligne est encaissée telle quelle
-            // et n'ouvre AUCUN abonnement ni mandat. Le drapeau vit dans `champsPerso`, comme
-            // « bénéficiaire obligatoire ». (Au comptoir, un tel produit n'ouvre d'ailleurs pas la
-            // modale de souscription : il passe par la vente normale, qui atterrit ici.)
-            if ((($produit->getChampsPerso() ?? [])['venteSansSouscription'] ?? false) === true) {
-                continue;
-            }
-
+        foreach ($this->subscriptionLines($vente) as [$ligne, $formule]) {
             // ── IDEMPOTENCE (G-5) ──────────────────────────────────────────────────────────────
             // Une ligne ne crée qu'UN abonnement. `sourceSaleLineId` est UNIQUE en base (filet
             // ultime) ; court-circuit ici pour ne pas relancer une souscription complète si cette
@@ -122,6 +123,34 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
 
             $adherent = $this->beneficiaires->forPurchase($payeur, $designe);
 
+            // ── L'ABONNEMENT DÉJÀ SOUSCRIT PAR CE PARCOURS (G-5 : formule déjà active → 1 seul) ──
+            // L'écran de souscription souscrit d'abord, PUIS encaisse le 1er mois dans une vente qui
+            // porte la même formule : souscrire ici en créait un second (PR #276, 2 → 3). On relie la
+            // ligne à l'abonnement actif du jour, même payeur, même formule, qu'aucune ligne n'a encore
+            // payé — la clé d'idempotence de `/sport/abonnements/souscrire`. L'adhérent ne départage
+            // que si la ligne le désigne (l'écran le fait ; un appel d'API peut ne pas le faire).
+            $criteres = [
+                'payeur' => $payeur, 'formule' => $formule, 'etablissement' => $etablissement,
+                'statut' => MembershipStatus::Actif, 'dateSouscription' => $vente->getDate(), 'sourceSaleLineId' => null,
+            ];
+            if ($designe instanceof Client) {
+                $criteres['adherent'] = $adherent;
+            }
+            $dejaSouscrit = $this->abonnements->findOneBy($criteres);
+            if ($dejaSouscrit instanceof Membership) {
+                $dejaSouscrit->setSourceSaleLineId($ligne->getId());
+                // ⚠ UN SEUL ACCÈS : CELUI DE L'ABONNEMENT. Une ligne nominative émet aussi son billet,
+                // avec un droit SANS fin de validité (mesuré le 07/10) : il ouvrirait encore après une
+                // résiliation ou un impayé. On le révoque, comme une annulation le ferait.
+                foreach ($vente->getSupports() as $support) {
+                    if ((string) $support->getLigne()?->getId() === (string) $ligne->getId()) {
+                        $this->acces->invalider($support);
+                    }
+                }
+                $this->em->flush();
+                continue;
+            }
+
             $this->souscription->souscrire(
                 adherent: $adherent,
                 payeur: $payeur,
@@ -134,6 +163,34 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                 sourceSaleLineId: $ligne->getId(),
             );
         }
+    }
+
+    /**
+     * Les lignes qui ouvrent un abonnement. Seul un produit à facette Formule nous concerne (G-1) ;
+     * les autres (billet, carnet, accès simple) sont ignorés, pas refusés.
+     *
+     * ── OPT-OUT « VENDU COMME PRODUIT SIMPLE » (sauf paramétrage contraire) ─────────────────────
+     * Un abonnement se souscrit (mandat + contrat) partout — SAUF si la fiche produit demande de le
+     * vendre comme produit SIMPLE. Alors la ligne est encaissée telle quelle et n'ouvre AUCUN
+     * abonnement ni mandat. Le drapeau vit dans `champsPerso`, comme « bénéficiaire obligatoire ».
+     * (Au comptoir, un tel produit n'ouvre d'ailleurs pas la modale de souscription : il passe par la
+     * vente normale, qui atterrit ici.)
+     *
+     * @return list<array{0: LigneVente, 1: Formule}>
+     */
+    private function subscriptionLines(Vente $vente): array
+    {
+        $lignes = [];
+        foreach ($vente->getLignes() as $ligne) {
+            $produit = $this->em->getRepository(Produit::class)->find($ligne->getProduit());
+            $formule = $produit instanceof Produit ? $produit->getFormule() : null;
+            if ($formule instanceof Formule
+                && (($produit->getChampsPerso() ?? [])['venteSansSouscription'] ?? false) !== true) {
+                $lignes[] = [$ligne, $formule];
+            }
+        }
+
+        return $lignes;
     }
 
     private function resoudreClient(?Uuid $id): ?Client
