@@ -106,7 +106,10 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/paiements',
-            description: 'Enregistre un reglement. Corps : { moyen, montant, id?, differe?, banque?, numeroCheque? }.',
+            description: 'Enregistre un reglement. Corps : { moyen, montant, cleIdempotence?, id?, differe?, banque?, numeroCheque? }. '
+                . 'Rejouer le meme appel avec la meme cleIdempotence (ou le meme id) rend le reglement deja enregistre '
+                . '(dejaEnregistre: true, 200), sans redemander au terminal ni redebiter le porte-monnaie, meme apres validation. '
+                . 'Une cle deja employee sur une autre vente, ou avec un autre moyen ou un autre montant, est refusee (422) avant tout effet.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
