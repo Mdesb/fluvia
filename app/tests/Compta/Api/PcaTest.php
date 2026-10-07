@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Compta\Api;
 
+use ApiPlatform\Symfony\Bundle\Test\Client as ApiClient;
 use App\Compta\Entity\EtalementPca;
 use App\Compta\Entity\MouvementPca;
 use App\Compta\Enum\MethodePca;
@@ -15,6 +16,8 @@ use App\Compta\Regime\CompteLookupService;
 use App\Compta\Regime\RegimeComptableResolver;
 use App\Compta\Service\RepriseAuPassageHandler;
 use App\Compta\Service\RepriseMensuellePcaHandler;
+use App\Crm\DataFixtures\CrmFixtures;
+use App\Crm\Entity\Client;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Tests\Compta\ComptaApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -26,6 +29,19 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class PcaTest extends ComptaApiTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Le CRM, pour le client payeur de `vendreGold()`.
+        $container = static::getContainer();
+        /** @var EntityManagerInterface $em */
+        $em = $container->get('doctrine')->getManager();
+        $container->get(CrmFixtures::class)->load($em);
+
+        self::ensureKernelShutdown();
+    }
+
     public function testAbonnementEncaisseDavanceCrediteLe487(): void
     {
         [$client, $entete] = $this->adminSurA();
@@ -38,19 +54,7 @@ final class PcaTest extends ComptaApiTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        $session = $this->ouvrirSession($client, $entete);
-        $vente = $client->request('POST', '/api/ventes', $entete + ['json' => ['session' => '/api/session_caisses/' . $session['id']]])->toArray();
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
-            'json' => [
-                'produit' => '/api/produits/' . $goldId,
-                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
-                'quantite' => 1,
-                'beneficiaire' => (string) \Symfony\Component\Uid\Uuid::v4(), // produit nominatif (RG-M2-04).
-            ],
-        ]);
-        self::assertResponseIsSuccessful();
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '39.90']]);
-        $vente = $client->request('POST', '/api/ventes/' . $vente['id'] . '/valider', $entete)->toArray();
+        $vente = $this->vendreGold($client, $entete, $goldId);
         self::assertSame('validee', $vente['statut']);
 
         $client->request('POST', '/api/compta/ecritures/generer', $entete + [
@@ -172,19 +176,9 @@ final class PcaTest extends ComptaApiTestCase
             'json' => ['reglePca' => 'etalement'],
         ]);
 
-        $session = $this->ouvrirSession($client, $entete);
-        $vente = $client->request('POST', '/api/ventes', $entete + ['json' => ['session' => '/api/session_caisses/' . $session['id']]])->toArray();
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
-            'json' => [
-                'produit' => '/api/produits/' . $goldId,
-                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
-                'quantite' => 1,
-                'beneficiaire' => (string) \Symfony\Component\Uid\Uuid::v4(), // produit nominatif (RG-M2-04).
-            ],
-        ]);
-        self::assertResponseIsSuccessful();
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '39.90']]);
-        $vente = $client->request('POST', '/api/ventes/' . $vente['id'] . '/valider', $entete)->toArray();
+        $vente = $this->vendreGold($client, $entete, $goldId);
+        // Témoin : sans vente validée, « aucun étalement » plus bas serait vrai pour une autre raison.
+        self::assertSame('validee', $vente['statut']);
 
         $client->request('POST', '/api/compta/ecritures/generer', $entete + [
             'json' => ['profilExploitant' => '/api/profil_exploitants/' . $this->idProfilExploitant()],
@@ -199,5 +193,39 @@ final class PcaTest extends ComptaApiTestCase
         $ecriture = $emApres->getRepository(\App\Compta\Entity\EcritureComptable::class)->findOneBy(['venteOrigine' => $vente['id']]);
         self::assertNotNull($ecriture);
         self::assertTrue($ecriture->estEquilibree());
+    }
+
+    /**
+     * Vend « Abonnement Gold » (39,90 €, espèces) au client payeur du CRM et valide la vente.
+     *
+     * ⚠ LE PAYEUR EST CE QUI MANQUAIT. Depuis la caisse → abonnement (16/09, `SaleSubscriptionAdapter`),
+     * valider une ligne de produit-formule souscrit l'abonnement, et une vente anonyme est refusée : un
+     * mandat SEPA suppose un débiteur nommé. Ce test vendait Gold sans client et levait ce 422 avant de
+     * regarder le 487. Ce qu'il prouve n'a pas changé ; la vente redevient une vente permise.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed> la vente validée
+     */
+    private function vendreGold(ApiClient $client, array $entete, string $goldId): array
+    {
+        $payeurId = (string) $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL])->getId();
+
+        $session = $this->ouvrirSession($client, $entete);
+        $vente = $client->request('POST', '/api/ventes', $entete + ['json' => ['session' => '/api/session_caisses/' . $session['id']]])->toArray();
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/client', $entete + ['json' => ['client' => $payeurId]]);
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
+            'json' => [
+                'produit' => '/api/produits/' . $goldId,
+                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
+                'quantite' => 1,
+                'beneficiaire' => $payeurId, // produit nominatif (RG-M2-04) : l'adhérent est le payeur.
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '39.90']]);
+
+        return $client->request('POST', '/api/ventes/' . $vente['id'] . '/valider', $entete)->toArray();
     }
 }

@@ -106,4 +106,21 @@ abstract class OffreApiTestCase extends ApiTestCase
 
         return $entite;
     }
+
+    /**
+     * Remet un produit des fixtures en BROUILLON, pour un test du cycle de vie qui part d'un brouillon.
+     *
+     * Les produits des fixtures sont publiés depuis le 06/10/2026 : la caisse refuse désormais un
+     * produit non publié, et presque toutes les suites les vendent. Le test qui a besoin d'un
+     * brouillon le pose donc lui-même — par l'ORM, parce que c'est la PRÉCONDITION, pas l'objet du
+     * test.
+     */
+    protected function remettreEnBrouillon(string $libelleRecherche): void
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $produit = $this->entite(Produit::class, ['libelleRecherche' => $libelleRecherche]);
+        $produit->setStatut(\App\Offre\Enum\StatutProduit::Brouillon);
+        $em->flush();
+    }
 }

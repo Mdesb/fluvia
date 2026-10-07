@@ -23,16 +23,27 @@ final class ProductSaleScopeGuard
 {
     public function assertSoldAt(Produit $produit, Etablissement $establishment): void
     {
+        if (!$this->isSoldAt($produit, $establishment)) {
+            throw new NotFoundHttpException('Ce produit n\'est pas commercialisé sur cet établissement.');
+        }
+    }
+
+    /**
+     * La même règle, en question : la caisse (`CounterSellability`) en a besoin pour refuser en 422
+     * avec son propre message, ou pour tracer un écart sans refuser (synchro hors ligne).
+     */
+    public function isSoldAt(Produit $produit, Etablissement $establishment): bool
+    {
         $etablissements = $produit->getEtablissements();
         if ($etablissements->isEmpty()) {
-            return; // socle : vendu partout
+            return true; // socle : vendu partout
         }
         foreach ($etablissements as $e) {
             if ((string) $e->getId() === (string) $establishment->getId()) {
-                return;
+                return true;
             }
         }
 
-        throw new NotFoundHttpException('Ce produit n\'est pas commercialisé sur cet établissement.');
+        return false;
     }
 }

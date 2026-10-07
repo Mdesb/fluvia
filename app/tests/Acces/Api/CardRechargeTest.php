@@ -242,6 +242,17 @@ final class CardRechargeTest extends AccesApiTestCase
         $enteteB = ['auth_bearer' => $enteteA['auth_bearer'], 'headers' => [ContexteEtablissement::HEADER => $idB]];
         $sessionIdB = $this->creerSessionCaissePourEtablissement($idB);
 
+        // La carte des fixtures n'est vendue QUE sur le site A. Ce test la vendait pourtant à la caisse
+        // de B — il s'appuyait sans le savoir sur le défaut corrigé le 06/10/2026 (la caisse vendait un
+        // produit d'un autre site). La carte est donc rendue vendable sur B aussi : la vente à B est
+        // légitime, et ce qui est éprouvé reste l'intrusion — rattacher à cette vente le SUPPORT de A.
+        $carte = $em->getRepository(Produit::class)->findOneBy(['libelleRecherche' => OffreFixtures::PRODUIT_CARTE]);
+        $etabB = $em->getRepository(Etablissement::class)->find(Uuid::fromString($idB));
+        self::assertInstanceOf(Produit::class, $carte);
+        self::assertInstanceOf(Etablissement::class, $etabB);
+        $carte->addEtablissement($etabB);
+        $em->flush();
+
         $clientB = static::createClient();
         $venteB = $this->creerVente($clientB, $enteteB, $sessionIdB);
         $ligneB = $clientB->request('POST', '/api/ventes/' . $venteB['id'] . '/lignes', $enteteB + [

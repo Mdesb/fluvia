@@ -4,7 +4,7 @@ import FicheAbonnement, { GesteAbonnement } from '../components/FicheAbonnement.
 import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
-import { libelleProduit } from '../api/produit.js'
+import { libelleProduit, estAuGuichet } from '../api/produit.js'
 import { useEtatUrl } from '../api/url.js'
 import { mot } from '../api/vocabulaire.js'
 import { tonStatutAbonnement } from '../api/abonnement.js'
@@ -1229,7 +1229,9 @@ function SouscriptionModal({ open, onClose, onFait }) {
   //   désormais le champ plutôt que de l'ignorer — l'envoyer rendrait 422.
   const CADENCES = { mensuel: 'Mensuelle', annuel: 'Annuelle', personnalise: 'Personnalisée' }
 
-  const formules = produits.filter((p) => p.formule?.id)
+  // Seules les formules que le guichet vend (publiées, canal guichet) : le serveur refuse les autres
+  // en 422 (`CounterSellability`), comme la caisse. Ce filtre évite seulement le choix qui y mène.
+  const formules = produits.filter((p) => p.formule?.id && p.statut === 'publie' && estAuGuichet(p))
   // Le tarif du produit choisi, tel que le catalogue le porte. On l'AFFICHE : c'est ce que le
   // serveur résoudra, et le montrer avant permet de s'apercevoir qu'il manque avant de valider.
   const produitChoisi = formules.find((p) => p.id === produit)
@@ -1278,8 +1280,8 @@ function SouscriptionModal({ open, onClose, onFait }) {
 
         {formules.length === 0 && (
           <div className="banner banner-warn">
-            Aucun produit ne porte de formule d’abonnement. Une souscription s’appuie sur une
-            formule : créez d’abord un produit de type abonnement dans <b>Catalogue</b>.
+            Aucune formule d’abonnement publiée et vendue au guichet. Une formule en brouillon,
+            archivée ou réservée à la vente en ligne ne s’affiche pas ici&nbsp;: cela se règle dans <b>Catalogue</b>.
           </div>
         )}
 
