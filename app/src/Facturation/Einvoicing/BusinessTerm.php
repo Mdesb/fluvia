@@ -17,6 +17,13 @@ namespace App\Facturation\Einvoicing;
  * (CIUS). Construire le modèle une fois sert les quatre ; construire un connecteur national d'abord
  * ne sert qu'un.
  *
+ * L'Italie a bien un CIUS : le **CIUS-IT** (AgID et Agenzia delle Entrate), avec son schematron
+ * pour UBL et pour CII. Il vaut pour les factures EN 16931 adressées à l'administration publique
+ * via le SdI, qui le vérifie puis traduit la facture en **FatturaPA**. FatturaPA est le format
+ * national (DM 55/2013), pas une syntaxe EN 16931 : en émettre directement serait une conversion.
+ * Sources : AgID, « CIUS-IT » rel. 1.0.0 (eIGOR, 2017) ; provvedimento de l'Agenzia delle Entrate
+ * du 18/04/2019 ; Regole tecniche (d.lgs. 148/2018, art. 3 c. 1) v2.6 du 15/05/2025, §§ 1 à 4.
+ *
  * ── CE QUE CETTE ÉNUMÉRATION EST, ET CE QU'ELLE N'EST PAS ────────────────────────────────────────
  *
  * Elle liste les termes **obligatoires** dont on a besoin pour émettre. Elle n'est pas la norme :

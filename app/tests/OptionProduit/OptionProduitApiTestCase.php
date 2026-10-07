@@ -63,7 +63,10 @@ abstract class OptionProduitApiTestCase extends VenteApiTestCase
             ->setLibelleRecherche($code)
             ->setCode($code)
             ->setCanaux(['guichet'])
-            ->setStatut(StatutProduit::Brouillon);
+            // Publié : ce produit est vendu en caisse par les tests d'options, et la caisse refuse
+            // un brouillon depuis le 06/10/2026 (`CounterSellability`). Ce sont les OPTIONS qu'on
+            // éprouve ici, pas le statut.
+            ->setStatut(StatutProduit::Publie);
         $produit->addEtablissement($etab);
         $em->persist($produit);
         $grille = (new GrilleTarifaire())->setProduit($produit)->setTypeTarif($tarif)->setSaison($saison)->setPrix($prix);
