@@ -19,6 +19,7 @@ use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\ChevauchementCreneauGuard;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -39,6 +40,7 @@ final class GenererPoulesEtBlocageHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ChevauchementCreneauGuard $guard,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
     ) {
     }
 
@@ -128,6 +130,9 @@ final class GenererPoulesEtBlocageHandler
                         ->setMontantDu('0.00')
                         ->setStatut(StatutReservation::Confirmee);
                     $this->em->persist($reservation);
+                    // Le blocage tient la place autant qu'une réservation : il pèse sur la jauge
+                    // globale du terrain, sinon son annulation rendrait une unité jamais posée.
+                    $this->jaugeMere->incrementer($ressource);
 
                     $match = new MatchTournoi();
                     $match->setTournoi($tournoi)

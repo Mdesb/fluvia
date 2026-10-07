@@ -30,4 +30,14 @@ interface ProjectionAccesInterface
      * (⚠ heuristique documentée, Risque §9.7 plan-reporting.md — aucun contrôleur = jamais partiel).
      */
     public function etablissementHorsLigne(Uuid $etablissementId, int $seuilMinutes): bool;
+
+    /**
+     * Le site est-il DEPOURVU de tout controleur d'acces ?
+     *
+     * ⚠ A NE PAS CONFONDRE AVEC `etablissementHorsLigne()`, qui rend `false` dans DEUX cas
+     * opposes : « les controleurs repondent » et « il n'y a pas de controleur ». C'est
+     * volontaire de sa part (Risque §9.7 : l'absence de tourniquet n'est pas une panne),
+     * mais l'agregateur a besoin de distinguer les deux pour ne pas certifier un zero.
+     */
+    public function etablissementSansControleur(Uuid $etablissementId): bool;
 }

@@ -8,8 +8,10 @@ use App\DataFixtures\SocleFixtures;
 use App\Reservation\Command\ExpireReservationConfirmationsCommand;
 use App\Reservation\Entity\RegleAnnulation;
 use App\Reservation\Entity\Reservation;
+use App\Padel\Entity\TerrainPadel;
 use App\Reservation\Enum\ConfirmationExpiry;
 use App\Tests\Padel\PadelApiTestCase;
+use App\Tests\Reservation\ConcurrentSlotWriter;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -21,6 +23,36 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class ExpirationConfirmationTest extends PadelApiTestCase
 {
+    use ConcurrentSlotWriter;
+
+    /**
+     * ⚠ LA JAUGE GLOBALE SE REND À L'EXPIRATION — et les deux moitiés se corrigent ensemble.
+     *
+     * Le chemin padel ne comptait pas sa place sur `Ressource.occupationCourante` ; l'expiration
+     * n'avait donc rien à rendre, et l'absence d'un geste compensait l'absence de l'autre. Ce test
+     * tient les deux : la réservation compte à la création, l'expiration la rend.
+     */
+    public function testUneExpirationRendLaPlaceSurLaJaugeGlobale(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $this->poserRegle(1440, ConfirmationExpiry::Release);
+
+        $terrain = $this->entite(TerrainPadel::class, []);
+        \assert($terrain instanceof TerrainPadel);
+        $ressource = $terrain->getRessource();
+        self::assertNotNull($ressource, 'Terrain padel sans ressource socle (fixture).');
+        $idRessource = (string) $ressource->getId();
+        $avant = $this->occupationInDatabase($idRessource);
+
+        $this->reserverDansLeDelai($client, $entete);
+        self::assertSame($avant + 1, $this->occupationInDatabase($idRessource), 'la réservation tient une place sur la jauge globale');
+
+        $compte = $this->expirer();
+        self::assertSame(1, $compte['liberees'], 'témoin : l\'expiration a bien traité cette réservation');
+        self::assertSame($avant, $this->occupationInDatabase($idRessource), 'et l\'expiration rend exactement ce qu\'elle avait pris');
+    }
+
     /** `release` : le créneau repart à la vente. */
     public function testLiberer(): void
     {

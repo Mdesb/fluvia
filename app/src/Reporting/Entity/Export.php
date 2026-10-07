@@ -79,7 +79,10 @@ class Export implements RattachementNiveauInterface
     #[Groups(['export:read'])]
     private ?array $axesAppliques = null;
 
-    #[ORM\Column(length: 8, enumType: StatutExport::class)]
+    // ⚠ 16 ET NON 8 : `non_expedie` fait 11 caracteres. A 8, MySQL tronque a `non_expe`,
+    // que `StatutExport::from()` refuse a la relecture — l'ecriture passe, la lecture casse.
+    // Meme defaut que `report_mesure.statut_completude` le meme jour (Version20260915120000).
+    #[ORM\Column(length: 16, enumType: StatutExport::class)]
     #[Groups(['export:read'])]
     private StatutExport $statut = StatutExport::Genere;
 

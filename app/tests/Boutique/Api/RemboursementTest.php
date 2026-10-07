@@ -35,7 +35,7 @@ final class RemboursementTest extends BoutiqueApiTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['headers' => $entete, 'json' => ['rgpd' => true]]);
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/consentement', ['headers' => $entete, 'json' => ['mentionVersion' => 'mention-test']]);
         $client->request('POST', '/api/boutique/paniers/' . $panierId . '/beneficiaires', [
             'headers' => $entete,
             'json' => ['lignes' => [['ligneId' => $ligneId, 'beneficiaireSimple' => ['nom' => 'Martin', 'prenom' => 'Camille']]]],

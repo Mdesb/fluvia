@@ -88,7 +88,7 @@ final class CloisonnementParametresEtSeriesTest extends FacturationApiTestCase
 
         $serieB = new SerieNumerotation();
         $serieB->setProfilExploitant($profilB);
-        $serieB->setPeriode($periodeB);
+        $serieB->setExercice((int) $periodeB->getDateDebut()->format('Y'));
         $serieB->setPrefixe(PrefixeSerie::Facture);
         $serieB->setDernierNumero(7);
         $em->persist($serieB);

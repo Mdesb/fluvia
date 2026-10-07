@@ -205,6 +205,14 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'me:read'])]
     private bool $mfaActif = false;
 
+    // ── ÉQUIPE PLATEFORME (mono-propriétaire) : ACCÈS À TOUS LES SITES ────────────────────────────
+    // Exception assumée à RG-ED-07 : tous les établissements appartiennent au même propriétaire, il
+    // n'y a pas de tiers à cloisonner. `PlatformScope` est le seul lecteur ; les trois coutures du
+    // contrôle d'accès (reachability, périmètre établissement, calcul des droits) court-circuitent le
+    // cloisonnement pour un membre plateforme. À accorder avec parcimonie (toi + ton équipe).
+    #[ORM\Column(options: ['default' => false])]
+    private bool $plateforme = false;
+
     /** Secret TOTP chiffré au repos (libsodium) — jamais exposé en lecture API. */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $mfaSecret = null;
@@ -393,6 +401,18 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     public function setMfaActif(bool $mfaActif): self
     {
         $this->mfaActif = $mfaActif;
+
+        return $this;
+    }
+
+    public function isPlateforme(): bool
+    {
+        return $this->plateforme;
+    }
+
+    public function setPlateforme(bool $plateforme): self
+    {
+        $this->plateforme = $plateforme;
 
         return $this;
     }

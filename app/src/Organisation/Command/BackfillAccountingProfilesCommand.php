@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Organisation\Command;
 
 use App\Compta\Entity\ProfilExploitant;
-use App\Compta\Entity\TauxTva;
 use App\Compta\Service\AccountingChartSeeder;
+use App\Compta\Service\VatRateSeeder;
+use App\Facturation\Service\BillingSettingsSeeder;
 use App\Offre\Service\AccountingCategorySeeder;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
@@ -38,8 +39,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * par un seed qui passe derrière lui : le doublon d'un taux de TVA ne se voit pas dans une liste et
  * se voit très bien sur une facture.
  *
- * De même, un profil sans aucun taux reçoit les taux manquants, jamais ceux qu'il a déjà — la
- * comparaison porte sur la VALEUR du taux, pas sur son libellé, qu'un exploitant a pu renommer.
+ * De même, un profil reçoit les taux manquants, jamais ceux qu'il a déjà. ⚠ **La comparaison porte
+ * désormais sur l'ORIGINE LÉGALE du taux, plus sur sa valeur.** Cette phrase disait l'inverse, avec
+ * un bon argument — « un exploitant a pu renommer Taux normal 20 % en TVA 20 » — mais la valeur ne
+ * distingue pas deux 20 % de deux pays, et elle confond un taux zéro avec un hors-champ. Depuis que
+ * les taux viennent du référentiel légal (voir {@see VatRateSeeder}), l'origine répond aux deux.
  *
  * ── PAR DÉFAUT ELLE NE FAIT RIEN ────────────────────────────────────────────────────────────────
  *
@@ -52,18 +56,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 final class BackfillAccountingProfilesCommand extends Command
 {
-    /** @var list<array{0: string, 1: string}> */
-    private const TAUX_TVA_FRANCE = [
-        ['20.00', 'Taux normal 20 %'],
-        ['10.00', 'Taux intermédiaire 10 %'],
-        ['5.50', 'Taux réduit 5,5 %'],
-        ['2.10', 'Taux particulier 2,1 %'],
-    ];
-
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly AccountingChartSeeder $chartSeeder,
         private readonly AccountingCategorySeeder $categorySeeder,
+        private readonly VatRateSeeder $vatRateSeeder,
+        private readonly BillingSettingsSeeder $billingSettingsSeeder,
     )
     {
         parent::__construct();
@@ -125,16 +123,18 @@ final class BackfillAccountingProfilesCommand extends Command
                 }
             }
 
-            $manquants = $this->tauxManquants($profil, $creeProfil);
+            // ── LES TAUX VIENNENT DU PAYS DE LA STRUCTURE ───────────────────────────────────────
+            //
+            // Ici se trouvait une SECONDE copie de `TAUX_TVA_FRANCE`, identique à celle de
+            // `StructureOnboarding`. Ne corriger que l'ouverture aurait laissé cette reprise semer
+            // des taux français sur les structures déjà ouvertes — celles-là mêmes qu'elle répare.
+            //
+            // `missing()` et `seed()` lisent la même source, comme `manquants()`/`poser()` juste en
+            // dessous : le constat ne peut donc pas annoncer autre chose que ce que l'écriture fera.
+            $manquants = $this->vatRateSeeder->missing($profil);
             $tauxCrees += \count($manquants);
 
-            if ($ecrire) {
-                foreach ($manquants as [$taux, $libelle]) {
-                    $this->em->persist(
-                        (new TauxTva())->setProfilExploitant($profil)->setTaux($taux)->setLibelle($libelle)->setActif(true)
-                    );
-                }
-            }
+            $tauxNormal = $ecrire ? $this->vatRateSeeder->seed($profil) : null;
 
             // ⚠ LE PROFIL ET LES TAUX NE SUFFISENT PAS.
             //
@@ -152,6 +152,17 @@ final class BackfillAccountingProfilesCommand extends Command
 
             if ($ecrire && $aPoser > 0) {
                 $this->chartSeeder->poser($profil);
+            }
+
+            // ── ET LE PARAMÉTRAGE DE FACTURATION ────────────────────────────────────────────────
+            //
+            // ⚠ LE FLUSH EST OBLIGATOIRE ICI, pas une précaution. `BillingSettingsSeeder` résout le
+            // compte de produit par une requête, qui ne voit pas les comptes que `chartSeeder` vient
+            // de `persist()`. Sans lui, le défaut resterait `null` sans que rien ne le dise, et la
+            // reprise annoncerait avoir réparé une structure qui refuse toujours de facturer.
+            if ($ecrire) {
+                $this->em->flush();
+                $this->billingSettingsSeeder->seed($profil, $tauxNormal);
             }
 
             if ($creeProfil || $manquants !== [] || $aPoser > 0) {
@@ -189,36 +200,6 @@ final class BackfillAccountingProfilesCommand extends Command
         }
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * Les taux légaux que ce profil n'a pas encore.
-     *
-     * La comparaison porte sur la VALEUR, jamais sur le libellé : un exploitant a pu renommer
-     * « Taux normal 20 % » en « TVA 20 » — c'est le même taux, et le reposer le doublerait.
-     *
-     * @return list<array{0: string, 1: string}>
-     */
-    private function tauxManquants(ProfilExploitant $profil, bool $profilNeuf): array
-    {
-        $existants = [];
-        if (!$profilNeuf) {
-            foreach ($this->em->getRepository(TauxTva::class)->findBy(['profilExploitant' => $profil]) as $taux) {
-                $existants[] = $taux->getTaux();
-            }
-        }
-
-        $manquants = [];
-        foreach (self::TAUX_TVA_FRANCE as [$taux, $libelle]) {
-            if (!\in_array($taux, $existants, true)) {
-                $manquants[] = [$taux, $libelle];
-            }
-        }
-        if (!\in_array('0.00', $existants, true)) {
-            $manquants[] = ['0.00', TauxTva::LIBELLE_HORS_CHAMP];
-        }
-
-        return $manquants;
     }
 
     private function siren(Etablissement $etablissement): ?string

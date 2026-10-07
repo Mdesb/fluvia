@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Reporting\Controller;
 
-use App\Securite\Entity\Affectation;
-use App\Securite\Service\EstablishmentReachability;
 use App\Reporting\Entity\Export;
-use App\Reporting\Enum\StatutExport;
+use App\Reporting\Security\ExportDownloadAuthorizer;
 use App\Reporting\Service\StockageExportInterface;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,17 +30,13 @@ final class ExportTelechargerController
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly StockageExportInterface $stockage,
-        private readonly EstablishmentReachability $reachability,
+        private readonly ExportDownloadAuthorizer $autorisation,
     ) {
     }
 
     #[Route('/reporting/exports/{id}/telecharger', name: 'reporting_export_telecharger', methods: ['GET'])]
     public function __invoke(string $id): Response
     {
-        if (!$this->security->isGranted('PERM', 'reporting.lire')) {
-            throw new AccessDeniedHttpException('reporting.lire requis.');
-        }
-
         $export = $this->em->getRepository(Export::class)->find($id);
         if (!$export instanceof Export) {
             throw new NotFoundHttpException('Export introuvable.');
@@ -50,21 +44,18 @@ final class ExportTelechargerController
 
         $utilisateur = $this->security->getUser();
         \assert($utilisateur instanceof Utilisateur);
-        $estProprietaire = $export->getDemandePar() !== null && $export->getDemandePar()->getId()->equals($utilisateur->getId());
-        if (!$estProprietaire && !$this->security->isGranted('PERM', 'reporting.configurer')) {
-            throw new AccessDeniedHttpException('Export réservé à son demandeur ou à reporting.configurer.');
-        }
 
-        // ⚠ AUDIT DU 06/09, CONSTAT 5. `reporting.configurer` ouvrait les exports de TOUS les tenants,
-        //   l'export ne portant aucun établissement. Un export qu'on n'a pas demandé soi-même doit avoir
-        //   été demandé par quelqu'un qui atteint AU MOINS UN des sites qu'on atteint soi-même : c'est ce
-        //   qui le rattache à un tenant — en-tête ou pas, et depuis n'importe lequel de ses sites pour un
-        //   administrateur de groupe. 404, pas 403 : ne pas confirmer l'existence de l'export.
-        if (!$estProprietaire && !$this->partageUnEtablissement($utilisateur, $export->getDemandePar())) {
-            throw new NotFoundHttpException('Export introuvable.');
-        }
+        // LA REGLE VIT DANS `ExportDownloadAuthorizer`, ET PLUS ICI.
+        // Elle ne vivait que dans ce fichier, et l'autre porte ne l'appliquait pas : un export
+        // reserve a son demandeur cessait de l'etre par `/api/reporting/exports/{id}/telecharger`.
+        $this->autorisation->assertPeutTelecharger($export, $utilisateur);
 
-        if ($export->getStatut() !== StatutExport::Genere && $export->getStatut() !== StatutExport::Envoye) {
+        // LA REGLE DU FICHIER VIT DANS `StatutExport::fichierDisponible()`, ET PLUS ICI.
+        // Elle etait ecrite deux fois, et en COMPLEMENT : ici « autorise Genere|Envoye », dans
+        // `TelechargerExportProvider` « refuse Echec ». Les deux s'accordaient par coincidence
+        // tant qu'il y avait trois etats ; au quatrieme, cette porte refusait un fichier que
+        // l'autre servait.
+        if (!$export->getStatut()->fichierDisponible()) {
             throw new ConflictHttpException(sprintf('Export non disponible (statut : %s).', $export->getStatut()->value));
         }
         if ($export->getCheminStockage() === null) {
@@ -80,22 +71,4 @@ final class ExportTelechargerController
         return $reponse;
     }
 
-    private function partageUnEtablissement(Utilisateur $appelant, ?Utilisateur $demandeur): bool
-    {
-        if (!$demandeur instanceof Utilisateur) {
-            return false;
-        }
-
-        $maintenant = new \DateTimeImmutable();
-        /** @var list<Affectation> $affectations */
-        $affectations = $this->em->getRepository(Affectation::class)->findBy(['utilisateur' => $appelant]);
-        foreach ($affectations as $affectation) {
-            $etablissement = $affectation->getEtablissement();
-            if ($etablissement !== null && $this->reachability->canReachEstablishment($demandeur, $etablissement, $maintenant)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

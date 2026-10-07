@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import Modal from './Modal.jsx'
 import { confirmer } from './Confirmation.jsx'
 
 // Absences du personnel : déclarer, valider, refuser.
@@ -28,7 +27,7 @@ const STATUTS = {
   refusee: { libelle: 'Refusée', ton: 'mut' },
 }
 
-export default function AbsencesSection({ etabActif, droits = [] }) {
+export default function AbsencesSection({ etabActif, droits = [], params = {}, majParams }) {
   // ⚠ `null` = PAS LU. << Aucune absence enregistree >> decide d'un planning : on affecte
   // quelqu'un qui est peut-etre en arret.
   const [lignes, setLignes] = useState(null)
@@ -38,6 +37,9 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
   const [succes, setSucces] = useState(null)
   const [enCours, setEnCours] = useState(null)
   const [declaration, setDeclaration] = useState(null)
+  // L'échec d'ENVOI a sa bannière dans l'écran ; `null` = la liste des employés n'a pas répondu.
+  const [erreurDeclaration, setErreurDeclaration] = useState(null)
+  const [employesLus, setEmployesLus] = useState(null)
 
   const peutDecider = aLeDroit(droits, 'personnel.valider_absence')
   const peutDeclarer =
@@ -62,8 +64,21 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
 
   useEffect(() => {
     if (!peutDeclarer) return
-    api.employes().then((c) => setEmployes(membres(c))).catch(() => {})
+    api.employes()
+      .then((c) => { setEmployes(membres(c)); setEmployesLus(true) })
+      .catch(() => setEmployesLus(false))
   }, [peutDeclarer])
+
+  // La déclaration s'ouvre par l'adresse : le brouillon naît à l'ouverture et meurt à la fermeture.
+  useEffect(() => {
+    if (!params.absence) { setDeclaration(null); setErreurDeclaration(null); return }
+    setDeclaration((s) => s || { employe: '', debut: '', fin: '', type: 'conge', motif: '' })
+  }, [params.absence])
+  // La personne proposée par défaut arrive avec la liste, qui peut répondre après l'ouverture.
+  useEffect(() => {
+    if (!params.absence || !employes[0]) return
+    setDeclaration((s) => (s && !s.employe ? { ...s, employe: employes[0].id } : s))
+  }, [params.absence, employes])
 
   async function decider(l, accepte) {
     if (accepte && l.alerteCouverture) {
@@ -91,6 +106,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
   async function declarer(e) {
     e.preventDefault()
     setErreur(null)
+    setErreurDeclaration(null)
     setSucces(null)
     setEnCours('declaration')
     try {
@@ -103,12 +119,133 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
       })
       setSucces('Absence déclarée.')
       setDeclaration(null)
+      majParams({ absence: '' }, { pousser: true })
       await recharger()
     } catch (err) {
-      setErreur(err.message || "La déclaration n'a pas abouti.")
+      setErreurDeclaration(err.message || "La déclaration n'a pas abouti.")
     } finally {
       setEnCours(null)
     }
+  }
+
+  // ── DÉCLARER UNE ABSENCE, EN ÉCRAN ──────────────────────────────────────────────────────────
+  //
+  // Le formulaire était passé en modale le 28/08 parce qu'il s'insérait ENTRE l'en-tête et le
+  // tableau, et poussait sous le pli les lignes « à décider » qu'on lisait. La raison tient en
+  // écran : il ne pousse plus la liste, il la remplace, et « précédent » la rend à sa place.
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND.
+  // ⚠ L'ÉCHEC D'ENVOI A SA BANNIÈRE ICI : la modale le renvoyait sur la carte, derrière elle.
+  // ⚠ LA LISTE DES EMPLOYÉS SE DIT : son échec laissait un sélecteur vide et un champ requis
+  // impossible à remplir, sans une phrase.
+  if (params.absence) {
+    const fermerDeclaration = () => majParams({ absence: '' }, { pousser: true })
+    return (
+      <section className="card">
+        <div className="card-b">
+          <button className="btn ghost sm" type="button" onClick={fermerDeclaration}
+            style={{ marginBottom: 'var(--esp-large)' }}>
+            ← Retour au personnel
+          </button>
+          {!peutDeclarer ? (
+            <div className="banner banner-warn">
+              Déclarer une absence demande le droit de gérer le planning, ou de déclarer ses propres
+              absences, que ce compte n’a pas.
+            </div>
+          ) : (
+            <>
+              <h2>Déclarer une absence</h2>
+              {erreurDeclaration && <div className="banner banner-error">{erreurDeclaration}</div>}
+              {employesLus === false && (
+                <div className="banner banner-error">
+                  La liste des employés n’a pas pu être lue : la personne absente ne peut pas être
+                  choisie. Ce n’est pas la même chose que « personne n’est employé ici ».
+                </div>
+              )}
+              {employesLus === true && employes.length === 0 && (
+                <div className="banner banner-warn">
+                  Aucun employé n’est déclaré sur ce site : il n’y a personne à déclarer absent.
+                </div>
+              )}
+        {declaration && (
+          <form onSubmit={declarer}>
+            <div className="grid g2" style={{ gap: 12 }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-emp">Personne *</label>
+                <select
+                  id="ab-emp"
+                  className="select"
+                  required
+                  value={declaration.employe}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, employe: e.target.value }))}
+                >
+                  {employes.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {[emp.prenom, emp.nom].filter(Boolean).join(' ') || emp.matricule || 'Employé'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-type">Motif</label>
+                <select
+                  id="ab-type"
+                  className="select"
+                  value={declaration.type}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, type: e.target.value }))}
+                >
+                  {TYPES.map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-debut">Du *</label>
+                <input
+                  id="ab-debut"
+                  className="input"
+                  type="datetime-local"
+                  required
+                  value={declaration.debut}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, debut: e.target.value }))}
+                />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-fin">Au *</label>
+                <input
+                  id="ab-fin"
+                  className="input"
+                  type="datetime-local"
+                  required
+                  value={declaration.fin}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, fin: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="ab-motif">Précision</label>
+              <input
+                id="ab-motif"
+                className="input"
+                value={declaration.motif}
+                placeholder="Facultatif"
+                onChange={(e) => setDeclaration((s) => ({ ...s, motif: e.target.value }))}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" type="button" onClick={fermerDeclaration}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={enCours !== null}>
+                Déclarer
+              </button>
+            </div>
+
+          </form>
+        )}
+            </>
+          )}
+        </div>
+      </section>
+    )
   }
 
   const aDecider = (lignes || []).filter((l) => l.statut === 'declaree').length
@@ -118,14 +255,12 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
       <div className="card-h">
         <h3>Absences</h3>
         {aDecider > 0 && <span className="badge warn">{aDecider} à décider</span>}
-        {peutDeclarer && !declaration && (
+        {peutDeclarer && (
           <div className="r">
             <button
               className="btn primary sm"
               type="button"
-              onClick={() =>
-                setDeclaration({ employe: employes[0]?.id || '', debut: '', fin: '', type: 'conge', motif: '' })
-              }
+              onClick={() => majParams({ absence: 'nouvelle' }, { pousser: true })}
             >
               ＋ Déclarer une absence
             </button>
@@ -222,91 +357,6 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
-
-      {/* LE FORMULAIRE EST PASSÉ EN MODALE (28/08), ET CE N’EST PAS COSMÉTIQUE.
-          Il s’insérait ENTRE l’en-tête et le tableau : déclarer une absence poussait vers le bas la
-          liste qu’on était en train de lire, et les lignes « à décider » disparaissaient sous le
-          pli au moment où l’on ouvrait le formulaire. Une modale laisse la liste où elle est. */}
-      <Modal
-        open={!!declaration}
-        onClose={() => setDeclaration(null)}
-        titre="Déclarer une absence"
-      >
-        {declaration && (
-          <form onSubmit={declarer}>
-            <div className="grid g2" style={{ gap: 12 }}>
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="ab-emp">Personne *</label>
-                <select
-                  id="ab-emp"
-                  className="select"
-                  required
-                  value={declaration.employe}
-                  onChange={(e) => setDeclaration((s) => ({ ...s, employe: e.target.value }))}
-                >
-                  {employes.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {[emp.prenom, emp.nom].filter(Boolean).join(' ') || emp.matricule || 'Employé'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="ab-type">Motif</label>
-                <select
-                  id="ab-type"
-                  className="select"
-                  value={declaration.type}
-                  onChange={(e) => setDeclaration((s) => ({ ...s, type: e.target.value }))}
-                >
-                  {TYPES.map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="ab-debut">Du *</label>
-                <input
-                  id="ab-debut"
-                  className="input"
-                  type="datetime-local"
-                  required
-                  value={declaration.debut}
-                  onChange={(e) => setDeclaration((s) => ({ ...s, debut: e.target.value }))}
-                />
-              </div>
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="ab-fin">Au *</label>
-                <input
-                  id="ab-fin"
-                  className="input"
-                  type="datetime-local"
-                  required
-                  value={declaration.fin}
-                  onChange={(e) => setDeclaration((s) => ({ ...s, fin: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="ab-motif">Précision</label>
-              <input
-                id="ab-motif"
-                className="input"
-                value={declaration.motif}
-                placeholder="Facultatif"
-                onChange={(e) => setDeclaration((s) => ({ ...s, motif: e.target.value }))}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn" type="button" onClick={() => setDeclaration(null)}>Annuler</button>
-              <button className="btn primary" type="submit" disabled={enCours !== null}>
-                Déclarer
-              </button>
-            </div>
-
-          </form>
-        )}
-      </Modal>
     </section>
   )
 }

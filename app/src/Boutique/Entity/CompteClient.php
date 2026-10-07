@@ -13,6 +13,7 @@ use App\Boutique\State\MeCompteClientProvider;
 use App\Boutique\State\VerifyAccountEmailProcessor;
 use App\Boutique\State\MesBilletsProvider;
 use App\Boutique\State\MesCommandesProvider;
+use App\Boutique\State\MySubscriptionsProvider;
 use App\Boutique\State\SouscrireAbonnementEnLigneProcessor;
 use App\Crm\Entity\Client;
 use App\Organisation\Entity\Etablissement;
@@ -67,6 +68,11 @@ use Symfony\Component\Uid\Uuid;
             uriTemplate: '/boutique/comptes/me/billets',
             security: "is_granted('IS_AUTHENTICATED_FULLY') and is_granted('PERM', 'boutique.lire_soi')",
             provider: MesBilletsProvider::class,
+        ),
+        new Get(
+            uriTemplate: '/boutique/comptes/me/abonnements',
+            security: "is_granted('IS_AUTHENTICATED_FULLY') and is_granted('PERM', 'boutique.lire_soi')",
+            provider: MySubscriptionsProvider::class,
         ),
         // RG-M3-12/17 (CA-13) : sécurité déclarée PUBLIC_ACCESS, le blocage invité est un contrôle
         // impératif dans le handler (message explicite « création de compte requise »), même esprit

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { nomsDuCreneau } from '../api/slot-label.js'
 
 /**
  * LA VUE SEMAINE — demandée par Maxime depuis le début, et jamais livrée.
@@ -214,23 +215,31 @@ export default function PlanningSemaine({ creneaux, occupation, aConfirmer, ress
                 {duJour.map((c) => {
                   const debut = heureDecimale(c._debut)
                   const fin = Number.isNaN(c._fin.getTime()) ? debut + 1 : heureDecimale(c._fin)
-                  const prises = occupation[c.id] || 0
-                  const capacite = c.capacite || 1
-                  const complet = prises >= capacite
-                  const presque = !complet && prises / capacite >= 0.8
+                  // ⚠ `occupation` EST LA JAUGE DU SERVEUR, créneau par créneau (`occupees`,
+                  // `restantes`, `capacite`). Un créneau absent n'a pas été lu : il n'est ni libre ni
+                  // complet, et sa case le dit par un « ? » sur fond neutre — le vert d'une case
+                  // libre ferait promettre une place qu'on ne connaît pas.
+                  const ligne = occupation?.[c.id]
+                  const connue = ligne !== undefined
+                  const prises = connue ? ligne.occupees : null
+                  const capacite = (connue ? ligne.capacite : c.capacite) || 1
+                  const complet = connue && ligne.restantes <= 0
+                  const presque = connue && !complet && prises / capacite >= 0.8
 
                   // ⚠ DES PLACES PRISES PEUVENT ENCORE DISPARAÎTRE (R15 a). Une réservation
                   // `a_confirmer` occupe la place, mais sera LIBÉRÉE à l'échéance si personne ne
                   // confirme. Sans marque, le planning montre un créneau plein qui ne l'est
                   // peut-être pas — et l'exploitant l'apprend le jour où la place se rouvre seule.
                   const enAttente = aConfirmer?.[c.id] || 0
+                  // Activité ET ressource : « l'une ou l'autre » laissait lire un terrain pour une activité.
+                  const noms = nomsDuCreneau(c)
 
                   return (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => onCreneau?.(c)}
-                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)} · ${prises}/${capacite}` + (enAttente > 0 ? ` · ${enAttente} à confirmer` : '')}
+                      title={`${hhmm(c._debut)} – ${hhmm(c._fin)}${noms ? ` · ${noms}` : ''} · ${connue ? prises : '?'}/${capacite}` + (connue ? '' : ' · places non lues') + (enAttente > 0 ? ` · ${enAttente} à confirmer` : '')}
                       style={{
                         position: 'absolute',
                         top: (debut - heureMin) * HAUTEUR_HEURE + 1,
@@ -254,18 +263,20 @@ export default function PlanningSemaine({ creneaux, occupation, aConfirmer, ress
                         // La couleur dit la place restante, jamais le type d'activité : c'est la
                         // question qu'on pose au planning, et une seule information peut occuper la
                         // couleur sans que les deux se brouillent.
-                        background: complet
-                          ? 'color-mix(in srgb, var(--crit) 18%, var(--panel))'
-                          : presque
-                            ? 'color-mix(in srgb, var(--warn) 20%, var(--panel))'
-                            : 'color-mix(in srgb, var(--good) 15%, var(--panel))',
+                        background: !connue
+                          ? 'var(--panel)'
+                          : complet
+                            ? 'color-mix(in srgb, var(--crit) 18%, var(--panel))'
+                            : presque
+                              ? 'color-mix(in srgb, var(--warn) 20%, var(--panel))'
+                              : 'color-mix(in srgb, var(--good) 15%, var(--panel))',
                         color: 'var(--ink)',
                       }}
                     >
                       <b>{hhmm(c._debut)}</b>{' '}
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{prises}/{capacite}</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{connue ? prises : '?'}/{capacite}</span>
                       <div className="sub" style={{ fontSize: 11 }}>
-                        {c.activite?.libelle || c.ressource?.libelle || ''}
+                        {noms}
                         {enAttente > 0 ? ` · ${enAttente} à confirmer` : ''}
                       </div>
                     </button>

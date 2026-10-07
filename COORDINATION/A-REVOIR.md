@@ -94,6 +94,20 @@ ici pour qu'il ne soit pas subi par défaut.
 
 ### 1. Cinq commandes à autoriser, ou non, dans `TACHES_AUTORISEES`
 
+> **État au 15/09, mesuré dans `infra/ordonnanceur.sh` et non supposé.** Le titre dit
+> « cinq » ; elles sont six depuis le 15/09, et deux sont réglées :
+>
+> | commande | état |
+> |---|---|
+> | `reporting:agreger` | **autorisée**, passé rattrapé |
+> | `dms:purge-expired-documents` | **autorisée** — l'échéance du 06/10 annoncée ici est donc levée |
+> | `reporting:executer-rapports` | **absente** — un rapport planifié ne part toujours pas |
+> | `finance:treasury:verifier-seuils` | **absente** — aucune alerte de trésorerie n'existera |
+> | `finance:treasury:suggerer-rapprochements` | **absente** — dégradé |
+> | `finance:treasury:detecter-ecarts` | **absente** — dégradé |
+>
+> Il reste donc **quatre** décisions, dont une seule dans le module d'analyse (`reporting:executer-rapports`).
+
 Aucune n'est dans `infra/ordonnanceur.sh` (mesuré le 06/09). D36 a établi qu'une commande
 périodique entre au dépôt avec sa planification ; D109/D110, que cette liste est une décision
 versionnée. Elles ne pèsent pas la même chose :
@@ -101,7 +115,7 @@ versionnée. Elles ne pèsent pas la même chose :
 | commande | ce qu'il se passe tant qu'elle n'y est pas |
 |---|---|
 | `finance:treasury:verifier-seuils` | **aucune alerte de trésorerie n'existera jamais** — la fonction est entièrement inerte, 0 ligne en base |
-| `reporting:agreger` | **les mesures cessent d'être produites** — dernière mesure générée le **04/09 à 21:49** (`genereLe`, mesuré le 07/09) ; depuis, l'Explorateur rend « sans mesure » pour chaque jour écoulé, et la consolidation région/groupe est vide de bout en bout |
+| ~~`reporting:agreger`~~ | **AUTORISÉE le 15/09**, et le passé rattrapé (`--depuis=2026-09-05`) : `report_mesure` est passé de 2 068 à 4 136 lignes, et les 40 ventes que le module ne montrait pas sont revenues. Plus rien à décider ici |
 | `reporting:executer-rapports` | un rapport planifié **ne part pas** ; l'écran le déduit des dates plutôt que de l'affirmer |
 | `finance:treasury:suggerer-rapprochements` | dégradé : l'onglet « Suggérées » reste vide, le rapprochement à la demande fonctionne |
 | `finance:treasury:detecter-ecarts` | dégradé : l'écran des écarts reste juste (il calcule en direct), seule la notification manque |
@@ -117,9 +131,55 @@ versionnée. Elles ne pèsent pas la même chose :
 
 
 **Les deux premières changent ce qu'un dirigeant voit**, pas seulement ce qu'il reçoit : sans
-`reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».
+~~`reporting:agreger`, tout l'étage consolidé du module d'analyse reste à « non mesuré ».~~
+**Autorisée le 15/09** — cette phrase ne décrit plus rien.
 
-### 2. `AxeAnalytique` sert-il encore à quelque chose ?
+> **Complété le 15/09 — ce point a deux moitiés, et une seule était écrite.**
+>
+> **a) Autoriser la tâche ne répare pas le passé.** `reporting:agreger` accepte `--depuis` et
+> `--jusqu-a`, **par défaut aujourd'hui**, et `ScheduleCatalog` l'inscrit **sans option**. L'ajouter
+> à `TACHES_AUTORISEES` empêche donc les trous à venir, et laisse le trou existant en place —
+> définitivement, puisque rien d'autre ne le comble.
+>
+> **b) Le rattrapage est possible et sans risque.** Un jour passé est recalculable : l'agrégateur
+> passe la période à ses projections (`caEncaisse`, `frequentationCumulee`), et l'écriture est un
+> **upsert idempotent** via `Mesure.cleAgregation`. La commande peut donc être rejouée :
+>
+>     reporting:agreger --depuis=2026-09-05 --jusqu-a=<aujourd'hui>
+>
+> **c) ⚠ Et il y a de la vraie donnée à récupérer.** Mesuré le 15/09 sur la préproduction :
+>
+> | | |
+> |---|---|
+> | ventes depuis le 05/09, **invisibles** du module | **40**, sur 8 jours et 2 sites |
+> | passages d'accès sur la même fenêtre | 0 |
+> | *témoin* : ventes dans la fenêtre déjà agrégée (25/08 → 04/09) | 28 |
+>
+> Le module d'analyse est donc aveugle à **plus de ventes qu'il n'en montre**. Et le témoin des 28
+> prouve que l'agrégation lit bien cette source quand elle tourne — ce n'est pas une hypothèse.
+>
+> ⚠ **J'ai failli conclure l'inverse.** Ma première lecture ne regardait que `acces_passage`, qui
+> s'arrête au 02/09 : j'en avais déduit qu'un rattrapage remplirait le trou de faux zéros, et donc
+> qu'il valait mieux ne rien faire. Les ventes démentent. Une conclusion tirée d'**une** des deux
+> sources de l'indicateur valait exactement le contraire de la bonne.
+>
+> **Réserve, à écrire si le rattrapage est lancé** : la fréquentation sortira à **0** pour tout jour
+> après le 02/09, faute de passages en base. C'est arithmétiquement juste et ça ne dit rien de la
+> fréquentation réelle — c'est le générateur de données de la préproduction qui s'est arrêté, pas
+> les visiteurs. Un `0` de fréquentation sur ces jours ne doit pas se lire comme un fait métier.
+
+
+### 2. ~~`AxeAnalytique` sert-il encore à quelque chose ?~~ — **tranché le 15/09 : SUPPRIMÉ, rien à revoir**
+
+> Réponse : non. Supprimé le 15/09 — entité, enum, fixtures, table (`DROP`, PR #180) et
+> route (test de disparition, PR #183). Les trois spécifications qui le décrivaient portent
+> désormais un en-tête disant qu'il n'existe plus ; elles sont **annotées et non effacées**,
+> pour que le raisonnement qui a conduit à le concevoir reste lisible.
+>
+> ⚠ Le premier retrait était incomplet et se présentait comme vérifié : la table avait bien
+> disparu (témoin en base), mais **aucun test n'exigeait la disparition de la route** et les
+> `specs/` n'avaient pas été regardées. « Ce qui référence cet objet » et « ce qui l'affirme »
+> ne se cherchent pas au même endroit.
 
 Six axes en base, alimentés par les fixtures, **consommés par rien** : ni écran, ni moteur
 d'agrégation. Je n'ai délibérément pas construit son écran — un formulaire de configuration
@@ -160,6 +220,34 @@ main).
 Ce n'est pas urgent — il n'y a aujourd'hui aucun export — mais la question se pose avant les
 premiers usages réguliers : **combien de temps garde-t-on un export**, et qui purge ?
 
+> **Complété le 15/09 — ce point a un précédent dans le dépôt, il n'est plus une question ouverte.**
+>
+> Le même problème a déjà été tranché une fois, pour la GED :
+>
+> | | |
+> |---|---|
+> | commande | `dms:purge-expired-documents` (`app/src/Dms/Command/PurgeDocumentsCommand.php`) |
+> | règle | 30 jours de grâce après `deletedAt`, et jamais si une rétention est active |
+> | décidé par | arbitrage **D18 pt.6**, RG-DMS-15 |
+> | déclarée | dans `ScheduleCatalog` |
+>
+> Côté exports d'analyse : **aucune commande**. Les fichiers atterrissent dans
+> `var/reporting/exports/` (`StockageExportLocal`) et **rien ne les retire** — cherché dans tout le
+> dépôt, pas seulement dans le module. Aujourd'hui le coût est nul : 0 fichier, 0 ligne dans
+> `report_export`, 0 rapport planifié. Il devient réel dès que `reporting:executer-rapports` est
+> autorisée, à raison d'un fichier par destinataire et par exécution.
+>
+> La décision se réduit donc à **deux mots** : adopter la forme de la GED (une commande, 30 jours,
+> au catalogue puis dans la liste blanche), ou déclarer les exports éphémères et ne rien stocker.
+>
+> ⚠ **Et le précédent ne tourne pas non plus.** `dms:purge-expired-documents` est déclarée au
+> catalogue et **absente de `TACHES_AUTORISEES`** : un document marqué supprimé n'est jamais détruit
+> physiquement. Mesuré le 15/09 — 1 document supprimé le 06/09, **pas encore** purgeable ; il le
+> devient le **06/10**. C'est daté, ce n'est pas un défaut actuel. Ça appartient au point n°1 de ce
+> relevé, dont la liste passe donc de cinq commandes à six, et celle-ci a une dimension données
+> personnelles : « supprimé » y veut dire « marqué », pas « effacé ».
+
+
 ### 5. Un créneau validé peut perdre son encadrant — **reformulé le 07/09**
 
 Écrit le 06/09, et déjà à moitié dépassé : `feat(piscine): renouveler un diplôme, retirer une
@@ -190,6 +278,88 @@ manquant mais sur une garde manquante :
 
 > ⚠ Ma phrase du 06/09 est rectifiée ici plutôt qu'effacée. C'est la deuxième fiche de ce relevé
 > qui vieillit en un jour — les autres se relisent avec la même méfiance.
+
+### 7. ~~Un site sans instrument rend « 0 », certifié complet~~ — **tranché le 15/09 : option B, FAIT**
+
+> Décision : un **troisième état de complétude**, `non_instrumente` — ni « complet » ni
+> « partiel ». Livré (PR #157), puis complété (PR #173) parce que la première version
+> s'arrêtait à la passe site et laissait les agrégats région/groupe repartir en `complet`.
+>
+> Vérifié aux **trois** niveaux après rattrapage, témoin positif d'abord :
+>
+> ```
+> complet de source `acces` sur la fenêtre        0
+> TÉMOIN POSITIF : complet d'autres sources     715
+> ```
+>
+> ⚠ Deux fois, la vérification a été annoncée sur **un niveau sur trois** — et deux fois le
+> zéro manquant était au-dessus du site. Un agrégat se vérifie à tous ses étages.
+
+Le rattrapage de `reporting:agreger` (arbitrage n°1, tranché et exécuté le 15/09) a écrit 2 068
+mesures de plus. En vérifiant **ce qu'il a écrit** plutôt que qu'il avait tourné :
+
+| ce qui a été mesuré | résultat |
+|---|---|
+| sites **sans** aucun contrôleur d'accès | **7 sites × 11 jours** — `FREQUENTATION_CUMULEE` = `0.00`, statut **`complet`** |
+| sites **avec** contrôleur (périmé ou hors ligne) | 5 sites × 11 jours — statut `partiel`, site nommé dans `sitesManquants` |
+
+Les sept comprennent **Musée C** et **Patinoire B** : dans la base, un musée porte onze jours de
+fréquentation nulle *certifiée complète*.
+
+> ⚠ **RECTIFICATION DU 15/09, DANS LA DEMI-HEURE : CE ZÉRO N'EST ATTEIGNABLE PAR AUCUN RÔLE
+> AUJOURD'HUI.** J'ai d'abord écrit la phrase ci-dessus seule, et elle sur-affirmait — vraie de la
+> *donnée*, fausse de ce qu'un utilisateur voit. Mesuré ensuite :
+>
+> | entité | statut | atteignable par un rôle reporting |
+> |---|---|---|
+> | Site A1 / A2 / B1 Reporting | `partiel` | oui — et **correctement signalés** |
+> | Groupe Démo Reporting, Région A/B Reporting | `partiel` | oui — **correctement signalés** |
+> | GI-ONE FITNESS, Groupe Démo Support, Groupe Second Loisirs, Région B | `complet` à 0 | **non** |
+>
+> Les trois sites que le reporting atteint ont tous un contrôleur ; leurs mesures sont donc
+> `partiel`, et le signal fonctionne. Les entités qui portent le zéro certifié sont hors du
+> périmètre de tous les rôles reporting.
+>
+> **Le point reste entier, mais il est LATENT** : il se réveille le jour où un rôle reporting
+> couvre un site non instrumenté — un musée, une patinoire, une salle de sport sans tourniquet.
+> C'est-à-dire au premier client de ce type. « Atteignable » et « cassé » sont deux choses
+> différentes, et je l'avais oublié sur ma propre trouvaille.
+
+**Le mécanisme est sain, et c'est le point.** `etablissementHorsLigne()` lit les contrôleurs ; sans
+contrôleur il rend `false`, avec sa raison écrite dans le code :
+
+> « Pas de contrôleur Accès sur ce site (verticale sans contrôle d'accès physique) : ce seul signal
+> ne peut pas conclure à un défaut de remontée (**Risque §9.7** plan-reporting.md). »
+
+C'est juste : l'absence de tourniquet n'est pas une panne de remontée. Mais §9.7 nommait un
+**risque**, et ce risque n'a jamais été tranché — il a été accepté au niveau de la détection, et
+personne n'a regardé ce que l'écran en fait. L'Explorateur affiche donc `0` comme une valeur
+mesurée, là où il disait honnêtement « aucune mesure » avant le rattrapage.
+
+**Le levier technique est propre et déjà en place** : `Indicateur.sourceModule`.
+`FREQUENTATION_CUMULEE` et les trois `FMI_MAX*` valent `acces` ; `CA` vaut `vente`, `FOND_CAISSE`
+vaut `compta`. On sait donc, pour chaque indicateur, de quel module il tire sa source — et si le
+site est instrumenté pour ce module.
+
+Trois voies, et il n'y a rien d'autre à décider :
+
+- **Ne pas écrire la mesure** quand le site n'a pas la source de l'indicateur. L'Explorateur
+  redirait « aucune mesure », ce qu'il sait déjà faire (il distingue trois états). Le plus honnête,
+  et il retire des lignes que quelqu'un pourrait déjà lire.
+- **Un troisième état de complétude** — « non instrumenté » — distinct de `partiel`. `partiel`
+  signifie « un site n'a pas contribué » et supposerait un défaut passager ; un site sans tourniquet
+  n'est pas en panne, il n'est pas équipé. Plus juste, plus de travail.
+- **Assumer le zéro** et le documenter comme tel. Alors il faut le dire à l'écran : un `0` de
+  fréquentation sur un site non instrumenté n'est pas un fait de fréquentation.
+
+⚠ **Je ne tranche pas, et je ne corrige pas de moi-même** : les trois voies changent ce que le
+module *affirme*, pas seulement ce qu'il affiche. La première retire de la donnée déjà écrite.
+
+⚠ **Et c'est moi qui ai recommandé le rattrapage**, dans le point n°1 de ce relevé, avec la réserve
+« la fréquentation sortira à 0 pour tout jour après le 02/09 ». Cette réserve était juste sur la
+cause et **trop étroite sur la portée** : je l'avais attribuée à l'arrêt du générateur de données de
+la préproduction. Elle vaut en réalité pour **tout site non instrumenté, en production comprise**,
+et indépendamment de tout générateur.
 
 ### 6. Un droit d'accès ne dit pas à qui il appartient — et sans ça, on ne peut pas le rattacher
 

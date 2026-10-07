@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
-import Modal from './Modal.jsx'
 
 /**
  * LES AUDIOGUIDES, ET CE QU'ILS RÉVÈLENT — quatre routes servies, aucun écran.
@@ -21,21 +20,36 @@ import Modal from './Modal.jsx'
  * (qualification → guide → utilisateur), et le second saut arrive en référence nue. Un écran qui
  * afficherait « guide #e8bba2be » n'aiderait personne ; le NOMBRE, lui, dit exactement quoi faire.
  */
-export default function AudioguidesMusee({ etabActif, droits }) {
+// ⚠ UNE CONSTANTE DE MODULE : le formulaire recharge ses champs à chaque nouvel objet `valeurs`.
+// Un `{ produit: '', langues: [] }` écrit en ligne effacerait la saisie à chaque rendu.
+const AUDIOGUIDE_NOUVEAU = Object.freeze({ produit: '', langues: [] })
+
+export default function AudioguidesMusee({ etabActif, droits, params = {}, majParams }) {
   // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
-  const [audioguides, setAudioguides] = useState(null)
+  // ⚠ UNE LISTE EST LUE POUR UN ÉTABLISSEMENT. Remise à `null` dans l'effet, elle restait affichée
+  // une trame après une bascule ; et une réponse partie avant la bascule arrivait après elle et
+  // réaffichait, sous le nouvel établissement, l'audioguide de l'ancien. La lecture garde
+  // l'établissement pour lequel elle a été faite, une réponse périmée est ignorée, et une liste
+  // d'un autre établissement compte comme « on lit ».
+  const [lectureAudioguides, setLectureAudioguides] = useState({ etab: null, lignes: null })
   const [qualifications, setQualifications] = useState(null)
   const [bascules, setBascules] = useState(null)
-  const [produits, setProduits] = useState(null)
-  const [edition, setEdition] = useState(null)
+  const [lectureProduits, setLectureProduits] = useState({ etab: null, lignes: null })
+  const etabCourant = useRef(etabActif)
+  etabCourant.current = etabActif
+  const audioguides = lectureAudioguides.etab === etabActif ? lectureAudioguides.lignes : null
+  const produits = lectureProduits.etab === etabActif ? lectureProduits.lignes : null
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
 
   const peutConfigurer = aUnDesDroits(droits, ['musee.configurer', 'musee.gerer'])
 
   function charger() {
-    setAudioguides(null)
-    api.museeAudioguides().then((r) => setAudioguides(membres(r))).catch(() => setAudioguides(undefined))
+    const etab = etabActif
+    setLectureAudioguides({ etab, lignes: null })
+    api.museeAudioguides()
+      .then((r) => { if (etabCourant.current === etab) setLectureAudioguides({ etab, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etab) setLectureAudioguides({ etab, lignes: undefined }) })
   }
 
   useEffect(charger, [etabActif])
@@ -48,8 +62,8 @@ export default function AudioguidesMusee({ etabActif, droits }) {
       .then((r) => setBascules(membres(r)))
       .catch(() => setBascules(undefined))
     api.produits({ itemsPerPage: 200 })
-      .then((r) => setProduits(membres(r)))
-      .catch(() => setProduits(undefined))
+      .then((r) => { if (etabCourant.current === etabActif) setLectureProduits({ etab: etabActif, lignes: membres(r) }) })
+      .catch(() => { if (etabCourant.current === etabActif) setLectureProduits({ etab: etabActif, lignes: undefined }) })
   }, [etabActif])
 
   function nomProduit(ref) {
@@ -92,6 +106,58 @@ export default function AudioguidesMusee({ etabActif, droits }) {
     () => (couverture || []).filter((c) => c.audioguide && c.guides === 0),
     [couverture],
   )
+
+  // L'audioguide ouvert : la constante en création, un objet mémorisé sur la ligne lue en modification.
+  const valeursOuvertes = useMemo(() => {
+    if (!params.audioguide) return null
+    if (params.audioguide === 'nouveau') return AUDIOGUIDE_NOUVEAU
+    if (!Array.isArray(audioguides)) return null
+    const a = audioguides.find((x) => String(x.id) === String(params.audioguide))
+    return a ? { id: a.id, produit: idDe(a.produit) || '', langues: [...(a.langues || [])] } : null
+  }, [params.audioguide, audioguides])
+
+  // ── DÉCLARER OU MODIFIER UN AUDIOGUIDE, EN ÉCRAN ────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Une modification se fait sur la
+  // ligne lue : illisible, on ne la réécrit pas. Une création attend le catalogue, qui dit déjà
+  // lui-même son échec dans le formulaire.
+  if (params.audioguide) {
+    const fermerAudioguide = () => majParams({ audioguide: '' }, { pousser: true })
+    const creation = params.audioguide === 'nouveau'
+    let contenu
+    if (!peutConfigurer) {
+      contenu = <div className="banner banner-warn">Déclarer ou modifier un audioguide demande le droit de configurer le musée, que ce compte n’a pas.</div>
+    } else if ((creation && produits === null) || (!creation && audioguides === null)) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (!creation && audioguides === undefined) {
+      contenu = <div className="banner banner-error">Les audioguides n’ont pas pu être lus : on ne modifie pas une fiche qu’on n’a pas lue.</div>
+    } else if (!valeursOuvertes) {
+      contenu = <div className="banner banner-warn">Cet audioguide n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <EditionAudioguide
+            key={params.audioguide}
+            valeurs={valeursOuvertes}
+            produits={produits}
+            onFermer={fermerAudioguide}
+            onFait={(m) => { fermerAudioguide(); setSucces(m); setErreur(null); charger() }}
+            onErreur={setErreur}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <button className="btn ghost sm" type="button" onClick={fermerAudioguide}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux audioguides
+        </button>
+        {contenu}
+      </>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--esp-bloc)' }}>
@@ -180,7 +246,7 @@ export default function AudioguidesMusee({ etabActif, droits }) {
               type="button"
               className="btn primary sm"
               style={{ marginLeft: 'auto' }}
-              onClick={() => setEdition({ produit: '', langues: [] })}
+              onClick={() => { setErreur(null); setSucces(null); majParams({ audioguide: 'nouveau' }, { pousser: true }) }}
             >
               Déclarer un audioguide
             </button>
@@ -235,11 +301,7 @@ export default function AudioguidesMusee({ etabActif, droits }) {
                             <button
                               type="button"
                               className="btn ghost sm"
-                              onClick={() => setEdition({
-                                id: a.id,
-                                produit: idDe(a.produit) || '',
-                                langues: [...(a.langues || [])],
-                              })}
+                              onClick={() => { setErreur(null); setSucces(null); majParams({ audioguide: String(a.id) }, { pousser: true }) }}
                             >
                               Modifier
                             </button>
@@ -301,14 +363,6 @@ export default function AudioguidesMusee({ etabActif, droits }) {
           )}
         </div>
       </section>
-
-      <EditionAudioguide
-        valeurs={edition}
-        produits={produits}
-        onFermer={() => setEdition(null)}
-        onFait={(m) => { setEdition(null); setSucces(m); setErreur(null); charger() }}
-        onErreur={setErreur}
-      />
     </div>
   )
 }
@@ -352,7 +406,8 @@ function EditionAudioguide({ valeurs, produits, onFermer, onFait, onErreur }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre={v.id ? 'Modifier l’audioguide' : 'Déclarer un audioguide'} taille="sm">
+    <>
+      <h2>{v.id ? 'Modifier l’audioguide' : 'Déclarer un audioguide'}</h2>
       <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Produit *</span>
@@ -416,6 +471,6 @@ function EditionAudioguide({ valeurs, produits, onFermer, onFait, onErreur }) {
           </button>
         </div>
       </div>
-    </Modal>
+    </>
   )
 }

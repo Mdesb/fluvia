@@ -30,14 +30,16 @@ import { confirmer } from './Confirmation.jsx'
 
 const OUVERTES = ['brouillon', 'envoyee', 'confirmee', 'partiellement_recue']
 
-export default function AchatsStock({ articles, droits, etabActif, onErreur, onFait }) {
+export default function AchatsStock({ articles, droits, etabActif, onErreur, onFait, params = {}, majParams }) {
   const [fournisseurs, setFournisseurs] = useState([])
   const [commandes, setCommandes] = useState([])
   const [lignes, setLignes] = useState([])
   const [receptions, setReceptions] = useState([])
   const [chargement, setChargement] = useState(true)
   const [nouvelle, setNouvelle] = useState(false)
-  const [composition, setComposition] = useState(null)
+  // ⚠ `null` = PAS ENCORE LU, `false` = LECTURE ÉCHOUÉE. Les listes restaient à [] sur un refus : un
+  // écran de lignes afficherait « aucune ligne » sur une commande qui en a.
+  const [listesLues, setListesLues] = useState(null)
   const [reception, setReception] = useState(null)
 
   const peutAcheter = aUnDesDroits(droits, ['stock.gerer_achat', 'stock.gerer'])
@@ -67,7 +69,9 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
       setCommandes(membres(c))
       setLignes(membres(l))
       setReceptions(membres(r))
+      setListesLues(true)
     } catch (e) {
+      setListesLues(false)
       onErreur(e.message)
     } finally {
       setChargement(false)
@@ -77,6 +81,29 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
   useEffect(() => {
     recharger()
   }, [recharger])
+
+  // ⚠ LA COMMANDE SE LIT PAR SON IDENTIFIANT : un lien ne doit pas dépendre de la liste, dont la
+  // lecture peut échouer.
+  // Seul un 404 dit « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, ET LA CLÉ PORTE L'ÉTABLISSEMENT (même motif que #178 et #185).
+  // Un drapeau levé dans l'effet ne l'est qu'APRÈS le rendu : ce rendu-là affirmait « n'existe
+  // pas » à l'ouverture, et montrait une trame la commande de l'ancien établissement après une
+  // bascule. Refermer l'écran oublie la lecture.
+  const [lectureCommande, setLectureCommande] = useState(null)
+  const cleCommande = params.commande ? `${params.commande}|${etabActif}` : null
+  useEffect(() => {
+    if (!params.commande) { setLectureCommande(null); return undefined }
+    const cle = `${params.commande}|${etabActif}`
+    let vivant = true
+    api.stockCommandeAchat(params.commande)
+      .then((v) => { if (vivant) setLectureCommande({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureCommande({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.commande, etabActif])
+  const lectureCommandeCourante = lectureCommande?.cle === cleCommande ? lectureCommande : null
+  const chargementCommande = cleCommande !== null && lectureCommandeCourante === null
+  const commandeOuverte = lectureCommandeCourante?.valeur ?? null
+  const lectureCommandeEchouee = lectureCommandeCourante?.echouee ?? false
 
   const lignesParCommande = useMemo(() => {
     const index = {}
@@ -106,6 +133,61 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
       <section className="card">
         <div className="card-b center" style={{ minHeight: 120 }}><div className="spinner" /></div>
       </section>
+    )
+  }
+
+  // ── LES LIGNES D'UNE COMMANDE, EN ÉCRAN ────────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DU BOUTON ET L'ÉCRAN LES REPREND : le droit de gérer les
+  // achats, et une commande en brouillon. Et les lignes viennent de la liste : illisible, elle
+  // ferait dire « aucune ligne » à une commande qui en a.
+  if (params.commande) {
+    const fermerComposition = () => majParams({ commande: '' }, { pousser: true })
+    const c = commandeOuverte
+    if (!peutAcheter) {
+      return (
+        <div className="banner banner-warn">
+          Composer une commande d’achat demande le droit de gérer les achats, que ce compte n’a pas.
+        </div>
+      )
+    }
+    if (chargementCommande) {
+      return <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    }
+    if (!c) {
+      return (
+        <div className="banner banner-warn">
+          {lectureCommandeEchouee
+            ? 'Cette commande n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+            : 'Cette commande n’existe pas, ou n’est pas visible depuis cet établissement.'}
+        </div>
+      )
+    }
+    if (c.statut !== 'brouillon') {
+      return (
+        <div className="banner banner-warn">
+          La commande {c.numero || ''} est « {mot(c.statut)} » : ses lignes ne se modifient qu’en brouillon.
+        </div>
+      )
+    }
+    if (listesLues === false) {
+      return (
+        <div className="banner banner-error">
+          Les lignes des commandes n’ont pas pu être lues : cet écran ne peut pas montrer ce que
+          contient déjà la commande, et n’y ajoute rien.
+        </div>
+      )
+    }
+    return (
+      <CompositionModal
+        key={params.commande}
+        commande={c}
+        lignes={lignesParCommande[c.id] || []}
+        articles={articles}
+        onClose={fermerComposition}
+        onChange={recharger}
+        onErreur={onErreur}
+      />
     )
   }
 
@@ -172,7 +254,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
                       <td className="num">
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                           {peutAcheter && brouillon && (
-                            <button className="btn ghost sm" type="button" onClick={() => setComposition(c)}>
+                            <button className="btn ghost sm" type="button" onClick={() => majParams({ commande: String(c.id) }, { pousser: true })}>
                               Modifier les lignes
                             </button>
                           )}
@@ -276,7 +358,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
 
       {peutGererFournisseur && (
         <div style={{ marginTop: 16 }}>
-          <FournisseursSection onChange={recharger} />
+          <FournisseursSection onChange={recharger} params={params} majParams={majParams} />
         </div>
       )}
 
@@ -288,19 +370,11 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
           setNouvelle(false)
           await recharger()
           onFait('Commande créée en brouillon. Ajoutez ses lignes, puis envoyez-la.')
-          setComposition(commande)
+          if (commande?.id) majParams({ commande: String(commande.id) }, { pousser: true })
         }}
         onErreur={onErreur}
       />
 
-      <CompositionModal
-        commande={composition}
-        lignes={composition ? lignesParCommande[composition.id] || [] : []}
-        articles={articles}
-        onClose={() => setComposition(null)}
-        onChange={recharger}
-        onErreur={onErreur}
-      />
 
       {/* ⚠ `articles` était lu par `ReceptionModal` sans jamais lui être passé : la modale de
           réception mourait à l'ouverture. `CompositionModal`, juste au-dessus, fait la même
@@ -447,13 +521,11 @@ function CompositionModal({ commande, lignes, articles, onClose, onChange, onErr
     0,
   )
 
+  if (!commande) return null
+
   return (
-    <Modal
-      open={!!commande}
-      onClose={onClose}
-      titre={commande ? `Lignes — ${commande.numero || 'commande en brouillon'}` : ''}
-      taille="lg"
-    >
+    <>
+      <h2>{`Lignes — ${commande.numero || 'commande en brouillon'}`}</h2>
       {commande && (
         <>
           {lignes.length === 0 ? (
@@ -525,7 +597,7 @@ function CompositionModal({ commande, lignes, articles, onClose, onChange, onErr
           </div>
         </>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -716,7 +788,7 @@ function ReceptionsSection({ receptions, fournisseurs, peutReceptionner, onValid
 // --------------------------------------------------------------------------------------------
 // Les fournisseurs.
 // --------------------------------------------------------------------------------------------
-function FournisseursSection({ onChange }) {
+function FournisseursSection({ onChange, params, majParams }) {
   // Pas de suppression : un fournisseur porte des commandes et des réceptions. Ce qu'on veut, c'est
   // cesser de lui commander — c'est la case « actif », et elle est réversible.
   const descripteur = {
@@ -764,5 +836,5 @@ function FournisseursSection({ onChange }) {
     ],
   }
 
-  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} />
+  return <ReferentielEditable descripteur={descripteur} peutEcrire onChange={onChange} params={params} majParams={majParams} />
 }

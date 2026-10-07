@@ -6,7 +6,10 @@ namespace App\Membership\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Enum\StatutProjectionDroit;
+use App\Acces\Service\AppairageHandler;
 use App\Membership\Entity\Membership;
 use App\Membership\Entity\StatutAccesFitness;
 use App\Membership\Service\PropagationAccesFitnessHandler;
@@ -29,6 +32,7 @@ final class RattacherDroitAccesProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly PropagationAccesFitnessHandler $propagation,
+        private readonly AppairageHandler $appairageHandler,
     ) {
     }
 
@@ -46,6 +50,21 @@ final class RattacherDroitAccesProcessor implements ProcessorInterface
         $statutAcces = $this->em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $data]);
         if (!$statutAcces instanceof StatutAccesFitness) {
             throw new UnprocessableEntityHttpException('Statut d\'accès Sport introuvable pour cet abonnement.');
+        }
+
+        // ── ON RÉVOQUE L'ANCIEN DROIT AVANT DE LE REMPLACER ──────────────────────────────────────
+        // Depuis l'émission du billet QR à la souscription, `droitAcces` n'est plus null au départ :
+        // il porte le support QR, avec un appairage ACTIF. L'écraser sans le révoquer laissait ce QR
+        // ouvrir la porte indéfiniment — même après résiliation, car la propagation ne dévalide que le
+        // droit rattaché AU STATUT, désormais le nouveau. On coupe donc l'ancien : dévalidation + tous
+        // ses appairages actifs révoqués. (Un adhérent n'a qu'un support à la fois ; en vouloir deux —
+        // QR ET badge — serait une fonctionnalité à part, pas un effet de bord de l'appairage d'un badge.)
+        $ancien = $statutAcces->getDroitAcces();
+        if ($ancien instanceof DroitAcces && (string) $ancien->getId() !== (string) $droit->getId()) {
+            $ancien->setStatutProjection(StatutProjectionDroit::Devalide);
+            foreach ($this->em->getRepository(Appairage::class)->findBy(['droit' => $ancien, 'actif' => true]) as $app) {
+                $this->appairageHandler->revoquer($app);
+            }
         }
 
         $statutAcces->setDroitAcces($droit);

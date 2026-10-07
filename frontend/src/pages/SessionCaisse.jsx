@@ -251,10 +251,11 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
           : 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'}
         style={{ marginTop: 14 }}
       >
-        {cloture ? 'Clôture…' : 'Clôturer (Z)'}
+        {cloture ? 'Clôture…' : 'Clôturer la journée (Z)'}
       </button>
       <div className="hint">
-        Sans comptage saisi, chaque moyen est réputé conforme. La clôture scelle la session (NF525).
+        Le « Z » est le comptage de fin de journée (terme de caisse NF525). Sans comptage saisi, chaque
+        moyen est réputé conforme. La clôture scelle la session (NF525) : elle est irréversible.
       </div>
     </>
   )
@@ -285,7 +286,7 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
   } else if (session) {
     const formCloture = (
       <form onSubmit={cloturerZ} className={modale ? undefined : 'card'}>
-        {!modale && <div className="card-h"><h3>Clôture Z</h3><span className="sub">irréversible</span></div>}
+        {!modale && <div className="card-h"><h3>Clôture Z (comptage de fin de journée)</h3><span className="sub">irréversible</span></div>}
         {modale ? champsCloture : <div className="card-b">{champsCloture}</div>}
       </form>
     )
@@ -377,7 +378,7 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
       <div className="view-head">
         <div className="ttl">
           <h1>Caisse : session / Z</h1>
-          <p>Ouverture, suivi et clôture Z de la session de caisse</p>
+          <p>Ouverture, suivi et clôture Z (comptage de fin de journée) de la session de caisse</p>
         </div>
       </div>
 

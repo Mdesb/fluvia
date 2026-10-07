@@ -8,6 +8,7 @@ use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ConfirmationExpiry;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
+use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\ResolveurRegleAnnulation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -51,6 +52,7 @@ final class ExpireReservationConfirmationsCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly AnnulationVenteReservationHandler $annulationVente,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
     ) {
         parent::__construct();
     }
@@ -168,6 +170,15 @@ final class ExpireReservationConfirmationsCommand extends Command
     {
         $reservation->setStatut(StatutReservation::AnnuleeLibre);
         ++$compte['liberees'];
+
+        // ⚠ LA JAUGE GLOBALE SE REND AUSSI, ET C'EST NEUF. Le chemin padel — le seul qui pose
+        // « à confirmer » — ne comptait pas sa place sur `Ressource.occupationCourante` ; il n'y avait
+        // donc rien à rendre ici, et l'absence de ce geste compensait l'absence de l'autre. Les deux
+        // se corrigent ensemble : la réservation compte à sa création, et l'expiration la rend.
+        $ressource = $reservation->getCreneau()?->getRessource();
+        if ($ressource !== null) {
+            $this->jaugeMere->decrementer($ressource, $reservation->getQuantity());
+        }
 
         // ⚠ LIBÉRER LE CRÉNEAU SANS TOUCHER LA VENTE LAISSAIT UNE DETTE DERRIÈRE.
         //

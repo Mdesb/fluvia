@@ -38,6 +38,10 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
 
         $config = $this->configDuSite($em, $abonnement);
         $config->setPreNotificationDelayDays(7); // exactement la période hebdomadaire
+        // D115 : un délai hebdomadaire (<14 j) exige la clause de préavis réduit — un prélèvement
+        // hebdomadaire impose de fait un délai <14. On la pose pour isoler ici la seule règle testée
+        // (délai > période, la borne haute).
+        $config->setPreavisReduitContractuel(true);
 
         self::assertSame(
             [],
@@ -56,6 +60,7 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
 
         $config = $this->configDuSite($em, $abonnement);
         $config->setPreNotificationDelayDays(8);
+        $config->setPreavisReduitContractuel(true); // <14 j : clause requise, pour isoler la borne « délai > période »
 
         self::assertCount(
             1,
@@ -103,6 +108,38 @@ final class DelaiPreavisPeriodeTest extends SepaApiTestCase
 
         self::assertSame([], $this->fautesSur($config, 'preNotificationDelayDays'));
         self::assertSame([], $this->fautesSur($abonnement, 'periodicite'));
+    }
+
+    /** D115 : un délai sous 14 jours SANS clause contractuelle → refus. */
+    public function testUnDelaiSousQuatorzeSansClauseEstRefuse(): void
+    {
+        $em = $this->em();
+        $abonnement = $this->unAbonnement($em); // mensuel (28 j) : la borne haute ne se déclenche pas à 10
+        $config = $this->configDuSite($em, $abonnement);
+        $config->setPreNotificationDelayDays(10);
+        // pas de clause : preavisReduitContractuel reste false
+
+        self::assertCount(
+            1,
+            $this->fautesSur($config, 'preNotificationDelayDays'),
+            'dix jours de préavis sans clause de préavis réduit : sous le minimum SEPA de 14 jours',
+        );
+    }
+
+    /** D115 : un délai sous 14 jours AVEC la clause déclarée → accepté. */
+    public function testUnDelaiSousQuatorzeAvecClauseEstAccepte(): void
+    {
+        $em = $this->em();
+        $abonnement = $this->unAbonnement($em);
+        $config = $this->configDuSite($em, $abonnement);
+        $config->setPreNotificationDelayDays(10);
+        $config->setPreavisReduitContractuel(true);
+
+        self::assertSame(
+            [],
+            $this->fautesSur($config, 'preNotificationDelayDays'),
+            'la clause de préavis réduit contractuel autorise un délai sous 14 jours',
+        );
     }
 
     /**

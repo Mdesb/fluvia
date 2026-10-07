@@ -43,25 +43,25 @@ const DEFAUT_HEURES = 2
 // Le contexte de support vit en `sessionStorage`, donc DANS CET ONGLET seulement (voir
 // `supportStore`). Avec `localStorage`, l'établissement actif du premier onglet aurait changé aussi,
 // et l'agent y serait revenu — chez le client, sans bandeau, sans rien qui le dise.
-export default function BasculeSupport() {
-  const [ouvert, setOuvert] = useState(false)
-
+// Le bouton de la barre : il DEMANDE l'écran, il ne l'ouvre plus lui-même — c'est l'application
+// de l'éditeur qui porte l'adresse, donc l'écran.
+export default function BasculeSupport({ onOuvrir }) {
   return (
     <>
       <button
         type="button"
         className="btn ghost sm"
-        onClick={() => setOuvert(true)}
+        onClick={() => onOuvrir?.()}
         title="Ouvrir un accès d’assistance chez un client et travailler dans son établissement"
       >
         ◈ Basculer en mode support
       </button>
-      <FenetreBascule open={ouvert} onClose={() => setOuvert(false)} />
     </>
   )
 }
 
-function FenetreBascule({ open, onClose }) {
+// Le panneau : un écran de l'éditeur (#<onglet>?bascule=1), plus une modale.
+export function PanneauBascule({ onClose }) {
   const [clients, setClients] = useState(null)
   const [erreurChargement, setErreurChargement] = useState(null)
   const [filtre, setFiltre] = useState('')
@@ -72,7 +72,6 @@ function FenetreBascule({ open, onClose }) {
   const [erreur, setErreur] = useState(null)
 
   useEffect(() => {
-    if (!open) return
     setChoisi(null)
     setMotif('')
     setHeures(DEFAUT_HEURES)
@@ -83,7 +82,8 @@ function FenetreBascule({ open, onClose }) {
       .editorCustomers()
       .then((r) => setClients(r['hydra:member'] ?? r.member ?? []))
       .catch((e) => setErreurChargement(e.message || 'La liste des clients n’a pas pu être chargée.'))
-  }, [open])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // UNE LIGNE PAR ÉTABLISSEMENT, PAS PAR CLIENT. On bascule chez un établissement, pas chez une
   // raison sociale : un client peut en avoir plusieurs, et « lequel ? » est la première question.
@@ -150,7 +150,8 @@ function FenetreBascule({ open, onClose }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre="Basculer en mode support" taille="lg">
+    <>
+      <h2>Basculer en mode support</h2>
       {erreurChargement && <div className="banner banner-error">{erreurChargement}</div>}
       {clients === null && !erreurChargement && <div className="empty">Chargement des clients…</div>}
 
@@ -256,6 +257,6 @@ function FenetreBascule({ open, onClose }) {
           </div>
         </>
       )}
-    </Modal>
+    </>
   )
 }

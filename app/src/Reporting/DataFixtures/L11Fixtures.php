@@ -24,12 +24,10 @@ use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
-use App\Reporting\Entity\AxeAnalytique;
 use App\Reporting\Entity\Indicateur;
 use App\Reporting\Enum\ModeCalculIndicateur;
 use App\Reporting\Enum\NatureIndicateur;
 use App\Reporting\Enum\SourceModuleIndicateur;
-use App\Reporting\Enum\TypeAxeAnalytique;
 use App\Reporting\Enum\UniteIndicateur;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Permission;
@@ -297,22 +295,6 @@ final class L11Fixtures extends Fixture
 
     private function chargerReferentiel(ObjectManager $manager): void
     {
-        $axes = [
-            ['site', 'Site', TypeAxeAnalytique::Site, null, false],
-            ['activite', 'Activité', TypeAxeAnalytique::Activite, null, false],
-            ['produit', 'Produit', TypeAxeAnalytique::Produit, null, false],
-            ['categorie', 'Catégorie', TypeAxeAnalytique::Categorie, null, true],
-            ['periode', 'Période', TypeAxeAnalytique::Periode, ['jour', 'semaine', 'mois', 'annee'], false],
-            ['canal', 'Canal', TypeAxeAnalytique::Canal, null, true],
-        ];
-        foreach ($axes as [$code, $libelle, $type, $granularites, $estExtension]) {
-            $axe = $this->parCode($manager, AxeAnalytique::class, $code);
-            $axe->setLibelle($libelle)->setType($type)->setEstExtension($estExtension);
-            if ($granularites !== null) {
-                $axe->setGranularites($granularites);
-            }
-        }
-
         $indicateurs = [
             ['CA', 'Chiffre d\'affaires encaissé', UniteIndicateur::Euro, ModeCalculIndicateur::Somme, NatureIndicateur::Cumule, SourceModuleIndicateur::Vente],
             ['FREQUENTATION_CUMULEE', 'Fréquentation cumulée', UniteIndicateur::Nombre, ModeCalculIndicateur::Somme, NatureIndicateur::Cumule, SourceModuleIndicateur::Acces],

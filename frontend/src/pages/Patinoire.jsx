@@ -6,6 +6,8 @@ import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 import { confirmer } from '../components/Confirmation.jsx'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
+import { useEtatUrl } from '../api/url.js'
 
 // Patinoire — l'écran de guichet, et non plus la vitrine en lecture seule.
 //
@@ -37,6 +39,14 @@ import { confirmer } from '../components/Confirmation.jsx'
 // qui survit à sa propre correction est pire que pas de limite du tout, parce que plus personne ne
 // la cherche.
 
+// `retour` : la location dont on enregistre le retour ; `bareme` : `nouvelle` ou l'identifiant d'une
+// ligne de barème ; `pointure` : `nouvelle` quand on en déclare une.
+const DEFAUTS_URL = { retour: '', bareme: '', pointure: '' }
+
+// ⚠ UNE CONSTANTE DE MODULE : l'effet du formulaire de barème recharge ses champs à chaque nouvel
+// objet `grille`. Un `{}` écrit en ligne effacerait la saisie à chaque rendu.
+const GRILLE_NOUVELLE = Object.freeze({})
+
 export default function Patinoire({ etabActif, droits, envoiCourriel = false }) {
   // ⚠ `null` = PAS LU · `[]` = LU ET VIDE.
   //
@@ -55,6 +65,7 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
+  const [params, majParams] = useEtatUrl('patinoire', DEFAUTS_URL)
 
   const peutLouer = aLeDroit(droits, 'patinoire.gerer_location')
   const peutAffuter = aLeDroit(droits, 'patinoire.gerer_affutage')
@@ -96,6 +107,29 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
     recharger()
   }, [recharger])
 
+  // ⚠ LA LOCATION RENDUE SE LIT PAR SON IDENTIFIANT : la liste est bornée à 100. Seul un 404 dit
+  // « elle n'existe pas » ; tout le reste est une lecture qui a échoué.
+  // ⚠ « PAS ENCORE LU » SE DÉDUIT, IL NE SE POSE PAS DANS L'EFFET (même défaut que le rejet
+  // bancaire de Sport, #172). Un drapeau levé par l'effet ne l'est qu'APRÈS le premier rendu avec
+  // l'adresse : ce rendu-là n'avait ni objet ni chargement, et affirmait « n'existe pas » le temps
+  // d'une trame. La lecture garde la clé qu'elle a lue ; tant qu'elle ne correspond pas, on charge.
+  // Refermer l'écran oublie la lecture : rouvrir relit au lieu de montrer l'état d'avant l'action.
+  const [lectureLocation, setLectureLocation] = useState(null)
+  const cleLocation = params.retour ? `${params.retour}|${etabActif}` : null
+  useEffect(() => {
+    if (!(params.retour)) { setLectureLocation(null); return undefined }
+    const cle = `${params.retour}|${etabActif}`
+    let vivant = true
+    api.patinoireLocation(params.retour)
+      .then((v) => { if (vivant) setLectureLocation({ cle, valeur: v, echouee: false }) })
+      .catch((e) => { if (vivant) setLectureLocation({ cle, valeur: null, echouee: e?.status !== 404 }) })
+    return () => { vivant = false }
+  }, [params.retour, etabActif])
+  const lectureLocationCourante = lectureLocation?.cle === cleLocation ? lectureLocation : null
+  const chargementLocation = cleLocation !== null && lectureLocationCourante === null
+  const locationRendue = lectureLocationCourante?.valeur ?? null
+  const lectureLocationEchouee = lectureLocationCourante?.echouee ?? false
+
   // La liste ne sert qu'à ceux qui peuvent louer : la charger pour les autres serait un appel de plus
   // à chaque ouverture de l'écran, pour un menu qu'ils ne verront jamais.
   useEffect(() => {
@@ -114,6 +148,27 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
     return nom || `Bénéficiaire ${String(b?.id || '').slice(0, 8)}`
   }, [])
 
+  // ⚠ LE MÊME COMPTAGE QUE `ParcSection` — `en_attente` ou `proposee` —, parce qu'une personne
+  // « proposée » attend toujours : on lui a réservé la paire, on ne l'a pas prévenue. Il vivait dans
+  // LocationsSection, qui ne s'en servait que pour la modale de retour ; l'écran de retour est posé
+  // ici, le compte monte avec lui.
+  const enAttenteParParc = useMemo(() => {
+    const c = {}
+    for (const l of attente || []) {
+      if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
+      const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
+      c[id] = (c[id] || 0) + 1
+    }
+    return c
+  }, [attente])
+
+  // La ligne de barème ouverte : la constante en création, la ligne de la liste en modification.
+  const grilleEditee = useMemo(() => {
+    if (!params.bareme) return null
+    if (params.bareme === 'nouvelle') return GRILLE_NOUVELLE
+    return (grilles || []).find((g) => String(g.id) === String(params.bareme)) || null
+  }, [params.bareme, grilles])
+
   const apres = useCallback(
     async (message) => {
       setSucces(message)
@@ -122,6 +177,104 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
     },
     [recharger],
   )
+
+  // ── RETOUR, BARÈME, POINTURE : LES ÉCRANS PRENNENT LA PAGE ─────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LES CONDITIONS DES BOUTONS ET CHAQUE ÉCRAN LES REPREND. Et chaque formulaire
+  // décide sur une liste de la page : illisible, on refuse plutôt que de laisser passer un doublon de
+  // pointure — qui ne se supprime pas — ou de modifier un barème qu'on n'a pas lu.
+  if (params.retour || params.bareme || params.pointure) {
+    const fermerEcran = () => majParams({ retour: '', bareme: '', pointure: '' }, { pousser: true })
+    let contenu
+    if (params.retour) {
+      if (!peutLouer) {
+        contenu = <div className="banner banner-warn">Enregistrer un retour de patins demande le droit de gérer les locations, que ce compte n’a pas.</div>
+      } else if (chargementLocation) {
+        contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+      } else if (!locationRendue) {
+        contenu = (
+          <div className="banner banner-warn">
+            {lectureLocationEchouee
+              ? 'Cette location n’a pas pu être lue. Ce n’est pas la même chose que « elle n’existe pas » : réessayez avant d’en conclure quoi que ce soit.'
+              : 'Cette location n’existe pas, ou n’est pas visible depuis cet établissement.'}
+          </div>
+        )
+      } else if (locationRendue.statut !== 'en_cours') {
+        contenu = (
+          <div className="banner banner-warn">
+            Cette paire n’est plus sortie (« {mot(locationRendue.statut)} ») : il n’y a pas de retour à enregistrer.
+          </div>
+        )
+      } else {
+        contenu = (
+          <>
+            {erreur && <div className="banner banner-error">{erreur}</div>}
+            <RetourModal
+              key={params.retour}
+              location={locationRendue}
+              enAttenteParParc={enAttenteParParc}
+              envoiCourriel={envoiCourriel}
+              onClose={fermerEcran}
+              onFait={(m) => { fermerEcran(); apres(m) }}
+              onErreur={setErreur}
+            />
+          </>
+        )
+      }
+    } else if (params.bareme) {
+      if (!peutConfigurer) {
+        contenu = <div className="banner banner-warn">Modifier le barème de retenue demande le droit de configurer la patinoire, que ce compte n’a pas.</div>
+      } else if (chargement) {
+        contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+      } else if (grilles === null) {
+        contenu = (
+          <div className="banner banner-error">
+            Le barème n’a pas pu être lu : on ne modifie pas une ligne qu’on n’a pas lue, et on n’en
+            ajoute pas une sans voir celles qui existent.
+          </div>
+        )
+      } else if (!grilleEditee) {
+        contenu = <div className="banner banner-warn">Cette ligne de barème n’existe pas, ou n’est pas visible depuis cet établissement.</div>
+      } else {
+        contenu = (
+          <>
+            {erreur && <div className="banner banner-error">{erreur}</div>}
+            <BaremeModal
+              key={params.bareme}
+              grille={grilleEditee}
+              parc={parc}
+              etabActif={etabActif}
+              onClose={fermerEcran}
+              onFait={(m) => { fermerEcran(); apres(m) }}
+              onErreur={setErreur}
+            />
+          </>
+        )
+      }
+    } else if (!peutConfigurer) {
+      contenu = <div className="banner banner-warn">Déclarer une {mot('pointure').toLowerCase()} demande le droit de configurer la patinoire, que ce compte n’a pas.</div>
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (parc === null) {
+      contenu = (
+        <div className="banner banner-error">
+          Le parc n’a pas pu être lu : cet écran ne pourrait pas vérifier que la {mot('pointure').toLowerCase()} n’est
+          pas déjà déclarée — et une {mot('pointure').toLowerCase()} déclarée ne se supprime pas.
+        </div>
+      )
+    } else {
+      contenu = <ParcPatinsModal open parc={parc} onClose={fermerEcran} onFait={() => { fermerEcran(); apres() }} onErreur={setErreur} />
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerEcran}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour à la patinoire
+        </button>
+        {contenu}
+      </div>
+    )
+  }
 
   return (
     <div className="view large">
@@ -149,6 +302,7 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
             peutConfigurer={peutConfigurer}
             onFait={apres}
             onErreur={setErreur}
+            majParams={majParams}
           />
 
           <div className="resa-grid" style={{ marginTop: 16 }}>
@@ -160,6 +314,7 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
               peutLouer={peutLouer}
               onFait={apres}
               onErreur={setErreur}
+              majParams={majParams}
             />
             <ListeAttenteSection
               attente={attente}
@@ -185,6 +340,7 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
             etabActif={etabActif}
             onFait={apres}
             onErreur={setErreur}
+            majParams={majParams}
           />
 
           <AffutagesSection
@@ -207,8 +363,7 @@ export default function Patinoire({ etabActif, droits, envoiCourriel = false }) 
 // --------------------------------------------------------------------------------------------
 // Le parc : une tuile par pointure, et la sortie part d'ici.
 // --------------------------------------------------------------------------------------------
-function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, peutConfigurer, onFait, onErreur }) {
-  const [creation, setCreation] = useState(false)
+function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, peutConfigurer, onFait, onErreur, majParams }) {
   const [sortie, setSortie] = useState(null)
   const [indispo, setIndispo] = useState(null)
 
@@ -245,7 +400,7 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
         <span className="sub">ce qui est louable, {mot('pointure').toLowerCase()} par {mot('pointure').toLowerCase()}</span>
         {peutConfigurer && (
           <div className="actions" style={{ marginLeft: 'auto' }}>
-            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            <button className="btn sm" type="button" onClick={() => majParams({ pointure: 'nouvelle' }, { pousser: true })}>
               ＋ Déclarer une {mot('pointure').toLowerCase()}
             </button>
           </div>
@@ -265,13 +420,6 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
                 conclure qu'on n'a pas compris son propre logiciel. C'est pire que le silence. */}
             Aucune pointure n'est enregistrée pour cet établissement. Tant que le parc est vide,
             aucune paire ne peut être louée.{peutConfigurer ? ' Déclarez-en une avec le bouton ci-dessus.' : ''}
-            <ParcPatinsModal
-              open={creation}
-              parc={parc}
-              onClose={() => setCreation(false)}
-              onFait={() => { setCreation(false); onFait() }}
-              onErreur={onErreur}
-            />
           </div>
         ) : (
           <>
@@ -281,13 +429,6 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
                 voisines et l'inscription en liste d'attente.
               </div>
             )}
-            <ParcPatinsModal
-              open={creation}
-              parc={parc}
-              onClose={() => setCreation(false)}
-              onFait={() => { setCreation(false); onFait() }}
-              onErreur={onErreur}
-            />
             <div className="pat-parc">
               {parc.map((p) => {
                 const dispo = p.quantiteDisponible || 0
@@ -348,6 +489,8 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
 // Sortir une paire. La caution est pré-remplie au montant que le serveur applique par défaut : un
 // champ vide ferait croire qu'aucune caution n'est prise, alors qu'il en prend une.
 function SortieModal({ etat, beneficiaires, nommer, onClose, onFait, onErreur, onIndisponible }) {
+  // Vocabulaire patinoire (#100, lot 3) : t('deposit', 'patinoire', …) rend « Caution patins ».
+  const { t } = useVocabulaireVerticales()
   const [beneficiaire, setBeneficiaire] = useState('')
   const [caution, setCaution] = useState('15.00')
   const [moyen, setMoyen] = useState('')
@@ -398,7 +541,7 @@ function SortieModal({ etat, beneficiaires, nommer, onClose, onFait, onErreur, o
           </div>
 
           <div className="field">
-            <label htmlFor="pat-caution">Caution encaissée</label>
+            <label htmlFor="pat-caution">{t('deposit', 'patinoire', 'Caution')} encaissée</label>
             <input id="pat-caution" className="input" type="number" step="0.01" min="0" value={caution} onChange={(e) => setCaution(e.target.value)} />
             <div className="hint">15,00 € par défaut. Consignée à la sortie, rendue au retour sauf retenue.</div>
           </div>
@@ -498,24 +641,7 @@ function IndisponibleModal({ etat, beneficiaires, nommer, peutAttente, onClose, 
 // --------------------------------------------------------------------------------------------
 // Les locations en cours, et le retour.
 // --------------------------------------------------------------------------------------------
-function LocationsSection({ locations, attente, envoiCourriel = false, nommer, peutLouer, onFait, onErreur }) {
-  // ⚠ LE MÊME COMPTAGE QUE `ParcSection`, ET IL EST DÉLIBÉRÉMENT REFAIT PLUTÔT QUE PARTAGÉ.
-  //
-  // Les deux sections en ont besoin, et remonter le calcul dans la page pour le passer aux deux
-  // ajouterait une dépendance entre elles pour trois lignes. Ce qui compte est que le CRITÈRE soit
-  // le même — `en_attente` ou `proposee` — parce qu'une personne « proposée » attend toujours : on
-  // lui a réservé la paire, on ne l'a pas prévenue.
-  const enAttenteParParc = useMemo(() => {
-    const c = {}
-    for (const l of attente || []) {
-      if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
-      const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
-      c[id] = (c[id] || 0) + 1
-    }
-    return c
-  }, [attente])
-
-  const [retour, setRetour] = useState(null)
+function LocationsSection({ locations, envoiCourriel = false, nommer, peutLouer, majParams }) {
   const enCours = (locations || []).filter((l) => l.statut === 'en_cours')
 
   return (
@@ -556,7 +682,7 @@ function LocationsSection({ locations, attente, envoiCourriel = false, nommer, p
                   <td>{dateHeureFr(l.dateSortie)}</td>
                   {peutLouer && (
                     <td className="num">
-                      <button className="btn ghost sm" type="button" onClick={() => setRetour(l)}>Retour</button>
+                      <button className="btn ghost sm" type="button" onClick={() => majParams({ retour: String(l.id) }, { pousser: true })}>Retour</button>
                     </td>
                   )}
                 </tr>
@@ -566,14 +692,6 @@ function LocationsSection({ locations, attente, envoiCourriel = false, nommer, p
         )}
       </div>
 
-      <RetourModal
-        location={retour}
-        enAttenteParParc={enAttenteParParc}
-        envoiCourriel={envoiCourriel}
-        onClose={() => setRetour(null)}
-        onFait={(m) => { setRetour(null); onFait(m) }}
-        onErreur={onErreur}
-      />
     </section>
   )
 }
@@ -651,12 +769,11 @@ function RetourModal({ location, enAttenteParParc = {}, envoiCourriel = false, o
     }
   }
 
+  if (!location) return null
+
   return (
-    <Modal
-      open={!!location}
-      onClose={onClose}
-      titre={location ? `Retour — pointure ${location.parcPatins?.pointure ?? ''}` : ''}
-    >
+    <>
+      <h2>{`Retour — pointure ${location.parcPatins?.pointure ?? ''}`}</h2>
       {location && (
         <form onSubmit={envoyer}>
           <div className="fiche-sec" style={{ marginTop: 0 }}>Dans quel état la paire revient-elle ?</div>
@@ -717,7 +834,7 @@ function RetourModal({ location, enAttenteParParc = {}, envoiCourriel = false, o
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }
 
@@ -978,9 +1095,7 @@ const MOTIFS_RETENUE = {
   restitution_partielle: 'Restitution partielle',
 }
 
-function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErreur }) {
-  const [editee, setEditee] = useState(null)
-
+function BaremeSection({ grilles, parc, peutConfigurer, majParams }) {
   const actives = (grilles || []).filter((g) => g.actif !== false)
   const inactives = (grilles || []).filter((g) => g.actif === false)
 
@@ -991,7 +1106,7 @@ function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErr
         <span className="sub">ce qu&rsquo;on garde sur la caution, et pour quoi</span>
         {peutConfigurer && (
           <div className="r">
-            <button className="btn primary sm" type="button" onClick={() => setEditee({})}>
+            <button className="btn primary sm" type="button" onClick={() => majParams({ bareme: 'nouvelle' }, { pousser: true })}>
               ＋ Ajouter une ligne
             </button>
           </div>
@@ -1045,7 +1160,7 @@ function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErr
                   </td>
                   {peutConfigurer && (
                     <td className="num">
-                      <button className="btn ghost sm" type="button" onClick={() => setEditee(g)}>
+                      <button className="btn ghost sm" type="button" onClick={() => majParams({ bareme: String(g.id) }, { pousser: true })}>
                         Modifier
                       </button>
                     </td>
@@ -1063,14 +1178,6 @@ function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErr
         )}
       </div>
 
-      <BaremeModal
-        grille={editee}
-        parc={parc}
-        etabActif={etabActif}
-        onClose={() => setEditee(null)}
-        onFait={(m) => { setEditee(null); onFait(m) }}
-        onErreur={onErreur}
-      />
     </section>
   )
 }
@@ -1122,12 +1229,11 @@ function BaremeModal({ grille, parc, etabActif, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!grille) return null
+
   return (
-    <Modal
-      open={!!grille}
-      onClose={onClose}
-      titre={edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}
-    >
+    <>
+      <h2>{edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}</h2>
       <form onSubmit={envoyer}>
         <div className="field">
           <label htmlFor="pb-motif">Motif de la retenue *</label>
@@ -1200,7 +1306,7 @@ function BaremeModal({ grille, parc, etabActif, onClose, onFait, onErreur }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }
 
@@ -1470,10 +1576,13 @@ function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
     }
   }
 
+  if (!open) return null
+
   return (
     // ⚠ LE MOT VIENT DE L'ÉTABLISSEMENT (R12). Par défaut « Pointure » — `humaniser` le rend tel
     // quel — mais un loueur de combinaisons écrit « Taille » et un loueur de skis « Longueur ».
-    <Modal open={open} onClose={onClose} titre={`Déclarer une ${mot('pointure').toLowerCase()}`}>
+    <>
+      <h2>{`Déclarer une ${mot('pointure').toLowerCase()}`}</h2>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
@@ -1534,6 +1643,6 @@ function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
           </button>
         </div>
       </form>
-    </Modal>
+    </>
   )
 }

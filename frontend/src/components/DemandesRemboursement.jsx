@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import Modal from './Modal.jsx'
 import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -31,12 +30,15 @@ import { euros } from '../api/produit.js'
 
 const EN_ATTENTE = ['recue', 'en_cours']
 
-export default function DemandesRemboursement({ etabActif, droits }) {
+export default function DemandesRemboursement({ etabActif, droits, params = {}, majParams }) {
+  const ouvert = params.demande || ''
+  const sensConnu = params.sens === 'accepter' || params.sens === 'refuser'
+  const ouvrir = (id, sens) => majParams({ demande: String(id), sens }, { pousser: true })
+  const fermer = () => majParams({ demande: '', sens: '' }, { pousser: true })
   const [demandes, setDemandes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
-  const [traitement, setTraitement] = useState(null)
 
   const peutTraiter = aLeDroit(droits, 'boutique.traiter_remboursement')
 
@@ -58,6 +60,61 @@ export default function DemandesRemboursement({ etabActif, droits }) {
 
   const attente = demandes.filter((d) => EN_ATTENTE.includes(d.statut))
   const traitees = demandes.filter((d) => !EN_ATTENTE.includes(d.statut))
+
+  // ── LE TRAITEMENT D'UNE DEMANDE, EN ÉCRAN ───────────────────────────────────────────────
+  //
+  // ⚠ DEUX PARAMÈTRES, PAS UN : la demande ET le sens. Le sens décide du titre, du formulaire
+  // et de la route appelée — accepter émet un avoir, refuser prévient le client. Un sens
+  // inconnu ne doit donc PAS retomber silencieusement sur « accepter » : l'écran le refuse.
+  //
+  // ⚠ `demandes` part à [] et non à null : la longueur de la liste ne dit rien sur la lecture.
+  // C'est `chargement` qui porte la distinction, consulté avant de conclure « introuvable ».
+  if (ouvert) {
+    const retour = (
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={fermer}
+        style={{ marginBottom: 'var(--esp-large)' }}
+      >
+        ← Retour aux demandes
+      </button>
+    )
+    if (chargement) {
+      return (
+        <>
+          {retour}
+          <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+        </>
+      )
+    }
+    const demande = demandes.find((d) => String(d.id) === String(params.demande))
+    if (!demande || !sensConnu) {
+      return (
+        <>
+          {retour}
+          <div className="banner banner-warn">
+            {!sensConnu
+              ? 'Ce lien ne dit pas s’il s’agit d’accepter ou de refuser. Revenez à la liste et choisissez : les deux gestes n’ont pas les mêmes conséquences.'
+              : 'Cette demande n’est plus dans la liste — elle a sans doute été traitée depuis que ce lien a été copié.'}
+          </div>
+        </>
+      )
+    }
+    return (
+      <>
+        {retour}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <TraitementModal
+          key={`${params.demande}:${params.sens}`}
+          etat={{ demande, sens: params.sens }}
+          onClose={fermer}
+          onFait={(m) => { fermer(); setSucces(m); setErreur(null); recharger() }}
+          onErreur={setErreur}
+        />
+      </>
+    )
+  }
 
   return (
     <>
@@ -121,14 +178,14 @@ export default function DemandesRemboursement({ etabActif, droits }) {
                             <button
                               className="btn primary sm"
                               type="button"
-                              onClick={() => setTraitement({ demande: d, sens: 'accepter' })}
+                              onClick={() => ouvrir(d.id, 'accepter')}
                             >
                               Accepter
                             </button>
                             <button
                               className="btn ghost sm"
                               type="button"
-                              onClick={() => setTraitement({ demande: d, sens: 'refuser' })}
+                              onClick={() => ouvrir(d.id, 'refuser')}
                             >
                               Refuser
                             </button>
@@ -180,17 +237,6 @@ export default function DemandesRemboursement({ etabActif, droits }) {
         </section>
       )}
 
-      <TraitementModal
-        etat={traitement}
-        onClose={() => setTraitement(null)}
-        onFait={(m) => {
-          setTraitement(null)
-          setSucces(m)
-          setErreur(null)
-          recharger()
-        }}
-        onErreur={setErreur}
-      />
     </>
   )
 }
@@ -230,11 +276,8 @@ function TraitementModal({ etat, onClose, onFait, onErreur }) {
   }
 
   return (
-    <Modal
-      open={!!etat}
-      onClose={onClose}
-      titre={accepte ? 'Accepter le remboursement' : 'Refuser la demande'}
-    >
+    <>
+      <h2>{accepte ? 'Accepter le remboursement' : 'Refuser la demande'}</h2>
       {etat && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
@@ -337,6 +380,6 @@ function TraitementModal({ etat, onClose, onFait, onErreur }) {
           </div>
         </form>
       )}
-    </Modal>
+    </>
   )
 }

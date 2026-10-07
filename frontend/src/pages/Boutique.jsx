@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import VitrinesBoutique from '../components/VitrinesBoutique.jsx'
 import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
@@ -6,13 +5,25 @@ import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
 import RetraitsClickCollect from '../components/RetraitsClickCollect.jsx'
 import PartenairesOta from '../components/PartenairesOta.jsx'
 import { api } from '../api/client.js'
+import { useEtatUrl } from '../api/url.js'
 
 // Boutique en ligne (M3, vue admin) : demandes de remboursement, comptes clients, vitrines.
+//
+// ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE L'ÉCRAN. Le traitement d'une demande vit
+// dans un composant que seul l'onglet « Remboursements » monte : sans le paramètre `tab`, un
+// F5 sur `?demande=…` retomberait sur un onglet qui ne le rend pas.
+const DEFAUTS_URL = { tab: 'remboursements', demande: '', sens: '', partenaire: '' }
+
 export default function Boutique({ etabActif, droits }) {
-  const [sousOnglet, setSousOnglet] = useState('remboursements')
+  const [params, majParams] = useEtatUrl('boutique', DEFAUTS_URL)
+  const sousOnglet = params.tab
+  const setSousOnglet = (v) => majParams({ tab: v, demande: '', sens: '', partenaire: '' })
+  // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
+  const ecranOuvert = Boolean(params.demande || params.partenaire)
 
   return (
     <div className="view">
+      {!ecranOuvert && (<>
       <div className="view-head">
         <div className="ttl">
           <h1>Boutique en ligne</h1>
@@ -31,9 +42,10 @@ export default function Boutique({ etabActif, droits }) {
         actif={sousOnglet}
         onChange={setSousOnglet}
       />
+      </>)}
 
       {sousOnglet === 'remboursements' && (
-        <DemandesRemboursement etabActif={etabActif} droits={droits} />
+        <DemandesRemboursement etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'retraits' && (
@@ -41,7 +53,7 @@ export default function Boutique({ etabActif, droits }) {
       )}
 
       {sousOnglet === 'partenaires' && (
-        <PartenairesOta etabActif={etabActif} droits={droits} />
+        <PartenairesOta etabActif={etabActif} droits={droits} params={params} majParams={majParams} />
       )}
 
       {sousOnglet === 'comptes' && (

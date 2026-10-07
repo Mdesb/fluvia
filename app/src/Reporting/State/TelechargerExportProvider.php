@@ -7,8 +7,8 @@ namespace App\Reporting\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Reporting\Entity\Export;
+use App\Reporting\Security\ExportDownloadAuthorizer;
 use App\Reporting\Enum\NiveauEntite;
-use App\Reporting\Enum\StatutExport;
 use App\Reporting\Security\PerimetreReportingResolver;
 use App\Reporting\Service\StockageExportInterface;
 use App\Securite\Entity\Utilisateur;
@@ -52,6 +52,7 @@ use Symfony\Component\Uid\Uuid;
 final class TelechargerExportProvider implements ProviderInterface
 {
     public function __construct(
+        private readonly ExportDownloadAuthorizer $autorisation,
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly PerimetreReportingResolver $resolver,
@@ -83,15 +84,42 @@ final class TelechargerExportProvider implements ProviderInterface
             throw new NotFoundHttpException('Export introuvable.');
         }
 
+        // LA MEME REGLE QUE LE CONTROLEUR, ET LA MEME IMPLEMENTATION.
+        // Elle manquait ici : mesure du 15/09, directeur regional couvrant A1 et non demandeur,
+        // controleur 403 et provider 200.
+        $this->autorisation->assertPeutTelecharger($export, $utilisateur);
+
+        // ⚠ EN PLUS, ET ON NE LE RETIRE PAS. Ce controle porte sur la PORTEE de l'export confrontee
+        // au perimetre du lecteur, la ou la regle ci-dessus porte sur son DEMANDEUR. Il couvre le
+        // cas d'un `reporting.configurer` qui partage un etablissement avec le demandeur sans que
+        // son perimetre couvre la portee de l'export. Ce provider est donc strictement plus severe
+        // que le controleur — dit, et non suppose identique.
         $this->verifierPerimetreLecture($export, $utilisateur);
 
-        if ($export->getStatut() !== StatutExport::Genere || $export->getCheminStockage() === null) {
+        // TROIS CAS, ET ILS NE SE DISENT PAS PAREIL.
+        //
+        // ⚠ `Envoye` EST UN SUCCÈS. `ExecuterRapportsCommand` stocke le fichier, passe à `Genere`,
+        // envoie le courriel, puis passe à `Envoye` sans toucher au chemin de stockage : le fichier
+        // est toujours là. L'exclure ici rendait « la génération n'a pas abouti » à un destinataire
+        // qui a le fichier dans sa boîte.
+        // Meme source de verite que l'autre porte : `StatutExport::fichierDisponible()`.
+        if (!$export->getStatut()->fichierDisponible()) {
             // On ne rend pas 404 : l'export existe, il a échoué. Confondre les deux ferait chercher
             // un identifiant faux là où il y a un message d'erreur à lire.
             throw new UnprocessableEntityHttpException(sprintf(
                 'Cet export n\'a pas de fichier : %s',
                 $export->getMessageErreur() ?? 'la génération n\'a pas abouti.',
             ));
+        }
+
+        // ⚠ UN FICHIER ABSENT N'EST PAS UNE GÉNÉRATION RATÉE. Ce cas arrivera avec la rétention :
+        // dire « la génération n'a pas abouti » d'un fichier purgé enverrait chercher un défaut qui
+        // n'a jamais eu lieu.
+        if ($export->getCheminStockage() === null) {
+            throw new UnprocessableEntityHttpException(
+                'Le fichier de cet export n\'est plus disponible. La génération avait abouti ; '
+                . 'seul le fichier a été retiré du stockage.',
+            );
         }
 
         $export->setContenuBase64(base64_encode($this->stockage->recuperer($export->getCheminStockage())));

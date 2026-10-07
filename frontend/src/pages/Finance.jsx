@@ -28,16 +28,16 @@ import TresorerieDashboard from '../components/TresorerieDashboard.jsx'
 // échéancier, écarts — qui n'avaient elles non plus aucun écran.
 // ⚠ L'ONGLET ENTRE DANS L'ADRESSE EN MÊME TEMPS QUE LES ÉCRANS. Sans lui, revenir d'un écran
 // retomberait sur « Factures fournisseur » quel que soit l'onglet d'où l'on venait.
-const DEFAUTS_URL = { tab: 'fournisseurs', facture: '', depense: '' }
+const DEFAUTS_URL = { tab: 'fournisseurs', facture: '', depense: '', note: '', compte: '', avoir: '', approbation: '' }
 
 export default function Finance({ etabActif, droits }) {
   const [params, majParams] = useEtatUrl('finance', DEFAUTS_URL)
   const onglet = params.tab
   // Changer d'onglet ferme les écrans : un identifiant laissé dans l'adresse rouvrirait
   // l'écran d'un autre onglet dès qu'on y reviendrait.
-  const setOnglet = (v) => majParams({ tab: v, facture: '', depense: '' })
+  const setOnglet = (v) => majParams({ tab: v, facture: '', depense: '', note: '', compte: '', avoir: '', approbation: '' })
   // Un écran de niveau 2 prend la page : ni titre ni onglets au-dessus de lui.
-  const ecranOuvert = Boolean(params.facture || params.depense)
+  const ecranOuvert = Boolean(params.facture || params.depense || params.note || params.compte || params.avoir || params.approbation)
 
   return (
     <div className="view large">
@@ -70,7 +70,8 @@ export default function Finance({ etabActif, droits }) {
         && <FacturesFournisseur etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
       {onglet === 'frais'
         && <NotesDeFrais etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
-      {onglet === 'comptes' && <ComptesBancaires etabActif={etabActif} droits={droits} />}
+      {onglet === 'comptes'
+        && <ComptesBancaires etabActif={etabActif} droits={droits} params={params} majParams={majParams} />}
       {onglet === 'import' && <ImportReleve etabActif={etabActif} droits={droits} />}
       {onglet === 'rapprochement' && <RapprochementBancaire etabActif={etabActif} droits={droits} />}
       {onglet === 'position' && <TresorerieDashboard />}

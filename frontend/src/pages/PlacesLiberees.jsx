@@ -6,6 +6,9 @@ import { confirmer } from '../components/Confirmation.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
+import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
+import { useEtatUrl } from '../api/url.js'
+import { activiteDuCreneau, ressourceDuCreneau } from '../api/slot-label.js'
 
 // PLACES LIBÉRÉES — sept routes servies, aucun écran, et un mécanisme qui a tourné dans le vide.
 //
@@ -96,10 +99,17 @@ function labelBeneficiaire(b) {
   return `${role} · client ${client ? client.slice(0, 8) : '?'}`
 }
 
+// `inscrire` : l'écran d'inscription en liste d'attente est ouvert.
+const DEFAUTS_URL = { onglet: 'propositions', inscrire: '' }
+
 export default function PlacesLiberees({ etabActif, droits }) {
   const peutGerer = aLeDroit(droits, 'smart_flow.reschedule_manage')
 
-  const [onglet, setOnglet] = useState('propositions')
+  // ⚠ L'ONGLET ENTRE DANS L'ADRESSE AVEC L'ÉCRAN D'INSCRIPTION : sans lui, « précédent » après un F5
+  // ramènerait aux propositions, et non à la liste d'attente d'où l'on venait.
+  const [params, majParams] = useEtatUrl('places_liberees', DEFAUTS_URL)
+  const onglet = params.onglet
+  const setOnglet = (v) => majParams({ onglet: v, inscrire: '' })
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -111,7 +121,9 @@ export default function PlacesLiberees({ etabActif, droits }) {
   const [beneficiaires, setBeneficiaires] = useState([])
 
   const [aAccepter, setAAccepter] = useState(null)
-  const [inscriptionOuverte, setInscriptionOuverte] = useState(false)
+  // ⚠ `null` = PAS ENCORE LU, `false` = LECTURE ÉCHOUÉE. Les listes retombent à [] sur un échec :
+  // l'écran d'inscription ne propose pas deux sélecteurs vides comme s'il n'y avait rien à choisir.
+  const [listesLues, setListesLues] = useState(null)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -132,6 +144,7 @@ export default function PlacesLiberees({ etabActif, droits }) {
       setRessources(membres(rr))
       setCreneaux(membres(cc))
       setBeneficiaires(membres(bb))
+      setListesLues(true)
     } catch (e) {
       // ⚠ PAS DE REPLI SUR DES LISTES VIDES. Un 403 rendu en « aucune proposition » ferait dire à
       // l'écran qu'il n'y a personne à servir, ce qu'il n'a pas mesuré.
@@ -140,6 +153,7 @@ export default function PlacesLiberees({ etabActif, droits }) {
       setRessources([])
       setCreneaux([])
       setBeneficiaires([])
+      setListesLues(false)
       setErreur(e?.message || 'Impossible de lire les places libérées.')
     } finally {
       setChargement(false)
@@ -176,8 +190,11 @@ export default function PlacesLiberees({ etabActif, droits }) {
     if (!id) return null
     const c = parCreneau[String(id)]
     if (!c) return `créneau ${String(id).slice(0, 8)}…`
-    const ressource = parRessource[idDe(c.ressource)] || 'ressource inconnue'
-    return `${dateHeureFr(c.debut)} → ${dateHeureFr(c.fin)} · ${ressource}`
+    // Activité et ressource embarquées dans le créneau (règles : api/slot-label.js). Une ressource
+    // qu'on ne sait pas nommer se cherche dans la liste lue ; introuvable, elle se dit inconnue.
+    const activite = activiteDuCreneau(c)
+    const ressource = ressourceDuCreneau(c) ?? (parRessource[idDe(c.ressource)] || 'ressource inconnue')
+    return [`${dateHeureFr(c.debut)} → ${dateHeureFr(c.fin)}`, activite, ressource].filter(Boolean).join(' · ')
   }
 
   function libelleClient(id) {
@@ -234,11 +251,58 @@ export default function PlacesLiberees({ etabActif, droits }) {
     try {
       await api.inscrirePlaceLiberee(corps)
       setSucces('Inscription enregistrée : la personne sera servie à la prochaine place libérée.')
-      setInscriptionOuverte(false)
+      majParams({ inscrire: '' }, { pousser: true })
       await charger()
     } catch (e) {
       setErreur(e?.message || "L'inscription a échoué.")
     }
+  }
+
+  // ── INSCRIRE EN LISTE D'ATTENTE, EN ÉCRAN ───────────────────────────────────────────────────
+  //
+  // ⚠ L'ADRESSE CONTOURNE LE DROIT DU BOUTON ET L'ÉCRAN LE REPREND. Et le formulaire choisit dans
+  // les listes de la page : illisibles, elles rendraient deux sélecteurs vides qui se liraient
+  // « il n'y a ni ressource ni personne ».
+  if (params.inscrire) {
+    const fermerInscription = () => majParams({ inscrire: '' }, { pousser: true })
+    let contenu
+    if (!peutGerer) {
+      contenu = (
+        <div className="banner banner-warn">
+          Inscrire quelqu’un en liste d’attente demande le droit de gérer les reports, que ce compte n’a pas.
+        </div>
+      )
+    } else if (chargement) {
+      contenu = <div className="center" style={{ minHeight: 'var(--esp-section)' }}><div className="spinner" /></div>
+    } else if (listesLues === false) {
+      contenu = (
+        <div className="banner banner-error">
+          Les ressources et les personnes n’ont pas pu être lues : on ne choisit pas dans une liste
+          qu’on n’a pas. Ce n’est pas la même chose que « il n’y en a pas ».
+        </div>
+      )
+    } else {
+      contenu = (
+        <>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          <InscrireEnAttente
+            ressources={ressources}
+            beneficiaires={beneficiaires}
+            onFermer={fermerInscription}
+            onValider={inscrire}
+          />
+        </>
+      )
+    }
+    return (
+      <div className="view large">
+        <button className="btn ghost sm" type="button" onClick={fermerInscription}
+          style={{ marginBottom: 'var(--esp-large)' }}>
+          ← Retour aux places libérées
+        </button>
+        {contenu}
+      </div>
+    )
   }
 
   return (
@@ -282,7 +346,7 @@ export default function PlacesLiberees({ etabActif, droits }) {
           nomRessource={(id) => parRessource[String(id)] || `ressource ${String(id).slice(0, 8)}…`}
           libelleClient={libelleClient}
           peutGerer={peutGerer}
-          onInscrire={() => setInscriptionOuverte(true)}
+          onInscrire={() => { setErreur(null); setSucces(null); majParams({ inscrire: '1' }, { pousser: true }) }}
         />
       ) : (
         <OngletPropositions
@@ -305,14 +369,6 @@ export default function PlacesLiberees({ etabActif, droits }) {
         />
       )}
 
-      {inscriptionOuverte && (
-        <InscrireEnAttente
-          ressources={ressources}
-          beneficiaires={beneficiaires}
-          onFermer={() => setInscriptionOuverte(false)}
-          onValider={inscrire}
-        />
-      )}
     </div>
   )
 }
@@ -510,6 +566,7 @@ function AccepterProposition({ proposition, libelleCreneau, libelleClient, onFer
 /* ------------------------------------------------------------------ Liste d'attente (la porte d'entrée) */
 
 function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, onInscrire }) {
+  const { t } = useVocabulaireVerticales()
   return (
     <div className="card">
       <div className="card-h">
@@ -538,7 +595,7 @@ function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, o
               <thead>
                 <tr>
                   <th className="num">Rang</th>
-                  <th>Ressource</th>
+                  <th>{t('resource', null, 'Ressource')}</th>
                   <th>Personne</th>
                   <th>Fenêtre demandée</th>
                   <th>Statut</th>
@@ -577,6 +634,7 @@ function OngletAttente({ inscriptions, nomRessource, libelleClient, peutGerer, o
 }
 
 function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
+  const { t } = useVocabulaireVerticales()
   // Quatorze jours : c'est ce que le module lui-même appelle une fenêtre de recherche
   // (`compatibleSlotSearchWindowDays` dans son manifeste). Un défaut arbitraire aurait fait
   // saisir deux dates à chaque inscription pour une valeur qui, aujourd'hui, ne sert à rien.
@@ -613,7 +671,8 @@ function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
   }
 
   return (
-    <Modal open onClose={onFermer} titre="Inscrire en liste d’attente" taille="lg">
+    <>
+      <h2>Inscrire en liste d’attente</h2>
       <div className="banner banner-warn">
         <strong>Une inscription ne se retire pas.</strong> Aucune route ne permet de l&rsquo;annuler :
         elle reste en attente jusqu&rsquo;à ce qu&rsquo;une place lui soit proposée. Vérifiez la
@@ -621,7 +680,7 @@ function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
       </div>
 
       <div className="field">
-        <label htmlFor="sf-res">Ressource</label>
+        <label htmlFor="sf-res">{t('resource', null, 'Ressource')}</label>
         <select id="sf-res" className="select" value={ressource} onChange={(e) => setRessource(e.target.value)}>
           <option value="">Choisir…</option>
           {ressources.map((r) => (
@@ -690,6 +749,6 @@ function InscrireEnAttente({ ressources, beneficiaires, onFermer, onValider }) {
           {enCours ? 'Inscription…' : 'Inscrire'}
         </button>
       </div>
-    </Modal>
+    </>
   )
 }

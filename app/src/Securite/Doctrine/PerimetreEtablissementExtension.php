@@ -12,6 +12,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Port\SupportAccessScopeInterface;
+use App\Securite\Service\PlatformScope;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -65,6 +66,7 @@ final class PerimetreEtablissementExtension implements QueryCollectionExtensionI
     public function __construct(
         private readonly Security $security,
         private readonly SupportAccessScopeInterface $assistance,
+        private readonly PlatformScope $platformScope,
     ) {
     }
 
@@ -101,6 +103,12 @@ final class PerimetreEtablissementExtension implements QueryCollectionExtensionI
 
         $utilisateur = $this->security->getUser();
         if (!$utilisateur instanceof Utilisateur) {
+            return;
+        }
+
+        // ÉQUIPE PLATEFORME (mono-propriétaire) : voit TOUS les établissements — aucun filtre posé
+        // (RG-ED-07, exception assumée — voir `PlatformScope`).
+        if ($this->platformScope->isGlobal($utilisateur)) {
             return;
         }
 

@@ -13,6 +13,7 @@ use App\Reporting\Entity\Mesure;
 use App\Reporting\Enum\ModeCalculIndicateur;
 use App\Reporting\Enum\NiveauEntite;
 use App\Reporting\Enum\RegimeExploitantMesure;
+use App\Reporting\Enum\SourceModuleIndicateur;
 use App\Reporting\Enum\StatutCompletude;
 use App\Reporting\Projection\ProjectionAccesInterface;
 use App\Reporting\Projection\ProjectionComptaInterface;
@@ -78,10 +79,28 @@ final class AgregateurMesuresService
                     continue;
                 }
 
-                $seuil = $indicateur->getSeuilCompletudeMinutes() ?? 60;
-                $horsLigne = $this->projectionAcces->etablissementHorsLigne($etablissement->getId(), $seuil);
-                $statut = $horsLigne ? StatutCompletude::Partiel : StatutCompletude::Complet;
-                $sitesManquants = $horsLigne ? [$etablissement->getId()->toRfc4122()] : null;
+                // ⚠ PAS DE SOURCE SUR CE SITE ? ALORS CE N'EST PAS UNE MESURE COMPLETE A ZERO.
+                //
+                // `etablissementHorsLigne()` rend `false` aussi bien quand les controleurs
+                // repondent que quand il n'y en a AUCUN (Risque §9.7). Le second cas donnait
+                // donc « complet 0,00 » : mesure du 15/09, 77 lignes sur sept sites, dont un
+                // musee et une patinoire. Arbitrage de Maxime : un troisieme etat.
+                //
+                // ⚠ ON NE BASCULE QUE POUR `acces`, PARCE QUE C'EST LE SEUL MODULE DONT ON
+                // SAIT DIRE S'IL EST INSTRUMENTE. Pour `vente`, `compta`, `reservation` et
+                // `recouvrement`, aucun signal n'existe : le comportement reste inchange.
+                // Basculer sans signal serait poser une regle sur une mesure qu'on n'a pas.
+                if ($indicateur->getSourceModule() === SourceModuleIndicateur::Acces
+                    && $this->projectionAcces->etablissementSansControleur($etablissement->getId())) {
+                    $statut = StatutCompletude::NonInstrumente;
+                    // Pas un site « manquant » : rien ne manque, rien n'etait attendu.
+                    $sitesManquants = null;
+                } else {
+                    $seuil = $indicateur->getSeuilCompletudeMinutes() ?? 60;
+                    $horsLigne = $this->projectionAcces->etablissementHorsLigne($etablissement->getId(), $seuil);
+                    $statut = $horsLigne ? StatutCompletude::Partiel : StatutCompletude::Complet;
+                    $sitesManquants = $horsLigne ? [$etablissement->getId()->toRfc4122()] : null;
+                }
 
                 $this->upsert(
                     $indicateur,
@@ -262,16 +281,7 @@ final class AgregateurMesuresService
             ModeCalculIndicateur::Moyenne, ModeCalculIndicateur::Ratio => $valeurs === [] ? 0.0 : array_sum($valeurs) / \count($valeurs),
         };
 
-        $partiel = false;
-        $sitesManquants = [];
-        foreach ($mesures as $m) {
-            if ($m->getStatutCompletude() === StatutCompletude::Partiel) {
-                $partiel = true;
-                foreach ($m->getSitesManquants() ?? [] as $site) {
-                    $sitesManquants[$site] = $site;
-                }
-            }
-        }
+        [$statutCombine, $sitesManquantsCombines] = $this->completudeCombinee($mesures);
 
         // Consolidation multi-régime (RG-REPORT-09, §2.7) : régimes distincts non nuls des sources.
         $regimes = [];
@@ -285,8 +295,8 @@ final class AgregateurMesuresService
 
         return [
             number_format($valeur, 2, '.', ''),
-            $partiel ? StatutCompletude::Partiel : StatutCompletude::Complet,
-            $sitesManquants === [] ? null : array_values($sitesManquants),
+            $statutCombine,
+            $sitesManquantsCombines,
             $regimeConsolide,
             $comparabilite,
         ];
@@ -316,9 +326,58 @@ final class AgregateurMesuresService
         $somme = array_sum($valeurs);
         $max = max($valeurs);
 
+        [$statutCombine, $sitesManquantsCombines] = $this->completudeCombinee($mesures);
+        $statut = $statutCombine;
+        $sitesManquantsListe = $sitesManquantsCombines;
+
+        $this->upsert($fmiSomme, $niveau, $entiteId, null, $region, $groupe, $periode, number_format($somme, 2, '.', ''), null, false, $statut, $sitesManquantsListe);
+        $this->upsert($fmiCritique, $niveau, $entiteId, null, $region, $groupe, $periode, number_format($max, 2, '.', ''), null, false, $statut, $sitesManquantsListe);
+    }
+
+    /**
+     * LA COMPLÉTUDE D'UN AGRÉGAT, EN UN SEUL ENDROIT.
+     *
+     * `combiner()` et `agregerFmi()` portaient ce calcul mot pour mot, deux fois. Le troisième état
+     * `NonInstrumente` a été ajouté à la passe site sans qu'aucun des deux ne le connaisse : un
+     * enfant sans source passait à travers, et le parent ressortait `Complet` avec un total qui
+     * OMET ces sites, puisque leur valeur est zéro. C'est le même mensonge un étage plus haut.
+     *
+     * Mesuré le 15/09 : 352 lignes de source `acces` en `complet` depuis le 05/09, dont 132 aux
+     * niveaux région et groupe — celles-là, la correction de la passe site ne les touchait pas.
+     *
+     * Trois cas, déduits du sens des états :
+     *
+     *   tous les enfants non instrumentés   l'agrégat n'a aucune source     -> NonInstrumente
+     *   certains seulement                  total sur une portée incomplète -> Partiel,
+     *                                       et ces sites sont NOMMÉS
+     *   aucun                               logique d'origine
+     *
+     * ⚠ LE CAS « CERTAINS » DEVIENT `Partiel` À DESSEIN. Du point de vue de l'agrégat, un site sans
+     * instrument ne contribue pas : le lecteur doit savoir que son total ne couvre pas tout.
+     * `sitesManquants` porte déjà exactement ce sens, et l'écran l'affiche déjà.
+     *
+     * @param list<Mesure> $mesures
+     *
+     * @return array{0: StatutCompletude, 1: list<string>|null}
+     */
+    private function completudeCombinee(array $mesures): array
+    {
         $partiel = false;
         $sitesManquants = [];
+        $nonInstrumentes = 0;
+
         foreach ($mesures as $m) {
+            if ($m->getStatutCompletude() === StatutCompletude::NonInstrumente) {
+                ++$nonInstrumentes;
+                $partiel = true;
+                if ($m->getEtablissement() !== null) {
+                    $id = $m->getEtablissement()->getId()->toRfc4122();
+                    $sitesManquants[$id] = $id;
+                }
+
+                continue;
+            }
+
             if ($m->getStatutCompletude() === StatutCompletude::Partiel) {
                 $partiel = true;
                 foreach ($m->getSitesManquants() ?? [] as $site) {
@@ -326,11 +385,16 @@ final class AgregateurMesuresService
                 }
             }
         }
-        $statut = $partiel ? StatutCompletude::Partiel : StatutCompletude::Complet;
-        $sitesManquantsListe = $sitesManquants === [] ? null : array_values($sitesManquants);
 
-        $this->upsert($fmiSomme, $niveau, $entiteId, null, $region, $groupe, $periode, number_format($somme, 2, '.', ''), null, false, $statut, $sitesManquantsListe);
-        $this->upsert($fmiCritique, $niveau, $entiteId, null, $region, $groupe, $periode, number_format($max, 2, '.', ''), null, false, $statut, $sitesManquantsListe);
+        // Aucune source sur AUCUN enfant : l'agrégat n'est pas partiel, il n'est pas instrumenté.
+        if ($mesures !== [] && $nonInstrumentes === \count($mesures)) {
+            return [StatutCompletude::NonInstrumente, null];
+        }
+
+        return [
+            $partiel ? StatutCompletude::Partiel : StatutCompletude::Complet,
+            $sitesManquants === [] ? null : array_values($sitesManquants),
+        ];
     }
 
     // --- Upsert idempotent (§2.1) ---

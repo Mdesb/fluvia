@@ -374,6 +374,29 @@ final class LegalDocumentGenerator
         );
     }
 
+    /**
+     * La politique de confidentialité TYPE, servie au public quand l'établissement n'en a publié
+     * aucune (#101). Même texte que le brouillon, mais un autre avertissement : celui du brouillon
+     * parle à l'exploitant (« à faire relire avant publication »), celui-ci au visiteur — il dit que
+     * le texte est un modèle, et qui en reste responsable.
+     *
+     * @return array{0: string, 1: string} titre, contenu Markdown
+     */
+    public function defaultPrivacyPolicy(LegalIdentity $identity, string $siteName): array
+    {
+        $champ = static function (?string $valeur, string $nom): string {
+            return $valeur === null || trim($valeur) === '' ? sprintf('*(non renseigné : %s)*', $nom) : trim($valeur);
+        };
+
+        $avertissement = sprintf(
+            "> Politique type établie automatiquement au nom de %s, qui n'a pas encore publié la sienne.\n"
+            . "> L'établissement reste responsable du traitement de vos données et de compléter ce texte.\n\n",
+            $champ($identity->getLegalName(), 'nom de l\'établissement'),
+        );
+
+        return [LegalDocumentType::PrivacyPolicy->label(), $avertissement . $this->privacyPolicy($identity, $siteName, $champ)];
+    }
+
     /** Remplit un document existant avec le texte régénéré. */
     public function fill(LegalDocument $document, LegalIdentity $identity, string $siteName): LegalDocument
     {

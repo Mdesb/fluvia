@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { boutique, clientTokenStore } from '../api/boutiqueClient.js'
-import { euros, dateCourte } from '../lib/format.js'
+import { euros, eurosCentimes, dateCourte, libelleProduit } from '../lib/format.js'
 import { Chargement, Erreur, Vide } from '../components/Etats.jsx'
 import Tabs from '../../components/Tabs.jsx'
 import Qr from '../../components/Qr.jsx'
@@ -145,6 +145,7 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
   const [compte, setCompte] = useState(null)
   const [commandes, setCommandes] = useState(null)
   const [billets, setBillets] = useState(null)
+  const [abonnements, setAbonnements] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
@@ -159,15 +160,16 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
     // 401 ne s'executait JAMAIS, puisque chaque appel avalait sa propre erreur et que
     // `Promise.all` ne rejetait pas. Le chemin de reconnexion existait et etait mort.
     const enveloppe = (p) => p.then((v) => ({ v })).catch((e) => ({ e }))
-    const [c, cmd, bil] = await Promise.all([
+    const [c, cmd, bil, abo] = await Promise.all([
       enveloppe(boutique.moiCompte()),
       enveloppe(boutique.mesCommandes()),
       enveloppe(boutique.mesBillets()),
+      enveloppe(boutique.mesAbonnements()),
     ])
 
     // Session expiree ou revoquee : on le dit et on renvoie a la connexion, plutot que d'afficher
     // un espace client vide qui ressemble a un compte sans achats.
-    if ([c, cmd, bil].some((r) => r.e?.status === 401)) {
+    if ([c, cmd, bil, abo].some((r) => r.e?.status === 401)) {
       clientTokenStore.clear()
       setChargement(false)
       onDeconnexion()
@@ -179,7 +181,8 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
     // `.catch()` qui la detruisait.
     setCommandes(cmd.e ? null : cmd.v?.commandes || [])
     setBillets(bil.e ? null : bil.v?.billets || [])
-    if (cmd.e && bil.e) setErreur(cmd.e?.message || 'Chargement impossible.')
+    setAbonnements(abo.e ? null : abo.v?.abonnements || [])
+    if (cmd.e && bil.e && abo.e) setErreur(cmd.e?.message || 'Chargement impossible.')
     setChargement(false)
   }
 
@@ -211,6 +214,7 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
         onglets={[
           ['commandes', 'Mes commandes'],
           ['billets', 'Mes billets'],
+          ['abonnements', 'Mes abonnements'],
         ]}
         actif={onglet}
         onChange={setOnglet}
@@ -222,8 +226,10 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
         <Erreur message={erreur} onReessayer={charger} />
       ) : onglet === 'commandes' ? (
         <Commandes commandes={commandes} nonLu={commandes === null} />
-      ) : (
+      ) : onglet === 'billets' ? (
         <Billets billets={billets} nonLu={billets === null} />
+      ) : (
+        <MesAbonnements abonnements={abonnements} nonLu={abonnements === null} />
       )}
     </section>
   )
@@ -387,6 +393,55 @@ function Billets({ billets, nonLu }) {
                 <span className="badge mut">{b.statutRetraitPhysique}</span>
               )}
             </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// MES ABONNEMENTS — le contrat souscrit en ligne, que le client ne retrouvait NULLE PART. Statut,
+// prochain prélèvement, mandat. Même distinction `null` (pas lu) / `[]` (lu et vide) que les autres.
+// ⚠ Nom distinct de l'écran STAFF `Abonnements` (pages/Abonnements.jsx, qui teste des droits) : le
+// garde-fou D39 résout les composants par nom, un homonyme lui ferait exiger `droits` ici.
+function MesAbonnements({ abonnements, nonLu }) {
+  if (!abonnements || abonnements.length === 0) {
+    return nonLu ? (
+      <Vide
+        titre="Vos abonnements n’ont pas pu être lus"
+        texte="Cette liste est vide parce que la lecture a échoué, pas parce que vous n’êtes pas abonné. Rechargez la page dans un moment."
+      />
+    ) : (
+      <Vide titre="Aucun abonnement" texte="Vos abonnements souscrits en ligne apparaîtront ici." />
+    )
+  }
+  return (
+    <ul className="bq-billets">
+      {abonnements.map((a) => (
+        <li key={a.id} className="card">
+          <div className="card-b">
+            <p className="bq-billet-id">{libelleProduit({ libelle: a.libelle })}</p>
+            <p>
+              <span className="badge info">{a.statut}</span>{' '}
+              <span className="badge mut">{a.periodicite}</span>
+            </p>
+            <p className="bq-sub">
+              {eurosCentimes(a.montantCentimes)} · engagement du {dateCourte(a.dateDebutEngagement)} au{' '}
+              {dateCourte(a.dateFinEngagement)}
+            </p>
+            {a.prochaineEcheance ? (
+              <p className="bq-sub">
+                Prochain prélèvement : {dateCourte(a.prochaineEcheance.date)} —{' '}
+                {eurosCentimes(a.prochaineEcheance.montantCentimes)}
+              </p>
+            ) : (
+              <p className="bq-sub">Aucun prélèvement à venir.</p>
+            )}
+            {a.mandatIban4Derniers && (
+              <p className="bq-sub">
+                Mandat SEPA •••• {a.mandatIban4Derniers} <span className="badge">{a.mandatStatut}</span>
+              </p>
+            )}
           </div>
         </li>
       ))}

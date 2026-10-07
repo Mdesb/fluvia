@@ -12,11 +12,13 @@ use App\Sepa\Entity\RemiseSepa;
 use App\Sepa\Enum\SeqTpSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Enum\StatutRemiseSepa;
+use App\Sepa\Event\EcheancesCollecteesEvent;
 use App\Sepa\Port\CollecteurSepaInterface;
 use App\Sepa\Port\EcheanceSepaSource;
 use App\Sepa\Service\DebitPreNotifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Génère et transmet une remise SEPA pour un établissement à une date d'exécution donnée (plan §3) :
@@ -40,6 +42,7 @@ final class GenerationRemiseHandler
         private readonly Pain008Generator $generator,
         private readonly CollecteurSepaInterface $collecteur,
         private readonly DebitPreNotifier $preNotifier,
+        private readonly EventDispatcherInterface $dispatcher,
     ) {
     }
 
@@ -227,6 +230,14 @@ final class GenerationRemiseHandler
 
         $source->marquerCollectees($remise, $referencesOrigine);
         $this->em->flush();
+
+        // ── COLLECTE RÉUSSIE : ON L'ANNONCE (D2) ────────────────────────────────────────────────
+        // Les échéances viennent de passer à `Prelevee`. Les modules qui les FACTURENT écoutent pour
+        // solder la facture d'échéance et écrire l'encaissement au grand livre (512 / 411). On émet
+        // un événement plutôt que d'appeler Facturation d'ici : `App\Sepa` ne connaît ni la facture
+        // ni la comptabilité. (Même « succès » que la collecte : simulé tant que la banque n'est pas
+        // raccordée — ce que l'écoute solde est donc daté de ce passage, cf. le listener.)
+        $this->dispatcher->dispatch(new EcheancesCollecteesEvent($referencesOrigine, $referenceTransmission));
 
         return $remise;
     }
