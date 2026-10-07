@@ -13,6 +13,8 @@ use App\Boutique\Enum\StatutTunnel;
 use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
+use App\Offre\Enum\StatutProduit;
+use App\Offre\Service\ProductSaleScopeGuard;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sepa\Entity\MandatSepa;
@@ -54,6 +56,7 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly SouscriptionAbonnementHandler $souscription,
         private readonly VitrineAccessibleGuard $vitrineGuard,
         private readonly IbanFormatValidator $ibanValidator,
+        private readonly ProductSaleScopeGuard $saleScope,
     ) {
     }
 
@@ -93,15 +96,6 @@ final class SouscriptionAbonnementEnLigneHandler
             throw new UnprocessableEntityHttpException('Ce produit ne porte pas la facette SEPA (RG-M3-17).');
         }
 
-        // ── LE PRODUIT DOIT ÊTRE PROPOSÉ EN LIGNE (revue sécurité) ────────────────────────────────
-        // `isSepaActif()` ne dit RIEN du canal : un produit GUICHET-ONLY avec un tarif visible partout
-        // devenait souscriptible en ligne, car `SubscriptionPriceResolver` résout sur la visibilité du
-        // `TypeTarif`, pas sur `Produit.canaux`. Le catalogue et le tunnel billet imposent déjà
-        // `Canal::EnLigne` ; ce chemin l'oubliait. 404 (D3) : un produit hors ligne n'existe pas ici.
-        if (!$produit->aCanal(Canal::EnLigne)) {
-            throw new NotFoundHttpException('Ce produit n\'est pas proposé en ligne.');
-        }
-
         // La vitrine où l'achat a lieu doit être publiquement accessible (établissement actif + canal
         // en_ligne ouvert), comme tout point d'entrée public (`VitrineAccessibleGuard`). `null` =
         // appelant historique sans vitrine : rien à vérifier, on garde le repli.
@@ -113,6 +107,22 @@ final class SouscriptionAbonnementEnLigneHandler
         \assert($client !== null);
         // L'etablissement du VENDEUR, pas celui ou le compte est ne.
         $etablissement = $vitrineAchat?->getEtablissement() ?? $compteClient->getEtablissement();
+
+        // ── LE PRODUIT DOIT ÊTRE PROPOSÉ EN LIGNE, ICI (revue sécurité ; statut et site le 07/10/2026) ──
+        // `isSepaActif()` ne dit RIEN du canal : un produit GUICHET-ONLY avec un tarif visible partout
+        // devenait souscriptible en ligne, car `SubscriptionPriceResolver` résout sur la visibilité du
+        // `TypeTarif`, pas sur `Produit.canaux`. Le catalogue et le tunnel billet imposent déjà
+        // `Canal::EnLigne` ; ce chemin l'oubliait. 404 (D3) : un produit hors ligne n'existe pas ici.
+        //
+        // Le statut et le site manquaient aussi : un brouillon, un archivé, ou le produit d'un AUTRE
+        // site (vendu au nom de cette vitrine, dans ses comptes) se souscrivaient. Même règle de site
+        // que la caisse (D92 : aucun site = socle). Un seul `throw` : les quatre cas répondent pareil.
+        if ($produit->getStatut() !== StatutProduit::Publie
+            || !$produit->aCanal(Canal::EnLigne)
+            || $etablissement === null
+            || !$this->saleScope->isSoldAt($produit, $etablissement)) {
+            throw new NotFoundHttpException('Ce produit n\'est pas proposé en ligne.');
+        }
 
         $iban = \is_string($donnees['iban'] ?? null) ? $donnees['iban'] : '';
         $bic = \is_string($donnees['bicDebiteur'] ?? null) ? $donnees['bicDebiteur'] : '';

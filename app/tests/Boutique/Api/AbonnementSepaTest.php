@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Boutique\Api;
 
 use App\Boutique\DataFixtures\BoutiqueFixtures;
+use App\DataFixtures\SocleFixtures;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\StatutProduit;
+use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Tests\Boutique\BoutiqueApiTestCase;
 
@@ -77,6 +80,58 @@ final class AbonnementSepaTest extends BoutiqueApiTestCase
             ],
         ]);
         self::assertResponseStatusCodeSame(404, 'un produit guichet-only n\'est pas souscriptible en ligne');
+    }
+
+    /**
+     * UN PRODUIT NON PUBLIÉ, OU D'UN AUTRE SITE, N'EST PAS SOUSCRIPTIBLE EN LIGNE (07/10/2026).
+     *
+     * Le handler regardait le canal, ni le statut ni le site : un brouillon, un archivé, ou le produit
+     * du seul site B souscrit au nom du site A se vendaient. Même 404 que le canal (D3), et aucun
+     * mandat créé. Témoin : le même produit, publié sur A, se souscrit.
+     */
+    public function testProduitNonPublieOuDUnAutreSiteRefuseEnLigne(): void
+    {
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+
+        // Le témoin passe en dernier : il crée la vente.
+        $cas = [
+            'brouillon' => [StatutProduit::Brouillon, SocleFixtures::ETAB_A_NOM],
+            'archivé' => [StatutProduit::Archive, SocleFixtures::ETAB_A_NOM],
+            'site B seulement' => [StatutProduit::Publie, SocleFixtures::ETAB_B_NOM],
+            'témoin publié sur A' => [StatutProduit::Publie, SocleFixtures::ETAB_A_NOM],
+        ];
+        $obtenu = [];
+        foreach ($cas as $nom => [$statut, $site]) {
+            // Relus à chaque tour : le noyau redémarre entre deux requêtes.
+            $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+            $produit->setStatut($statut);
+            foreach ($produit->getEtablissements()->toArray() as $e) {
+                $produit->removeEtablissement($e);
+            }
+            $produit->addEtablissement($this->entite(Etablissement::class, ['nom' => $site]));
+            $this->em()->flush();
+
+            $client->request('POST', '/api/boutique/abonnements/souscrire', [
+                'auth_bearer' => $token,
+                'json' => [
+                    'produit' => (string) $produit->getId(),
+                    'iban' => 'FR7630006000011234567890189',
+                    'bicDebiteur' => 'AGRIFRPP',
+                    'debiteurNom' => 'Cas ' . $nom,
+                ],
+            ]);
+            $mandats = $this->em()->getRepository(MandatSepa::class)->findBy(['debiteurNom' => 'Cas ' . $nom]);
+            $obtenu[$nom] = [$client->getResponse()->getStatusCode(), \count($mandats)];
+        }
+
+        // [statut HTTP, mandats créés]
+        self::assertSame([
+            'brouillon' => [404, 0],
+            'archivé' => [404, 0],
+            'site B seulement' => [404, 0],
+            'témoin publié sur A' => [201, 1],
+        ], $obtenu);
     }
 
     /**
