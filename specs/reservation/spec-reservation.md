@@ -97,7 +97,7 @@ le cahier comme un rôle système — dérivé du texte fonctionnel).
 | **Opérateur de ressource** *(encadrant, coach, guide…)* | Consulter ses créneaux, ouvrir la liste des inscrits, émarger présents/absents, saisir un compte-rendu | Créer un créneau, réaffecter une ressource, annuler une réservation payée | `reservation × lire`, `reservation × emarger` |
 | **Agent d'accueil / guichet** | Réserver une place au guichet pour un bénéficiaire, inscrire en liste d'attente, annuler dans/hors délai franc (avec déclenchement facturation), déclencher la vente à l'unité vers M2 | Créer/supprimer une ressource ou un créneau, changer une capacité, exonérer un no-show sans droit dédié | `reservation × reserver`, `reservation × annuler`, `reservation × lire` |
 | **Client / Organisateur (en ligne ou app)** | Réserver une place pour lui-même et, s'il est organisateur, pour d'autres participants (paiement partagé), s'inscrire en liste d'attente, annuler **dans le délai franc**, consulter son quota restant et le statut de sa réservation | Voir les réservations d'autres clients, réserver un créneau complet/fermé, annuler **hors délai** sans être facturé, forcer une exonération | `reservation × reserver_soi`, `reservation × annuler_soi`, `reservation × lire_soi` |
-| **Responsable / Administrateur** | Exonérer un no-show au cas par cas (motif tracé), forcer une réouverture de créneau, arbitrer un conflit de récurrence en validation manuelle | Contourner la traçabilité d'une exonération (toujours journalisée, `RG-SOCLE-07`) | `reservation × exonerer`, `reservation × forcer`, `reservation × arbitrer_recurrence` |
+| **Responsable / Administrateur** | Exonérer un no-show au cas par cas (motif tracé), lever une absence une fois exonérée (motif tracé, §4.8), forcer une réouverture de créneau, arbitrer un conflit de récurrence en validation manuelle | Contourner la traçabilité d'une exonération (toujours journalisée, `RG-SOCLE-07`), lever une absence encore facturable | `reservation × exonerer`, `reservation × lever_absence`, `reservation × forcer`, `reservation × arbitrer_recurrence` |
 | **Système** | Bloquer un conflit de ressource à la création, promouvoir automatiquement la liste d'attente, faire basculer une réservation en no-show à l'issue du créneau, déclencher la vente/l'avoir de facturation, reporter automatiquement une récurrence en conflit selon la règle configurée | Décider hors des règles paramétrées (aucune dérogation automatique) | *(acteur technique — pas de permission humaine)* |
 
 - ⚠ HYPOTHÈSE — Les noms de permissions `reservation × …` ne sont **pas nommés littéralement** dans les
@@ -224,6 +224,13 @@ exonéré » :
 - ⚠ HYPOTHÈSE — La **marge** après la fin du créneau avant bascule automatique en no-show n'est pas
   chiffrée par les sources ; retenue comme **paramètre par établissement/activité**, valeur par défaut
   non fixée, à confirmer au paramétrage produit.
+- **Lever une absence** (décision de Maxime, 07/10/2026) — Une absence constatée à tort sort de
+  `no_show_facturé` vers l'état neutre **`terminée_sans_constat`** (ni honorée, ni absente : n'occupe
+  aucune place, n'ouvre aucun accès, n'est pas comptée comme absence par le reporting).
+  `POST /reservation/reservations/{id}/lever-absence`, permission **`reservation × lever_absence`**
+  (donnée aux rôles qui portent `reservation × exonerer`), **motif obligatoire** gardé sur la
+  réservation. N'accepte que `no_show_facturé`, et **refuse tant que la facturation d'absence liée
+  n'est pas `exonérée`** : le geste ne remplace jamais l'exonération. Ne rembourse ni ne recrédite rien.
 
 ### 4.9 Lien optionnel vers un droit d'accès (US-RES-12, RG-M5-12)
 - **RG-M5-12** (**nouvelle**, généralise `RG-PADEL-05` : « éclairage et accès badge du terrain
@@ -297,7 +304,8 @@ Les objets M1 (Produit, Formule, ServiceInclus, TypeTarif), M2 (Vente, Avoir, Pa
 | **Reservation** | id | uuid | PK | RG-M5-01/02/09 |
 | | créneau | ref Creneau | requis | — |
 | | organisateur | ref Beneficiaire/Client (M4) | requis | payeur potentiellement distinct (RG-M4-02) |
-| | statut | enum {confirmée, liste_attente, annulée_libre, annulée_tardive_facturée, no_show_facturé, honorée} | défaut = confirmée si place | cahier §6 |
+| | statut | enum {à_confirmer, confirmée, liste_attente, annulée_libre, annulée_tardive_facturée, no_show_facturé, honorée, terminée_sans_constat} | défaut = confirmée si place | cahier §6 ; `terminée_sans_constat` §4.8 |
+| | motifLevéeAbsence | string? (255) | requis si `terminée_sans_constat` | §4.8, tracé |
 | | dateCréation | datetime | requis | — |
 | | modeDécompte | enum {quota_formule, vente_unité, gratuit} | requis | RG-M5-02 |
 | | quotaConsommé | ref ServiceInclus (M1)? | requis si `quota_formule` | RG-M1-12 |
@@ -447,7 +455,9 @@ Les objets M1 (Produit, Formule, ServiceInclus, TypeTarif), M2 (Vente, Avoir, Pa
   Espace (`RG-SOCLE-01`) à laquelle se rattachent Ressources et Créneaux ; permissions `module × action`
   réutilisées sur le module **`reservation`** (`RG-SOCLE-02/03/04`) ; cadrage par établissement actif
   (`RG-SOCLE-05`) ; journal d'audit append-only (`RG-SOCLE-07`) sur lequel s'appuient la traçabilité des
-  exonérations, promotions de liste d'attente et bascules en no-show.
+  exonérations, promotions de liste d'attente et bascules en no-show. Depuis le 07/10/2026,
+  `Reservation` et `FacturationNoShow` y sont auditées (auteur, date, avant/après, établissement de
+  la réservation) : tout changement de statut, exonération ou levée d'absence laisse une entrée.
 - **Dépend de : M1 · Offre & Tarification** (L1, `specs/L1-offre/spec-offre.md`) — ce module est
   **propriétaire fonctionnel** de l'`Activité` référencée par `ServiceInclus.activité` (RG-M1-03) ; il
   **consomme** le tarif de référence (Produit/grille), le **quota inclus** d'une Formule et sa règle de
