@@ -8,8 +8,10 @@ use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Acces\DataFixtures\AccesFixtures;
+use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\EspaceAcces;
+use App\Acces\Entity\Support;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
@@ -111,9 +113,19 @@ abstract class SportApiTestCase extends ApiTestCase
         return (string) $this->abonnementDemo()->getId();
     }
 
+    /**
+     * Le droit L3 de démonstration : celui qu'`AccesFixtures` appaire au support QR-DEMO-0001, donc
+     * celui que le tourniquet lit. Les fixtures Sport en portent deux (celui-ci et celui de la
+     * souscription) : un `findOneBy([])` sans ordre tirait l'un ou l'autre selon les UUID v4, et
+     * `AccesHorsLigneTest` dévalidait une fois sur deux un droit que le badge ne présente pas.
+     */
     protected function idDroitAccesDemo(): string
     {
-        return (string) $this->entite(DroitAcces::class, [])->getId();
+        $support = $this->entite(Support::class, ['identifiant' => AccesFixtures::SUPPORT_IDENTIFIANT]);
+        $appairage = $this->entite(Appairage::class, ['support' => $support, 'actif' => true]);
+        self::assertInstanceOf(DroitAcces::class, $appairage->getDroit());
+
+        return (string) $appairage->getDroit()->getId();
     }
 
     protected function idPolitiqueDemo(): string
