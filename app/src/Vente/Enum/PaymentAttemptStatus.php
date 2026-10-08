@@ -8,8 +8,8 @@ namespace App\Vente\Enum;
  * Où en est une tentative de règlement (G-3, G-6 du ticket opposable).
  *
  * Deux statuts tiennent la vente — aucun autre règlement n'y passe : `Pending` (l'effet est en cours)
- * et `Unresolved` (le terminal a pu débiter, personne ne sait). Les trois autres sont des issues
- * définitives et la libèrent.
+ * et `Unresolved` (le terminal a pu débiter, personne ne sait). Les autres sont des issues
+ * définitives et la libèrent ; les deux dernières sont DÉCLARÉES par le caissier, qui a lu le terminal.
  */
 enum PaymentAttemptStatus: string
 {
@@ -28,6 +28,12 @@ enum PaymentAttemptStatus: string
     /** Timeout, réponse perdue, processus interrompu : rien ne repart au terminal avant une déclaration (Q-A1). */
     case Unresolved = 'unresolved';
 
+    /** Sans issue, puis déclarée « accepté » : le règlement est écrit avec la référence du ticket CB, sans terminal. */
+    case DeclaredAccepted = 'declared_accepted';
+
+    /** Sans issue, puis déclarée « non passé » : rien d'écrit, la vente est libérée pour un nouvel envoi. */
+    case DeclaredNotProcessed = 'declared_not_processed';
+
     public function holdsTheSale(): bool
     {
         return $this === self::Pending || $this === self::Unresolved;
@@ -42,6 +48,8 @@ enum PaymentAttemptStatus: string
             self::Refused => 'refusée par le terminal',
             self::Failed => 'non aboutie',
             self::Unresolved => 'sans issue connue',
+            self::DeclaredAccepted => 'déclarée acceptée',
+            self::DeclaredNotProcessed => 'déclarée non passée',
         };
     }
 }

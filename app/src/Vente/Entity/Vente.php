@@ -21,6 +21,7 @@ use App\Vente\State\AjoutLigneProcessor;
 use App\Vente\State\AnnulerVenteProcessor;
 use App\Vente\State\CorrectSettlementProcessor;
 use App\Vente\State\CreerVenteProcessor;
+use App\Vente\State\DeclareSettlementProcessor;
 use App\Vente\State\ModifierLigneProcessor;
 use App\Vente\State\PaiementProcessor;
 use App\Vente\State\RattacherClientProcessor;
@@ -118,8 +119,21 @@ use Symfony\Component\Uid\Uuid;
             processor: PaiementProcessor::class,
         ),
         new Post(
+            uriTemplate: '/ventes/{id}/declarer-reglement',
+            description: 'Declare ce qu affiche un terminal reste muet (Q-A1, D122) : seule sortie d une tentative payment_outcome_unknown. '
+                . 'Corps : { tentative (id rendu par le 409), issue: accepte|non_passe, referenceCarte (obligatoire si accepte, 64 car. max) }. '
+                . 'accepte : reglement ecrit avec la cle et le montant de la tentative, sans terminal (201) ; non_passe : vente liberee (200). '
+                . 'Qui et quand restent sur la tentative. Rejouee a l identique, rend son issue (dejaEnregistre: true). '
+                . '409 payment_in_progress si la tentative attend encore le terminal, payment_outcome_known si elle a trouve son issue autrement.',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'vente.encaisser')",
+            processor: DeclareSettlementProcessor::class,
+        ),
+        new Post(
             uriTemplate: '/ventes/{id}/valider',
-            description: 'Valide la vente et emet les supports. Corps : { supports?: [...] }.',
+            description: 'Valide la vente et emet les supports. Corps : { supports?: [...] }. '
+                . 'Refusee (409, meme code et meme tentative que les paiements) tant qu un reglement tient la vente.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",

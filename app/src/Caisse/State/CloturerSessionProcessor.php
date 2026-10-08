@@ -24,6 +24,7 @@ use App\Vente\Nf525\OperationAScellerDto;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\PanierCalculateur;
+use App\Vente\Service\SettlementCoordinator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -57,6 +58,7 @@ final class CloturerSessionProcessor implements ProcessorInterface
         private readonly Security $security,
         private readonly JournalAudit $journal,
         private readonly RegieHandler $regieHandler,
+        private readonly SettlementCoordinator $reglements,
     ) {
     }
 
@@ -71,6 +73,19 @@ final class CloturerSessionProcessor implements ProcessorInterface
 
         // Refus si paiements incohérents : une vente en cours porte des règlements partiels.
         foreach ($ventes as $vente) {
+            // Ticket opposable (G-6, D122) : une carte à l'issue inconnue est peut-être débitée. Clore
+            // laisserait une déclaration « accepté » écrire après le Z un règlement qu'il ne compte pas.
+            $tentative = $vente->getStatut() === StatutVente::EnCours ? $this->reglements->holdingAttempt($vente) : null;
+            if ($tentative !== null) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'Clôture refusée : un règlement de %s € (%s) sur la vente n° %s attend son issue (%s). '
+                    . 'Reprenez cette vente depuis l\'historique des ventes, puis déclarez ce qu\'affiche le terminal.',
+                    $tentative['amount'],
+                    $tentative['method'],
+                    $vente->getNumero(),
+                    $tentative['status']->label(),
+                ));
+            }
             if ($vente->getStatut() === StatutVente::EnCours && !$vente->getPaiements()->isEmpty()) {
                 throw new UnprocessableEntityHttpException('Clôture refusée : des paiements sont incohérents (vente en cours réglée partiellement).');
             }

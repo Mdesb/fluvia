@@ -19,12 +19,12 @@ use Symfony\Component\Uid\Uuid;
  * autre demande a déjà fait passer la tentative ailleurs, et l'appelant en tire la conséquence. Les
  * identifiants se comparent en `UNHEX` (garde-fou n°14).
  *
- * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable}
+ * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable, reason: ?string, cardReference: ?string}
  */
 final class PaymentAttemptStore
 {
     private const SELECT = 'SELECT LOWER(HEX(id)) id, LOWER(HEX(sale_id)) sale, idempotency_key, payment_method_code, requested_amount, amount, '
-        . 'uses_terminal, status, terminal_status, started_at FROM sale_payment_attempt WHERE ';
+        . 'uses_terminal, status, terminal_status, started_at, failure_reason, card_reference FROM sale_payment_attempt WHERE ';
 
     public function __construct(private readonly Connection $connection)
     {
@@ -51,6 +51,8 @@ final class PaymentAttemptStore
             'status' => PaymentAttemptStatus::Pending,
             'terminal' => null,
             'startedAt' => new \DateTimeImmutable(),
+            'reason' => null,
+            'cardReference' => null,
         ];
         $this->connection->executeStatement(
             'INSERT INTO sale_payment_attempt (id, sale_id, open_sale_id, idempotency_key, payment_method_code, requested_amount, amount, uses_terminal, status, started_at) '
@@ -77,10 +79,74 @@ final class PaymentAttemptStore
         return $this->one(self::SELECT . 'idempotency_key = UNHEX(:v)', self::hex($key));
     }
 
-    /** @return Attempt|null la tentative qui tient la vente, s'il y en a une */
-    public function holding(Vente $sale): ?array
+    /** @return Attempt|null */
+    public function byId(string $id): ?array
     {
-        return $this->one(self::SELECT . 'open_sale_id = UNHEX(:v)', self::hex($sale->getId()));
+        return $this->one(self::SELECT . 'id = UNHEX(:v)', $id);
+    }
+
+    /**
+     * @param bool $locking lecture verrouillante (dans une transaction) : elle lit la dernière version
+     *                      validée, et une tentative en cours d'écriture se fait attendre
+     *
+     * @return Attempt|null la tentative qui tient la vente, s'il y en a une
+     */
+    public function holding(Vente $sale, bool $locking = false): ?array
+    {
+        return $this->one(self::SELECT . 'open_sale_id = UNHEX(:v)' . ($locking ? ' LOCK IN SHARE MODE' : ''), self::hex($sale->getId()));
+    }
+
+    /**
+     * La déclaration du caissier (Q-A1, D122) : une tentative `unresolved` passe à son issue déclarée,
+     * libère la vente et garde qui, quand, et la référence du ticket CB. La raison du « sans issue »
+     * reste écrite. Faux si la tentative n'était plus `unresolved` (une réponse tardive du terminal,
+     * ou une autre déclaration, l'a précédée).
+     */
+    public function declare(string $id, PaymentAttemptStatus $to, Uuid $by, ?string $cardReference, ?Uuid $payment): bool
+    {
+        return 1 === (int) $this->connection->executeStatement(
+            'UPDATE sale_payment_attempt SET status = :to, open_sale_id = NULL, closed_at = :now, declared_by_id = UNHEX(:by), '
+            . 'declared_at = :now, card_reference = :ref, payment_id = UNHEX(:payment) WHERE id = UNHEX(:id) AND status = :from',
+            [
+                'to' => $to->value,
+                'now' => self::now(),
+                'by' => self::hex($by),
+                'ref' => $cardReference,
+                'payment' => $payment !== null ? self::hex($payment) : null,
+                'id' => $id,
+                'from' => PaymentAttemptStatus::Unresolved->value,
+            ],
+        );
+    }
+
+    /**
+     * Ce que l'écran reçoit d'une tentative : de quoi la nommer au caissier et la déclarer.
+     *
+     * @param Attempt $attempt
+     *
+     * @return array{id: string, moyen: string, montant: string, statut: string, statutTPE: ?string, depuis: string, raison: ?string}
+     */
+    public static function summary(array $attempt): array
+    {
+        return [
+            'id' => Uuid::fromBinary((string) hex2bin($attempt['id']))->toRfc4122(),
+            'moyen' => $attempt['method'],
+            'montant' => $attempt['amount'],
+            'statut' => $attempt['status']->value,
+            'statutTPE' => $attempt['terminal']?->value,
+            'depuis' => $attempt['startedAt']->format(\DATE_ATOM),
+            'raison' => self::shownReason($attempt['reason']),
+        ];
+    }
+
+    /**
+     * Ce que le caissier peut lire de la raison : les phrases écrites par le coordinateur (référence
+     * d'une acceptation, délai dépassé, réponse tardive), jamais le message brut d'une exception.
+     */
+    private static function shownReason(?string $reason): ?string
+    {
+        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\)|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?/u', $reason, $m) === 1
+            ? $m[0] : null;
     }
 
     /**
@@ -112,6 +178,18 @@ final class PaymentAttemptStore
                 'from' => array_map(static fn (PaymentAttemptStatus $s): string => $s->value, $from),
             ],
             ['from' => ArrayParameterType::STRING],
+        );
+    }
+
+    /**
+     * Ajoute un fait appris après l'issue (réponse tardive du terminal), quel que soit le statut. Il
+     * passe DEVANT la raison d'origine, qui est gardée : 255 caractères ne tronquent que l'ancien.
+     */
+    public function note(string $id, string $reason): void
+    {
+        $this->connection->executeStatement(
+            "UPDATE sale_payment_attempt SET failure_reason = LEFT(CONCAT_WS(' | ', :reason, failure_reason), 255) WHERE id = UNHEX(:id)",
+            ['reason' => mb_substr($reason, 0, 255), 'id' => $id],
         );
     }
 
@@ -151,6 +229,8 @@ final class PaymentAttemptStore
             'status' => PaymentAttemptStatus::from((string) $ligne['status']),
             'terminal' => $ligne['terminal_status'] !== null ? StatutTPE::from((string) $ligne['terminal_status']) : null,
             'startedAt' => new \DateTimeImmutable((string) $ligne['started_at']),
+            'reason' => $ligne['failure_reason'] !== null ? (string) $ligne['failure_reason'] : null,
+            'cardReference' => $ligne['card_reference'] !== null ? (string) $ligne['card_reference'] : null,
         ];
     }
 
