@@ -46,6 +46,7 @@ use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutTPE;
 use App\Vente\Enum\StatutVente;
 use App\Vente\Service\GenerateurNumero;
+use App\Vente\Service\LineVatRateGuard;
 use App\Vente\Service\PanierCalculateur;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -77,6 +78,7 @@ final class ConfirmerCommandeHandler
         private readonly ConfirmationCommandeMailer $mailer,
         private readonly ProduitEtablissementGuard $etablissementGuard,
         private readonly BeneficiaryResolver $beneficiaires,
+        private readonly LineVatRateGuard $vatRate,
     ) {
     }
 
@@ -171,6 +173,8 @@ final class ConfirmerCommandeHandler
                 throw new UnprocessableEntityHttpException('Produit non publié ou non visible au canal en ligne (RG-M1-07/09).');
             }
             [$typeTarif, $prix] = $this->resoudrePrix($ligne->getProduit());
+            // D123 (G-9) : avant `initierPaiement()`, que l'appelant ne lance qu'après cette méthode.
+            $this->vatRate->assertResolvable($ligne->getProduit()->getId(), $etablissement);
 
             $ligneVente = new LigneVente();
             $ligneVente->setProduit($ligne->getProduit()->getId())

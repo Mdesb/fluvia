@@ -30,6 +30,7 @@ use App\Vente\Entity\Paiement;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
 use App\Vente\Service\GenerateurNumero;
+use App\Vente\Service\LineVatRateGuard;
 use App\Vente\Service\PanierCalculateur;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -58,6 +59,7 @@ final class SouscriptionAbonnementEnLigneHandler
         private readonly VitrineAccessibleGuard $vitrineGuard,
         private readonly IbanFormatValidator $ibanValidator,
         private readonly ProductSaleScopeGuard $saleScope,
+        private readonly LineVatRateGuard $vatRate,
     ) {
     }
 
@@ -137,6 +139,8 @@ final class SouscriptionAbonnementEnLigneHandler
         $dateSignature = isset($donnees['dateSignature']) && \is_string($donnees['dateSignature'])
             ? new \DateTimeImmutable($donnees['dateSignature'])
             : new \DateTimeImmutable('today');
+        // D123 (G-9) : sans taux de TVA, ni mandat, ni vente, ni règlement.
+        $this->vatRate->assertResolvable($produit->getId(), $etablissement);
 
         $token = $this->tokenisation->tokeniser($iban);
         $mandat = new MandatSepa();
