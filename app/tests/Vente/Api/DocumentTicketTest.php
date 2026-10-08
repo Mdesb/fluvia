@@ -12,9 +12,10 @@ use App\Tests\Vente\VenteApiTestCase;
  *
  * ── POURQUOI CE TEST EXISTE ────────────────────────────────────────────────────────────────────
  *
- * `TicketProcessor` fabrique le document dans sa propre méthode. Le rendu ESC/POS aura besoin du
- * même document, et le construire une seconde fois créerait deux vérités sur le même papier — le
- * défaut que ce fichier-là passe son en-tête à redouter, et qui se paie au PREMIER correctif.
+ * `TicketProcessor` fabrique le document dans sa propre méthode. Le rendu PDF du lot 9 (D124) aura
+ * besoin du même document, et le construire une seconde fois créerait deux vérités sur le même
+ * papier — le défaut que ce fichier-là passe son en-tête à redouter, et qui se paie au PREMIER
+ * correctif.
  *
  * Extraire est donc juste. Mais un remplacement de source ne se prouve pas en vérifiant que les
  * champs sont toujours là : il se prouve par l'égalité de la SORTIE. Un extracteur qui oublie
@@ -87,8 +88,8 @@ final class DocumentTicketTest extends VenteApiTestCase
         self::assertEquals([
             'lignes' => [[
                 // ⚠ UN TABLEAU TRADUISIBLE, PAS UNE CHAÎNE — et c'est le libellé qui va sur le papier.
-                // Un rendu qui l'écrit tel quel imprime « Array ». Toute sortie ESC/POS devra choisir
-                // une langue, donc décider laquelle : celle de l'établissement, pas celle du caissier.
+                // Un rendu qui l'écrit tel quel imprime « Array ». Le rendu papier devra choisir une
+                // langue, donc décider laquelle : celle de l'établissement, pas celle du caissier.
                 'libelle' => ['fr' => 'Carte 10=12 piscine'],
                 'tarif' => 'Plein tarif',
                 'quantite' => 1,
@@ -117,19 +118,18 @@ final class DocumentTicketTest extends VenteApiTestCase
     }
 
     /**
-     * ⚠ LE PREMIER APPEL EXPLICITE REND DÉJÀ « DUPLICATA », ET C'EST JUSTE.
+     * ⚠ LE PREMIER APPEL EXPLICITE REND DÉJÀ « DUPLICATA » : C'EST LE COMPORTEMENT DE `main`,
+     * ÉPINGLÉ TEL QUEL POUR L'EXTRACTION, PAS LA RÈGLE À VENIR.
      *
-     * J'attendais `false` et j'avais tort — le test l'a montré AVANT que j'extraie quoi que ce soit,
-     * ce qui est exactement ce qu'on lui demande.
+     * Aujourd'hui, au-dessus du seuil et en session, `ValiderVenteService` marque la vente imprimée à
+     * la validation (`TicketPrintingPolicy::marqueImprimeeALaValidation`), et la mention se lit de
+     * `imprime`. Or aucune imprimante n'est pilotée : D124 (Q-C3) dit qu'une édition ne compte que si
+     * elle produit le papier, que l'affichage à l'écran n'en est pas une, et que la mention viendra
+     * du journal des éditions. Ce test sera donc changé délibérément au lot 9 (É39), pas avant.
      *
-     * La raison : au-dessus du seuil et en session, `ValiderVenteService` marque la vente imprimée à
-     * la validation, parce que le ticket EST sorti tout seul à ce moment-là
-     * (`TicketPrintingPolicy::marqueImprimeeALaValidation`). L'appel explicite qui suit édite donc
-     * bien un SECOND papier. Le compteur ne part pas de l'appel, il part du document.
-     *
-     * Ce qui rend cette valeur cruciale pour l'extraction : elle est LUE de l'entité au moment de
-     * l'édition, puis l'entité est modifiée dans la foulée. Un extracteur qui recalculerait la
-     * mention après coup rendrait « DUPLICATA » sur tout, y compris sur l'original.
+     * Ce qu'il garde d'ici là, et qui compte pour l'extraction : la valeur est LUE de l'entité au
+     * moment de l'édition, puis l'entité est modifiée dans la foulée. Un extracteur qui recalculerait
+     * la mention après coup rendrait « DUPLICATA » sur tout, y compris sur l'original.
      */
     public function testLePremierAppelExpliciteEstDejaUnDuplicata(): void
     {
@@ -139,7 +139,7 @@ final class DocumentTicketTest extends VenteApiTestCase
         $premier = $client->request('POST', '/api/ventes/' . $venteId . '/ticket', $entete + [
             'json' => ['mode' => 'imprimer'],
         ])->toArray();
-        self::assertTrue($premier['duplicata'], 'Le ticket edite a la validation compte comme le premier.');
+        self::assertTrue($premier['duplicata'], 'Comportement de main : la validation a pose `imprime` (D124 le change au lot 9).');
 
         $second = $client->request('POST', '/api/ventes/' . $venteId . '/ticket', $entete + [
             'json' => ['mode' => 'imprimer'],
