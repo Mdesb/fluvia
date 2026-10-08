@@ -431,9 +431,7 @@ final class ValiderVenteService
 
     private function emetSupport(TypeProduit $type): bool
     {
-        return $type->aFacette(TypeProduit::FACETTE_BILLET)
-            || $type->aFacette(TypeProduit::FACETTE_CARNET)
-            || $type->aFacette(TypeProduit::FACETTE_ACCES);
+        return $type->issuesTicket();
     }
 
     /**

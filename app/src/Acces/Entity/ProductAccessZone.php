@@ -42,15 +42,15 @@ use Symfony\Component\Uid\Uuid;
  * ⚠ Corollaire D58 : d'où `UuidReferenceFilter` plutôt qu'un `SearchFilter`, qui rendrait une liste
  * vide sans rien signaler.
  *
- * ── AUCUNE LIGNE = AUCUNE RESTRICTION ───────────────────────────────────────────────────────────
+ * ── AUCUNE LIGNE = AUCUNE PORTE (D87) ───────────────────────────────────────────────────────────
  *
- * Un produit sans déclaration ouvre toutes les zones, comme avant. C'est ce qui rend la
- * fonctionnalité déployable : elle n'existe que là où quelqu'un l'a demandée. Fermer par défaut
- * refuserait des porteurs qui ont payé, sur un mécanisme dont ils ignorent l'existence.
+ * Un produit sans déclaration n'ouvre AUCUNE zone : le droit projeté sort sans espace, et
+ * `DroitAcces::ouvre()` le refuse depuis le 30/08 (seuls le personnel et la réservation en sont
+ * exemptés). Ce bloc a dit l'inverse — « aucune restriction » — jusqu'au 08/10, après la bascule.
  *
- * ⚠ L'écran doit le DIRE. Une liste vide ne signifie pas « ce produit n'ouvre rien » mais « aucune
- * restriction ». Affichée comme un tableau vide, elle ferait croire à l'exploitant qu'il a tout
- * fermé alors qu'il a tout ouvert.
+ * D'où la garde de publication (`AccessZonePublicationPrerequisite`) : là où le contrôle d'accès
+ * est actif, un produit qui émet un titre ne se publie pas sans zone sur chacun de ses sites. Un
+ * billet vendu reste connu du contrôle (D86) ; c'est la porte qui reste fermée.
  *
  * ── NI `Get` UNITAIRE NI `Patch`, ET C'EST UN CHOIX ─────────────────────────────────────────────
  *

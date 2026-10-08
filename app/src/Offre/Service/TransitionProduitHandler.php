@@ -35,11 +35,12 @@ final class TransitionProduitHandler
             );
         }
 
-        $manquants = $this->guard->prerequisManquants($produit);
+        // Des phrases, pas des codes : le message est affiché tel quel à l'exploitant, et « canal,
+        // prix, categorie_comptable » ne lui disait pas quoi faire. Les codes restent servis par
+        // `GET /produits/{id}/readiness`.
+        $manquants = $this->guard->missing($produit);
         if ($manquants !== []) {
-            throw new UnprocessableEntityHttpException(
-                'Publication impossible, prérequis manquants : ' . implode(', ', $manquants) . '.'
-            );
+            throw new UnprocessableEntityHttpException('Publication impossible. ' . implode(' ', $manquants));
         }
 
         $produit->setStatut(StatutProduit::Publie);

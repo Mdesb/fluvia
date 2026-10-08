@@ -38,11 +38,12 @@ use Symfony\Component\Uid\Uuid;
  * réglage fait pour les ventes à venir. Si un jour on veut la reprise, elle doit être un GESTE
  * explicite de l'exploitant, avec son décompte affiché avant exécution, pas un effet de bord.
  *
- * ── AUCUNE DÉCLARATION = AUCUNE RESTRICTION ─────────────────────────────────────────────────────
+ * ── AUCUNE DÉCLARATION = AUCUNE PORTE (D87) ─────────────────────────────────────────────────────
  *
- * Un produit sans ligne vide la collection du droit, ce qui signifie « ouvre tout » (cf.
- * `DroitAcces::ouvre()`). Le sens par défaut est ouvert parce que le mécanisme est neuf : refuser
- * par défaut transformerait un déploiement en panne d'accès pour tout le parc.
+ * Un produit sans ligne vide la collection du droit, et un droit sans espace n'ouvre rien (cf.
+ * `DroitAcces::ouvre()`, strict depuis le 30/08). La garde de publication empêche d'en PUBLIER un
+ * là où le contrôle d'accès est actif (`AccessZonePublicationPrerequisite`) ; un produit déjà
+ * publié, lui, continue de se vendre.
  */
 final class ProductAccessZoneResolver
 {
@@ -65,7 +66,7 @@ final class ProductAccessZoneResolver
             ->from(ProductAccessZone::class, 'z')
             // ⚠ D58 : `productRef` est une colonne `uuid` nue, sans relation Doctrine. Sans le type
             // explicite en troisième argument, la comparaison ne trouve RIEN et ne lève RIEN — le
-            // droit sortirait sans zone, donc ouvrant tout, et la déclaration serait muette.
+            // droit sortirait sans zone, donc n'ouvrant aucune porte (D87), sans rien signaler.
             ->andWhere('z.productRef = :product')
             ->setParameter('product', $productRef, 'uuid')
             ->andWhere('IDENTITY(z.establishment) = :establishment')
