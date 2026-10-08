@@ -36,7 +36,8 @@ final class VerificateurFenetreSaisonEphemereListener
         /** @var list<SaisonEphemere> $saisons */
         $saisons = $em->getRepository(SaisonEphemere::class)->findBy(['actif' => true, 'bascule' => BasculeSaisonEphemere::Automatique->value]);
 
-        $maintenant = new \DateTimeImmutable('today');
+        // L'instant, pas `today` (minuit UTC) : la saison le ramène au jour de son établissement.
+        $maintenant = new \DateTimeImmutable();
         foreach ($saisons as $saison) {
             if (!\in_array($produit, $saison->getCatalogueAssocie(), true)) {
                 continue;

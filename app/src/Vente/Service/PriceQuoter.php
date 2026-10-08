@@ -75,7 +75,7 @@ final class PriceQuoter
         $groupes = $this->optionsDuProduit($produit, $etablissement, $baseCentimes, $optionsRetenues);
 
         // Calculées une fois : elles sont rendues à l'écran ET déduites du montant annoncé.
-        $promotions = $prix === null ? [] : $this->promotionsAuto($produit, $date);
+        $promotions = $prix === null ? [] : $this->promotionsAuto($produit, $date, $etablissement);
 
         $totalUnitaire = null;
         $totalLigne = null;
@@ -301,8 +301,16 @@ final class PriceQuoter
      *
      * @return list<array{id: string, nom: string, type: string, valeur: string|null}>
      */
-    public function promotionsAuto(Produit $produit, \DateTimeImmutable $date): array
+    public function promotionsAuto(Produit $produit, \DateTimeImmutable $date, ?Etablissement $etablissement = null): array
     {
+        // ⚠ UNE PROMOTION SE COMPTE EN JOURS DE L'ETABLISSEMENT, COMME UNE SAISON (#290).
+        //
+        // Ses bornes sont des colonnes `date`, que Doctrine rend a 00:00 UTC. Comparee a l'instant de
+        // la vente, la promotion cessait le dernier jour a 00:00 UTC (01:00 ou 02:00 a Paris) et ne
+        // s'appliquait le premier qu'a partir de cette heure-la. Mesure le 07/10/2026
+        // (`PromotionLastDayTest`). Sans etablissement, le defaut d'`Etablissement::$fuseauHoraire`.
+        $jour = $date->setTimezone(new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris'))->format('Y-m-d');
+
         /** @var list<Promotion> $promotions */
         $promotions = $this->em->getRepository(Promotion::class)->findAll();
         $appliquees = [];
@@ -310,7 +318,7 @@ final class PriceQuoter
             if ($promo->getType() === TypePromotion::Bonus1012 || $promo->getType() === TypePromotion::OffreGroupee) {
                 continue; // portées par la carte / logique de groupe, hors calcul de remise ligne.
             }
-            if (!$this->promoEligible($promo, $produit, $date)) {
+            if (!$this->promoEligible($promo, $produit, $jour)) {
                 continue;
             }
             $appliquees[] = [
@@ -324,12 +332,12 @@ final class PriceQuoter
         return $appliquees;
     }
 
-    private function promoEligible(Promotion $promo, Produit $produit, \DateTimeImmutable $date): bool
+    private function promoEligible(Promotion $promo, Produit $produit, string $jour): bool
     {
-        if ($promo->getDateDebut() !== null && $promo->getDateDebut() > $date) {
+        if ($promo->getDateDebut() !== null && $promo->getDateDebut()->format('Y-m-d') > $jour) {
             return false;
         }
-        if ($promo->getDateFin() !== null && $promo->getDateFin() < $date) {
+        if ($promo->getDateFin() !== null && $promo->getDateFin()->format('Y-m-d') < $jour) {
             return false;
         }
         $canaux = $promo->getCanaux();

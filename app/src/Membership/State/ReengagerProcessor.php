@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Membership\Entity\Membership;
 use App\Membership\Entity\Reengagement;
 use App\Membership\Service\ReengagementHandler;
+use App\Organisation\Entity\Etablissement;
 use App\Vente\Service\LecteurCorps;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -51,7 +52,7 @@ final class ReengagerProcessor implements ProcessorInterface
         $dureeEngagementMois = isset($corps['dureeEngagementMois']) ? (int) $corps['dureeEngagementMois'] : 12;
         $dateReengagement = isset($corps['dateReengagement']) && \is_string($corps['dateReengagement'])
             ? new \DateTimeImmutable($corps['dateReengagement'])
-            : new \DateTimeImmutable('today');
+            : Etablissement::jourCivil($data->getEtablissement());
 
         return $this->handler->reengager($data, $dateReengagement, $dureeEngagementMois, $iban, $titulaire);
     }
