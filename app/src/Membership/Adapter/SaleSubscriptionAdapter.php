@@ -9,11 +9,13 @@ use App\Crm\Service\BeneficiaryResolver;
 use App\Membership\Entity\Membership;
 use App\Membership\Enum\MembershipStatus;
 use App\Membership\Repository\SubscriptionRepository;
+use App\Membership\Service\DemanderResiliationHandler;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Organisation\Entity\Etablissement;
+use App\Vente\Entity\BilletSupport;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
 use App\Vente\Port\AppairageAccesInterface;
@@ -52,7 +54,23 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
         private readonly BeneficiaryResolver $beneficiaires,
         private readonly SubscriptionRepository $abonnements,
         private readonly AppairageAccesInterface $acces,
+        private readonly DemanderResiliationHandler $resiliations,
     ) {
+    }
+
+    /**
+     * Les abonnements des lignes de la vente annulée sont résiliés avec elle : celui que la caisse a
+     * créé, celui qu'elle a relié au comptoir (#288), celui de la vente en ligne. Sans quoi il resterait
+     * un abonnement fantôme, son mandat et ses prélèvements (décision de Maxime du 07/10).
+     */
+    public function terminateSubscriptionsFromSale(Vente $vente, string $motif): void
+    {
+        foreach ($vente->getLignes() as $ligne) {
+            $abonnement = $this->abonnements->findOneBySourceSaleLine($ligne->getId());
+            if ($abonnement instanceof Membership) {
+                $this->resiliations->terminateForCancelledSale($abonnement, $motif);
+            }
+        }
     }
 
     /**
@@ -142,10 +160,8 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                 // ⚠ UN SEUL ACCÈS : CELUI DE L'ABONNEMENT. Une ligne nominative émet aussi son billet,
                 // avec un droit SANS fin de validité (mesuré le 07/10) : il ouvrirait encore après une
                 // résiliation ou un impayé. On le révoque, comme une annulation le ferait.
-                foreach ($vente->getSupports() as $support) {
-                    if ((string) $support->getLigne()?->getId() === (string) $ligne->getId()) {
-                        $this->acces->invalider($support);
-                    }
+                foreach ($this->ticketsOf($vente, $ligne) as $support) {
+                    $this->acces->invalider($support);
                 }
                 $this->em->flush();
                 continue;
@@ -161,8 +177,19 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
                 canal: Canal::Guichet,
                 mandatEnAttente: true,
                 sourceSaleLineId: $ligne->getId(),
+                // ⚠ LE BILLET DE LA LIGNE DEVIENT L'ACCÈS DE L'ABONNEMENT (décision de Maxime du
+                // 07/10) : c'est le seul que le client emporte, il est coupé avec l'abonnement.
+                saleTicketCode: ($this->ticketsOf($vente, $ligne)[0] ?? null)?->getIdentifiantSupport(),
             );
         }
+    }
+
+    /** @return list<BilletSupport> les billets que la vente a émis pour cette ligne */
+    private function ticketsOf(Vente $vente, LigneVente $ligne): array
+    {
+        return array_values($vente->getSupports()->filter(
+            static fn (BilletSupport $support): bool => (string) $support->getLigne()?->getId() === (string) $ligne->getId(),
+        )->toArray());
     }
 
     /**

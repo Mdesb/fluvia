@@ -14,6 +14,7 @@ use App\Membership\Enum\MotifInactiviteAccesFitness;
 use App\Membership\Enum\MembershipStatus;
 use App\Membership\Enum\StatutEcheanceSepa;
 use App\Membership\Enum\StatutResiliation;
+use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -66,6 +67,34 @@ final class DemanderResiliationHandler
 
         $resiliation->setValideParUtilisateur($validateur)->setStatut(StatutResiliation::EnPreavis);
         $this->em->flush();
+
+        return $resiliation;
+    }
+
+    /**
+     * LA VENTE QUI A CRÉÉ L'ABONNEMENT EST ANNULÉE : IL EST RÉSILIÉ AVEC ELLE (décision de Maxime du 07/10).
+     *
+     * Sans frais : ni engagement ni préavis. L'effet est posé la veille du premier jour d'engagement,
+     * puisque le contrat n'a jamais pris effet. `executerEffet()` annule donc toutes les échéances
+     * encore à venir, la première comprise. Le reste est la résiliation ordinaire : mandat révoqué
+     * s'il ne sert plus, accès coupé par la propagation, et cette résiliation reste comme trace.
+     */
+    public function terminateForCancelledSale(Membership $abonnement, string $motifVente): ?Resiliation
+    {
+        if ($abonnement->getStatut() === MembershipStatus::Resilie) {
+            return null;
+        }
+
+        $resiliation = new Resiliation();
+        $resiliation->setAbonnement($abonnement)
+            ->setDateDemande(Etablissement::jourCivil($abonnement->getEtablissement()))
+            ->setMotif(sprintf('Vente annulée (%s)', $motifVente))
+            ->setMotifLegitime(true)
+            ->setPreavisAppliqueJours(0)
+            ->setDateEffet($abonnement->getDateDebutEngagement()->modify('-1 day'))
+            ->setStatut(StatutResiliation::EnPreavis);
+        $this->em->persist($resiliation);
+        $this->executerEffet($resiliation);
 
         return $resiliation;
     }
