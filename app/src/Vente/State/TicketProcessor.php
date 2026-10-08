@@ -7,6 +7,7 @@ namespace App\Vente\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
+use App\Vente\Service\DocumentTicket;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\PanierCalculateur;
 use App\Vente\Service\TicketPrintingPolicy;
@@ -43,6 +44,10 @@ final class TicketProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly PanierCalculateur $calc,
         private readonly TicketPrintingPolicy $politique,
+        // Le document lui-même vit dans `DocumentTicket` : le rendu papier a besoin du MÊME, et deux
+        // constructions du même ticket divergeraient au premier correctif. Ce processeur ne garde
+        // que ce qui décrit l'interaction avec l'écran — mode, renvoi, seuil.
+        private readonly DocumentTicket $document,
     ) {
     }
 
@@ -92,13 +97,22 @@ final class TicketProcessor implements ProcessorInterface
 
         $renvoye = false;
 
+        // ⚠ LES CHAMPS SONT REPRIS UN À UN, ET L'ORDRE EST TENU EXPRÈS.
+        //
+        // `$document + [...]` aurait été plus court et aurait déplacé `duplicata` au milieu du
+        // document, alors qu'il se lit ici entre `venteGratuite` et `renvoiPropose`. L'ordre des clés
+        // d'un JSON ne veut rien dire pour une machine — et il change quand même la sortie, donc
+        // c'est déjà une modification qu'on n'a pas demandée. Une extraction se prouve par l'égalité
+        // de la sortie ; autant ne pas commencer par la casser sur un détail cosmétique.
+        $document = $this->document->pour($data, $duplicata);
+
         return new JsonResponse([
-            'vente' => (string) $data->getId(),
-            'numero' => $data->getNumero(),
-            'date' => $data->getDate()->format(\DATE_ATOM),
-            'lignes' => $this->lignes($data),
-            'total' => $data->getTotal(),
-            'totalRemises' => $data->getTotalRemises(),
+            'vente' => $document['vente'],
+            'numero' => $document['numero'],
+            'date' => $document['date'],
+            'lignes' => $document['lignes'],
+            'total' => $document['total'],
+            'totalRemises' => $document['totalRemises'],
             'mode' => $mode,
             'imprime' => $data->isImprime(),
             'impressionAutomatique' => $auDessusSeuil,
@@ -106,41 +120,10 @@ final class TicketProcessor implements ProcessorInterface
             // distinguer « en dessous du seuil, propose le renvoi » de « gratuite, ne propose rien ».
             // Deux situations, deux gestes, et un seul booléen ne les sépare pas.
             'venteGratuite' => $venteGratuite,
-            'duplicata' => $duplicata,
+            'duplicata' => $document['duplicata'],
             'renvoiPropose' => $renvoiPropose,
             'renvoye' => $renvoye,
             'canal' => $renvoye ? ($corps['canal'] ?? 'email') : null,
         ], JsonResponse::HTTP_OK);
-    }
-
-    /**
-     * Le contenu du ticket, **relu de la vente et de rien d'autre**.
-     *
-     * Les libellés viennent de la ligne, pas du catalogue : c'est ce qui rend un duplicata fidèle six
-     * mois plus tard, quand le produit a changé de nom ou n'existe plus. Voir
-     * `LigneVente::$libelleProduit`.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function lignes(Vente $vente): array
-    {
-        $lignes = [];
-        foreach ($vente->getLignes() as $ligne) {
-            $lignes[] = [
-                'id' => (string) $ligne->getId(),
-                'libelle' => $ligne->getLibelleProduit(),
-                'tarif' => $ligne->getLibelleTypeTarif(),
-                'quantite' => $ligne->getQuantite(),
-                'prixUnitaire' => $ligne->getPrixUnitaire(),
-                'impactOptionsUnitaire' => $ligne->getImpactOptionsUnitaire(),
-                'remiseLigne' => $ligne->getRemiseLigne(),
-                'remiseType' => $ligne->getRemiseType()?->value,
-                'montantLigne' => $ligne->getMontantLigne(),
-                'optionsSelectionnees' => $ligne->getOptionsSelectionnees(),
-                'promotionsAppliquees' => $ligne->getPromotionsAppliquees(),
-            ];
-        }
-
-        return $lignes;
     }
 }

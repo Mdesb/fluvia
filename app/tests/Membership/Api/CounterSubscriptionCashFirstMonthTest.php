@@ -12,6 +12,7 @@ use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
 use App\Membership\Entity\EcheanceSepa;
 use App\Membership\Entity\Membership;
+use App\Membership\Entity\Resiliation;
 use App\Membership\Entity\StatutAccesFitness;
 use App\Membership\Enum\StatutEcheanceSepa;
 use App\Offre\DataFixtures\OffreFixtures;
@@ -25,6 +26,7 @@ use App\Tests\Acces\AccesApiTestCase;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -73,8 +75,53 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         $abonnements = $this->subscriptionsOf($payeur, $produit);
         self::assertCount(1, $abonnements, 'Un parcours de souscription crée UN abonnement, encaissé ou non.');
         self::assertSame($parcours['abonnement'], (string) $abonnements[0]->getId(), 'C\'est celui que l\'écran a souscrit.');
-        self::assertSame($parcours['ligne'], (string) $abonnements[0]->getSourceSaleLineId(), 'Il est relié à la ligne qui a payé son premier mois.');
+        self::assertSame($parcours['ligne'], (string) $abonnements[0]->getFirstMonthSaleLineId(), 'Il est relié à la ligne qui a payé son premier mois.');
+        self::assertNull($abonnements[0]->getSourceSaleLineId(), 'Cette vente ne l\'a pas créé.');
         self::assertSame(1, $this->echeancesAnnulees($parcours['abonnement']), 'La première échéance, encaissée au comptoir, n\'est plus prélevée.');
+    }
+
+    /**
+     * ANNULER LA VENTE DU PREMIER MOIS NE RÉSILIE PAS L'ABONNEMENT SOUSCRIT À PART (décision de Maxime
+     * du 08/10). Seule la vente qui a créé l'abonnement le résilie (#292). Ici, il a été souscrit avant
+     * la vente, qui lui a seulement été reliée (#288) : il reste actif, le premier mois redevient dû
+     * (de nouveau à venir), et l'erreur de saisie se reprend par une nouvelle vente, sans resouscrire
+     * ni refaire le mandat. Le remboursement total passe par le même chemin, et donne la même chose.
+     *
+     * @param array<string, string> $corps
+     */
+    #[DataProvider('undoings')]
+    public function testUndoingTheFirstMonthSaleKeepsTheSubscriptionAndTheMonthIsDueAgain(string $geste, array $corps): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $produit = $this->entite(Produit::class, ['code' => 'PRD-GOLD01']);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        $session = $this->ouvrirSession($client, $entete);
+        $parcours = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit);
+        self::assertLessThan(300, $parcours['valider'], $parcours['corps']);
+        $encaissee = $this->instalments($client, $entete, $parcours['abonnement'], 'annulee')[0];
+
+        $client->request('POST', '/api/ventes/' . $parcours['vente'] . '/' . $geste, $entete + ['json' => $corps]);
+        self::assertResponseStatusCodeSame(201);
+
+        // Ce que lit la fiche abonnement.
+        self::assertSame('actif', $client->request('GET', '/api/abonnement_fitnesses/' . $parcours['abonnement'], $entete)->toArray()['statut']);
+        self::assertSame(0, $this->em()->getRepository(Resiliation::class)->count(['abonnement' => Uuid::fromString($parcours['abonnement'])]));
+        $dues = $this->instalments($client, $entete, $parcours['abonnement'], 'a_venir');
+        self::assertSame(
+            [$encaissee['dateProgrammee'], $encaissee['montantCentimes']],
+            [$dues[0]['dateProgrammee'] ?? null, $dues[0]['montantCentimes'] ?? null],
+            'Le premier mois n\'est plus encaissé : il redevient une échéance à venir, prélevée comme les autres.',
+        );
+        $statut = $this->em()->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => Uuid::fromString($parcours['abonnement'])]);
+        self::assertTrue($this->opens((string) $statut?->getSupportIdentifiant()), 'L\'accès de l\'abonnement reste ouvert.');
+
+        // L'erreur se reprend : une nouvelle vente du premier mois se relie au même abonnement.
+        $reprise = $this->subscribeThenPayCash($client, $entete, $session['id'], $payeur, $produit, dejaSouscrit: $parcours['abonnement']);
+        self::assertLessThan(300, $reprise['valider'], $reprise['corps']);
+        $abonnements = $this->subscriptionsOf($payeur, $produit);
+        self::assertCount(1, $abonnements);
+        self::assertSame($reprise['ligne'], (string) $abonnements[0]->getFirstMonthSaleLineId());
+        self::assertNotSame($encaissee['dateProgrammee'], $this->instalments($client, $entete, $parcours['abonnement'], 'a_venir')[0]['dateProgrammee'] ?? null, 'Le premier mois, encaissé de nouveau, n\'est plus à venir.');
     }
 
     public function testCashFirstMonthForAFamilyMemberKeepsOneSubscription(): void
@@ -147,6 +194,13 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         self::assertCount(1, $this->subscriptionsOf($payeur, $produit));
     }
 
+    /** @return iterable<string, array{0: string, 1: array<string, string>}> */
+    public static function undoings(): iterable
+    {
+        yield 'annulation' => ['annuler', ['motif' => 'Erreur de saisie']];
+        yield 'remboursement total' => ['rembourser', ['motif' => 'Erreur de saisie', 'montant' => '39.90']];
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -166,6 +220,7 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         Produit $produit,
         ?Client $adherent = null,
         bool $rattacher = true,
+        ?string $dejaSouscrit = null,
     ): array {
         $payeurId = (string) $payeur->getId();
         $souscription = [
@@ -178,7 +233,10 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         if ($adherent instanceof Client) {
             $souscription['adherent'] = (string) $adherent->getId();
         }
-        $abonnement = $client->request('POST', '/api/sport/abonnements/souscrire', $entete + ['json' => $souscription])->toArray();
+        // `$dejaSouscrit` rejoue seulement l'encaissement, sur un abonnement déjà souscrit.
+        $abonnement = $dejaSouscrit !== null
+            ? ['id' => $dejaSouscrit]
+            : $client->request('POST', '/api/sport/abonnements/souscrire', $entete + ['json' => $souscription])->toArray();
 
         $vente = $client->request('POST', '/api/ventes', $entete + ['json' => ['session' => $sessionId]])->toArray();
         if ($rattacher) {
@@ -201,10 +259,7 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
 
         if ($statut < 300) {
             // Puis l'écran annule la première échéance « à venir » de CET abonnement.
-            $echeances = $client->request('GET', '/api/echeance_sepas', $entete + ['query' => [
-                'itemsPerPage' => 200, 'abonnement' => $abonnement['id'], 'statut' => 'a_venir', 'order' => 'asc',
-            ]])->toArray();
-            $premiere = ($echeances['member'] ?? $echeances['hydra:member'] ?? [])[0] ?? null;
+            $premiere = $this->instalments($client, $entete, (string) $abonnement['id'], 'a_venir')[0] ?? null;
             self::assertIsArray($premiere, 'L\'écran doit retrouver la première échéance.');
             $client->request('POST', '/api/sport/echeances/' . $premiere['id'] . '/annuler', $entete + [
                 'json' => ['motif' => 'Première échéance encaissée au comptoir.'],
@@ -219,6 +274,22 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
             'valider' => $statut,
             'corps' => (string) $valider->getContent(false),
         ];
+    }
+
+    /**
+     * Les échéances de l'abonnement dans cet état, dans l'ordre, comme l'écran les lit.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function instalments(ApiClient $client, array $entete, string $abonnementId, string $statut): array
+    {
+        $reponse = $client->request('GET', '/api/echeance_sepas', $entete + ['query' => [
+            'itemsPerPage' => 200, 'abonnement' => $abonnementId, 'statut' => $statut, 'order' => 'asc',
+        ]])->toArray();
+
+        return $reponse['member'] ?? $reponse['hydra:member'] ?? [];
     }
 
     /** Le Gold des fixtures, sous un type sans facette accès : une formule non nominative. */

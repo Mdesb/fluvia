@@ -73,13 +73,14 @@ final class DemanderResiliationHandler
 
     /**
      * LA VENTE QUI A CRÉÉ L'ABONNEMENT EST ANNULÉE : IL EST RÉSILIÉ AVEC ELLE (décision de Maxime du 07/10).
+     * Remboursée en totalité, elle l'est de même (décision du 08/10).
      *
      * Sans frais : ni engagement ni préavis. L'effet est posé la veille du premier jour d'engagement,
      * puisque le contrat n'a jamais pris effet. `executerEffet()` annule donc toutes les échéances
      * encore à venir, la première comprise. Le reste est la résiliation ordinaire : mandat révoqué
      * s'il ne sert plus, accès coupé par la propagation, et cette résiliation reste comme trace.
      */
-    public function terminateForCancelledSale(Membership $abonnement, string $motifVente): ?Resiliation
+    public function terminateForCancelledSale(Membership $abonnement, string $motif): ?Resiliation
     {
         if ($abonnement->getStatut() === MembershipStatus::Resilie) {
             return null;
@@ -88,7 +89,9 @@ final class DemanderResiliationHandler
         $resiliation = new Resiliation();
         $resiliation->setAbonnement($abonnement)
             ->setDateDemande(Etablissement::jourCivil($abonnement->getEtablissement()))
-            ->setMotif(sprintf('Vente annulée (%s)', $motifVente))
+            // « Vente annulée (…) » ou « Vente remboursée (…) » : le motif libre d'un remboursement peut
+            // remplir la colonne (255), et la résiliation partirait en erreur après l'avoir.
+            ->setMotif(mb_substr($motif, 0, 255))
             ->setMotifLegitime(true)
             ->setPreavisAppliqueJours(0)
             ->setDateEffet($abonnement->getDateDebutEngagement()->modify('-1 day'))
