@@ -24,11 +24,13 @@ use App\Crm\Enum\StatutClient;
 use App\Crm\Enum\TypeClient;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Categorie;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
 use App\Offre\Entity\TypeTarif;
+use App\Offre\Enum\AxeCategorie;
 use App\Offre\Enum\PeriodiciteFormule;
 use App\Offre\Enum\StatutProduit;
 use App\Organisation\Entity\Espace;
@@ -217,6 +219,14 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         $typeAbo = $manager->getRepository(TypeProduit::class)->findOneBy(['code' => OffreFixtures::TYPE_ABONNEMENT]);
         $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
         $saison = $manager->getRepository(\App\Offre\Entity\Saison::class)->findOneBy(['nom' => OffreFixtures::SAISON]);
+        // La catégorie comptable de l'offre, comme tout produit publié (`PublicationGuard`) : sans elle,
+        // une ligne vendue n'aurait pas de taux de TVA, et la boutique la refuserait avant le paiement (D123).
+        $catCompta = $manager->getRepository(Categorie::class)->findOneBy(['axe' => AxeCategorie::Comptable, 'libelle' => OffreFixtures::CAT_COMPTABLE]);
+        $classer = static function (Produit $produit) use ($catCompta): void {
+            if ($catCompta instanceof Categorie) {
+                $produit->addCategorie($catCompta);
+            }
+        };
 
         if ($typeEntree instanceof TypeProduit && $tarifPlein instanceof TypeTarif && $saison instanceof \App\Offre\Entity\Saison) {
             $simple = (new Produit())->setType($typeEntree)
@@ -224,6 +234,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
                 ->setCode(self::PRODUIT_SIMPLE_CODE)->setCanaux(['guichet', 'en_ligne'])
                 ->setChampsPerso(['visuelUrl' => '/assets/produits/billet-simple.jpg'])->setStatut(StatutProduit::Publie);
             $simple->addEtablissement($etabA);
+            $classer($simple);
             $manager->persist($simple);
             $simple->addGrille((new GrilleTarifaire())->setProduit($simple)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('12.00'));
             $manager->persist($simple->getGrilles()->last());
@@ -234,6 +245,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
                 ->setCode(self::PRODUIT_SUPPORT_PHYSIQUE_CODE)->setCanaux(['guichet', 'en_ligne'])
                 ->setChampsPerso(['supportPhysique' => true])->setStatut(StatutProduit::Publie);
             $physique->addEtablissement($etabA);
+            $classer($physique);
             $manager->persist($physique);
             $physique->addGrille((new GrilleTarifaire())->setProduit($physique)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('18.00'));
             $manager->persist($physique->getGrilles()->last());
@@ -257,6 +269,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
                 ->setChampsPerso(['timedEntry' => true])
                 ->setStatut(StatutProduit::Publie);
             $timedEntry->addEtablissement($etabA);
+            $classer($timedEntry);
             $manager->persist($timedEntry);
             $timedEntry->addGrille((new GrilleTarifaire())->setProduit($timedEntry)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('15.00'));
             $manager->persist($timedEntry->getGrilles()->last());
@@ -295,6 +308,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
                 ->setCode(self::PRODUIT_ABONNEMENT_CODE)->setCanaux(['guichet', 'en_ligne'])
                 ->setFormule($formule)->setStatut(StatutProduit::Publie);
             $abonnement->addEtablissement($etabA);
+            $classer($abonnement);
             $manager->persist($abonnement);
             $abonnement->addGrille((new GrilleTarifaire())->setProduit($abonnement)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('29.90'));
             $manager->persist($abonnement->getGrilles()->last());
