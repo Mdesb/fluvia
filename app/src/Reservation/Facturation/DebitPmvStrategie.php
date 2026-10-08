@@ -86,7 +86,7 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
         // Ce que l'appelant aurait encore en attente s'écrit AVANT l'unité : écrit dedans, le rollback
         // l'effacerait sans que l'UnitOfWork le sache. (Ses appelants n'ont rien en attente aujourd'hui.)
         $this->em->flush();
-        $avant =[$facturation->getStatut(), $facturation->getVenteRattachee(), $this->em->getUnitOfWork()->getScheduledEntityInsertions()];
+        $avant = [$facturation->getStatut(), $facturation->getVenteRattachee(), $this->em->getUnitOfWork()->getScheduledEntityInsertions()];
         $evenements = new SettlementEvents();
         $vente = null;
         try {
