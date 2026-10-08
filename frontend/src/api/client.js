@@ -2,6 +2,12 @@
 // - Appelle des chemins relatifs (proxifiés par Vite vers le back), pas de CORS.
 // - Ajoute automatiquement le Bearer JWT et l'en-tête X-Etablissement (établissement actif).
 // - 401 => on notifie l'app pour repasser sur l'écran de connexion.
+// - Annonce la langue affichée (`Accept-Language`) et traduit les erreurs codées du serveur.
+
+// Le NOYAU, pas `index.js` : il n'importe aucun catalogue JSON, que `node --test` (Node 20) refuse
+// sans attribut d'import — et `src/api/*.test.js` charge ce fichier. Les catalogues sont
+// enregistrés par `i18n/index.js`, que l'application charge avant toute requête.
+import { activeLanguage, translateApiError } from '../i18n/core.js'
 
 const TOKEN_KEY = 'billetterie.token'
 const ETAB_KEY = 'billetterie.etablissement'
@@ -190,7 +196,9 @@ async function request(
   path,
   { method = 'GET', body, formData, ld = false, auth = true, headers: extra = {}, query, timeoutMs, timeoutMessage } = {},
 ) {
-  const headers = { ...extra }
+  // La langue AFFICHÉE, pas celle du navigateur : le serveur (`App\I18n\RequestLocale`) répond
+  // ainsi dans la langue de l'écran, préférence de l'utilisateur comprise.
+  const headers = { 'Accept-Language': activeLanguage(), ...extra }
   // ⚠ ON NE POSE PAS `Content-Type` SUR UN ENVOI MULTIPART, ET C'EST CONTRE-INTUITIF.
   //
   // Le navigateur doit le composer lui-même, parce qu'il y ajoute la *frontière* (`boundary`) qui
@@ -321,7 +329,9 @@ async function request(
   }
 
   if (!res.ok) {
-    throw new ApiError(messageFromPayload(payload, res.status), res.status, payload)
+    // Une erreur codée (`code` + `params`, `CodedHttpException`) se lit dans le catalogue de la
+    // langue active ; sans code connu, le message du serveur reste, comme avant.
+    throw new ApiError(translateApiError(payload) ?? messageFromPayload(payload, res.status), res.status, payload)
   }
   return payload
 }

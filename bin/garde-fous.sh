@@ -557,6 +557,27 @@ if ls "$RACINE"/frontend/src/api/*.test.js >/dev/null 2>&1; then
     fi
 fi
 
+# TRADUCTION (i18n, 08/10/2026) — deux contrôles, sans dépendance.
+#
+# `node --test src/i18n/*.test.js` : `t()`, son repli sur le français, le formatage `Intl` et le
+# détecteur de texte en dur. `verifier-chaines-traduites.mjs` : un écran listé dans
+# `src/i18n/converted-files.json` ne reçoit plus de phrase en dur, et les catalogues se tiennent
+# (clés de la source, mêmes jetons, mêmes langues que `App\I18n\Locales::SUPPORTED`).
+if ls "$RACINE"/frontend/src/i18n/*.test.js >/dev/null 2>&1; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Socle de traduction du frontal (node --test)" sh -c "cd '$RACINE/frontend' && node --test src/i18n/*.test.js"
+    else
+        ignorer "Socle de traduction du frontal" "« node » indisponible ici."
+    fi
+fi
+if [ -f "$RACINE/frontend/scripts/verifier-chaines-traduites.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Chaînes traduites (i18n)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-chaines-traduites.mjs"
+    else
+        ignorer "Chaînes traduites (i18n)" "« node » indisponible ici."
+    fi
+fi
+
 # ── DEUX CONTROLES QUE LE PUSH EXIGEAIT ET QUE CE LANCEUR NE FAISAIT PAS TOURNER ────────────────
 #
 # `hooks/pre-receive` appelle sept scripts ; ce fichier n'en appelait que cinq. Manquaient
