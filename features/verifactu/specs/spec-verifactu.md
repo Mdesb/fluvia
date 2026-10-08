@@ -115,6 +115,8 @@ RD 238/2026 : toute facture à un professionnel établi en Espagne sera **élect
 
 ### Le code, mesuré le 08/10 sur `origin/main` `5870f9b0`
 
+Revu après le report de `main` (`3e6a3e37`, #299, #300, #302) : parmi les fichiers cités, seul le registre des traitements a bougé (C-11).
+
 #### C-1 — NF525 : trois chaînes, aucune n'est la bonne pour l'Espagne
 
 - **Trois chaînes indépendantes**, trois clés HMAC d'environnement : ventes et caisse dans `nf525_operation_scellee`, **par point de vente**, unicité `(point_de_vente_id, numero_sequence)` (`Vente/Nf525/Entity/OperationScellee.php:27-28`, clé `NF525_SEAL_KEY`) ; factures, par profil exploitant, sur `facturation_facture` (`ScellementFactureHandler.php:17-19`, `NF525_FACTURATION_SEAL_KEY`, **sans unicité**, simple index `Facture.php:66`) ; écritures, par `(profil, journal)` (`ScellementEcritureHandler.php:17`, `NF525_COMPTA_SEAL_KEY`).
@@ -177,7 +179,7 @@ Aucune bibliothèque i18n, aucune langue sur l'établissement, `'fr-FR'` écrit 
 
 #### C-11 — Hébergement, sauvegarde, purge
 
-Hébergement : VPS OVH à **Gravelines** (France) (`infra/README.md:1-3`). Sauvegarde : un dump par jour, **conservé 14 jours, sur le même hôte** (`infra/sauvegarde-base.sh:37-90`). Aucune purge des tables de vente, de facture, NF525 ou d'écritures ; l'anonymisation RGPD ne touche que les `Client`. Le registre des traitements propose **10 ans** pour les pièces comptables (`docs/juridique/registre-traitements.md:47, 58`).
+Hébergement : VPS OVH à **Gravelines** (France) (`infra/README.md:1-3`). Sauvegarde : un dump par jour, **conservé 14 jours, sur le même hôte** (`infra/sauvegarde-base.sh:37-90`). Aucune purge des tables de vente, de facture, NF525 ou d'écritures ; l'anonymisation RGPD ne touche que les `Client`. Le registre des traitements propose **10 ans** pour les pièces comptables, au titre de l'art. L123-22 du Code de commerce français, avec la mention « recommandé, à confirmer » (`docs/juridique/registre-traitements.md:49, 74`, état de `main` au 08/10 après #302) ; il dit l'hébergement « en France (VPS OVH) » (l.11).
 
 ## Décisions déjà rendues, qui s'imposent
 
@@ -440,13 +442,13 @@ Dans tous les cas, ses factures restent scellées en interne (NF525) : l'art. 29
 - **C — En France, sans s'en occuper.** *Conséquence* : moins de code ; l'exploitant qui l'ignore est en infraction sur la conservation, et le découvre en contrôle.
 
 **Q-C3 — TicketBAI et la Navarre ?**
-- **A (recommandé) — Lot à part, après VERI*FACTU** ; d'ici là, un obligé de normativa basque est refusé à l'activation ; un obligé navarrais est servi sans registre tant qu'aucun système navarrais n'est publié. *Conséquence* : le Pays basque attend ; le travail de VERI*FACTU (impôt, séries, QR, file, certificat) sert ensuite, mais la chaîne (sur la signature), le format, l'inscription au registre foral et le LROE de Bizkaia sont propres à TicketBAI.
+- **A (recommandé) — Lot à part, après VERI*FACTU** ; d'ici là, un obligé de normativa basque est refusé à l'activation ; un obligé navarrais est servi sans registre, sur pièce (Q-A4), tant qu'aucun système navarrais n'est publié. *Conséquence* : le Pays basque attend ; le travail de VERI*FACTU (impôt, séries, QR, file, certificat) sert ensuite, mais la chaîne (sur la signature), le format, l'inscription au registre foral et le LROE de Bizkaia sont propres à TicketBAI.
 - **B — Dans ce chantier.** *Conséquence* : deux formats, deux chaînes, une inscription par l'éditeur, trois QR, deux voies d'envoi, avant toute première vente.
 - **C — Jamais.** *Conséquence* : le Pays basque est fermé à Fluvia.
 
 **Q-C4 — Combien de temps conserver ?**
 - **A — Six ans après la fin de l'année d'émission** (Code de commerce art. 30), y compris après la fin du contrat. *Conséquence* : le minimum défendable ; un contrôle qui remonte plus loin (LGT art. 66 bis et 70.3) trouve un vide.
-- **B (recommandé) — Dix ans**, aligné sur le registre des traitements de Fluvia pour les pièces comptables. *Conséquence* : couvre les contrôles longs ; justification RGPD déjà écrite ; plus de stockage.
+- **B (recommandé) — Dix ans**, aligné sur ce que le registre des traitements de Fluvia propose pour les pièces comptables (« recommandé, à confirmer », C-11). *Conséquence* : couvre les contrôles longs (LGT art. 66 bis et 70.3) ; une seule durée pour la France et l'Espagne ; la justification RGPD est à écrire pour l'Espagne, le registre s'appuyant sur le droit français ; plus de stockage.
 - **C — Jusqu'à la fin du contrat, puis export remis et suppression.** *Conséquence* : l'exploitant porte seul la conservation ensuite (Orden art. 8.3 l'y oblige de toute façon) ; risque qu'il perde l'export.
 
 ### Bloc D — La version
