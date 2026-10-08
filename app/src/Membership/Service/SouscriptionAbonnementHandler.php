@@ -71,6 +71,9 @@ final class SouscriptionAbonnementHandler
         // La ligne de vente d'origine (App\Vente\Entity\LigneVente), quand l'abonnement naît d'une
         // vente au comptoir : porte l'idempotence et le lien retour Vente → abonnement.
         ?Uuid $sourceSaleLineId = null,
+        // Le code du billet que la vente a déjà remis au client : il devient l'accès de l'abonnement,
+        // au lieu d'un second QR (décision de Maxime du 07/10, voir `MembershipQrAccessIssuer`).
+        ?string $saleTicketCode = null,
     ): Membership {
         if ($mandatExistant === null && !$mandatEnAttente && ($ibanClair === null || $titulaireMandat === null)) {
             throw new UnprocessableEntityHttpException(
@@ -171,6 +174,7 @@ final class SouscriptionAbonnementHandler
             $montantCentimes,
             $montantPremiereCentimes,
             $sourceSaleLineId,
+            $saleTicketCode,
         ): Membership {
             $abonnement = new Membership();
             $abonnement->setAdherent($adherent)
@@ -247,7 +251,8 @@ final class SouscriptionAbonnementHandler
             // le droit d'accès + un support QR signé (zones du produit, D87) et les rattache au statut
             // d'accès. `appairer()` flushe en interne, mais dans la transaction ci-dessus : rien n'est
             // committé tant que le flush final n'a pas figé les liens (droit + code du support).
-            $this->qrIssuer->issue($abonnement, $formule, $etablissement, $statutAcces);
+            // Quand une vente a déjà remis un billet au client, c'est lui qui devient cet accès.
+            $this->qrIssuer->issue($abonnement, $formule, $etablissement, $statutAcces, $saleTicketCode);
 
             $this->em->flush();
 

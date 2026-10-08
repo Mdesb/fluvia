@@ -199,8 +199,9 @@ class Saison
         // (UTC). Comparer l'instant de la vente a ces minuits arretait la vente du dernier jour a
         // 00:00 UTC (01:00 ou 02:00 a Paris) et ouvrait le premier une ou deux heures en retard.
         // Mesure le 07/10/2026 (`SeasonLastDayTest`). Sans etablissement (lignes anterieures a D51),
-        // le defaut d'`Etablissement::$fuseauHoraire`.
-        $date = $date->setTimezone(new \DateTimeZone($this->etablissement?->getFuseauHoraire() ?? 'Europe/Paris'));
+        // le defaut d'`Etablissement::$fuseauHoraire`. Une date civile (« AAAA-MM-JJ ») reste ce
+        // jour-la, meme a l'ouest de Greenwich : voir `Etablissement::jourCivil()`.
+        $date = Etablissement::jourCivil($this->etablissement, $date);
 
         // ⚠ « CHAQUE ANNEE » ETAIT COCHABLE, S'ENREGISTRAIT, ET PERSONNE NE LA LISAIT.
         //

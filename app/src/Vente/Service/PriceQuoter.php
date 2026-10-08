@@ -309,7 +309,8 @@ final class PriceQuoter
         // la vente, la promotion cessait le dernier jour a 00:00 UTC (01:00 ou 02:00 a Paris) et ne
         // s'appliquait le premier qu'a partir de cette heure-la. Mesure le 07/10/2026
         // (`PromotionLastDayTest`). Sans etablissement, le defaut d'`Etablissement::$fuseauHoraire`.
-        $jour = $date->setTimezone(new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris'))->format('Y-m-d');
+        // Un devis date « AAAA-MM-JJ » garde ce jour-la, meme a l'ouest de Greenwich.
+        $jour = Etablissement::jourCivil($etablissement, $date)->format('Y-m-d');
 
         /** @var list<Promotion> $promotions */
         $promotions = $this->em->getRepository(Promotion::class)->findAll();

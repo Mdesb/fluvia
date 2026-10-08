@@ -30,4 +30,11 @@ interface SaleSubscriptionInterface
     public function assertSubscribable(Vente $vente): void;
 
     public function createSubscriptionsFromSale(Vente $vente): void;
+
+    /**
+     * LA VENTE EST ANNULÉE : les abonnements de ses lignes sont résiliés avec elle, sans frais, au
+     * motif de l'annulation (décision de Maxime du 07/10). Appelée après le commit de l'avoir, comme
+     * la création ; rejouable, un abonnement déjà résilié est laissé tel quel.
+     */
+    public function terminateSubscriptionsFromSale(Vente $vente, string $motif): void;
 }

@@ -95,7 +95,7 @@ final readonly class ReferralService
         // et encaisse dans la même minute — souvent dans le désordre. Une borne à la seconde
         // refuserait la moitié des parrainages selon l'ordre des gestes, ce qu'aucun exploitant ne
         // saurait expliquer à son client.
-        if ($this->centimes($this->totalAchete($filleul, $etablissement, null, $this->debutDuJour())) > 0) {
+        if ($this->centimes($this->totalAchete($filleul, $etablissement, null, $this->debutDuJour($etablissement))) > 0) {
             throw new UnprocessableEntityHttpException(
                 'Cette personne est déjà cliente : un parrainage récompense une NOUVELLE relation.',
             );
@@ -145,7 +145,7 @@ final readonly class ReferralService
         $achat = $this->totalAchete(
             $filleul,
             $etablissement,
-            $this->debutDuJour($parrainage->getCreatedAt()),
+            $this->debutDuJour($etablissement, $parrainage->getCreatedAt()),
         );
         $programme = $this->programme($etablissement);
         $seuil = $programme?->getMinimumPurchase() ?? '0.00';
@@ -210,10 +210,16 @@ final readonly class ReferralService
             ->findOneBy(['establishment' => $etablissement]);
     }
 
-    /** Minuit — celui du jour donné, ou celui d'aujourd'hui. */
-    private function debutDuJour(?\DateTimeImmutable $quand = null): \DateTimeImmutable
+    /**
+     * Minuit à l'établissement, en UTC comme les ventes — celui du jour donné, ou celui d'aujourd'hui.
+     *
+     * ⚠ PAS `setTime(0, 0)`, QUI DONNE MINUIT UTC. Le jour du parrainage commençait à 01:00 ou 02:00
+     * à Paris : un achat de 00:30 comptait comme « d'avant » et refusait un vrai filleul (mesuré le
+     * 07/10/2026, `ReferralTest`).
+     */
+    private function debutDuJour(Etablissement $etablissement, ?\DateTimeImmutable $quand = null): \DateTimeImmutable
     {
-        return ($quand ?? new \DateTimeImmutable())->setTime(0, 0);
+        return Etablissement::instantLocal($etablissement, Etablissement::jourCivil($etablissement, $quand)->format('Y-m-d') . ' 00:00');
     }
 
     private function totalAchete(

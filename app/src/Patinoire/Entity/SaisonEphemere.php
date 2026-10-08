@@ -242,7 +242,7 @@ class SaisonEphemere
         // Le listener prenait `today`, minuit UTC : entre minuit a Paris et minuit UTC, la vente restait
         // ouverte le lendemain du dernier jour et fermee le premier jour. Mesure le 07/10/2026
         // (`EphemeralSeasonSaleWindowTest`).
-        $jour = $date->setTimezone(new \DateTimeZone($this->etablissement?->getFuseauHoraire() ?? 'Europe/Paris'))->format('Y-m-d');
+        $jour = Etablissement::jourCivil($this->etablissement, $date)->format('Y-m-d');
 
         return $jour >= $this->fenetreVenteDebut->format('Y-m-d') && $jour <= $this->fenetreVenteFin->format('Y-m-d');
     }

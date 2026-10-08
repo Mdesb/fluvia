@@ -339,12 +339,21 @@ class Etablissement
      *
      * ⚠ `new \DateTimeImmutable('today')` donne le jour UTC : de 00:00 à 01:00 ou 02:00 à Paris, la
      * veille. Mesuré le 07/10/2026 (`MembershipLocalDayTest`).
+     *
+     * ⚠ UNE DATE CIVILE (00:00:00 PILE) EST DÉJÀ UN JOUR, ET SE REND TELLE QUELLE. La convertir la
+     * relisait la veille à l'ouest de Greenwich : 2026-01-01 à 00:00 UTC, c'est 20:00 le 31/12 en
+     * Martinique (mesuré le 07/10/2026, `CivilDayTest`). Limite : un instant tombé à 00:00:00.000000
+     * pile à l'heure du serveur est pris pour une date ; à l'est de Greenwich c'est le même jour, à
+     * l'ouest il est lu le lendemain pendant cette seule seconde.
      */
     public static function jourCivil(?self $etablissement, ?\DateTimeImmutable $instant = null): \DateTimeImmutable
     {
-        $fuseau = new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris');
+        $instant ??= new \DateTimeImmutable();
+        if ($instant->format('H:i:s.u') !== '00:00:00.000000') {
+            $instant = $instant->setTimezone(new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris'));
+        }
 
-        return new \DateTimeImmutable(($instant ?? new \DateTimeImmutable())->setTimezone($fuseau)->format('Y-m-d'));
+        return new \DateTimeImmutable($instant->format('Y-m-d'));
     }
 
     /**

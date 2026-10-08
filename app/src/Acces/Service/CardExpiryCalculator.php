@@ -6,6 +6,7 @@ namespace App\Acces\Service;
 
 use App\Offre\Entity\CarteMultiEntrees;
 use App\Offre\Enum\RechargeValidityMode;
+use App\Organisation\Entity\Etablissement;
 
 /**
  * Calcule la nouvelle échéance de validité d'une carte multi-entrées (RG-CQ1-04, D26 — défaut livré :
@@ -27,13 +28,22 @@ final class CardExpiryCalculator
         CarteMultiEntrees $carte,
         ?\DateTimeImmutable $fenetreFinActuelle,
         \DateTimeImmutable $maintenant,
+        ?Etablissement $etablissement = null,
     ): ?\DateTimeImmutable {
         if ($carte->getRechargeValidityMode() === RechargeValidityMode::Keep && $fenetreFinActuelle !== null) {
             return $fenetreFinActuelle;
         }
 
         $duree = $carte->getValiditeDuree();
+        // ⚠ LA DATE BUTOIR EST LE DERNIER JOUR UTILISABLE, JUSQU'À MINUIT À L'ÉTABLISSEMENT (décision
+        // de Maxime du 07/10/2026). C'est une colonne `date`, rendue à 00:00 UTC : prise telle quelle,
+        // la carte cessait à 01:00 ou 02:00 à Paris le jour butoir, et dès 20:00 la veille en
+        // Martinique (mesuré le 07/10/2026, `CardDeadlineLastDayTest`). L'échéance est donc 23:59:59,
+        // heure locale ; la borne hors ligne la reçoit telle quelle (`validiteFin`).
         $butoir = $carte->getDateButoir();
+        if ($butoir !== null) {
+            $butoir = Etablissement::instantLocal($etablissement, $butoir->format('Y-m-d') . ' 23:59:59');
+        }
 
         if ($duree === null && $butoir === null) {
             return null; // carte illimitée, comportement actuel inchangé.

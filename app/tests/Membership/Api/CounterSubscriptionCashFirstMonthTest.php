@@ -17,6 +17,7 @@ use App\Membership\Enum\StatutEcheanceSepa;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
+use App\Organisation\Entity\Etablissement;
 use App\Recouvrement\DataFixtures\RecouvrementFixtures;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
@@ -246,7 +247,9 @@ final class CounterSubscriptionCashFirstMonthTest extends AccesApiTestCase
         return $em->getRepository(Membership::class)->findBy([
             'payeur' => $payeur->getId(),
             'formule' => $produit->getFormule()?->getId(),
-            'dateSouscription' => new \DateTimeImmutable('today'),
+            // Le jour de Paris (fuseau des fixtures), pas `today` : depuis #295 le contrat est daté du
+            // jour de l'établissement, et de 22:00 à 24:00 UTC ce test ne le trouvait plus (mesuré le 08/10/2026).
+            'dateSouscription' => Etablissement::jourCivil(null),
         ]);
     }
 
