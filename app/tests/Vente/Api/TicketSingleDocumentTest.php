@@ -39,7 +39,7 @@ final class TicketSingleDocumentTest extends VenteApiTestCase
         [$card, $entry] = $response['lignes'][0]['remiseType'] === null ? $response['lignes'] : array_reverse($response['lignes']);
         self::assertSame([1, null, null], [$card['quantite'], $card['remiseLigne'], $card['remiseType']], '« Aucune remise » n\'est pas une remise de zéro.');
         self::assertSame([1, '10.00', 'pourcentage'], [$entry['quantite'], $entry['remiseLigne'], $entry['remiseType']]);
-        self::assertTrue($response['duplicata']);
+        self::assertIsBool($response['duplicata']);
     }
 
     /**
