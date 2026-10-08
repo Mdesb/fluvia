@@ -84,8 +84,11 @@ final class ValiderVenteService
 
     /**
      * @param array<string, array{type?: string, identifiant?: string}> $supportsOverride indexé par id de ligne
+     * @param SettlementEvents|null                                      $retenus          fournis par qui tient une
+     *                                                                                      transaction englobante (le no-show) : les événements y sont
+     *                                                                                      retenus jusqu'à SON commit, au lieu d'être publiés ici
      */
-    public function valider(Vente $vente, array $supportsOverride = []): OperationScellee
+    public function valider(Vente $vente, array $supportsOverride = [], ?SettlementEvents $retenus = null): OperationScellee
     {
         // D7-bis — repart toujours d'une liste vide : un appel précédent qui aurait échoué en cours de
         // route (donc jamais parvenu jusqu'à la publication post-commit ci-dessous) ne doit rien laisser
@@ -242,8 +245,15 @@ final class ValiderVenteService
         // réellement committé (sinon une exception aurait déjà interrompu `valider()` plus haut, et ce
         // point ne serait jamais atteint). Aucun abonné synchrone ne peut donc jamais voir une recharge
         // que la vente finira par annuler.
+        //
+        // Sauf dans la transaction d'un appelant (le no-show, lot 4 du ticket opposable) : ce commit-là
+        // n'est qu'un point de sauvegarde, et c'est l'appelant qui publie après le sien.
         foreach ($this->evenementsEnAttente as $evenement) {
-            $this->eventBus->publish($evenement);
+            if ($retenus !== null) {
+                $retenus->add($evenement);
+            } else {
+                $this->eventBus->publish($evenement);
+            }
         }
         $this->evenementsEnAttente = [];
 

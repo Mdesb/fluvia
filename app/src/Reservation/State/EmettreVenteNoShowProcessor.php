@@ -91,6 +91,9 @@ final class EmettreVenteNoShowProcessor implements ProcessorInterface
         $agent = $utilisateur instanceof Utilisateur ? $utilisateur : null;
 
         $resultat = $strategie->appliquer($data, $agent, $contexte);
+        if ($resultat->conflict) {
+            throw new ConflictHttpException($resultat->motif ?? 'Cette facturation no-show n\'est plus « à facturer ».');
+        }
         if (!$resultat->succes) {
             throw new UnprocessableEntityHttpException($resultat->motif ?? 'Émission de la vente no-show impossible.');
         }
