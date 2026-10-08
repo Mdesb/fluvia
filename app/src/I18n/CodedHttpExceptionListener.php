@@ -15,6 +15,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * `vendor/api-platform/symfony/Bundle/Resources/config/symfony/symfony.php`, v4.3.17), qui
  * remplacerait sinon le corps par son document d'erreur et perdrait `code` et `params`. Même schéma
  * que `EscaladeRequiseExceptionListener`.
+ *
+ * ⚠ Les refus seulement (4xx). Répondre ici court-circuite aussi la journalisation de Symfony
+ * (`ErrorListener::logKernelException`, priorité 0) : une panne (5xx) passe donc par le chemin
+ * ordinaire, journalisée, quitte à perdre son code.
  */
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 32)]
 final class CodedHttpExceptionListener
@@ -22,7 +26,7 @@ final class CodedHttpExceptionListener
     public function __invoke(ExceptionEvent $event): void
     {
         $exception = $event->getThrowable();
-        if (!$exception instanceof CodedHttpException) {
+        if (!$exception instanceof CodedHttpException || $exception->getStatusCode() >= 500) {
             return;
         }
 

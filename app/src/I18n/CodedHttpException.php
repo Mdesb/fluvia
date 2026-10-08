@@ -17,7 +17,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * `COORDINATION/CONTRACT/i18n-traduction.md`.
  *
  * Deux usages : un processeur la LÈVE (`CodedHttpExceptionListener` la met en forme), un contrôleur
- * qui rend déjà une `JsonResponse` appelle `toResponse()`. Le corps est le même.
+ * qui rend déjà une `JsonResponse` appelle `toResponse()`. Le corps est le même. Pour un refus (4xx) :
+ * levée en 5xx, elle suit le chemin ordinaire des pannes.
  */
 final class CodedHttpException extends HttpException
 {

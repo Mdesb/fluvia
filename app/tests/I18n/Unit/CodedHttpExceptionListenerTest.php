@@ -42,12 +42,15 @@ final class CodedHttpExceptionListenerTest extends TestCase
 
     public function testOtherExceptionsAreLeftToTheUsualHandling(): void
     {
-        $event = $this->event(new ConflictHttpException('déjà là'));
+        // Une panne codée aussi : répondre ici la soustrairait à la journalisation.
+        foreach ([new ConflictHttpException('déjà là'), new CodedHttpException(503, 'x.down', 'Indisponible.')] as $exception) {
+            $event = $this->event($exception);
 
-        (new CodedHttpExceptionListener())($event);
+            (new CodedHttpExceptionListener())($event);
 
-        self::assertNull($event->getResponse());
-        self::assertFalse($event->isPropagationStopped());
+            self::assertNull($event->getResponse());
+            self::assertFalse($event->isPropagationStopped());
+        }
     }
 
     private function event(\Throwable $exception): ExceptionEvent
