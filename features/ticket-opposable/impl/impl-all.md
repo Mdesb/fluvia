@@ -23,4 +23,6 @@ Voir le plan, §2 (É1 à É44). Ordre de livraison : règlement d'abord (lots 1
 
 - 07/10 — CP-1 validé par Maxime (Q-C4 comprise, règle du duplicata révisée). Plan écrit par l'agent architecte, puis révisé pour le périmètre avoir. `bin/verifier-derive-schema.sh` mesuré cassé (limite mémoire) avec le jeton `ticket07` : preuve des migrations par exécution de leur SQL. Points P-1 à P-5 remontés à Maxime.
 
+- 08/10 — Lot 4 (É10-É11, #298) : le no-show débite en une seule transaction, sous le verrou de sa facturation puis de la session système, avec une clé HMAC tirée de la facturation ; exonération et vente d'agent prennent le même verrou ; jamais plus remboursé que le total moins les avoirs émis. Aucune migration. Tests rouges puis verts (pile `lot4t07`), relecture adversariale en trois passes (APPROVE). Reste : le marquage SEPA (`prelevement_differe`) ne prend pas le verrou.
+
 ## Journal de Rétropropagation
