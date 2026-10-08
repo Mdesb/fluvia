@@ -15,6 +15,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -39,9 +40,16 @@ final class VerifierChaineFactureProvider implements ProviderInterface
     {
         $profilId = $this->requestStack->getCurrentRequest()?->query->get('profilExploitant');
         $profil = null;
+        $etablissement = $this->contexte->etablissementActif();
         if (\is_string($profilId) && Uuid::isValid($profilId)) {
             $profil = $this->em->getRepository(ProfilExploitant::class)->find(Uuid::fromString($profilId));
-        } elseif (($etablissement = $this->contexte->etablissementActif()) !== null) {
+            // ⚠ D3 : CET IDENTIFIANT VIENT DU CLIENT. Il etait lu tel quel, et n'importe quel lecteur
+            // obtenait la chaine — nombre de factures, anomalies — d'un autre exploitant (mesure du
+            // 08/10). Un profil qui ne couvre pas l'etablissement actif repond comme un profil absent.
+            if (!$profil instanceof ProfilExploitant || $etablissement === null || !$profil->couvre($etablissement)) {
+                throw new NotFoundHttpException('Profil exploitant introuvable.');
+            }
+        } elseif ($etablissement !== null) {
             $profil = $this->comptes->profilPour($etablissement);
         }
 
