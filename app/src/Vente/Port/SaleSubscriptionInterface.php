@@ -32,9 +32,11 @@ interface SaleSubscriptionInterface
     public function createSubscriptionsFromSale(Vente $vente): void;
 
     /**
-     * LA VENTE EST ANNULÉE : les abonnements de ses lignes sont résiliés avec elle, sans frais, au
-     * motif de l'annulation (décision de Maxime du 07/10). Appelée après le commit de l'avoir, comme
-     * la création ; rejouable, un abonnement déjà résilié est laissé tel quel.
+     * LA VENTE EST ANNULÉE OU REMBOURSÉE EN TOTALITÉ : les abonnements que ses lignes ont créés sont
+     * résiliés avec elle, sans frais, au motif donné (« Vente annulée (…) », « Vente remboursée (…) »)
+     * (décisions de Maxime du 07/10 et du 08/10). Celui qu'elle a seulement payé au comptoir reste
+     * actif, et son premier mois redevient dû. Appelée après le commit de l'avoir, comme la création ;
+     * rejouable, un abonnement déjà résilié est laissé tel quel.
      */
     public function terminateSubscriptionsFromSale(Vente $vente, string $motif): void;
 }
