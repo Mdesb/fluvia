@@ -42,7 +42,7 @@ final class CardExpiryCalculator
         // heure locale ; la borne hors ligne la reçoit telle quelle (`validiteFin`).
         $butoir = $carte->getDateButoir();
         if ($butoir !== null) {
-            $butoir = Etablissement::debutDuJour($etablissement, $butoir->modify('+1 day'))->modify('-1 second');
+            $butoir = Etablissement::instantLocal($etablissement, $butoir->format('Y-m-d') . ' 23:59:59');
         }
 
         if ($duree === null && $butoir === null) {

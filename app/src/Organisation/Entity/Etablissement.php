@@ -357,17 +357,6 @@ class Etablissement
     }
 
     /**
-     * L'instant, dans le fuseau du serveur, où commence ce jour civil à l'établissement : minuit local.
-     * C'est la borne à comparer aux colonnes `datetime`, qui sont en heure du serveur.
-     */
-    public static function debutDuJour(?self $etablissement, \DateTimeImmutable $jour): \DateTimeImmutable
-    {
-        $fuseau = new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris');
-
-        return (new \DateTimeImmutable($jour->format('Y-m-d'), $fuseau))->setTimezone(new \DateTimeZone(date_default_timezone_get()));
-    }
-
-    /**
      * L'instant UTC d'une heure murale de l'établissement (« AAAA-MM-JJ HH:MM »), Europe/Paris à
      * défaut. UTC parce que Doctrine stocke l'heure de l'objet telle quelle, sans conversion.
      *

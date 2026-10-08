@@ -211,7 +211,7 @@ final readonly class ReferralService
     }
 
     /**
-     * Minuit à l'établissement, en heure du serveur — celui du jour donné, ou celui d'aujourd'hui.
+     * Minuit à l'établissement, en UTC comme les ventes — celui du jour donné, ou celui d'aujourd'hui.
      *
      * ⚠ PAS `setTime(0, 0)`, QUI DONNE MINUIT UTC. Le jour du parrainage commençait à 01:00 ou 02:00
      * à Paris : un achat de 00:30 comptait comme « d'avant » et refusait un vrai filleul (mesuré le
@@ -219,7 +219,7 @@ final readonly class ReferralService
      */
     private function debutDuJour(Etablissement $etablissement, ?\DateTimeImmutable $quand = null): \DateTimeImmutable
     {
-        return Etablissement::debutDuJour($etablissement, Etablissement::jourCivil($etablissement, $quand));
+        return Etablissement::instantLocal($etablissement, Etablissement::jourCivil($etablissement, $quand)->format('Y-m-d') . ' 00:00');
     }
 
     private function totalAchete(
