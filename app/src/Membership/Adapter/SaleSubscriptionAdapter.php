@@ -6,8 +6,10 @@ namespace App\Membership\Adapter;
 
 use App\Crm\Entity\Client;
 use App\Crm\Service\BeneficiaryResolver;
+use App\Membership\Entity\EcheanceSepa;
 use App\Membership\Entity\Membership;
 use App\Membership\Enum\MembershipStatus;
+use App\Membership\Enum\StatutEcheanceSepa;
 use App\Membership\Repository\SubscriptionRepository;
 use App\Membership\Service\DemanderResiliationHandler;
 use App\Membership\Service\SouscriptionAbonnementHandler;
@@ -59,18 +61,51 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
     }
 
     /**
-     * Les abonnements des lignes de la vente annulée sont résiliés avec elle : celui que la caisse a
-     * créé, celui qu'elle a relié au comptoir (#288), celui de la vente en ligne. Sans quoi il resterait
-     * un abonnement fantôme, son mandat et ses prélèvements (décision de Maxime du 07/10).
+     * Les abonnements que les lignes de la vente défaite ont CRÉÉS sont résiliés avec elle : celui de
+     * la caisse, celui de la vente en ligne. Sans quoi il resterait un abonnement fantôme, son mandat
+     * et ses prélèvements (décision de Maxime du 07/10).
+     *
+     * ⚠ PAS CELUI QU'ELLE A SEULEMENT PAYÉ (décision de Maxime du 08/10). Souscrit à part au comptoir
+     * puis relié à la vente de son premier mois (#288), il reste actif : une erreur de saisie obligeait
+     * à tout refaire, mandat compris. On lève le lien et le premier mois redevient dû.
      */
     public function terminateSubscriptionsFromSale(Vente $vente, string $motif): void
     {
         foreach ($vente->getLignes() as $ligne) {
-            $abonnement = $this->abonnements->findOneBySourceSaleLine($ligne->getId());
-            if ($abonnement instanceof Membership) {
-                $this->resiliations->terminateForCancelledSale($abonnement, $motif);
+            $cree = $this->abonnements->findOneBySourceSaleLine($ligne->getId());
+            if ($cree instanceof Membership) {
+                $this->resiliations->terminateForCancelledSale($cree, $motif);
+            }
+            $paye = $this->abonnements->findOneBy(['firstMonthSaleLineId' => $ligne->getId()]);
+            if ($paye instanceof Membership) {
+                $this->releaseFirstMonth($paye);
             }
         }
+    }
+
+    /**
+     * Le premier mois n'est plus payé : le lien est levé, pour qu'une nouvelle vente s'y relie (#288),
+     * et l'échéance du premier mois redevient à venir. C'est la première de l'échéancier, que l'écran
+     * annule une fois le mois encaissé (`firstInstalmentAtCounter.js`). Si aucune échéance de cette
+     * date n'est plus vivante, on en repose une du même montant, prélevée comme les autres ; l'annulée
+     * reste comme trace, car une échéance annulée ne revient pas. Rien n'est reposé si l'écran ne
+     * l'avait pas annulée, ni si l'abonnement n'est plus actif.
+     */
+    private function releaseFirstMonth(Membership $abonnement): void
+    {
+        $abonnement->setFirstMonthSaleLineId(null);
+        $echeances = $this->em->getRepository(EcheanceSepa::class)->findBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
+        $premiere = $echeances[0] ?? null;
+        $vivantes = array_filter($echeances, static fn (EcheanceSepa $e): bool => $e->getDateProgrammee() == $premiere?->getDateProgrammee()
+            && $e->getStatut() !== StatutEcheanceSepa::Annulee);
+        if ($premiere instanceof EcheanceSepa && $vivantes === [] && $abonnement->getStatut() === MembershipStatus::Actif) {
+            $this->em->persist((new EcheanceSepa())
+                ->setAbonnement($abonnement)
+                ->setDateProgrammee($premiere->getDateProgrammee())
+                ->setMontantCentimes($premiere->getMontantCentimes())
+                ->setStatut(StatutEcheanceSepa::AVenir));
+        }
+        $this->em->flush();
     }
 
     /**
@@ -100,7 +135,8 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             // Une ligne ne crée qu'UN abonnement. `sourceSaleLineId` est UNIQUE en base (filet
             // ultime) ; court-circuit ici pour ne pas relancer une souscription complète si cette
             // méthode est rejouée (reprise explicite après un échec, cf. docblock de classe).
-            if ($this->abonnements->findOneBySourceSaleLine($ligne->getId()) !== null) {
+            if ($this->abonnements->findOneBySourceSaleLine($ligne->getId()) !== null
+                || $this->abonnements->findOneBy(['firstMonthSaleLineId' => $ligne->getId()]) !== null) {
                 continue;
             }
 
@@ -152,7 +188,7 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             // retrouvé, puis doublé (mesuré le 08/10/2026, `CounterSubscriptionCashFirstMonthTest`).
             $criteres = [
                 'payeur' => $payeur, 'formule' => $formule, 'etablissement' => $etablissement,
-                'statut' => MembershipStatus::Actif, 'sourceSaleLineId' => null,
+                'statut' => MembershipStatus::Actif, 'sourceSaleLineId' => null, 'firstMonthSaleLineId' => null,
                 'dateSouscription' => Etablissement::jourCivil($etablissement, $vente->getDate()),
             ];
             if ($designe instanceof Client) {
@@ -160,7 +196,8 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             }
             $dejaSouscrit = $this->abonnements->findOneBy($criteres);
             if ($dejaSouscrit instanceof Membership) {
-                $dejaSouscrit->setSourceSaleLineId($ligne->getId());
+                // Payé, pas créé par cette vente : l'annuler ne le résiliera pas (décision du 08/10).
+                $dejaSouscrit->setFirstMonthSaleLineId($ligne->getId());
                 // ⚠ UN SEUL ACCÈS : CELUI DE L'ABONNEMENT. Une ligne nominative émet aussi son billet,
                 // avec un droit SANS fin de validité (mesuré le 07/10) : il ouvrirait encore après une
                 // résiliation ou un impayé. On le révoque, comme une annulation le ferait.

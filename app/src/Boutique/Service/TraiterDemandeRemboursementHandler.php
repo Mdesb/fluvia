@@ -40,6 +40,8 @@ final class TraiterDemandeRemboursementHandler
             ->setDateTraitement(new \DateTimeImmutable())
             ->setTraitePar($operateur);
         $this->em->flush();
+        // Après la demande close : un échec ici ne la laisse pas ouverte, prête à rembourser deux fois.
+        $this->contrePassation->resilierSiRembourseeEnTotalite($vente, 'Demande en ligne : ' . $demande->getMotif());
 
         return $avoir;
     }
