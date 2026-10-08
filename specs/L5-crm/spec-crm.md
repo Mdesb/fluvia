@@ -82,6 +82,8 @@ l'UI **masque** ce qui n'est pas autorisé (`RG-SOCLE-04`). Module de droits : *
   recharge peut le réactiver selon les règles d'échéance **paramétrées par établissement** : recharge
   autorisée (avec nouvelle échéance calculée) ou interdite (caisse bloque avec motif affiché) — décision
   actée « Recharge d'un PMV expiré » (US-L5-06). Le comportement retenu est journalisé sur le mouvement.
+  L'échéance est le dernier jour utilisable, au jour de l'établissement du client : dès le lendemain, le
+  débit est refusé, sans attendre la tâche quotidienne qui passe le statut à « expiré » (08/10/2026).
 - **RG-M4-05** — Un **segment dynamique** est réévalué en continu ; l'entrée/sortie d'un client est
   automatique selon ses critères. *(Non implémentée dans ce lot, cf. §2 Exclu — rappelée pour cohérence
   avec le cahier détaillé.)*

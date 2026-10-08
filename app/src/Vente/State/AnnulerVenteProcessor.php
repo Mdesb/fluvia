@@ -89,7 +89,7 @@ final class AnnulerVenteProcessor implements ProcessorInterface
 
         // Après le commit de l'avoir, comme la création à la validation : l'abonnement que cette
         // vente a créé est résilié avec elle (décision de Maxime du 07/10).
-        $this->abonnements->terminateSubscriptionsFromSale($data, $motif);
+        $this->abonnements->terminateSubscriptionsFromSale($data, sprintf('Vente annulée (%s)', $motif));
 
         return $this->reponse($avoir);
     }
