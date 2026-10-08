@@ -3,6 +3,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { payFirstInstalmentAtCounter } from './firstInstalmentAtCounter.js'
+import { pendingIntent } from './paymentIntent.js'
+import { ApiError } from './client.js'
 
 // Chaque appel est noté ; `pannes[nom]` le fait échouer. `/valider` scelle AVANT de pouvoir répondre
 // en erreur (G-5 : l'abonnement est créé après le commit) — sauf `scelle: false`.
@@ -79,4 +81,62 @@ test('validation puis relecture en échec : l’écran ne conclut pas, il fait v
   const message = await payFirstInstalmentAtCounter(api, parametres)
   assert.match(message, /AVANT tout nouvel encaissement/)
   assert.ok(!api.appels.includes('annulerEcheanceSepa'))
+})
+
+// ── LE RÈGLEMENT GARDE SA CLÉ JUSQU'À UNE ISSUE DÉFINITIVE (G-2 du ticket opposable) ───────────
+//
+// `payer` répond ce qu'on lui dicte, dans l'ordre ; les corps envoyés sont notés.
+function serveurReglement(...reponses) {
+  const api = serveur()
+  api.corps = []
+  api.payer = (vente, corps) => {
+    api.appels.push('payer')
+    api.corps.push(corps)
+    const r = reponses.shift()
+    return r instanceof Error ? Promise.reject(r) : Promise.resolve(r)
+  }
+  return api
+}
+const memoire = () => {
+  const m = new Map()
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }
+}
+const sansAttente = { pause: async () => {} }
+
+test('un délai dépassé se rejoue avec la même clé : le premier mois n\'est encaissé qu\'une fois', async () => {
+  const api = serveurReglement(new ApiError('Délai.', 0, null), { reglementEnregistre: true })
+  const message = await payFirstInstalmentAtCounter(api, parametres, { storage: memoire(), settleOptions: sansAttente })
+  assert.equal(message, null)
+  assert.equal(api.corps.length, 2)
+  assert.match(api.corps[0].cleIdempotence, /^[0-9a-f-]{36}$/)
+  assert.deepEqual(api.corps[1], api.corps[0])
+})
+
+test('une issue inconnue ne fait pas reprendre l\'encaissement : rien validé, échéance gardée, la clé reste pour la caisse', async () => {
+  const stockage = memoire()
+  const api = serveurReglement(new ApiError('Le terminal n\'a pas rendu d\'issue.', 409, { code: 'payment_outcome_unknown', tentative: { id: 't1' } }))
+  const message = await payFirstInstalmentAtCounter(api, parametres, { storage: stockage, settleOptions: sansAttente })
+  assert.doesNotMatch(message, /reprenez-la/)
+  assert.match(message, /ne l'encaissez pas une seconde fois/)
+  for (const geste of ['valider', 'annulerEcheanceSepa']) assert.ok(!api.appels.includes(geste), geste)
+  assert.equal(pendingIntent(stockage, 'v1')?.body.cleIdempotence, api.corps[0].cleIdempotence)
+})
+
+test('un refus reste un refus : l\'abonnement est souscrit, l\'échéance sera prélevée, la clé est oubliée', async () => {
+  const stockage = memoire()
+  const api = serveurReglement(new ApiError('Moyen non autorisé.', 422, {}))
+  const message = await payFirstInstalmentAtCounter(api, parametres, { storage: stockage, settleOptions: sansAttente })
+  assert.match(message, /Le règlement a été refusé/)
+  assert.equal(pendingIntent(stockage, 'v1'), null)
+})
+
+test('un règlement sans issue attend dans l\'onglet : la souscription n\'en ouvre pas un second', async () => {
+  const stockage = memoire()
+  const ancien = serveurReglement(new ApiError('Le terminal n\'a pas rendu d\'issue.', 409, { code: 'payment_outcome_unknown' }))
+  await payFirstInstalmentAtCounter(ancien, parametres, { storage: stockage, settleOptions: sansAttente })
+
+  const api = serveurReglement({ reglementEnregistre: true })
+  const message = await payFirstInstalmentAtCounter(api, parametres, { storage: stockage, settleOptions: sansAttente })
+  assert.match(message, /attend encore son issue/)
+  assert.deepEqual(api.appels, [])
 })

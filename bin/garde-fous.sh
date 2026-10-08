@@ -543,6 +543,20 @@ if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
     fi
 fi
 
+# LES CHEMINS D'ARGENT DU FRONTAL, TESTÉS HORS DU NAVIGATEUR (ticket opposable, lot 3).
+#
+# `src/api/*.test.js` : l'ordre des appels de la souscription au comptoir (#284) et l'intention de
+# règlement (G-2 : une clé gardée jusqu'à l'issue, jamais « réessayez »), contre un serveur en
+# mémoire. `node:test` est fourni par Node : rien à installer. Les fichiers sont nommés un à un —
+# un dossier passé à `node --test` ne se lit pas pareil d'une version de Node à l'autre.
+if ls "$RACINE"/frontend/src/api/*.test.js >/dev/null 2>&1; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Chemins d'argent du frontal (node --test)" sh -c "cd '$RACINE/frontend' && node --test src/api/*.test.js"
+    else
+        ignorer "Chemins d'argent du frontal" "« node » indisponible ici."
+    fi
+fi
+
 # ── DEUX CONTROLES QUE LE PUSH EXIGEAIT ET QUE CE LANCEUR NE FAISAIT PAS TOURNER ────────────────
 #
 # `hooks/pre-receive` appelle sept scripts ; ce fichier n'en appelait que cinq. Manquaient

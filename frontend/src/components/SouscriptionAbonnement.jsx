@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ClientPicker, { nomClient } from './ClientPicker.jsx'
 import SignaturePad from './SignaturePad.jsx'
-import { api, membres } from '../api/client.js'
+import { api, etablissementStore, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { euros, libelleProduit, prixIndicatif, typeTarifId } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
@@ -284,7 +284,7 @@ export default function SouscriptionAbonnement({
         moyen: moyenSel,
         montant: Number(montantComptant).toFixed(2),
         prixForce: comptantExigeForcage,
-      }),
+      }, { establishment: etablissementStore.get() }),
     [produit, session, payeur, adherent, moyenSel, montantComptant, comptantExigeForcage],
   )
 
