@@ -418,7 +418,7 @@ class DroitAcces
     /**
      * Ce droit ouvre-t-il cet espace ?
      *
-     * Vide = ouvre tout : voir le docbloc de la propriété. La comparaison porte sur la
+     * Vide = n'ouvre rien, sauf exemption : voir le docbloc de la propriété. La comparaison porte sur la
      * représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
      * comparaison stricte d'objets distinguerait à tort (D58).
      */
@@ -430,8 +430,12 @@ class DroitAcces
         // ⚠ Ceci ne dit rien de la VALIDITÉ du billet, seulement des portes qu'il ouvre (D86). Un
         // billet vendu est toujours connu du contrôle d'accès : un agent peut le contrôler à la
         // main là où il n'y a pas de matériel, et cette méthode n'est pas sur ce chemin-là.
+        //
+        // ⚠ Et un type exempté n'ouvre que les portes de SON établissement : sans zone, la
+        // réservation ou le badge du personnel d'un client ouvrait les portes de tous les autres.
         if ($this->authorisedSpaces->isEmpty()) {
-            return in_array($this->sourceType, self::TYPES_EXEMPTES_DE_ZONE, true);
+            return in_array($this->sourceType, self::TYPES_EXEMPTES_DE_ZONE, true)
+                && $this->isOwnEstablishment($space->getEtablissement());
         }
 
         foreach ($this->authorisedSpaces as $autorise) {
@@ -441,5 +445,30 @@ class DroitAcces
         }
 
         return false;
+    }
+
+    /**
+     * Ce droit vaut-il sur ce site ? Sur le sien, ou là où une zone déclarée l'ouvre. Ailleurs, son
+     * support est inconnu. Ce que vaut une carte sur les autres sites d'un groupe est un autre
+     * chantier (E7).
+     */
+    public function isValidAt(Etablissement $site): bool
+    {
+        if ($this->isOwnEstablishment($site)) {
+            return true;
+        }
+        foreach ($this->authorisedSpaces as $autorise) {
+            if ((string) $autorise->getEtablissement()?->getId() === (string) $site->getId()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isOwnEstablishment(?Etablissement $site): bool
+    {
+        return $site !== null && $this->etablissement !== null
+            && (string) $site->getId() === (string) $this->etablissement->getId();
     }
 }
