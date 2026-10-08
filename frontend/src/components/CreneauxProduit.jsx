@@ -92,7 +92,8 @@ const OUVERTURE_VIDE = {
   jusquA: '',
 }
 
-export default function CreneauxProduit({ produitId, droits = [], peutModifier = false }) {
+// `onChange` : prévenu après chaque écriture, pour que la fiche relise ce qui manque à la publication.
+export default function CreneauxProduit({ produitId, droits = [], peutModifier = false, onChange }) {
   const [activites, setActivites] = useState(null)
   const [ressources, setRessources] = useState(null)
   const [creneaux, setCreneaux] = useState(null)
@@ -236,6 +237,7 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
       else delete champs.timedEntry
       await api.majProduit(produitId, { champsPerso: champs })
       setTimedEntry(valeur)
+      onChange?.()
       setSucces(valeur
         ? 'La boutique demandera un horaire avant l’ajout au panier.'
         : 'La boutique vend ce produit sans horaire à choisir.')
@@ -256,6 +258,7 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
       await api.majActiviteReservation(rattachement, { produitTarifReference: `/api/produits/${produitId}` })
       setRattachement('')
       await charger()
+      onChange?.()
       setSucces('Les créneaux de cette activité sont désormais vendus sous ce produit.')
     } catch (err) {
       setErreur(err?.message || 'Le rattachement a échoué.')
@@ -272,6 +275,7 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
       // `null` DÉTACHE — un champ absent laisserait la valeur en place (cf. `client.js`).
       await api.majActiviteReservation(activite.id, { produitTarifReference: null })
       await charger()
+      onChange?.()
       setSucces('Activité détachée : ses créneaux ne se vendent plus sous ce produit.')
     } catch (err) {
       setErreur(err?.message || 'Le détachement a échoué.')
@@ -315,6 +319,7 @@ export default function CreneauxProduit({ produitId, droits = [], peutModifier =
       }
       await api.creerCreneau(corps)
       await charger()
+      onChange?.()
       setFormulaireOuvert(false)
       setOuverture({ ...OUVERTURE_VIDE, ressource: ouverture.ressource })
     } catch (err) {
