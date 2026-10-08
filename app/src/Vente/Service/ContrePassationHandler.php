@@ -72,7 +72,11 @@ final class ContrePassationHandler
     private function annulerSousVerrou(Vente $vente, string $motif, Utilisateur $auteur): Avoir
     {
         $this->exigerValidee($vente);
-        $avoir = $this->creerAvoir($vente, $vente->getTotal(), $motif, $auteur, 'annulation');
+        // Après des remboursements partiels, l'annulation n'émet que le reste (É11 du ticket opposable) —
+        // un avoir nul si tout a été rendu (ou plus, par l'ancien code) : il annule la vente et ses
+        // billets, il ne rend plus rien.
+        $montant = $this->calc->decimal(max(0, $this->calc->centimes($vente->getTotal()) - $this->dejaRembourse($vente)));
+        $avoir = $this->creerAvoir($vente, $montant, $motif, $auteur, 'annulation');
 
         // Annulation après impression : dévalidation du support émis côté Accès (US-L2-09).
         if ($vente->isImprime()) {
@@ -82,7 +86,7 @@ final class ContrePassationHandler
             $avoir->setSupportInvalide(true);
         }
 
-        $this->recrediterPmv($vente, $vente->getTotal());
+        $this->recrediterPmv($vente, $montant);
         $vente->setStatut(StatutVente::Annulee);
 
         return $avoir;
@@ -92,9 +96,18 @@ final class ContrePassationHandler
     {
         $this->exigerValidee($vente);
 
-        $montantAvoir = $montant !== null ? number_format((float) $montant, 2, '.', '') : $vente->getTotal();
-        if ($this->calc->centimes($montantAvoir) <= 0 || $this->calc->centimes($montantAvoir) > $this->calc->centimes($vente->getTotal())) {
-            throw new UnprocessableEntityHttpException('Montant de remboursement invalide (0 < montant ≤ total).');
+        // JAMAIS PLUS QUE CE QUI RESTE (É11) : le plafond était le total, à chaque remboursement — deux
+        // remboursements de 30,00 sur une vente de 45,00 rendaient 60,00. Sans montant : le reste.
+        $deja = $this->dejaRembourse($vente);
+        $reste = $this->calc->centimes($vente->getTotal()) - $deja;
+        $montantAvoir = $montant !== null ? number_format((float) $montant, 2, '.', '') : $this->calc->decimal($reste);
+        if ($this->calc->centimes($montantAvoir) <= 0 || $this->calc->centimes($montantAvoir) > $reste) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Montant de remboursement invalide : il reste %s € remboursables sur cette vente (total %s €, déjà remboursé %s €).',
+                $this->calc->decimal(max(0, $reste)),
+                $vente->getTotal(),
+                $this->calc->decimal($deja),
+            ));
         }
 
         $avoir = $this->creerAvoir($vente, $montantAvoir, $motif, $auteur, 'remboursement');
@@ -128,6 +141,19 @@ final class ContrePassationHandler
         if ($credit > 0) {
             $this->pmv->crediter($clientId, $this->calc->decimal($credit), $vente->getId(), 'remboursement_vente');
         }
+    }
+
+    /**
+     * Ce que les avoirs de la vente ont déjà rendu, en centimes. Lu sous le verrou de la vente
+     * (`sousVerrou()`), que prend toute contre-passation : une lecture simple suffit, son instantané
+     * (fixé à la première lecture simple de la transaction) date d'après l'attente du verrou.
+     */
+    private function dejaRembourse(Vente $vente): int
+    {
+        return $this->calc->centimes((string) $this->em->getConnection()->fetchOne(
+            'SELECT COALESCE(SUM(montant), 0) FROM vente_avoir WHERE vente_origine_id = UNHEX(:v)',
+            ['v' => bin2hex($vente->getId()->toBinary())],
+        ));
     }
 
     private function creerAvoir(Vente $vente, string $montant, string $motif, Utilisateur $auteur, string $nature): Avoir

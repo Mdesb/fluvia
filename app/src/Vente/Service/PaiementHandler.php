@@ -35,8 +35,9 @@ use Symfony\Component\Uid\Uuid;
  *
  * Seul, il n'écrit rien avant l'effet. Le chemin de l'écran passe donc par `SettlementCoordinator`,
  * qui écrit une TENTATIVE avant de l'appeler, l'appelle dans une transaction (ou le terminal hors
- * transaction) et publie après le commit. Appelé directement — synchronisation hors ligne (Q-A2),
- * no-show (lot 4) —, il garde ses limites d'avant :
+ * transaction) et publie après le commit. Le no-show l'appelle dans sa propre unité, sérialisée sur
+ * sa facturation, avec une clé qui en est tirée (`DebitPmvStrategie`, lot 4). Appelé directement par la
+ * synchronisation hors ligne (Q-A2), il garde ses limites d'avant :
  *
  * 1. **Deux appels SIMULTANÉS avec la même clé** passent tous deux la recherche et sollicitent tous
  *    deux le TPE ou le PMV ; l'index unique refuse le second au `flush()`, après son effet.
