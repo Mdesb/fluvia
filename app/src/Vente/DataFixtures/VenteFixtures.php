@@ -9,6 +9,7 @@ use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Enum\EtatCaisse;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Categorie;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\Promotion;
@@ -16,6 +17,7 @@ use App\Offre\Entity\Saison;
 use App\Offre\Entity\Stock;
 use App\Offre\Entity\TypeProduit;
 use App\Offre\Entity\TypeTarif;
+use App\Offre\Enum\AxeCategorie;
 use App\Offre\Enum\StatutProduit;
 use App\Offre\Enum\TypePromotion;
 use App\Organisation\Entity\Etablissement;
@@ -131,6 +133,9 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
         $typeEntree = $manager->getRepository(TypeProduit::class)->findOneBy(['code' => OffreFixtures::TYPE_ENTREE]);
         $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
         $saison = $manager->getRepository(Saison::class)->findOneBy(['nom' => OffreFixtures::SAISON]);
+        // La catégorie comptable de l'offre, comme tout produit publié (`PublicationGuard`) : sans elle,
+        // la ligne n'aurait pas de taux de TVA, et la caisse la refuserait avant de regarder le stock (D123).
+        $catCompta = $manager->getRepository(Categorie::class)->findOneBy(['axe' => AxeCategorie::Comptable, 'libelle' => OffreFixtures::CAT_COMPTABLE]);
         if ($typeEntree instanceof TypeProduit && $tarifPlein instanceof TypeTarif && $saison instanceof Saison) {
             $stock = (new Stock())->setType(Stock::TYPE_DEDIE)->setDisponibilite(0);
             $rupture = (new Produit())
@@ -145,6 +150,9 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
                 ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $rupture->addEtablissement($etabA);
+            }
+            if ($catCompta instanceof Categorie) {
+                $rupture->addCategorie($catCompta);
             }
             $manager->persist($rupture);
             $grille = (new GrilleTarifaire())->setProduit($rupture)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('3.00');
@@ -163,6 +171,9 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
                 ->setStatut(StatutProduit::Publie);
             if ($etabA instanceof Etablissement) {
                 $limite->addEtablissement($etabA);
+            }
+            if ($catCompta instanceof Categorie) {
+                $limite->addCategorie($catCompta);
             }
             $manager->persist($limite);
             $grilleUn = (new GrilleTarifaire())->setProduit($limite)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('3.00');

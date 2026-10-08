@@ -9,6 +9,7 @@ use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
@@ -19,8 +20,9 @@ use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Base des tests d'API M2 : schéma recréé et fixtures socle + offre + vente rechargées avant chaque
- * test. Fournit des raccourcis pour authentifier l'admin sur l'établissement A et pour dérouler le
+ * Base des tests d'API M2 : schéma recréé et fixtures socle + offre + compta + vente rechargées avant
+ * chaque test. La compta met la catégorie de l'offre en correspondance (20 %, site A) : sans elle, une
+ * ligne n'a pas de taux de TVA et la caisse la refuse (D123). Fournit des raccourcis pour authentifier l'admin sur l'établissement A et pour dérouler le
  * cycle caisse (ouverture de session, composition de panier, encaissement, validation).
  */
 abstract class VenteApiTestCase extends ApiTestCase
@@ -40,7 +42,7 @@ abstract class VenteApiTestCase extends ApiTestCase
         // la suite complète, et donc une suite que personne ne lançait.
         SchemaDuHarnais::reinitialiser($em);
 
-        foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class] as $classe) {
+        foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class] as $classe) {
             $fixture = $container->get($classe);
             $fixture->load($em);
         }

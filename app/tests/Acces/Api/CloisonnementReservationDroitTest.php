@@ -10,6 +10,7 @@ use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\Entity\Client as CrmClient;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
@@ -58,7 +59,7 @@ final class CloisonnementReservationDroitTest extends ApiTestCase
         // la suite complète, et donc une suite que personne ne lançait.
         SchemaDuHarnais::reinitialiser($em);
 
-        foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, CrmFixtures::class, AccesFixtures::class] as $classe) {
+        foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class, CrmFixtures::class, AccesFixtures::class] as $classe) {
             $container->get($classe)->load($em);
         }
 

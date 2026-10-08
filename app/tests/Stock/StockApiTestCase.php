@@ -7,6 +7,7 @@ namespace App\Tests\Stock;
 use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
@@ -38,7 +39,7 @@ abstract class StockApiTestCase extends ApiTestCase
         // la suite complète, et donc une suite que personne ne lançait.
         SchemaDuHarnais::reinitialiser($em);
 
-        foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, StockFixtures::class] as $classe) {
+        foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class, StockFixtures::class] as $classe) {
             $container->get($classe)->load($em);
         }
 

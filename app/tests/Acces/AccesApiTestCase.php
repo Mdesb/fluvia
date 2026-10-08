@@ -15,6 +15,7 @@ use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
@@ -47,7 +48,7 @@ abstract class AccesApiTestCase extends ApiTestCase
         // la suite complète, et donc une suite que personne ne lançait.
         SchemaDuHarnais::reinitialiser($em);
 
-        foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, AccesFixtures::class] as $classe) {
+        foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class, AccesFixtures::class] as $classe) {
             $fixture = $container->get($classe);
             $fixture->load($em);
         }
