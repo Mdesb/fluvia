@@ -32,6 +32,11 @@ use Doctrine\ORM\EntityManagerInterface;
  * de l'encaissement. Y écrire la persistance et la publication aurait dispersé deux responsabilités
  * dans une méthode qui en a déjà quatre, et surtout : l'ordre « écrire puis publier » serait devenu
  * une convention à respecter plutôt qu'une propriété du code.
+ *
+ * **Deux portes, le même ordre** (G-5 du ticket opposable). `consigner()` écrit, vide et annonce seul :
+ * pour qui n'a pas de transaction à lui (synchronisation hors ligne). `record()` persiste sans vider
+ * et retient l'annonce : pour le coordinateur de règlement, qui écrit la trace dans SA transaction et
+ * n'annonce qu'après le commit — un `flush()` ici, au milieu de son unité, l'aurait coupée en deux.
  */
 final class CardRejectionRecorder
 {
@@ -46,6 +51,19 @@ final class CardRejectionRecorder
 
     public function consigner(Vente $vente, string $moyenCode, string $montant, StatutTPE $statut, ?string $refTpe): CardRejection
     {
+        $evenements = new SettlementEvents();
+        $refus = $this->record($vente, $moyenCode, $montant, $statut, $refTpe, $evenements);
+        // Vidé ici, et pas laissé au `flush()` de l'appelant : l'événement part juste après et il
+        // référence cette ligne. Un abonné synchrone qui irait la relire ne doit pas trouver le vide.
+        $this->em->flush();
+        $evenements->publishTo($this->bus);
+
+        return $refus;
+    }
+
+    /** Persiste le refus SANS vider, et retient son annonce : celui qui tient la transaction la publie après le commit. */
+    public function record(Vente $vente, string $moyenCode, string $montant, StatutTPE $statut, ?string $refTpe, SettlementEvents $evenements): CardRejection
+    {
         $refus = new CardRejection();
         $refus->setVente($vente)
             ->setPointDeVente($vente->getPointDeVente())
@@ -57,13 +75,10 @@ final class CardRejectionRecorder
             ->setEtablissement($vente->getEtablissement());
 
         $this->em->persist($refus);
-        // Vidé ici, et pas laissé au `flush()` de l'appelant : l'événement part juste après et il
-        // référence cette ligne. Un abonné synchrone qui irait la relire ne doit pas trouver le vide.
-        $this->em->flush();
 
         $etablissement = $vente->getEtablissement();
         if ($etablissement !== null) {
-            $this->bus->publish(new DomainEvent(
+            $evenements->add(new DomainEvent(
                 self::EVENEMENT,
                 new EventTenant($etablissement->getId()),
                 new EventSubject('CardRejection', (string) $refus->getId()),

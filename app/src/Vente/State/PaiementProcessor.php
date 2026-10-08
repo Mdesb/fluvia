@@ -8,8 +8,8 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\LecteurCorps;
-use App\Vente\Service\PaiementHandler;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Vente\Service\PaymentAttemptConflict;
+use App\Vente\Service\SettlementCoordinator;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 /**
@@ -17,17 +17,21 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  * rendu espèces uniquement, TPE automatique (un refus/timeout n'ajoute rien). Renvoie l'état du reste
  * à payer et, le cas échéant, le statut TPE.
  *
- * Un rejeu (même `cleIdempotence` ou même `id`) rend le règlement déjà enregistré avec
- * `dejaEnregistre: true` et un 200 : rien n'a été créé, rien n'a été encaissé de nouveau.
+ * Un rejeu (même `cleIdempotence` ou même `id`) rend le règlement déjà enregistré — ou le refus du
+ * terminal — avec `dejaEnregistre: true` et un 200 : rien n'a été créé, rien n'a été encaissé de nouveau.
+ *
+ * Une autre tentative tient la vente : 409, `code` = `payment_in_progress` (l'effet est en cours) ou
+ * `payment_outcome_unknown` (le terminal a pu débiter ; rien ne passe avant une déclaration). Un
+ * code et non un message : l'écran doit les distinguer, et le message d'une exception ne traverse
+ * pas toujours la production.
  *
  * @implements ProcessorInterface<Vente, JsonResponse>
  */
 final class PaiementProcessor implements ProcessorInterface
 {
     public function __construct(
-        private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
-        private readonly PaiementHandler $handler,
+        private readonly SettlementCoordinator $coordinateur,
     ) {
     }
 
@@ -35,8 +39,16 @@ final class PaiementProcessor implements ProcessorInterface
     {
         \assert($data instanceof Vente);
 
-        $resultat = $this->handler->encaisser($data, $this->lecteur->corps());
-        $this->em->flush();
+        try {
+            $resultat = $this->coordinateur->settle($data, $this->lecteur->corps());
+        } catch (PaymentAttemptConflict $conflit) {
+            return new JsonResponse([
+                'code' => $conflit->reason,
+                'message' => $conflit->getMessage(),
+                'vente' => (string) $data->getId(),
+                'reglementEnregistre' => false,
+            ], JsonResponse::HTTP_CONFLICT);
+        }
 
         $paiement = $resultat['paiement'];
         $statutTpe = $resultat['statutTPE'];
