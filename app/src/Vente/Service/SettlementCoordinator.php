@@ -41,7 +41,8 @@ use Symfony\Component\Uid\Uuid;
  * terminal, et la seule sortie est la déclaration du caissier ({@see declare()}, Q-A1, D122).
  *
  * La synchronisation hors ligne et le no-show appellent `PaiementHandler::encaisser()` directement,
- * sans tentative : ce lot ne les change pas (Q-A2 ; le no-show a son lot, le 4).
+ * sans tentative : la première est inchangée (Q-A2) ; le no-show se sérialise sur sa facturation, dans
+ * une seule transaction (`DebitPmvStrategie`, lot 4).
  *
  * @phpstan-import-type Attempt from PaymentAttemptStore
  */
