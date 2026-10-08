@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 /**
  * POST /boutique/demandes-remboursement/{id}/accepter (RG-M3-15, CA-17) : déclenche un avoir M2 via
- * `ContrePassationHandler` (réutilisé). Corps : { "montant"?: string } (défaut = total).
+ * `ContrePassationHandler` (réutilisé). Corps : { "montant"?: string } (défaut = ce qui reste).
  *
  * @implements ProcessorInterface<DemandeRemboursement, JsonResponse>
  */
