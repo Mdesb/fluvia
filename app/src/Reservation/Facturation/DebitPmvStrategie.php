@@ -81,7 +81,7 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
         }
 
         $session = $this->sessionSysteme->sessionSysteme($etablissement);
-        $avant = [$facturation->getStatut(), $facturation->getVenteRattachee()];
+        $avant = [$facturation->getStatut(), $facturation->getVenteRattachee(), $this->em->getUnitOfWork()->getScheduledEntityInsertions()];
         $evenements = new SettlementEvents();
         $vente = null;
         try {
@@ -90,6 +90,11 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
                 if ($statut !== StatutFacturationNoShow::AFacturer) {
                     return ResultatFacturationNoShow::alreadySettled($statut);
                 }
+                // Puis la session système de l'établissement, que partagent tous ses no-shows : le numéro
+                // de leurs ventes (un `COUNT`) et le dernier maillon de leur chaîne NF525 se lisent par
+                // lecture simple. Sans ce verrou, deux débits simultanés de l'établissement prenaient le
+                // même numéro, et le second échouait au `flush()`. L'instantané se prend après l'attente.
+                $this->em->getConnection()->executeQuery('SELECT id FROM caisse_session WHERE id = UNHEX(:s) FOR UPDATE', ['s' => bin2hex($session->getId()->toBinary())]);
 
                 $vente = $this->venteHandler->creerVente(
                     $session,
@@ -117,10 +122,17 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
             });
         } catch (\Throwable $e) {
             $this->forget($facturation, $avant, $vente);
+            if ($e->getMessage() === PaiementHandler::AUTRE_VENTE) {
+                return new ResultatFacturationNoShow(false, 'La clé de débit de cette facturation a déjà servi, sur une autre vente : '
+                    . 'elle a déjà été débitée une fois, et ne le sera pas une seconde. Rien n\'a été débité.', true);
+            }
+            $http = $e instanceof HttpExceptionInterface;
 
-            return new ResultatFacturationNoShow(false, $e instanceof HttpExceptionInterface
-                ? $e->getMessage()
-                : 'Débit PMV impossible : l\'opération a été annulée en entier, rien n\'a été débité.');
+            return new ResultatFacturationNoShow(
+                false,
+                $http ? $e->getMessage() : 'Débit PMV impossible : l\'opération a été annulée en entier, rien n\'a été débité.',
+                $http && $e->getStatusCode() === 409,
+            );
         }
         $evenements->publishTo($this->bus);
 
@@ -131,10 +143,14 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
      * La clé du débit (G-1) : tirée de la facturation, donc la même à chaque relance, et jamais celle
      * de la vente qu'on ouvre. Un HMAC et non l'identifiant : l'API montre celui-ci, et une clé connue
      * pourrait être prise d'avance sur une autre vente (l'index est unique sur toute la table) — le
-     * débit serait alors refusé pour toujours. UUID v8 (RFC 9562), donc jamais nul ni max.
+     * débit serait alors refusé pour toujours. UUID v8 (RFC 9562), donc jamais nul ni max. Sans secret,
+     * la clé se calculerait : on refuse de débiter (la préprod l'exige non vide, `compose.preprod.yaml`).
      */
     private function debitKey(FacturationNoShow $facturation): string
     {
+        if ($this->secret === '') {
+            throw new \LogicException('APP_SECRET est vide : la clé du débit d\'un no-show serait devinable.');
+        }
         $octets = substr(hash_hmac('sha256', 'no-show-debit|' . $facturation->getId()->toRfc4122(), $this->secret, true), 0, 16);
         $octets[6] = \chr((\ord($octets[6]) & 0x0F) | 0x80);
         $octets[8] = \chr((\ord($octets[8]) & 0x3F) | 0x80);
@@ -143,21 +159,23 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
     }
 
     /**
-     * La transaction est annulée, mais l'`EntityManager` garde ce qu'elle avait écrit : la vente, ses
-     * lignes et son règlement, la facturation « facturée ». L'appelant qui `flush()` ensuite y
-     * écrirait une facturation sans vente ni débit. On remet la facturation comme avant, et on oublie
-     * la vente.
+     * La transaction est annulée, mais l'`EntityManager` garde ce que l'unité avait créé ou changé.
+     * L'appelant (l'annulation d'une réservation, la bascule) fait `flush()` ensuite : on remet la
+     * facturation comme avant, et on oublie la vente et ce que l'unité laissait en attente d'insertion
+     * (un maillon NF525, un mouvement du porte-monnaie), qu'il écrirait pour une vente annulée.
      *
-     * @param array{0: StatutFacturationNoShow, 1: Vente|null} $avant
+     * Défensif : aujourd'hui, un refus métier (complément, stock, solde) part avant `setStatut()` et
+     * avant toute insertion en attente, et un `flush()` en échec ferme l'`EntityManager`.
+     *
+     * @param array{0: StatutFacturationNoShow, 1: Vente|null, 2: array<int, object>} $avant
      */
     private function forget(FacturationNoShow $facturation, array $avant, ?Vente $vente): void
     {
         $facturation->setStatut($avant[0]);
         $facturation->setVenteRattachee($avant[1]);
-        if ($vente === null) {
-            return;
-        }
-        foreach ([...$vente->getLignes(), ...$vente->getPaiements(), ...$vente->getSupports(), $vente] as $entite) {
+        $creees = array_diff_key($this->em->getUnitOfWork()->getScheduledEntityInsertions(), $avant[2]);
+        $graphe = $vente === null ? [] : [...$vente->getLignes(), ...$vente->getPaiements(), ...$vente->getSupports(), $vente];
+        foreach ([...$creees, ...$graphe] as $entite) {
             if ($this->em->contains($entite)) {
                 $this->em->detach($entite);
             }

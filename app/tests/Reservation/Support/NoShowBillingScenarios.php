@@ -29,7 +29,7 @@ trait NoShowBillingScenarios
     /**
      * @param array<string, mixed> $entete
      */
-    private function creerFacturationNoShow(object $client, array $entete, ModeFacturationNoShow $mode, string $montant = '10.00'): string
+    private function creerFacturationNoShow(object $client, array $entete, ModeFacturationNoShow $mode, string $montant = '10.00', int $decalageMinutes = 10): string
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
@@ -42,7 +42,7 @@ trait NoShowBillingScenarios
         $em->persist($regle);
         $em->flush();
 
-        $idCreneau = $this->creerCreneauHorsDelai($client, $entete);
+        $idCreneau = $this->creerCreneauHorsDelai($client, $entete, $decalageMinutes);
         $idReservation = $this->reserverGratuit($client, $entete, $idCreneau);
 
         $client->request('POST', '/api/reservation/reservations/' . $idReservation . '/annuler', $entete);

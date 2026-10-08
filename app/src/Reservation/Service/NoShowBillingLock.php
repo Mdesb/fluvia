@@ -17,7 +17,12 @@ use Doctrine\DBAL\Connection;
  * facturation dans sa transaction et relit son statut SOUS ce verrou ; le second attend le premier,
  * puis voit son issue.
  *
- * Ordre des verrous : la facturation d'abord, puis la vente (celui de `ValiderVenteService`).
+ * Ordre des verrous : la facturation d'abord, puis la session système et la vente.
+ *
+ * ⚠ Un écrivain n'y passe pas encore : le marquage « facturée » d'une remise SEPA
+ * (`ReservationEcheanceSepaSource::marquerCollectees()`, mode `prelevement_differe`), qui choisit ses
+ * échéances par lecture simple, hors de toute transaction. Le fermer demande de tenir la remise dans
+ * une transaction (`GenerationRemiseHandler`, module SEPA) : signalé, hors du lot 4.
  */
 final class NoShowBillingLock
 {

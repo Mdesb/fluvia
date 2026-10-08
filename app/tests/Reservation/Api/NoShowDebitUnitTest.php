@@ -107,6 +107,36 @@ final class NoShowDebitUnitTest extends ReservationApiTestCase
     }
 
     /**
+     * Deux absences d'un même établissement débitées en même temps partagent la session système : le
+     * numéro de leurs ventes et leur chaîne NF525. La seconde attend la première, puis passe avec le
+     * numéro suivant ; sinon elle prenait le même numéro et échouait au `flush()`.
+     */
+    public function testTwoNoShowsOfOneSiteAreDebitedOneAfterTheOther(): void
+    {
+        [$client, $entete, $idA] = $this->adminSurA();
+        $client->disableReboot();
+        $premiere = $this->pendingDebitBilling($client, $entete);
+        $seconde = $this->pendingDebitBilling($client, $entete, 180);
+
+        $autre = $this->settleInOtherProcess(sprintf(self::EMETTRE, $premiere), $entete['auth_bearer'], $idA, []);
+        $this->waitUntilHeld($autre, 'wallet');
+        $minuterie = $this->releaseLater($autre, 2.0);
+        $debut = microtime(true);
+        $statut = $client->request('POST', sprintf(self::EMETTRE, $seconde), $entete + ['json' => []])->getStatusCode();
+        $attente = microtime(true) - $debut;
+        proc_close($minuterie);
+        $issuePremiere = $this->release($autre);
+
+        self::assertSame([201, 201], [$issuePremiere['status'], $statut]);
+        self::assertGreaterThanOrEqual(1.5, $attente, 'La seconde attend la première sur la session système.');
+        self::assertSame(['30.00', 'facturee', 'facturee'], [$this->walletBalance(), $this->billingStatus($premiere), $this->billingStatus($seconde)]);
+        self::assertSame(2, (int) $this->db()->fetchOne(
+            'SELECT COUNT(DISTINCT v.numero) FROM vente_vente v JOIN vente_ligne l ON l.vente_id = v.id WHERE l.note LIKE :n',
+            ['n' => 'No-show (débit PMV automatique)%'],
+        ), 'Deux ventes, deux numéros.');
+    }
+
+    /**
      * La clé du débit vient de la facturation : rouverte (correction en base, reprise de données), elle
      * ne débite pas une seconde fois. Et ce n'est l'identifiant d'aucun objet que l'API montre : qui la
      * devinerait pourrait la prendre d'avance sur une autre vente, et le débit serait refusé pour toujours.
@@ -135,7 +165,7 @@ final class NoShowDebitUnitTest extends ReservationApiTestCase
             ['f' => $this->hex($facturation)],
         );
         $client->request('POST', sprintf(self::EMETTRE, $facturation), $entete + ['json' => []]);
-        self::assertResponseStatusCodeSame(422);
+        self::assertResponseStatusCodeSame(409);
         self::assertSame(['40.00', 1], [$this->walletBalance(), $this->noShowSales()]);
     }
 
@@ -188,10 +218,10 @@ final class NoShowDebitUnitTest extends ReservationApiTestCase
      *
      * @param array<string, mixed> $entete
      */
-    private function pendingDebitBilling(object $client, array $entete): string
+    private function pendingDebitBilling(object $client, array $entete, int $decalageMinutes = 10): string
     {
         $this->setWalletBalance('0.00');
-        $facturation = $this->creerFacturationNoShow($client, $entete, ModeFacturationNoShow::DebitPmv);
+        $facturation = $this->creerFacturationNoShow($client, $entete, ModeFacturationNoShow::DebitPmv, decalageMinutes: $decalageMinutes);
         self::assertSame('a_facturer', $this->billingStatus($facturation));
         $this->setWalletBalance('50.00');
 
