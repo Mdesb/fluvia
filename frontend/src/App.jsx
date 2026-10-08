@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { setVocabulaireLocal } from './api/vocabulaire.js'
+import { applyContextLanguage } from './i18n/index.js'
 import {
   api,
   membres,
@@ -262,10 +263,15 @@ export default function App() {
     // `mot()` est appelee depuis des colonnes de tableau et des titres, pendant le rendu. Charger le
     // vocabulaire APRES afficherait un ecran en langue par defaut, puis le meme ecran en langue du
     // metier -- un clignotement qui donne l'impression que le logiciel hesite sur ses propres termes.
-    setVocabulaireLocal((valide || liste.find((e) => e.id === choisi))?.vocabulaire)
+    const etablissement = valide || liste.find((e) => e.id === choisi)
+    setVocabulaireLocal(etablissement?.vocabulaire)
 
     // /me est désormais appelé avec l'établissement corrigé : capacitesActives correctes dès le 1er rendu.
-    setMe(await api.me())
+    const profil = await api.me()
+    // LA LANGUE AUSSI, AVANT LE PREMIER RENDU CONNECTÉ, pour la même raison que les mots du métier :
+    // la préférence de la personne, sinon celle de l'établissement.
+    applyContextLanguage(profil, etablissement)
+    setMe(profil)
   }, [])
 
   useEffect(() => {
@@ -359,7 +365,9 @@ export default function App() {
   function changerEtablissement(id) {
     // Changer d'etablissement change les mots : sans ca, on garderait le vocabulaire du salon
     // en arrivant sur la piscine, et << praticien >> designerait une ligne d'eau.
-    setVocabulaireLocal(etablissements.find((e) => e.id === id)?.vocabulaire)
+    const etablissement = etablissements.find((e) => e.id === id)
+    setVocabulaireLocal(etablissement?.vocabulaire)
+    applyContextLanguage(me, etablissement)
     setEtabActif(id)
     etablissementStore.set(id)
   }

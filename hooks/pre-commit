@@ -254,6 +254,7 @@ lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
 lancer_front verifier-icones-menu.mjs    "Icones du menu (n45)"
 lancer_front verifier-contrastes.mjs     "Contrastes"
 lancer_front verifier-encre-sur-fond.mjs "Encre sur fond"
+lancer_front verifier-chaines-traduites.mjs "Chaînes traduites (i18n)"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #
