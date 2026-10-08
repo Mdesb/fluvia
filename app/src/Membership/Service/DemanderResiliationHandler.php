@@ -14,6 +14,7 @@ use App\Membership\Enum\MotifInactiviteAccesFitness;
 use App\Membership\Enum\MembershipStatus;
 use App\Membership\Enum\StatutEcheanceSepa;
 use App\Membership\Enum\StatutResiliation;
+use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -86,7 +87,7 @@ final class DemanderResiliationHandler
 
         $resiliation = new Resiliation();
         $resiliation->setAbonnement($abonnement)
-            ->setDateDemande(new \DateTimeImmutable('today'))
+            ->setDateDemande(Etablissement::jourCivil($abonnement->getEtablissement()))
             ->setMotif(sprintf('Vente annulée (%s)', $motifVente))
             ->setMotifLegitime(true)
             ->setPreavisAppliqueJours(0)

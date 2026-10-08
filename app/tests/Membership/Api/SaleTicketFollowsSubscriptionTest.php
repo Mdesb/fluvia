@@ -161,9 +161,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
      */
     public function testATermThatRollsOnLiftsTheTicketEnd(): void
     {
-        // Un mois d'engagement : le tarif de la reconduction doit se résoudre dans la saison des
-        // fixtures, qui finit le 31/12/2026.
-        $this->setTermMode(TermRenewalMode::Suspend, engagementMonths: 1);
+        $this->setTermMode(TermRenewalMode::Suspend);
         [$gold] = $this->sell();
         self::assertNotNull($this->terminalEntry($gold)['validiteFin'], 'Témoin : la formule à terme donne une fin au billet.');
 
@@ -291,14 +289,11 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
         return $handler;
     }
 
-    private function setTermMode(TermRenewalMode $mode, ?int $engagementMonths = null): void
+    private function setTermMode(TermRenewalMode $mode): void
     {
         $formule = $this->entite(Produit::class, ['libelleRecherche' => OffreFixtures::PRODUIT_GOLD])->getFormule();
         self::assertNotNull($formule);
         $formule->setRenouvellement([TermRenewalMode::CLE_FORMULE => $mode->value] + $formule->getRenouvellement());
-        if ($engagementMonths !== null) {
-            $formule->setEngagement(['dureeMin' => $engagementMonths] + ($formule->getEngagement() ?? []));
-        }
         $this->em()->flush();
     }
 
@@ -307,10 +302,12 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
     {
         $em = $this->em();
         $em->clear();
-        $abonnements = $em->getRepository(Membership::class)->findBy(['dateSouscription' => new \DateTimeImmutable('today')]);
-        self::assertCount(1, $abonnements);
+        // Le plus récent, sans « today » : le contrat prend le jour de l'établissement (#295), qui
+        // n'est pas le jour UTC du conteneur de test entre 22:00 et minuit.
+        $abonnement = $em->getRepository(Membership::class)->findOneBy([], ['dateSouscription' => 'DESC']);
+        self::assertNotNull($abonnement?->getSourceSaleLineId(), 'L\'abonnement de la vente du test, relié à sa ligne.');
 
-        return $abonnements[0];
+        return $abonnement;
     }
 
     /** @return array{0: string, 1: ?string} le résultat du passage à la borne de démonstration, et son motif */
