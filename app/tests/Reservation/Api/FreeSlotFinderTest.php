@@ -27,10 +27,14 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * Chaque test fixe donc une situation minuscule et énonce la liste attendue **en toutes lettres**, pas
  * un décompte : un décompte passerait avec les mauvaises heures.
+ *
+ * Les heures écrites ici sont celles de l'établissement (Europe/Paris) : les horaires d'un praticien
+ * sont des heures murales, et les instants stockés sont en UTC.
  */
 final class FreeSlotFinderTest extends ReservationApiTestCase
 {
     private const JOUR = '2026-09-07'; // un lundi
+    private const FUSEAU = 'Europe/Paris';
 
     /**
      * **Le cas qui justifie le battement.**
@@ -129,18 +133,59 @@ final class FreeSlotFinderTest extends ReservationApiTestCase
         self::assertSame([], $this->heures($ressource, $activite), 'Le lundi ne doit rien recevoir.');
     }
 
+    /**
+     * **Un praticien ouvert à 9 h l'est à 9 h de Paris, l'été comme l'hiver.**
+     *
+     * Les horaires étaient posés à l'heure UTC : 9 h devenait 11 h à Paris l'été, 10 h l'hiver, et le
+     * rendez-vous pris sur la proposition était stocké à cette heure-là.
+     */
+    public function testLesHorairesSontALHeureDeLEtablissementEteCommeHiver(): void
+    {
+        [$ressource, $activite] = $this->poser(dureeMinutes: 60, battementMinutes: 0);
+        $this->ouvrir($ressource, jour: 1, de: '09:00', a: '10:00');
+        $finder = static::getContainer()->get(FreeSlotFinder::class);
+        self::assertInstanceOf(FreeSlotFinder::class, $finder);
+
+        foreach (['2026-09-07' => '2026-09-07T07:00:00+00:00', '2026-11-02' => '2026-11-02T08:00:00+00:00'] as $jour => $attendu) {
+            self::assertSame(
+                [$attendu],
+                array_map(static fn (array $c): string => $c['debut']->format(\DATE_ATOM), $finder->findStarts($ressource, $activite, new \DateTimeImmutable($jour), 15)),
+                sprintf('Le %s, 9 h à Paris est %s en UTC.', $jour, $attendu),
+            );
+        }
+    }
+
+    /**
+     * **La journée qu'on lit est celle de Paris** : un rendez-vous de minuit à 1 h (22 h à 23 h UTC la
+     * veille, l'été) occupe bien le praticien ce jour-là.
+     */
+    public function testUnRendezVousAvantDeuxHeuresOccupeLaJourneeDeParis(): void
+    {
+        [$ressource, $activite] = $this->poser(dureeMinutes: 60, battementMinutes: 0);
+        $this->ouvrir($ressource, jour: 1, de: '00:00', a: '02:00');
+        $this->occuper($ressource, $activite, de: '00:00', a: '01:00');
+
+        self::assertSame(['01:00'], $this->heures($ressource, $activite));
+    }
+
     // --- outillage ------------------------------------------------------------------------------
 
-    /** @return list<string> heures de début, au format HH:MM */
+    /** @return list<string> heures de début à Paris, au format HH:MM */
     private function heures(Ressource $ressource, Activite $activite): array
     {
         /** @var FreeSlotFinder $finder */
         $finder = static::getContainer()->get(FreeSlotFinder::class);
 
         return array_map(
-            static fn (array $creneau): string => $creneau['debut']->format('H:i'),
+            static fn (array $creneau): string => $creneau['debut']->setTimezone(new \DateTimeZone(self::FUSEAU))->format('H:i'),
             $finder->findStarts($ressource, $activite, new \DateTimeImmutable(self::JOUR), 15),
         );
+    }
+
+    /** Une heure de Paris le jour du test, en instant UTC : Doctrine stocke l'heure de l'objet telle quelle. */
+    private static function aParis(string $heure): \DateTimeImmutable
+    {
+        return (new \DateTimeImmutable(self::JOUR . ' ' . $heure, new \DateTimeZone(self::FUSEAU)))->setTimezone(new \DateTimeZone('UTC'));
     }
 
     /** @return array{0: Ressource, 1: Activite} */
@@ -149,6 +194,7 @@ final class FreeSlotFinderTest extends ReservationApiTestCase
         $em = $this->em();
         $etablissement = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
         self::assertInstanceOf(Etablissement::class, $etablissement);
+        self::assertSame(self::FUSEAU, $etablissement->getFuseauHoraire(), 'Précondition : les heures de ce fichier sont celles de Paris.');
 
         $ressource = (new Ressource())
             ->setEtablissement($etablissement)
@@ -193,8 +239,8 @@ final class FreeSlotFinderTest extends ReservationApiTestCase
                 ->setEtablissement($ressource->getEtablissement())
                 ->setRessource($ressource)
                 ->setActivite($activite)
-                ->setDebut(new \DateTimeImmutable(self::JOUR . ' ' . $de))
-                ->setFin(new \DateTimeImmutable(self::JOUR . ' ' . $a))
+                ->setDebut(self::aParis($de))
+                ->setFin(self::aParis($a))
                 ->setCapacite(1)
         );
         $em->flush();
@@ -206,8 +252,8 @@ final class FreeSlotFinderTest extends ReservationApiTestCase
         $em->persist(
             (new IndisponibiliteRessource())
                 ->setRessource($ressource)
-                ->setDebut(new \DateTimeImmutable(self::JOUR . ' ' . $de))
-                ->setFin(new \DateTimeImmutable(self::JOUR . ' ' . $a))
+                ->setDebut(self::aParis($de))
+                ->setFin(self::aParis($a))
                 ->setMotif('Déjeuner')
         );
         $em->flush();
