@@ -73,8 +73,11 @@ final class CreerCreneauProcessor implements ProcessorInterface
             \assert($activite instanceof Activite);
         }
 
-        $debut = $this->dateTime($corps['debut'] ?? null, 'debut');
-        $fin = $this->dateTime($corps['fin'] ?? null, 'fin');
+        // EN UTC AVANT D'ÉCRIRE : Doctrine stocke l'heure de l'objet sans la convertir, et la base
+        // tient des instants UTC. « 18:00+02:00 » s'écrivait 18:00, relu 18:00 UTC (20:00 à Paris).
+        $utc = new \DateTimeZone('UTC');
+        $debut = $this->dateTime($corps['debut'] ?? null, 'debut')->setTimezone($utc);
+        $fin = $this->dateTime($corps['fin'] ?? null, 'fin')->setTimezone($utc);
         if ($debut >= $fin) {
             throw new UnprocessableEntityHttpException('Le début du créneau doit être antérieur à la fin.');
         }
