@@ -17,6 +17,7 @@ use App\Vente\Service\PaiementHandler;
 use App\Vente\Service\SettlementEvents;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -47,6 +48,7 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
         private readonly ValiderVenteService $validation,
         private readonly NoShowBillingLock $verrou,
         private readonly EventBus $bus,
+        private readonly LoggerInterface $logger,
         #[Autowire(env: 'APP_SECRET')] private readonly string $secret,
     ) {
     }
@@ -81,7 +83,10 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
         }
 
         $session = $this->sessionSysteme->sessionSysteme($etablissement);
-        $avant = [$facturation->getStatut(), $facturation->getVenteRattachee(), $this->em->getUnitOfWork()->getScheduledEntityInsertions()];
+        // Ce que l'appelant aurait encore en attente s'écrit AVANT l'unité : écrit dedans, le rollback
+        // l'effacerait sans que l'UnitOfWork le sache. (Ses appelants n'ont rien en attente aujourd'hui.)
+        $this->em->flush();
+        $avant =[$facturation->getStatut(), $facturation->getVenteRattachee(), $this->em->getUnitOfWork()->getScheduledEntityInsertions()];
         $evenements = new SettlementEvents();
         $vente = null;
         try {
@@ -127,6 +132,10 @@ final class DebitPmvStrategie implements StrategieFacturationNoShow
                     . 'elle a déjà été débitée une fois, et ne le sera pas une seconde. Rien n\'a été débité.', true);
             }
             $http = $e instanceof HttpExceptionInterface;
+            if (!$http) {
+                // Un refus métier se lit dans la réponse ; une panne (SQL, secret absent) ne se lit qu'ici.
+                $this->logger->error('Débit du no-show annulé : {message}', ['message' => $e->getMessage(), 'facturation' => (string) $facturation->getId(), 'exception' => $e]);
+            }
 
             return new ResultatFacturationNoShow(
                 false,

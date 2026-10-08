@@ -12,7 +12,7 @@ final class ResultatFacturationNoShow
     public function __construct(
         public readonly bool $succes,
         public readonly ?string $motif = null,
-        /** Un autre geste a traité la facturation entre-temps : un conflit (409), pas une demande invalide. */
+        /** Un conflit (409), pas une demande invalide : facturation traitée entre-temps, clé de débit déjà employée, ou 409 de la validation. */
         public readonly bool $conflict = false,
     ) {
     }
