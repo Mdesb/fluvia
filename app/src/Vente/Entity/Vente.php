@@ -109,7 +109,9 @@ use Symfony\Component\Uid\Uuid;
             description: 'Enregistre un reglement. Corps : { moyen, montant, cleIdempotence?, id?, differe?, banque?, numeroCheque? }. '
                 . 'Rejouer le meme appel avec la meme cleIdempotence (ou le meme id) rend le reglement deja enregistre '
                 . '(dejaEnregistre: true, 200), sans redemander au terminal ni redebiter le porte-monnaie, meme apres validation. '
-                . 'Une cle deja employee sur une autre vente, ou avec un autre moyen ou un autre montant, est refusee (422) avant tout effet.',
+                . 'Une cle deja employee sur une autre vente, ou avec un autre moyen ou un autre montant, est refusee (422) avant tout effet. '
+                . 'Un seul reglement en cours par vente : 409 { code: payment_in_progress } si un autre est en cours, '
+                . '{ code: payment_outcome_unknown } si le terminal n\'a pas rendu d\'issue (rien ne passe avant une declaration).',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
