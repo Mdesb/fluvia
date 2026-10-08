@@ -191,8 +191,10 @@ class Exposition
         if ($this->dateDebut === null || $this->dateFin === null) {
             return false;
         }
-        $jour = $date->setTime(0, 0);
+        // Le jour de l'etablissement, comme `Saison::contient()` (#290) : `setTime(0, 0)` sur un instant
+        // UTC prenait le jour UTC (mesure le 07/10/2026, `ExhibitionSaleWindowTest`).
+        $jour = $date->setTimezone(new \DateTimeZone($this->etablissement?->getFuseauHoraire() ?? 'Europe/Paris'))->format('Y-m-d');
 
-        return $jour >= $this->dateDebut->setTime(0, 0) && $jour <= $this->dateFin->setTime(0, 0);
+        return $jour >= $this->dateDebut->format('Y-m-d') && $jour <= $this->dateFin->format('Y-m-d');
     }
 }

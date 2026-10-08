@@ -332,6 +332,21 @@ class Etablissement
         return $this;
     }
 
+    /**
+     * Le jour civil de l'établissement à cet instant (maintenant par défaut), à 00:00 dans le fuseau
+     * du serveur : la forme sous laquelle Doctrine rend une colonne `date`, et celle d'une date reçue
+     * en « AAAA-MM-JJ ». Sans établissement, le fuseau par défaut, comme `Saison::contient()` (#290).
+     *
+     * ⚠ `new \DateTimeImmutable('today')` donne le jour UTC : de 00:00 à 01:00 ou 02:00 à Paris, la
+     * veille. Mesuré le 07/10/2026 (`MembershipLocalDayTest`).
+     */
+    public static function jourCivil(?self $etablissement, ?\DateTimeImmutable $instant = null): \DateTimeImmutable
+    {
+        $fuseau = new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris');
+
+        return new \DateTimeImmutable(($instant ?? new \DateTimeImmutable())->setTimezone($fuseau)->format('Y-m-d'));
+    }
+
     public function getFiscalTerritory(): string
     {
         return $this->fiscalTerritory;

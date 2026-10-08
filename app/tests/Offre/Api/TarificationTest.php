@@ -151,7 +151,7 @@ final class TarificationTest extends OffreApiTestCase
         ]);
         self::assertResponseStatusCodeSame(422);
 
-        // Non-chevauchement : une saison de même priorité recouvrant « Saison 2026 » est refusée.
+        // Non-chevauchement : une saison de même priorité recouvrant la saison des fixtures est refusée.
         $client->request('POST', '/api/saisons', $entete + [
             'json' => [
                 'nom' => 'Chevauchante',

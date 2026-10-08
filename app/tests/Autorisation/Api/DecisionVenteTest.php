@@ -29,7 +29,7 @@ final class DecisionVenteTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '80.00');
 
-        $avoir = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Test CA-1']])->toArray();
+        $avoir = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']])->toArray();
         self::assertResponseStatusCodeSame(201);
         self::assertSame('annulee', $avoir['statutVente']);
         self::assertSame('80.00', $avoir['montant']);
@@ -46,7 +46,7 @@ final class DecisionVenteTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '100.00');
 
-        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Egal au plafond']]);
+        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertResponseStatusCodeSame(201);
     }
 
@@ -59,7 +59,7 @@ final class DecisionVenteTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '250.00');
 
-        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Test CA-2']]);
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertResponseStatusCodeSame(403);
         $corps = $reponse->toArray(false);
         self::assertSame('escalade_requise', $corps['decision']);
@@ -90,7 +90,7 @@ final class DecisionVenteTest extends AutorisationApiTestCase
         $venteId = $this->venteValideeMontant($clientProprietaire, $enteteProprietaire, $session['id'], '30.00');
 
         [$clientAutre, $enteteAutre] = $this->connecte('caissier-autre@test.itcotation.com');
-        $clientAutre->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteAutre + ['json' => ['motif' => 'Test CA-5']]);
+        $clientAutre->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteAutre + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertResponseStatusCodeSame(403);
 
         self::assertSame(0, $this->em()->getRepository(DemandeEscalade::class)->count([]));
@@ -124,7 +124,7 @@ final class DecisionVenteTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '150.00');
 
-        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Test CA-7']]);
+        $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertResponseStatusCodeSame(403);
 
         self::assertSame(0, $this->em()->getRepository(DemandeEscalade::class)->count([]));

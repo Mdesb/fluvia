@@ -357,7 +357,7 @@ final class PerimetreEcritureTest extends StockApiTestCase
         self::assertResponseIsSuccessful();
 
         $reponse = $client->request('POST', '/api/ventes/' . $vente['id'] . '/annuler', $entete + [
-            'json' => ['motif' => 'Test cloisonnement Stock'],
+            'json' => ['motif' => 'Erreur de saisie'],
         ])->toArray();
         self::assertResponseIsSuccessful();
 

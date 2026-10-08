@@ -145,7 +145,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
 
         $dateSouscription = isset($corps['dateSouscription']) && \is_string($corps['dateSouscription'])
             ? new \DateTimeImmutable($corps['dateSouscription'])
-            : new \DateTimeImmutable('today');
+            : Etablissement::jourCivil($etablissement);
         $dureeEngagementMois = isset($corps['dureeEngagementMois']) ? (int) $corps['dureeEngagementMois'] : 12;
         // ⚠ `montantCentimes` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
         //

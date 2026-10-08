@@ -36,7 +36,7 @@ final class AllYearPriceTest extends OffreApiTestCase
     public function testSeasonPriceOverridesAllYearPriceDuringItsSeason(): void
     {
         [$client, $headers, $produit, $plein] = $this->newProduct();
-        $saison = $this->idSaison(OffreFixtures::SAISON); // 2026-01-01 → 2026-12-31, priorité 0
+        $saison = $this->idSaison(OffreFixtures::SAISON); // du 01/01/2026 au 31/12 de l'an prochain, priorité 0
 
         $this->postPrice($client, $headers, $produit, $plein, null, '10.00');
         self::assertResponseStatusCodeSame(201);
@@ -47,7 +47,7 @@ final class AllYearPriceTest extends OffreApiTestCase
         self::assertSame('8.00', $enSaison['prixUnitaire'], 'Le tarif de la saison l\'emporte pendant la saison.');
         self::assertSame($saison, $enSaison['saison'], 'La saison retenue est celle du tarif appliqué.');
 
-        $horsSaison = $this->quote($client, $headers, $produit, $plein, '2027-03-01');
+        $horsSaison = $this->quote($client, $headers, $produit, $plein, '2025-03-01');
         self::assertSame('10.00', $horsSaison['prixUnitaire'], 'Hors saison, le tarif toute l\'année s\'applique.');
         self::assertNull($horsSaison['saison']);
     }

@@ -6,11 +6,13 @@ namespace App\Tests\Boutique\Api;
 
 use App\Boutique\DataFixtures\BoutiqueFixtures;
 use App\DataFixtures\SocleFixtures;
+use App\Membership\Entity\Membership;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\StatutProduit;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Tests\Boutique\BoutiqueApiTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Achat d'abonnement + mandat SEPA en ligne — compte obligatoire (US-L8-09, RG-M3-12/17, CA-13).
@@ -188,5 +190,52 @@ final class AbonnementSepaTest extends BoutiqueApiTestCase
         self::assertSame('0189', $abo['mandatIban4Derniers']);
         // L'IBAN complet n'est JAMAIS exposé (seulement les 4 derniers chiffres).
         self::assertStringNotContainsString('FR7630006000011234567890189', $reponse->getContent());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function fuseaux(): iterable
+    {
+        yield 'UTC+14' => ['Pacific/Kiritimati'];
+        yield 'UTC-11' => ['Pacific/Pago_Pago'];
+    }
+
+    /**
+     * LE CONTRAT SOUSCRIT EN LIGNE COMMENCE LE JOUR DE L'ÉTABLISSEMENT, PAS LE JOUR UTC.
+     *
+     * Il prenait `new \DateTimeImmutable('today')` (mesuré le 07/10/2026) : de 00:00 à 01:00 ou
+     * 02:00 à Paris, le contrat commençait la veille, au tarif de la veille, quand la vente du même
+     * tunnel était tarifée à l'instant. Les établissements passent à UTC+14 puis UTC-11 : à toute
+     * heure, l'un des deux n'a pas le jour UTC.
+     */
+    #[DataProvider('fuseaux')]
+    public function testLaSouscriptionEnLigneCommenceLeJourDeLEtablissement(string $fuseau): void
+    {
+        $produit = $this->entite(Produit::class, ['code' => BoutiqueFixtures::PRODUIT_ABONNEMENT_CODE]);
+        $client = static::createClient();
+        $token = $this->jeton($client, BoutiqueFixtures::CLIENT_EMAIL, BoutiqueFixtures::CLIENT_MDP);
+        foreach ($this->em()->getRepository(Etablissement::class)->findAll() as $etablissement) {
+            $etablissement->setFuseauHoraire($fuseau);
+        }
+        $this->em()->flush();
+
+        $client->request('POST', '/api/boutique/abonnements/souscrire', [
+            'auth_bearer' => $token,
+            'json' => [
+                'produit' => (string) $produit->getId(),
+                'iban' => 'FR7630006000011234567890189',
+                'bicDebiteur' => 'AGRIFRPP',
+                'debiteurNom' => 'Camille Martin',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $em = $this->em();
+        $em->clear();
+        $mandat = $em->getRepository(MandatSepa::class)->findOneBy(['debiteurNom' => 'Camille Martin']);
+        $abonnement = $em->getRepository(Membership::class)->findOneBy(['mandatSepa' => $mandat]);
+        self::assertSame(
+            (new \DateTimeImmutable('now', new \DateTimeZone($fuseau)))->format('Y-m-d'),
+            $abonnement?->getDateSouscription()->format('Y-m-d'),
+        );
     }
 }

@@ -71,7 +71,7 @@ final class WalletPartialRefundTest extends CrmApiTestCase
         $vente = $this->mixedSale($client, $entete);
         $this->refund($client, $entete, $vente, '20.00');
 
-        $client->request('POST', '/api/ventes/' . $vente . '/annuler', $entete + ['json' => ['motif' => 'Annulation après geste']]);
+        $client->request('POST', '/api/ventes/' . $vente . '/annuler', $entete + ['json' => ['motif' => 'Client parti']]);
         self::assertResponseStatusCodeSame(201);
 
         self::assertSame('50.00', $this->balance($client, $entete));
