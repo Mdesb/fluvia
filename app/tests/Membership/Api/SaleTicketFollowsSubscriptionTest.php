@@ -216,7 +216,114 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
         self::assertSame($resiliations, $this->em()->getRepository(Resiliation::class)->count([]), 'Aucune résiliation.');
     }
 
+    /**
+     * REMBOURSER LA VENTE EN TOTALITÉ RÉSILIE L'ABONNEMENT QU'ELLE A CRÉÉ, comme l'annuler (décision de
+     * Maxime du 08/10). L'écran de caisse envoie toujours un montant, le total par défaut. Un second
+     * remboursement ne crée pas de seconde résiliation.
+     */
+    public function testATotalRefundTerminatesTheSubscriptionItCreated(): void
+    {
+        [$gold] = $this->sell();
+
+        self::assertSame(201, $this->refund($this->saleTotal(), 'Article rendu'));
+
+        $this->assertTerminatedBySale($gold, 'Vente remboursée (Article rendu)');
+        $this->refund($this->saleTotal(), 'Doublon de geste');
+        self::assertSame(1, $this->em()->getRepository(Resiliation::class)->count(['abonnement' => $this->subscription()]), 'Une seule résiliation, au premier remboursement total.');
+    }
+
+    /** Témoin : un remboursement partiel ne résilie rien. */
+    public function testAPartialRefundTerminatesNothing(): void
+    {
+        [$gold] = $this->sell();
+
+        self::assertSame(201, $this->refund('10.00', 'Geste commercial'));
+
+        $abonnement = $this->subscription();
+        self::assertSame(MembershipStatus::Actif, $abonnement->getStatut());
+        self::assertSame(0, $this->em()->getRepository(Resiliation::class)->count(['abonnement' => $abonnement]));
+        self::assertSame(['valide', null], $this->gate($gold));
+    }
+
+    /** Deux remboursements partiels qui soldent la vente : le second la rembourse en totalité. */
+    public function testPartialRefundsThatSettleTheSaleTerminateTheSubscription(): void
+    {
+        [$gold] = $this->sell();
+        $total = (float) $this->saleTotal();
+
+        $this->refund('10.00', 'Geste commercial');
+        self::assertSame(MembershipStatus::Actif, $this->subscription()->getStatut(), 'Témoin : le premier, partiel, ne résilie rien.');
+        self::assertSame(201, $this->refund(number_format($total - 10, 2, '.', ''), 'Article rendu'));
+
+        $this->assertTerminatedBySale($gold, 'Vente remboursée (Article rendu)');
+    }
+
+    /** Annuler après un remboursement partiel résilie, par l'annulation (#292). */
+    public function testCancellingAfterAPartialRefundTerminatesTheSubscription(): void
+    {
+        [$gold] = $this->sell();
+        $this->refund('10.00', 'Geste commercial');
+
+        self::assertSame(201, $this->cancelSale('Client parti'));
+
+        $this->assertTerminatedBySale($gold, 'Vente annulée (Client parti)');
+    }
+
+    /** Porte-monnaie (D127) : le remboursement total le recrédite de sa part, et résilie l'abonnement. */
+    public function testATotalRefundPaidByWalletRecreditsItAndTerminates(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $pmv = '/api/clients/' . $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL])->getId() . '/pmv';
+        $avant = $client->request('GET', $pmv, $entete)->toArray()['solde'];
+        [$gold] = $this->sell(moyen: 'pmv');
+
+        self::assertSame(201, $this->refund($this->saleTotal(), 'Article rendu'));
+
+        $this->assertTerminatedBySale($gold, 'Vente remboursée (Article rendu)');
+        [$client, $entete] = $this->adminSurA();
+        self::assertSame($avant, $client->request('GET', $pmv, $entete)->toArray()['solde'], 'Le porte-monnaie retrouve exactement son solde.');
+    }
+
+    /** Témoin : une vente sans abonnement se rembourse comme avant, sans résiliation. */
+    public function testASaleWithoutSubscriptionRefundsAsBefore(): void
+    {
+        $this->sell(gold: false, entrance: true);
+        $resiliations = $this->em()->getRepository(Resiliation::class)->count([]);
+
+        self::assertSame(201, $this->refund($this->saleTotal(), 'Article rendu'));
+
+        self::assertSame(StatutVente::AvoirEmis, $this->em()->getRepository(Vente::class)->find(Uuid::fromString($this->saleId))?->getStatut());
+        self::assertSame($resiliations, $this->em()->getRepository(Resiliation::class)->count([]), 'Aucune résiliation.');
+    }
+
     // ── Outillage ─────────────────────────────────────────────────────────────────────────────
+
+    /** L'abonnement de la vente est résilié au motif donné : sans échéance à venir, mandat révoqué, accès coupé. */
+    private function assertTerminatedBySale(string $gold, string $motif): void
+    {
+        $abonnement = $this->subscription();
+        self::assertSame(MembershipStatus::Resilie, $abonnement->getStatut());
+        $resiliation = $this->em()->getRepository(Resiliation::class)->findOneBy(['abonnement' => $abonnement]);
+        self::assertSame([StatutResiliation::Effective, $motif], [$resiliation?->getStatut(), $resiliation?->getMotif()]);
+        self::assertSame(0, $this->em()->getRepository(EcheanceSepa::class)->count(['abonnement' => $abonnement, 'statut' => StatutEcheanceSepa::AVenir]));
+        self::assertSame(StatutMandatSepa::Revoque, $abonnement->getMandatSepa()?->getStatut());
+        self::assertSame(['refuse', 'droit_invalide'], $this->gate($gold));
+    }
+
+    /** Rembourse la dernière vente (`/ventes/{id}/rembourser`) comme l'écran, montant compris, et rend le code HTTP. */
+    private function refund(string $montant, string $motif): int
+    {
+        [$client, $entete] = $this->adminSurA();
+        $reponse = $client->request('POST', '/api/ventes/' . $this->saleId . '/rembourser', $entete + ['json' => ['motif' => $motif, 'montant' => $montant]]);
+        $this->em()->clear();
+
+        return $reponse->getStatusCode();
+    }
+
+    private function saleTotal(): string
+    {
+        return (string) $this->em()->getRepository(Vente::class)->find(Uuid::fromString($this->saleId))?->getTotal();
+    }
 
     /**
      * Vend au payeur, à la caisse classique, le Gold (formule nominative) et/ou l'entrée, et rend les
@@ -224,7 +331,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
      *
      * @return list<string>
      */
-    private function sell(bool $gold = true, bool $entrance = false): array
+    private function sell(bool $gold = true, bool $entrance = false, string $moyen = 'cb'): array
     {
         [$client, $entete] = $this->adminSurA();
         $session = $this->ouvrirSession($client, $entete);
@@ -246,7 +353,7 @@ final class SaleTicketFollowsSubscriptionTest extends AccesApiTestCase
             ] + $extra]);
             self::assertResponseIsSuccessful();
         }
-        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => 'cb']]);
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => $moyen]]);
         $reponse = $client->request('POST', '/api/ventes/' . $vente['id'] . '/valider', $entete + ['json' => []]);
         self::assertLessThan(300, $reponse->getStatusCode(), (string) $reponse->getContent(false));
 
