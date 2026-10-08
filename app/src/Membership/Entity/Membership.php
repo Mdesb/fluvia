@@ -66,6 +66,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity(repositoryClass: SubscriptionRepository::class)]
 #[ORM\Table(name: 'sport_abonnement_fitness')]
 #[ORM\UniqueConstraint(name: 'uniq_abo_source_sale_line', columns: ['source_sale_line_id'])]
+#[ORM\UniqueConstraint(name: 'uniq_abo_first_month_sale_line', columns: ['first_month_sale_line_id'])]
 #[ApiResource(
     shortName: 'AbonnementFitness',
     operations: [
@@ -142,14 +143,23 @@ class Membership
     private Uuid $id;
 
     /**
-     * La ligne de vente (`LigneVente`) qui a créé cet abonnement au comptoir. UNIQUE (nullable,
-     * contrainte `uniq_abo_source_sale_line`) : idempotence de la création au comptoir (une ligne
-     * ne crée qu'un abonnement, même si la reprise est rejouée) ET lien retour Vente → abonnement.
-     * `null` pour tout abonnement né ailleurs (en ligne, réengagement). Renseigné dans le même
+     * La ligne de vente (`LigneVente`) qui a créé cet abonnement, en caisse ou en ligne. UNIQUE
+     * (nullable, contrainte `uniq_abo_source_sale_line`) : idempotence de la création (une ligne
+     * ne crée qu'un abonnement, même si la reprise est rejouée) ET lien retour Vente → abonnement :
+     * annuler ou rembourser en totalité cette vente le résilie (#292, décision de Maxime du 08/10).
+     * `null` pour tout abonnement né ailleurs (comptoir, réengagement). Renseigné dans le même
      * flush que l'abonnement (via `SouscriptionAbonnementHandler::souscrire()`).
      */
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
     private ?Uuid $sourceSaleLineId = null;
+
+    /**
+     * LA LIGNE DE VENTE QUI A PAYÉ LE PREMIER MOIS d'un abonnement souscrit à part, au comptoir (#288).
+     * Cette vente ne l'a pas créé : l'annuler ne le résilie pas (décision de Maxime du 08/10), le lien
+     * est levé et le premier mois redevient dû. UNIQUE (nullable) : une ligne ne paie qu'un abonnement.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $firstMonthSaleLineId = null;
 
     #[ORM\ManyToOne(targetEntity: Beneficiaire::class)]
     #[ORM\JoinColumn(nullable: false)]
@@ -267,6 +277,18 @@ class Membership
     public function setSourceSaleLineId(?Uuid $sourceSaleLineId): self
     {
         $this->sourceSaleLineId = $sourceSaleLineId;
+
+        return $this;
+    }
+
+    public function getFirstMonthSaleLineId(): ?Uuid
+    {
+        return $this->firstMonthSaleLineId;
+    }
+
+    public function setFirstMonthSaleLineId(?Uuid $firstMonthSaleLineId): self
+    {
+        $this->firstMonthSaleLineId = $firstMonthSaleLineId;
 
         return $this;
     }
