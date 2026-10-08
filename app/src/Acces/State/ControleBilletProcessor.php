@@ -66,7 +66,7 @@ final class ControleBilletProcessor implements ProcessorInterface
         }
 
         $vue = new ControleBillet();
-        $verdict = $this->verdict->evaluer($identifiant);
+        $verdict = $this->verdict->evaluer($identifiant, site: $etablissement);
 
         if (!$verdict->valide) {
             $this->tracer($verdict->support, $verdict->droit, $etablissement, ResultatPassage::Refuse, $verdict->codeMotif, $verdict->message);
