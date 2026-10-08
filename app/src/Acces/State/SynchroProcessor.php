@@ -7,6 +7,7 @@ namespace App\Acces\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Acces\Entity\Controleur;
+use App\Acces\Entity\Equipement;
 use App\Acces\Service\SynchroPassageHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\CalculateurDroits;
@@ -61,6 +62,18 @@ final class SynchroProcessor implements ProcessorInterface
         }
 
         $lot = \is_array($corps['lot'] ?? null) ? $corps['lot'] : [];
+
+        // Le droit est vérifié sur le contrôleur, mais chaque entrée nomme SON équipement : un lot
+        // remonté sur un contrôleur de son site décomptait les cartes et la jauge d'un autre site.
+        // L'équipement d'une entrée doit donc être du même établissement (404, comme ci-dessus).
+        foreach ($lot as $entree) {
+            $equipementId = \is_array($entree) ? $this->uuid($entree['equipementId'] ?? null) : null;
+            $equipement = $equipementId !== null ? $this->em->getRepository(Equipement::class)->find($equipementId) : null;
+            if ($equipement instanceof Equipement && (string) $equipement->getEtablissement()?->getId() !== (string) $controleur->getEtablissement()?->getId()) {
+                throw new NotFoundHttpException('Équipement introuvable.');
+            }
+        }
+
         $resultat = $this->handler->synchroniser($controleur, $lot);
 
         return new JsonResponse([

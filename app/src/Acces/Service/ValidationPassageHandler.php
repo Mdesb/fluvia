@@ -104,6 +104,7 @@ final class ValidationPassageHandler
             $evt->identifiantSupport,
             $evt->ignorerRevocationSiPosterieure,
             $evt->horodatage,
+            $espace->getEtablissement(),
         );
         $support = $verdict->support;
         $droit = $verdict->droit;
