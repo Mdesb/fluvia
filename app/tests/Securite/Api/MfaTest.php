@@ -56,11 +56,16 @@ final class MfaTest extends SecuriteApiTestCase
         self::assertResponseStatusCodeSame(401);
 
         // Code invalide au 2ᵉ facteur ⇒ refus (CA-5).
-        $client->request('POST', '/auth/mfa-verifier', [
+        $refus = $client->request('POST', '/auth/mfa-verifier', [
             'auth_bearer' => $jetonPreAuth,
             'json' => ['code' => '000000'],
         ]);
         self::assertResponseStatusCodeSame(401);
+        // Le refus porte un code que l'écran traduit (`error.auth.mfa_invalid_code`), et garde son
+        // message français pour qui ne le connaît pas.
+        $corpsRefus = $refus->toArray(false);
+        self::assertSame('auth.mfa_invalid_code', $corpsRefus['code']);
+        self::assertSame('Code invalide.', $corpsRefus['message']);
 
         // Code TOTP valide ⇒ jeton complet.
         $codeValide = $totp->codeActuel($secret);
