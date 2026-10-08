@@ -14,6 +14,7 @@ use App\Vente\Nf525\OperationAScellerDto;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Port\AppairageAccesInterface;
 use App\Vente\Port\PorteMonnaieVirtuelInterface;
+use App\Vente\Port\SaleSubscriptionInterface;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -33,6 +34,7 @@ final class ContrePassationHandler
         private readonly AppairageAccesInterface $appairage,
         private readonly PanierCalculateur $calc,
         private readonly EntityManagerInterface $em,
+        private readonly SaleSubscriptionInterface $abonnements,
         // Frontière M4 (RG-M4-03, CA-9, §2.3 plan-crm.md) : nullable, même précaution que
         // `PaiementHandler` — ne casse aucun test M2 existant si aucun port n'est câblé.
         private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
@@ -47,6 +49,23 @@ final class ContrePassationHandler
     public function rembourser(Vente $vente, ?string $montant, string $motif, Utilisateur $auteur): Avoir
     {
         return $this->sousVerrou($vente, fn (): Avoir => $this->rembourserSousVerrou($vente, $montant, $motif, $auteur));
+    }
+
+    /**
+     * REMBOURSÉE EN TOTALITÉ, LA VENTE EST DÉFAITE COMME UNE ANNULATION : l'abonnement qu'elle a créé
+     * est résilié, par le même chemin (#292, décision de Maxime du 08/10). « En totalité » : ses avoirs
+     * cumulés atteignent son total, en un ou plusieurs remboursements. Un remboursement partiel ne
+     * résilie rien. Appelée par chaque remboursement après le commit de son avoir, comme l'annulation.
+     */
+    public function resilierSiRembourseeEnTotalite(Vente $vente, string $motif): void
+    {
+        $rendu = 0;
+        foreach ($this->em->getRepository(Avoir::class)->findBy(['venteOrigine' => $vente]) as $avoir) {
+            $rendu += $this->calc->centimes($avoir->getMontant());
+        }
+        if ($rendu >= $this->calc->centimes($vente->getTotal())) {
+            $this->abonnements->terminateSubscriptionsFromSale($vente, sprintf('Vente remboursée (%s)', $motif));
+        }
     }
 
     /**

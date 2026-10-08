@@ -80,6 +80,9 @@ final class RembourserVenteProcessor implements ProcessorInterface
         $avoir = $this->handler->rembourser($data, $montant, $motif, $auteur);
         $this->em->persist($avoir);
         $this->em->flush();
+        // Après le commit de l'avoir, comme l'annulation : remboursée en totalité, la vente résilie
+        // l'abonnement qu'elle a créé (décision de Maxime du 08/10).
+        $this->handler->resilierSiRembourseeEnTotalite($data, $motif);
 
         return new JsonResponse([
             'avoir' => (string) $avoir->getId(),
