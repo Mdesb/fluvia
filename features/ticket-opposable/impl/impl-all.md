@@ -25,4 +25,6 @@ Voir le plan, §2 (É1 à É44). Ordre de livraison : règlement d'abord (lots 1
 
 - 08/10 — Lot 4 (É10-É11, #298) : le no-show débite en une seule transaction, sous le verrou de sa facturation puis de la session système, avec une clé HMAC tirée de la facturation ; exonération et vente d'agent prennent le même verrou ; jamais plus remboursé que le total moins les avoirs émis. Aucune migration. Tests rouges puis verts (pile `lot4t07`), relecture adversariale en trois passes (APPROVE). Reste : le marquage SEPA (`prelevement_differe`) ne prend pas le verrou.
 
+- 08/10 — Lot 5 (É12-É13, #304) : le ticket se construit dans `DocumentTicket` (portage de `11bba65f` et `40ccbc7f`), sortie inchangée ; le filet reste vert sans retouche de ses assertions, ses commentaires suivent D124. `TicketSingleDocumentTest` : la réponse relaie le document (rouge puis vert), le premier ticket sous le seuil est l'original, ni code d'accès ni mention d'avoir. Mutations mesurées. Pile `lot5t07` : Vente 201, Caisse 23 verts. Relecture adversariale (agent séparé). **À É23 et É39, rejouer et revoir `TicketSingleDocumentTest` avec le filet** (`new DocumentTicket()`, consultation non comptée).
+
 ## Journal de Rétropropagation
