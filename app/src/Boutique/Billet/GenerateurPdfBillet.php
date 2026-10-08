@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Billet;
 
+use App\I18n\Locales;
 use App\Boutique\Entity\BilletQrMeta;
 use App\Boutique\Entity\LigneCommandeMeta;
 use App\Boutique\Entity\RetraitClickCollect;
@@ -44,6 +45,7 @@ final class GenerateurPdfBillet
         }
 
         $html = $this->twig->render('boutique/billet/pdf.html.twig', [
+            'locale' => Locales::ofEstablishment($vente->getEtablissement()),
             'etablissementNom' => $vente->getEtablissement()?->getNom() ?? '',
             'numeroCommande' => $vente->getNumero(),
             'dateCommande' => $vente->getDate(),
