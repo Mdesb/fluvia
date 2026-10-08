@@ -93,10 +93,11 @@ final class Fonctionnalites
     /**
      * Active le jeu de capacités du preset (additif : n'en désactive aucune autre, cf. §« Preset » de la
      * spec). Les paramètres déjà saisis pour une capacité déjà connue de l'établissement sont conservés.
+     * Sans métier, seules les capacités communes (cf. `PresetVerticale::capacites()`).
      *
      * @return list<string> codes activés par le preset
      */
-    public function appliquerPreset(Etablissement $etablissement, Metier $metier): array
+    public function appliquerPreset(Etablissement $etablissement, ?Metier $metier): array
     {
         $codes = PresetVerticale::capacites($metier);
         foreach ($codes as $code) {

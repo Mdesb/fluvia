@@ -92,10 +92,21 @@ final class PresetVerticale
         CapaciteCode::Stock->value,
     ];
 
-    /** @return list<string> */
-    public static function capacites(Metier $metier): array
+    /**
+     * ⚠ LE PRÉRÉGLAGE ACTIVE AUSSI LA VERTICALE ELLE-MÊME, DEPUIS LE 08/10. Le menu masque désormais
+     * les modules d'un établissement qui ne les a pas activés (décision de Maxime du 08/10), et
+     * l'écran « Piscine » se garde par la capacité `piscine`. Sans elle dans son propre préréglage,
+     * une piscine ouverte avec le métier « piscine » n'aurait pas vu son écran métier. Le code de
+     * la verticale est sa valeur `Metier`, que `CatalogueCapacites::estVerticale()` reconnaît déjà.
+     *
+     * Sans métier (`null` : une structure ouverte sans métier reconnu, un cinéma par exemple), on
+     * n'active que les communes : tout exploitant tient des comptes et vend des marchandises.
+     *
+     * @return list<string>
+     */
+    public static function capacites(?Metier $metier): array
     {
-        $propres = self::CAPACITES[$metier->value] ?? [];
+        $propres = $metier === null ? [] : [...(self::CAPACITES[$metier->value] ?? []), $metier->value];
 
         // `array_values` + `array_unique` : une verticale qui listerait déjà une commune ne doit
         // pas la recevoir deux fois — un doublon ferait échouer l'insertion, pas la lecture.

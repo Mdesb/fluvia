@@ -289,6 +289,18 @@ final class CatalogueCapacites
                 "Ce qui se consomme sur place : la carte, le service, et l'addition réglée à table ou reportée sur le séjour. ⚠ Module en construction — le serveur existe, il n'a pas encore d'écran.",
                 'metier',
             ),
+            CapaciteCode::Affaires => new DescripteurCapacite(
+                $code->value,
+                'Affaires',
+                "Suivez vos ventes en cours, du premier appel au devis accepté : chaque affaire a son étape, son montant prévu et ses relances à faire.",
+                'metier',
+            ),
+            CapaciteCode::Projets => new DescripteurCapacite(
+                $code->value,
+                'Projets',
+                "Le travail interne qui a une fin : refaire les vestiaires, préparer la saison. Chaque projet a son responsable, ses tâches et son échéance.",
+                'metier',
+            ),
         };
 
         return new DescripteurCapacite(

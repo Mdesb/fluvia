@@ -75,4 +75,14 @@ enum CapaciteCode: string
      * definitivement inaccessible, exactement l'etat ou se trouvaient les neuf autres ce matin.
      */
     case Dining = 'dining';
+
+    // ── Deux écrans sans capacité, ajoutées le 08/10/2026 (décision de Maxime) ─────────────────
+    //
+    // Les modules qu'un établissement n'utilise pas sont masqués de son menu. Il faut pour cela
+    // qu'ils portent une capacité : « Affaires » (le pipeline commercial du CRM) et « Projets »
+    // n'en avaient aucune et s'affichaient partout. Aucun préréglage ne les active : ils naissent
+    // hors service et s'activent établissement par établissement (Paramètres › Modules en service).
+    // Le code reste tel quel (décision du 03/09) : seule l'exposition change.
+    case Affaires = 'affaires';
+    case Projets = 'projets';
 }
