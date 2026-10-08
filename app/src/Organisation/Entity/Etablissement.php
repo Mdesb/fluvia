@@ -332,6 +332,57 @@ class Etablissement
         return $this;
     }
 
+    /**
+     * Le jour civil de l'établissement à cet instant (maintenant par défaut), à 00:00 dans le fuseau
+     * du serveur : la forme sous laquelle Doctrine rend une colonne `date`, et celle d'une date reçue
+     * en « AAAA-MM-JJ ». Sans établissement, le fuseau par défaut, comme `Saison::contient()` (#290).
+     *
+     * ⚠ `new \DateTimeImmutable('today')` donne le jour UTC : de 00:00 à 01:00 ou 02:00 à Paris, la
+     * veille. Mesuré le 07/10/2026 (`MembershipLocalDayTest`).
+     *
+     * ⚠ UNE DATE CIVILE (00:00:00 PILE) EST DÉJÀ UN JOUR, ET SE REND TELLE QUELLE. La convertir la
+     * relisait la veille à l'ouest de Greenwich : 2026-01-01 à 00:00 UTC, c'est 20:00 le 31/12 en
+     * Martinique (mesuré le 07/10/2026, `CivilDayTest`). Limite : un instant tombé à 00:00:00.000000
+     * pile à l'heure du serveur est pris pour une date ; à l'est de Greenwich c'est le même jour, à
+     * l'ouest il est lu le lendemain pendant cette seule seconde.
+     */
+    public static function jourCivil(?self $etablissement, ?\DateTimeImmutable $instant = null): \DateTimeImmutable
+    {
+        $instant ??= new \DateTimeImmutable();
+        if ($instant->format('H:i:s.u') !== '00:00:00.000000') {
+            $instant = $instant->setTimezone(new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris'));
+        }
+
+        return new \DateTimeImmutable($instant->format('Y-m-d'));
+    }
+
+    /**
+     * L'instant UTC d'une heure murale de l'établissement (« AAAA-MM-JJ HH:MM »), Europe/Paris à
+     * défaut. UTC parce que Doctrine stocke l'heure de l'objet telle quelle, sans conversion.
+     *
+     * Les deux heures que le changement d'heure rend ambiguës suivent iCalendar (RFC 5545 §3.3.5) :
+     * l'heure qui existe deux fois (25/10/2026, 02:00 à 03:00) prend sa première occurrence, encore à
+     * l'heure d'été ; celle qui n'existe pas (28/03/2027) se lit avec le décalage d'avant le saut, une
+     * heure plus tard à l'horloge (02:30 devient 03:30). PHP seul n'a pas de règle constante : il rend
+     * la seconde occurrence depuis une chaîne et la première depuis `modify()` (mesuré, PHP 8.4.26).
+     */
+    public static function instantLocal(?self $etablissement, string $heureMurale): \DateTimeImmutable
+    {
+        $fuseau = new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'Europe/Paris');
+        $mur = new \DateTimeImmutable($heureMurale, new \DateTimeZone('UTC'));
+        $avant = $fuseau->getOffset($mur->modify('-1 day'));
+        $apres = $fuseau->getOffset($mur->modify('+1 day'));
+
+        foreach ([max($avant, $apres), min($avant, $apres)] as $decalage) {
+            $instant = $mur->setTimestamp($mur->getTimestamp() - $decalage);
+            if ($instant->setTimezone($fuseau)->format('Y-m-d H:i:s') === $mur->format('Y-m-d H:i:s')) {
+                return $instant;
+            }
+        }
+
+        return $mur->setTimestamp($mur->getTimestamp() - $avant);
+    }
+
     public function getFiscalTerritory(): string
     {
         return $this->fiscalTerritory;

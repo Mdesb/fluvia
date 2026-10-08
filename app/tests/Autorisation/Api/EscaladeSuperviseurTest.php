@@ -41,7 +41,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($clientCaissier, $enteteCaissier);
         $venteId = $this->venteValideeMontant($clientCaissier, $enteteCaissier, $session['id'], '250.00');
 
-        $reponse = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'CA-3']]);
+        $reponse = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse->getStatusCode());
         $jeton = $reponse->toArray(false)['demandeEscalade'];
 
@@ -63,7 +63,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
 
         // Rejeu de l'opération d'origine en référençant le jeton approuvé : AUTORISE, Avoir créé.
         $reponseRejeu = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + [
-            'json' => ['motif' => 'CA-3 rejeu', 'demandeEscalade' => $jeton],
+            'json' => ['motif' => 'Erreur de saisie', 'demandeEscalade' => $jeton],
         ]);
         self::assertSame(201, $reponseRejeu->getStatusCode());
         $avoir = $reponseRejeu->toArray(false);
@@ -80,7 +80,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($clientCaissier, $enteteCaissier);
         $venteId = $this->venteValideeMontant($clientCaissier, $enteteCaissier, $session['id'], '250.00');
 
-        $reponse1 = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'CA-4']]);
+        $reponse1 = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse1->getStatusCode());
         $jeton1 = $reponse1->toArray(false)['demandeEscalade'];
         $demande1 = $this->em()->getRepository(DemandeEscalade::class)->findOneBy(['jeton' => $jeton1]);
@@ -95,12 +95,12 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
 
         // Rejeu avec le jeton rejeté : refusé (n'est pas approuvée).
         $reponseRejeuBloque = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + [
-            'json' => ['motif' => 'Retry bloqué', 'demandeEscalade' => $jeton1],
+            'json' => ['motif' => 'Erreur de saisie', 'demandeEscalade' => $jeton1],
         ]);
         self::assertSame(403, $reponseRejeuBloque->getStatusCode());
 
         // Nouvelle tentative (sans jeton) : nouvelle DemandeEscalade distincte.
-        $reponse2 = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'CA-4 bis']]);
+        $reponse2 = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse2->getStatusCode());
         $jeton2 = $reponse2->toArray(false)['demandeEscalade'];
         self::assertNotSame($jeton1, $jeton2);
@@ -121,7 +121,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '250.00');
 
-        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Auto-approbation']]);
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse->getStatusCode());
         $jeton = $reponse->toArray(false)['demandeEscalade'];
         $demande = $this->em()->getRepository(DemandeEscalade::class)->findOneBy(['jeton' => $jeton]);
@@ -147,7 +147,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($clientCaissier, $enteteCaissier);
         $venteId = $this->venteValideeMontant($clientCaissier, $enteteCaissier, $session['id'], '250.00');
 
-        $reponse = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'Jeton unique']]);
+        $reponse = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse->getStatusCode());
         $jeton = $reponse->toArray(false)['demandeEscalade'];
         $demande = $this->em()->getRepository(DemandeEscalade::class)->findOneBy(['jeton' => $jeton]);
@@ -159,14 +159,14 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
 
         // Premier rejeu : AUTORISE.
         $reponsePremierRejeu = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + [
-            'json' => ['motif' => 'Premier rejeu', 'demandeEscalade' => $jeton],
+            'json' => ['motif' => 'Erreur de saisie', 'demandeEscalade' => $jeton],
         ]);
         self::assertSame(201, $reponsePremierRejeu->getStatusCode());
 
         // Deuxième rejeu du MÊME jeton (vente désormais annulée, mais le contrôle du jeton intervient
         // avant l'appel au handler de contre-passation) : refusé 409.
         $reponseDeuxiemeRejeu = $clientCaissier->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteCaissier + [
-            'json' => ['motif' => 'Deuxième rejeu', 'demandeEscalade' => $jeton],
+            'json' => ['motif' => 'Erreur de saisie', 'demandeEscalade' => $jeton],
         ]);
         self::assertSame(409, $reponseDeuxiemeRejeu->getStatusCode());
     }
@@ -206,7 +206,7 @@ final class EscaladeSuperviseurTest extends AutorisationApiTestCase
         $session = $this->ouvrirSessionCaissier($client, $entete);
         $venteId = $this->venteValideeMontant($client, $entete, $session['id'], '250.00');
 
-        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'CA-9']]);
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
         self::assertSame(403, $reponse->getStatusCode());
 
         $demande = $this->em()->getRepository(DemandeEscalade::class)->findOneBy([]);

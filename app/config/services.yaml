@@ -134,7 +134,8 @@ services:
     App\Vente\Port\RechercheSupportInterface: '@App\Vente\Adapter\RechercheSupportParSupport'
     # Historique d'achats par client (frontière M4, fiche 360°, §2.4 plan-crm.md).
     App\Vente\Port\HistoriqueVenteInterface: '@App\Vente\Adapter\HistoriqueVenteParClient'
-    # Connecteur TPE (Ingenico/Nayax/PAX) — mock en L2 (US-L2-07).
+    # Connecteur TPE (Ingenico/Nayax/PAX) — simulateur (US-L2-07), qui REFUSE toute carte tant que
+    # TPE_SIMULE_AUTORISE n'est pas posé (test, démonstration en préprod). Aucun terminal réel.
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'
@@ -441,3 +442,16 @@ when@test:
         App\Tests\Reservation\Support\NoShowCreditEventCollector:
             public: true
             tags: ['kernel.event_subscriber']
+        # Tentatives de règlement (lot 2 du ticket opposable) : arrêtent l'AUTRE processus d'un test de
+        # concurrence au terminal ou après le débit du porte-monnaie (`SettlementBarrier`), et laissent
+        # passer partout ailleurs. Ils décorent les ALIAS : `TpeMock` reste ce que les tests vont chercher.
+        App\Tests\Vente\Support\BlockingTerminal:
+            decorates: App\Vente\Tpe\TerminalPaiementInterface
+            arguments: ['@.inner']
+        App\Tests\Vente\Support\BlockingWallet:
+            decorates: App\Vente\Port\PorteMonnaieVirtuelInterface
+            arguments: ['@.inner']
+        # Fait échouer une écriture PENDANT le `flush()` (G-5) ; désarmé tant qu'un test ne l'arme pas.
+        App\Tests\Vente\Support\FailingWriteListener:
+            public: true
+            tags: [{ name: doctrine.event_listener, event: postPersist }]

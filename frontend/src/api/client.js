@@ -188,7 +188,7 @@ function qs(params) {
 
 async function request(
   path,
-  { method = 'GET', body, formData, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
+  { method = 'GET', body, formData, ld = false, auth = true, headers: extra = {}, query, timeoutMs, timeoutMessage } = {},
 ) {
   const headers = { ...extra }
   // ⚠ ON NE POSE PAS `Content-Type` SUR UN ENVOI MULTIPART, ET C'EST CONTRE-INTUITIF.
@@ -248,7 +248,7 @@ async function request(
   } catch (e) {
     if (abort?.signal.aborted) {
       throw new ApiError(
-        "Le serveur n'a pas répondu à temps (délai dépassé). Réessayez dans un instant.",
+        timeoutMessage || "Le serveur n'a pas répondu à temps (délai dépassé). Réessayez dans un instant.",
         0,
         null,
       )
@@ -653,10 +653,22 @@ export const api = {
   // Un règlement CB/chèque peut être simulé via l'en-tête X-Tpe-Simule (accepte|refuse|annule|timeout).
   // Le dialogue TPE peut prendre plusieurs secondes : coupe-circuit large (45 s) pour éviter le
   // spinner infini si le TPE ne répond pas, sans couper une transaction encore en cours.
+  // ⚠ Passé ce délai, le règlement a PEUT-ÊTRE abouti : on ne dit jamais « réessayez » (G-2). Les
+  // écrans passent par `paymentIntent.js`, qui le redemande avec la même clé.
   payer: (venteId, corps, headers) =>
-    request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
-  annulerVente: (venteId) =>
-    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
+    request(`/api/ventes/${venteId}/paiements`, {
+      method: 'POST',
+      body: corps,
+      headers,
+      timeoutMs: 45000,
+      timeoutMessage: "Résultat inconnu : le serveur n'a pas répondu à temps. Le règlement est peut-être "
+        + 'passé — ne l\'encaissez pas une seconde fois ; il est vérifié avec la même clé.',
+    }),
+  // Ce qu'affiche un terminal resté muet (Q-A1) : `{ tentative, issue: accepte|non_passe, referenceCarte? }`.
+  declarerReglement: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/declarer-reglement`, { method: 'POST', body: corps, timeoutMs: 20000 }),
+  annulerVente: (venteId, motif) =>
+    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: { motif }, timeoutMs: 20000 }),
   // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
   //
   // `ValiderVenteProcessor` lit `supports` depuis toujours, et `ValiderVenteService` en tire deux

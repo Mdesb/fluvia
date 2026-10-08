@@ -51,7 +51,7 @@ final class ContrePassationOptionsTest extends OptionProduitApiTestCase
         self::assertResponseIsSuccessful();
 
         $avoir = $client->request('POST', '/api/ventes/' . $vente['id'] . '/annuler', $entete + [
-            'json' => ['motif' => 'Test options'],
+            'json' => ['motif' => 'Erreur de saisie'],
         ])->toArray();
         self::assertResponseStatusCodeSame(201);
         self::assertSame('annulation', $avoir['nature']);

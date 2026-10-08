@@ -9,8 +9,10 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
 use App\Vente\Port\SaleSubscriptionInterface;
 use App\Vente\Service\LecteurCorps;
+use App\Vente\Service\PaymentAttemptConflict;
 use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 /**
  * Valide et scelle une vente (POST /ventes/{id}/valider, CA-8/11/12/15). Refuse si reste dû > 0 (sauf
@@ -28,7 +30,10 @@ use Doctrine\ORM\EntityManagerInterface;
  *   refus du port laisse ici la vente SCELLÉE et VALIDE (pas de rollback) : l'exception remonte
  *   telle quelle, la reprise se fait hors de cette transaction (G-5).
  *
- * @implements ProcessorInterface<Vente, Vente>
+ * ⚠ SAUF LE PAYEUR MANQUANT, REFUSÉ AVANT LE SCELLEMENT (décision de Maxime du 07/10, qui revoit
+ *   G-5) : `assertSubscribable()` répond 422 et la vente reste ouverte, rien n'est scellé.
+ *
+ * @implements ProcessorInterface<Vente, Vente|JsonResponse>
  */
 final class ValiderVenteProcessor implements ProcessorInterface
 {
@@ -40,7 +45,7 @@ final class ValiderVenteProcessor implements ProcessorInterface
     ) {
     }
 
-    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Vente
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Vente|JsonResponse
     {
         \assert($data instanceof Vente);
 
@@ -54,7 +59,13 @@ final class ValiderVenteProcessor implements ProcessorInterface
             }
         }
 
-        $this->service->valider($data, $overrides);
+        $this->abonnements->assertSubscribable($data);
+        try {
+            $this->service->valider($data, $overrides);
+        } catch (PaymentAttemptConflict $conflit) {
+            // Un règlement tient la vente (D-4) : le même 409 que les paiements, avec la tentative à déclarer.
+            return $conflit->toResponse($data);
+        }
         $this->em->flush();
 
         // Après le commit réel (voir docblock de classe) : jamais dans la transaction de scellement.

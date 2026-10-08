@@ -13,10 +13,13 @@ use App\Autorisation\Service\ServiceAutorisation;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Avoir;
 use App\Vente\Service\ContrePassationHandler;
+use App\Vente\Port\SaleSubscriptionInterface;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Uid\Uuid;
 
@@ -35,23 +38,31 @@ use Symfony\Component\Uid\Uuid;
  */
 final class AnnulerVenteProcessor implements ProcessorInterface
 {
+    private const MOTIFS = ['Erreur de saisie', 'Client parti', 'Doublon'];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ContrePassationHandler $handler,
         private readonly Security $security,
         private readonly ServiceAutorisation $serviceAutorisation,
+        private readonly SaleSubscriptionInterface $abonnements,
     ) {
     }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): JsonResponse
     {
-        \assert($data instanceof \App\Vente\Entity\Vente);
+        if (!$data instanceof \App\Vente\Entity\Vente) {
+            throw new NotFoundHttpException('Vente introuvable.');
+        }
         $auteur = $this->security->getUser();
         \assert($auteur instanceof Utilisateur);
 
         $corps = $this->lecteur->corps();
         $motif = \is_string($corps['motif'] ?? null) ? (string) $corps['motif'] : '';
+        if (!\in_array($motif, self::MOTIFS, true)) {
+            throw new UnprocessableEntityHttpException('Choisissez un motif : Erreur de saisie, Client parti ou Doublon.');
+        }
 
         $decision = $this->serviceAutorisation->evaluer(new RequeteAutorisation(
             operationCode: 'vente.annuler',
@@ -75,6 +86,10 @@ final class AnnulerVenteProcessor implements ProcessorInterface
         $avoir = $this->handler->annuler($data, $motif, $auteur);
         $this->em->persist($avoir);
         $this->em->flush();
+
+        // Après le commit de l'avoir, comme la création à la validation : l'abonnement que cette
+        // vente a créé est résilié avec elle (décision de Maxime du 07/10).
+        $this->abonnements->terminateSubscriptionsFromSale($data, $motif);
 
         return $this->reponse($avoir);
     }

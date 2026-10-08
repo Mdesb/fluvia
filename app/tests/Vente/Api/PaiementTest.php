@@ -91,6 +91,35 @@ final class PaiementTest extends VenteApiTestCase
         self::assertSame('0.00', $ok['resteAPayer']);
     }
 
+    /**
+     * Décision de Maxime du 07/10 — hors test et hors démonstration (`TPE_SIMULE_AUTORISE` non posé),
+     * l'en-tête `X-Tpe-Simule` ne force rien : la carte est refusée en clair et rien n'est encaissé.
+     * Le témoin passe par le câblage réel, pas par une instance construite à la main.
+     */
+    public function testSansTerminalConfigureLEnTeteNeForceRien(): void
+    {
+        $avant = $_ENV['TPE_SIMULE_AUTORISE'] ?? null;
+        $_ENV['TPE_SIMULE_AUTORISE'] = $_SERVER['TPE_SIMULE_AUTORISE'] = '0';
+        try {
+            [$client, $entete, $idA] = $this->adminSurA();
+            $session = $this->ouvrirSession($client, $entete);
+            [$venteId] = $this->venteCarteAvecLigne($client, $entete, $session['id']);
+
+            $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/paiements', [
+                'auth_bearer' => $entete['auth_bearer'],
+                'headers' => [ContexteEtablissement::HEADER => $idA, TpeMock::HEADER_SIMULATION => 'accepte'],
+                'json' => ['moyen' => 'cb', 'montant' => '45.00'],
+            ]);
+            self::assertResponseStatusCodeSame(422);
+            self::assertStringContainsString('Aucun terminal de paiement configuré', $reponse->getContent(false));
+
+            $vente = $client->request('GET', '/api/ventes/' . $venteId, $entete)->toArray();
+            self::assertSame('45.00', $vente['resteAPayer'], 'aucun règlement ne doit avoir été enregistré');
+        } finally {
+            $_ENV['TPE_SIMULE_AUTORISE'] = $_SERVER['TPE_SIMULE_AUTORISE'] = $avant;
+        }
+    }
+
     /** CA-11 — Seuil d'impression : au-dessus → impression auto ; en dessous → à la demande + renvoi. */
     public function testCa11SeuilImpression(): void
     {

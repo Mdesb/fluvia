@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reservation\Service;
 
+use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\DisponibiliteRessource;
@@ -97,9 +98,10 @@ final class FreeSlotFinder
     }
 
     /**
-     * Les débuts possibles pour une prestation, sur une ressource, un jour donné.
+     * Les débuts possibles pour une prestation, sur une ressource, un jour donné : la date de `$day`,
+     * lue comme un jour de l'établissement de la ressource.
      *
-     * @return list<array{debut: \DateTimeImmutable, fin: \DateTimeImmutable}>
+     * @return list<array{debut: \DateTimeImmutable, fin: \DateTimeImmutable}> instants UTC
      */
     public function findStarts(
         Ressource $resource,
@@ -152,8 +154,8 @@ final class FreeSlotFinder
 
         $ranges = [];
         foreach ($availabilities as $availability) {
-            $start = $this->at($day, $availability->getHeureDebut());
-            $end = $this->at($day, $availability->getHeureFin());
+            $start = $this->at($resource, $day, $availability->getHeureDebut()->format('H:i'));
+            $end = $this->at($resource, $day, $availability->getHeureFin()->format('H:i'));
             if ($end > $start) {
                 $ranges[] = [$start, $end];
             }
@@ -191,8 +193,7 @@ final class FreeSlotFinder
      */
     private function busyRanges(Ressource $resource, \DateTimeImmutable $day): array
     {
-        $dayStart = $day->setTime(0, 0);
-        $dayEnd = $dayStart->modify('+1 day');
+        [$dayStart, $dayEnd] = $this->dayBounds($resource, $day);
 
         /** @var list<Creneau> $slots */
         $slots = $this->em->getRepository(Creneau::class)->createQueryBuilder('c')
@@ -224,8 +225,7 @@ final class FreeSlotFinder
      */
     private function absences(Ressource $resource, \DateTimeImmutable $day): array
     {
-        $dayStart = $day->setTime(0, 0);
-        $dayEnd = $dayStart->modify('+1 day');
+        [$dayStart, $dayEnd] = $this->dayBounds($resource, $day);
 
         /** @var list<IndisponibiliteRessource> $absences */
         $absences = $this->em->getRepository(IndisponibiliteRessource::class)->createQueryBuilder('i')
@@ -258,9 +258,24 @@ final class FreeSlotFinder
         return false;
     }
 
-    /** Pose une heure de la journée sur une date, en gardant le fuseau de la date. */
-    private function at(\DateTimeImmutable $day, \DateTimeImmutable $time): \DateTimeImmutable
+    /**
+     * Une heure murale du jour, à l'heure de l'établissement de la ressource, en instant UTC.
+     *
+     * Les horaires d'un praticien sont des heures de son établissement, les créneaux sont stockés en
+     * UTC. Posé à l'heure UTC, 9 h était proposé à 11 h à Paris l'été et à 10 h l'hiver.
+     */
+    private function at(Ressource $resource, \DateTimeImmutable $day, string $time): \DateTimeImmutable
     {
-        return $day->setTime((int) $time->format('H'), (int) $time->format('i'), 0);
+        return Etablissement::instantLocal($resource->getEtablissement(), $day->format('Y-m-d ') . $time);
+    }
+
+    /**
+     * La journée de l'établissement, de minuit à minuit à Paris et non en UTC.
+     *
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable}
+     */
+    private function dayBounds(Ressource $resource, \DateTimeImmutable $day): array
+    {
+        return [$this->at($resource, $day, '00:00'), $this->at($resource, $day->modify('+1 day'), '00:00')];
     }
 }

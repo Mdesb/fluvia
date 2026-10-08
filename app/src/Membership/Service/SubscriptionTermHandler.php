@@ -126,6 +126,9 @@ final class SubscriptionTermHandler
             : $ancienneFin->modify($increment);
 
         $abonnement->setDateFinEngagement($nouvelleFin);
+        // Une formule passée de « suspendre » à un autre mode depuis la souscription laisserait au
+        // droit la fin d'engagement d'avant : l'adhérent reconduit serait refusé à la porte.
+        $this->propagation->syncEnd($abonnement);
 
         // ── LA GARDE D'IDEMPOTENCE ─────────────────────────────────────────────────────────────
         //

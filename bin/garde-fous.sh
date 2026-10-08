@@ -245,6 +245,10 @@ executer "Numeros de decision (n°46)" php_racine bin/garde-fou-numeros-de-decis
 #     jamais, un metier de plus est une LIGNE EN BASE.
 executer "Metiers sans ligne (n°55)" php_racine bin/garde-fou-metiers-sans-ligne.php
 
+# 58. Une classe PHP supprimee ou renommee, toujours citee ailleurs (#30). PHP ne dit rien avant
+#     d'executer la ligne, et la CI ne lance pas PHPUnit. Ce n'est PAS le n°37 (classes CSS).
+executer "Classes PHP disparues (n°58)" php_racine bin/garde-fou-classes-php-disparues.php
+
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
@@ -448,6 +452,11 @@ else
     executer "reference.php non commite (n°56)" "$RACINE/bin/garde-fou-reference-php.sh"
 fi
 
+# 13 quater. `reservation:no-show:basculer` reste hors de la liste blanche de l'ordonnanceur (n°57,
+#     D95). L'en-tête d'`infra/ordonnanceur.sh` l'interdisait et la liste la contenait quand même :
+#     du 04/09 au 07/10 elle a facturé des absences sans qu'aucune présence ne soit jamais écrite.
+executer "No-show hors liste (n°57)" "$RACINE/bin/garde-fou-no-show-hors-liste.sh"
+
 # 16. Lier un OBJET à un paramètre de requête sans dire son type (D58).
 #     Doctrine passe l'identifiant SANS son type `uuid` : la requête reste valide et compte zéro,
 #     sans exception ni avertissement. Deux modules en sont morts en silence le 28/08 — le solde
@@ -531,6 +540,20 @@ if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
         executer "Profil chargé avant le rendu" sh -c "cd '$RACINE/frontend' && node scripts/verifier-profil-charge.mjs"
     else
         ignorer "Profil chargé avant le rendu" "« node » indisponible ici."
+    fi
+fi
+
+# LES CHEMINS D'ARGENT DU FRONTAL, TESTÉS HORS DU NAVIGATEUR (ticket opposable, lot 3).
+#
+# `src/api/*.test.js` : l'ordre des appels de la souscription au comptoir (#284) et l'intention de
+# règlement (G-2 : une clé gardée jusqu'à l'issue, jamais « réessayez »), contre un serveur en
+# mémoire. `node:test` est fourni par Node : rien à installer. Les fichiers sont nommés un à un —
+# un dossier passé à `node --test` ne se lit pas pareil d'une version de Node à l'autre.
+if ls "$RACINE"/frontend/src/api/*.test.js >/dev/null 2>&1; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Chemins d'argent du frontal (node --test)" sh -c "cd '$RACINE/frontend' && node --test src/api/*.test.js"
+    else
+        ignorer "Chemins d'argent du frontal" "« node » indisponible ici."
     fi
 fi
 

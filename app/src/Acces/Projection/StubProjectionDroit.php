@@ -62,7 +62,7 @@ final class StubProjectionDroit implements ProjectionDroitInterface
             $droit->setProduitRef($produit->getId());
             if ($estNouveau) {
                 // T6 — n'écrit fenetreFin qu'à la PREMIÈRE projection (cf. docblock de classe).
-                $droit->setFenetreFin($this->cardExpiry->calculer($carte, null, new \DateTimeImmutable()));
+                $droit->setFenetreFin($this->cardExpiry->calculer($carte, null, new \DateTimeImmutable(), $etablissement));
             }
         } else {
             $droit->setSourceType(TypeDroitAcces::Billet);
@@ -84,7 +84,12 @@ final class StubProjectionDroit implements ProjectionDroitInterface
         // effet sur les titres deja emis, et n'en aurait aucun SANS RIEN DIRE.
         $this->accessZones->applyTo($droit, $droit->getProduitRef(), $etablissement);
 
-        $droit->setStatutProjection(StatutProjectionDroit::Valide);
+        // ⚠ UNE RE-PROJECTION NE ROUVRE PAS UN DROIT COUPÉ. Elle rafraîchit le crédit et les zones ; le
+        // statut appartient à qui l'a coupé (abonnement résilié, impayé, pause). Le remettre à « valide »
+        // rouvrait l'abonnement dont on ré-appairait le billet sur une nouvelle carte (mesuré le 07/10).
+        if ($estNouveau) {
+            $droit->setStatutProjection(StatutProjectionDroit::Valide);
+        }
         $droit->setSynchroniseLe(new \DateTimeImmutable());
 
         $this->em->persist($droit);

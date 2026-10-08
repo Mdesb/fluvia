@@ -17,6 +17,7 @@ use App\Offre\Enum\StatutProduit;
 use App\Offre\Service\ProductSaleScopeGuard;
 use App\Crm\Service\BeneficiaryResolver;
 use App\Offre\Service\SubscriptionPriceResolver;
+use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Membership\Service\SouscriptionAbonnementHandler;
 use App\Sepa\Enum\StatutMandatSepa;
@@ -229,12 +230,17 @@ final class SouscriptionAbonnementEnLigneHandler
             payeur: $client,
             formule: $formule,
             etablissement: $etablissement,
-            dateSouscription: new \DateTimeImmutable('today'),
+            dateSouscription: Etablissement::jourCivil($etablissement),
             // Repli : la formule décide quand elle déclare `engagement.dureeMin`. En ligne, aucun
             // vendeur ne peut négocier une durée — 12 mois est le défaut de l'écran de souscription.
             dureeEngagementMois: 12,
             canal: Canal::EnLigne,
             mandatExistant: $mandat,
+            // Le lien retour vente → abonnement : annuler la vente le résilie (décision du 07/10).
+            sourceSaleLineId: $ligneVente->getId(),
+            // Le QR affiché au client est celui de la vente : il devient l'accès de l'abonnement et
+            // il est coupé avec lui (décision de Maxime du 07/10), au lieu d'un second QR jamais remis.
+            saleTicketCode: $support instanceof BilletSupport ? $support->getIdentifiantSupport() : null,
         );
 
         return $vente;

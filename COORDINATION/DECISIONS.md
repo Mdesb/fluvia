@@ -3555,6 +3555,114 @@ retenue, tranchée par Maxime (droit et finance) le 14/09.
 
 ---
 
+## D116 — Annuler au guichet : trois gestes, un seul mécanisme, trois lots
+
+**Contexte.** La demande « un régisseur doit pouvoir annuler une entrée vendue par erreur dans les cinq
+minutes » arrive alors que l'annulation d'une vente entière existe déjà (`POST /ventes/{id}/annuler`, avoir
+scellé, motif obligatoire) mais qu'aucun bouton ne l'offre après une vente, qu'aucune annulation par ligne
+n'existe, et que le remboursement partiel par montant ne touche pas le crédit restant d'une carte
+multi-entrées (`DroitAcces.creditRestant`).
+
+**Décision.** Une seule spec (`features/annulation-entree`), trois gestes livrés en trois lots séparés, dans
+cet ordre : (1) annuler la vente en trois étapes depuis l'écran de fin de vente ; (2) annuler une seule ligne
+d'une vente multiple ; (3) rembourser partiellement une carte multi-entrées. Les trois passent par le même
+mécanisme : un avoir par contre-passation, référencé à la vente d'origine, daté du geste (D45), grand total
+perpétuel non diminué, avoirs cumulés à part.
+
+**Alternatives écartées.** Le geste 1 seul puis deux specs : trois avoirs conçus séparément, deux cycles
+de contradiction de plus. Tout en un lot : un diff de 400 lignes que personne ne relit.
+
+**Contrepartie acceptée.** Une spec plus longue à relire ; les lots 2 et 3 se codent sans attendre mais
+chacun passe sa propre relecture adversariale avant fusion.
+
+**Contradiction.** Le contradicteur avait sorti l'annulation par ligne (« pas dans la demande, écriture scellée
+nouvelle, état non défini ») — Réponse : écartée par Maxime, qui la demande explicitement (« quand il y a
+plusieurs produits dans une vente, on devrait pouvoir annuler une seule ligne ») ; l'objection reste
+vraie sur un point, l'état d'une vente à moitié annulée, tranché ci-dessous.
+
+**Comment on le voit tenir.** `ContrePassationTest` s'étend d'un test par geste ; le garde-fou n°29
+(création qu'on ne peut pas défaire) porte les trois routes.
+
+---
+
+## D117 — Le motif d'annulation est fermé : rien de nominatif n'entre dans la chaîne scellée
+
+**Contexte.** `Avoir.motif` est une chaîne libre dans un enregistrement scellé, conservé six ans, que
+`InalterabiliteListener` interdit de modifier. Un opérateur qui tape « M. Dupont, carte refusée » crée une
+donnée personnelle irrectifiable (RGPD art. 16 et 17 contre obligation de conservation).
+
+**Décision.** Trois motifs fermés au guichet : *Erreur de saisie* (présélectionné), *Client parti*,
+*Doublon*. Aucun texte libre dans l'avoir. Le serveur refuse tout motif hors liste (422).
+
+**Alternatives écartées.** Libre optionnel avec consigne « rien de nominatif » : la consigne ne protège pas.
+Libre stocké hors chaîne, effaçable, lié par référence : une table et du code pour une nuance rare.
+
+**Contrepartie acceptée.** On perd la nuance ; le simplificateur y voyait de toute façon un choix de moins
+pour l'opérateur.
+
+**Contradiction.** Perspective juridique : « donnée personnelle ineffaçable » — Réponse : retenue, tranchée
+par Maxime (droit). **Perspective croisée.** Simplificateur : trois boutons radio, un présélectionné.
+
+**Comment on le voit tenir.** Le test CA-5 envoie un motif hors liste et attend 422 ; le garde-fou
+« secrets / données » peut ajouter `Avoir.motif` à la liste des champs sans saisie libre.
+
+---
+
+## D118 — Par défaut, une annulation en régie passe par le régisseur ; l'établissement peut desserrer
+
+**Contexte.** Le régisseur de recettes est personnellement et pécuniairement responsable des fonds. Le code
+autorise aujourd'hui l'opérateur seul dès qu'aucune `LimiteAutorisation` n'existe pour `vente.annuler`
+(« aucune limite ⇒ AUTORISE »). Une « fenêtre de cinq minutes » n'a aucune base réglementaire : c'est un
+réglage d'exploitation.
+
+**Décision.** À la création d'un établissement en régie, une `LimiteAutorisation` est posée d'office sur
+`vente.annuler` : toute annulation passe par la validation du régisseur (`DemandeEscalade`). L'établissement
+peut desserrer par configuration (montant plafond, délai) ; le privé part sans limite. Aucune constante de
+temps dans le code, aucune migration : tout passe par l'autorisation graduée existante (D39).
+
+**Alternatives écartées.** Opérateur seul dans les cinq minutes puis régisseur : fenêtre codée, migration,
+et un mandataire qui engage le régisseur sans sa trace. Opérateur seul toujours : régisseur non couvert.
+
+**Contrepartie acceptée.** Dix secondes par annulation là où le régisseur n'a rien assoupli.
+
+**Contradiction.** Perspective juridique : « une annulation par un mandataire seul engage le régisseur » —
+Réponse : retenue, tranchée par Maxime (droit). **Perspective croisée.** Contradicteur : « la fenêtre n'existe
+pas par défaut sans limite configurée » — c'est précisément ce que la décision inverse en posant la limite
+d'office.
+
+**Comment on le voit tenir.** CA-2 : sans desserrage, une annulation crée une `DemandeEscalade` et n'annule
+rien ; un test de création d'établissement en régie vérifie la présence de la limite.
+
+---
+
+## D119 — Rembourser une carte multi-entrées : prorata du prix payé, carte close
+
+**Contexte.** Le remboursement partiel existe par montant libre ; rien ne le lie au crédit restant de la
+carte (`DroitAcces.creditRestant`). Rembourser 6 entrées sur 10 laisserait aujourd'hui la carte à 10.
+
+**Décision.** Le remboursement d'une carte multi-entrées se calcule au **prorata du prix payé** (entrées
+non consommées sur entrées totales, appliqué au prix effectivement payé, remise comprise) et **remet le
+crédit restant à zéro dans le même geste scellé**. L'avoir de ligne (lot 2) suit le même modèle que l'avoir
+de vente : référence à la vente d'origine, date du geste, grand total non diminué.
+
+**Alternatives écartées.** Six fois le prix unitaire : sur une carte vendue avec remise, on rembourse plus
+que payé. Prorata en laissant quatre entrées : le client garde des entrées et récupère de l'argent pour
+une carte payée dix.
+
+**Contrepartie acceptée.** Un client qui voudrait garder quelques entrées et se faire rembourser le reste
+n'a pas ce geste : il rachète une carte plus petite.
+
+**Contradiction.** Perspective juridique : « le cumul perpétuel NF525 avec des avoirs de ligne est-il
+conforme ? » — Réponse : validé par Maxime (finance, droit) : le grand total reste la somme des ventes,
+les avoirs se cumulent à part, comme l'avoir de vente entière déjà en production.
+**Perspective croisée.** Perspective finance non convoquée sur cet objet (mécanisme d'argent existant) ;
+le calcul du prorata a été tranché en CP-1.
+
+**Comment on le voit tenir.** Un test : carte de 10 à 40 € (remise), 4 consommées, remboursement → avoir de
+24,00 €, `creditRestant` = 0, support invalidé.
+
+---
+
 ## D120 — La protection de `main` vaut aussi pour les administrateurs ; le secours est une commande
 
 **Décidé par Maxime le 07/10/2026 (QCM), ticket #253.** Numéro D120 et non D111 : D111–D115 (arbitrages du
@@ -3578,3 +3686,280 @@ gh api -X DELETE repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # 
 gh api -X POST   repos/Mdesb/fluvia/branches/main/protection/enforce_admins   # rétablir
 gh api repos/Mdesb/fluvia/branches/main/protection/enforce_admins --jq .enabled
 ```
+
+---
+
+## D121 — Une entrée hors ligne remontée sur une jauge pleine est comptée, et l'exploitant est prévenu
+
+**Tranché par Maxime le 07/10, sur QCM : « compter et signaler ».**
+
+**Ce qui était faux, mesuré pendant #273.** Seuil 1, jauge à 1, une entrée faite sur une borne hors
+ligne puis remontée : le passage était journalisé `refuse / seuil_fmi` et la jauge restait à 1. La
+personne était pourtant entrée : la borne coupée ne connaît pas la jauge, elle ouvre sur son
+instantané. La jauge de sécurité restait donc une personne sous la réalité, et laissait entrer en
+ligne une personne de trop.
+
+**La règle.** Au rejeu, une entrée hors ligne est comptée même jauge pleine : la jauge dit l'état
+réel, quitte à dépasser le seuil. Le passage est accepté avec le code `seuil_fmi_depasse_hors_ligne`
+(même dérogation que le litige de crédit CA-8 : un code sur un passage accepté). La cloche prévient
+ceux qui ont `acces.superviser` sur le site (`access.capacity_exceeded`, critique), **une fois par
+espace et par lot remonté** : une borne coupée à l'heure d'affluence remonte des dizaines d'entrées,
+et une cloche qui sonne pour chacune ne se lit plus.
+
+**Ce qui ne change pas.** En ligne, une jauge pleine refuse toujours (`seuil_fmi`). Les autres refus
+au rejeu restent des refus — carte épuisée (R-6, en attente d'IT Cotation), anti-passback, zone,
+horaires : chacun appelle sa propre décision, celle-ci ne les tranche pas.
+
+**La contrepartie.** Une jauge au-dessus du seuil bloque les entrées en ligne jusqu'à ce qu'elle
+redescende : c'est ce que veut dire un seuil de sécurité. Et le dépassement se constate **à la
+remontée**, pas à l'heure du passage : une entrée dont la personne est déjà ressortie ne fait que
+compenser sa sortie, déjà décomptée, et n'alerte que si la jauge reste au-dessus du seuil après elle.
+
+---
+
+## D122 — Ticket opposable, règlement : un terminal muet se fait constater, il ne se relance pas
+
+**Décidé par Maxime le 07/10/2026 (QCM), au CP-1 du ticket opposable (PR #275, Q-A1 et Q-A2).**
+
+**Ce qui était mesuré le 07/10** (`features/ticket-opposable/specs/spec-ticket-opposable.md`, §F-1).
+L'écran abandonne un règlement au bout de 45 s (`frontend/src/api/client.js:657`) quand nginx en attend 60,
+puis dit « Réessayez dans un instant » (`client.js:251`). Un terminal qui accepte à la 50ᵉ seconde et un
+caissier qui réessaie font deux débits. Le lot 1 (#286) a posé la clé d'idempotence ; il ne dit pas quoi
+faire d'une demande partie sans réponse.
+
+**Ce qui change (Q-A1, objectif G-6 de la spec).** La tentative vers le terminal est écrite avant l'appel.
+Après un timeout, ou une tentative restée sans issue, le même règlement ne repart pas au terminal tant que le
+caissier n'a pas déclaré ce que le terminal affiche :
+- « accepté » : il saisit la référence du ticket CB, le règlement est créé avec elle, et la déclaration est
+  tracée (qui, quand, quelle tentative) ;
+- « non passé » : la tentative est close, et un nouvel envoi est permis.
+
+**Ce qui ne change pas ici (Q-A2).** La synchronisation hors ligne (`SynchroOperationsProcessor`, qui appelle
+`encaisser()` sans clé) garde son comportement. Elle fera l'objet d'un lot dédié, à livrer avant le premier
+poste hors ligne.
+
+**Ce qui reste.** Les lots 2 et 3 du plan (tentatives, déclaration, écrans), mis en service ensemble (D126).
+
+---
+
+## D123 — Ticket opposable, TVA : le taux de la catégorie comptable, gravé sur la ligne, et le ticket égal aux écritures
+
+**Décidé par Maxime le 07/10/2026 (QCM), au CP-1 du ticket opposable (PR #275, Q-B1 à Q-B4).**
+
+**Ce qui était mesuré le 07/10** (spec, §F-2). `LigneVente` ne porte aucun taux, et trois calculs se
+contredisent. Les écritures extraient la TVA du TTC ligne par ligne (`app/src/Compta/Regime/RegimeBase.php:50`).
+La facture justificative prend « hors champ 0 % » sans correspondance (`EmissionFactureJustificativeHandler.php:235`)
+et recalcule à l'endroit (`LigneFacture.php:220-227`) : 1,15 € à 10 % donne 0,10 € de TVA dans les écritures et
+0,11 € sur la facture. `Produit::$tauxTva` sert aux échéances d'abonnement (U-1) ; en préprod, les deux produits
+qui en portent un disent 10 % quand leur correspondance comptable dit 20 %.
+
+**Ce qui change.**
+- **Q-B1** : le taux vient de la correspondance comptable de la catégorie du produit, exigée valide. Il est gravé
+  sur la ligne à sa création (valeur, catégorie, libellé) et n'est jamais relu ensuite.
+- **Q-B2** : ticket = écritures, au centime. La TVA est extraite du TTC ligne par ligne, puis sommée par taux, par
+  un seul calcul (D63-bis).
+- **Q-B3** : une ligne sans taux valide est refusée à sa création, avant tout paiement, partout où l'on peut refuser
+  (caisse, réservation, no-show, boutique, abonnement en ligne). La mention « ventilation incomplète » est réservée
+  à l'historique et au hors ligne déjà vendu. Jamais de 0 % en silence.
+- **Q-B4** : la ventilation TVA entre dans l'empreinte NF525 de la vente dès ce lot.
+
+**Ce qui reste.** La contradiction entre le taux des échéances (le produit, U-1) et celui des ventes (la catégorie)
+sera tranchée à part. La facture justificative sera corrigée dans un lot Facturation.
+
+---
+
+## D124 — Ticket opposable : un journal des éditions scellé à part, et un duplicata identique à l'original
+
+**Décidé par Maxime le 07/10/2026 (QCM), au CP-1 du ticket opposable (PR #275, Q-C1 à Q-C3 et règle du duplicata).**
+
+**Ce qui était mesuré le 07/10** (spec, §F-3). `Vente::$imprime` est un booléen (`Vente.php:250`) : ni compteur,
+ni trace de réédition. Il est posé sans qu'aucune imprimante ne soit pilotée, à la validation
+(`ValiderVenteService.php:201`) et par l'écran, qui demande le ticket en mode « imprimer » après chaque validation
+(`Caisse.jsx:943`) : 44 des 50 ventes validées de la préprod sont « imprimées ». Le bouton « Imprimer » est un
+`window.print()`. Le payload scellé (`ValiderVenteService::payload()`, l.394) ne porte ni TVA ni vendeur, et le
+ticket affiché porte le code d'accès du billet.
+
+**Ce qui change.**
+- **Q-C1** : toute émission est comptée dans un journal des éditions scellé à part, avec son propre stockage (pas
+  `nf525_operation_scellee`) et sa propre chaîne d'empreintes.
+- **Q-C2** : l'identité du vendeur (raison sociale, adresse, SIRET, n° de TVA intracommunautaire, site) est figée à
+  la validation, dans le contenu scellé.
+- **Q-C3** : une impression ne compte que si une imprimante la confirme. D'ici là, le ticket s'imprime à la demande
+  seulement (loi AGEC) ; l'afficher à l'écran est une consultation, qui ne compte pas.
+- **Duplicata** : il reproduit exactement l'original scellé, avec la seule mention « DUPLICATA n° k — édité le … »
+  (référentiel LNE, exigence 9). Aucune mention d'avoir ni de correction : l'avoir a son propre justificatif (D125).
+- **Code d'accès** : le ticket PDF n'en porte jamais. Un duplicata ne doit pas devenir un second billet.
+
+**Ce qui reste.** Le lot 9 du plan (9a, 9b, 9c), mis en service d'un bloc. Le pilotage d'une imprimante (ESC/POS)
+est hors du périmètre de la spec.
+
+---
+
+## D125 — Ticket opposable, avoir : des lignes négatives avec leur taux, et un justificatif d'avoir dès ce lot
+
+**Décidé par Maxime le 07/10/2026 (QCM), Q-C4 du ticket opposable (PR #275), après une recherche aux sources officielles.**
+
+**Ce qui était mesuré le 07/10** (spec, §F-3). Un avoir ne porte qu'un montant (`app/src/Vente/Entity/Avoir.php:52`).
+`ContrePassationHandler::rembourser()` (l.47) le crée à montant libre, sans lignes ni taux. L'extourne
+(`RegimeBase::genererEcritureExtourne()`, l.198) contre-passe l'écriture entière, quel que soit le montant remboursé.
+
+**Ce qui change.**
+- **Enregistrement** : un remboursement devient des lignes négatives, chacune avec le taux gravé de sa ligne
+  d'origine. Un montant global est réparti (au taux des lignes visées, ou au prorata des bases par taux pour un
+  geste global), puis figé à la saisie. Rien n'est recalculé ensuite, et l'extourne suit ce que l'avoir porte.
+- **Vente facturée** : la caisse refuse de la rembourser, avant tout effet, et renvoie vers l'avoir de facture `AVF`.
+- **Justificatif d'avoir**, livré dès ce lot : série distincte, référence de la vente d'origine, lignes, HT, TVA et
+  TTC par taux. Il est remis à la demande ou par e-mail, jamais imprimé d'office, et ses rééditions passent au
+  journal des éditions (D124).
+
+**Sources citées par Maxime.** BOFiP BOI-TVA-DECLA-30-10-30 §50 et §90 ; référentiel LNE rév. 1.8, exigences 3, 4
+et 9 ; CGI art. 272, 289 et annexe II art. 242 nonies A ; BOI-TVA-DECLA-30-20-20-20 §220-260 ; loi AGEC, code de
+l'environnement D541-370 à D541-372.
+
+**Ce qui reste**, à trancher par Maxime (plan de la PR #275, « Points bloquants ») : P-1, la mention de
+certification d'un logiciel non certifié ; P-3, l'annulation d'une vente facturée ; P-4, où s'enregistre le
+remboursement d'une vente facturée (l'`AVF` d'une facture justificative ne produit aucune écriture). L'envoi par
+e-mail suit D94 tant que le prestataire n'est pas désigné (D82).
+
+---
+
+## D126 — Ticket opposable : quinze PR, chacune fusionnée sur vert et relue, sous le veto de Maxime
+
+**Décidé par Maxime le 07/10/2026 (QCM) : le plan complet de la PR #275 (`features/ticket-opposable/plans/plan-ticket-opposable.md`, §0.1).**
+
+**Le plan.** 44 étapes en 15 PR, l'argent d'abord :
+- 1, la clé du règlement ; 2, les tentatives ; 3, la déclaration et les écrans ;
+- 4, le no-show et le plafond des remboursements ; 5, le ticket en un seul endroit ;
+- 6, la TVA gravée ; 7, ticket = comptes ;
+- 8a à 8c, les avoirs ; 9a à 9c, le ticket PDF compté ; 10a et 10b, le justificatif d'avoir.
+
+Les lots 2 et 3 sont mis en service ensemble, comme les trois PR du lot 9.
+
+**La règle de fusion.** Chaque lot fusionne quand il est vert et relu :
+- des tests vus rouges avant le code, verts après ;
+- une relecture adversariale indépendante, sans bloquant ;
+- la CI verte.
+
+Maxime garde un veto sur chaque lot.
+
+**Où on en est.** Le lot 1 est fusionné le 07/10 (#286, `292bec06`) : le rejeu d'un règlement ne débite plus deux
+fois. L'étape du plafond du porte-monnaie, ajoutée au lot 4, est déjà faite (#283, D127).
+
+**Ce qui reste.** Les points P-1, P-3 et P-4 (D125) n'arrêtent que les étapes qu'ils nomment.
+
+---
+
+## D127 — Remboursement partiel : le porte-monnaie est recrédité d'abord, jamais au-delà de sa part
+
+**Décidé par Maxime le 07/10/2026 (QCM) : option A du point P-5 de la PR #275, livrée par la PR #283.**
+
+**Ce qui était mesuré le 07/10.** Chaque remboursement, même partiel, recréditait toute la part payée par
+porte-monnaie : c'était l'« ⚠ HYPOTHÈSE » écrite dans `ContrePassationHandler`. Deux remboursements partiels d'une
+vente payée 50 € en porte-monnaie recréditaient 100 €. Le test `tests/Crm/Api/WalletPartialRefundTest.php` était
+rouge sur `main` avant #283.
+
+**La règle.** Une contre-passation (remboursement ou annulation) recrédite d'abord le porte-monnaie, du plus petit
+de deux montants : celui de l'avoir, et la part payée par porte-monnaie moins ce qui a déjà été rendu pour cette
+vente. Jamais au-delà. Le reste de l'avoir passe par les autres moyens. Exemple de #283 : une vente de 64,80 €
+payée 50 € en porte-monnaie et 14,80 € en espèces ; trois remboursements de 20 € rendent 20, 20, puis 10 € au
+porte-monnaie.
+
+**Dans le code.** `ContrePassationHandler::recrediterPmv()` (`app/src/Vente/Service/ContrePassationHandler.php:113-127`)
+lit le déjà-rendu dans les mouvements réels (`recreditePourVente()`) et travaille sous verrou de la vente. Sans ce
+verrou, deux remboursements simultanés rendaient 60 € pour une part de 50 € (mesuré dans #283).
+
+**Ce qui reste.** Les avoirs cumulés d'une vente peuvent encore dépasser son total (étape É11 du lot 4, D126).
+Une annulation qui croise un remboursement est relue, pas testée (#283, UNVERIFIED).
+
+---
+
+## D128 — Le terminal de paiement simulé refuse par défaut, et jamais en production
+
+**Décidé par Maxime le 07/10/2026 (QCM), livré par la PR #282.**
+
+**Ce qui était mesuré le 07/10.** `TpeMock`, seule implémentation de `TerminalPaiementInterface`, est câblé dans
+tous les environnements (`app/config/services.yaml:139`). En production, une carte était donc « acceptée » en caisse
+sans aucun terminal, et l'en-tête `X-Tpe-Simule`, que tout appelant peut poser, choisissait l'issue : un
+contournement de paiement. La caisse de préprod comptait 13 règlements `cb` « acceptés », tous simulés.
+
+**La règle.** Le simulateur refuse (422, « Aucun terminal de paiement configuré… ») tant que `TPE_SIMULE_AUTORISE`
+ne vaut pas 1, et avant toute lecture de l'en-tête. Il n'est autorisé qu'en test (`app/.env.test:54`) et en préprod
+(`infra/.env.preprod`, non versionné, transmis par `infra/compose.preprod.yaml:83` avec 0 par défaut). Partout
+ailleurs, il refuse (`app/.env:313`). **Jamais `1` en production.** C'est un drapeau et non `APP_ENV`, parce que la
+préprod tourne sous `APP_ENV=prod`.
+
+**Mesuré après la fusion (07/10).** Le conteneur `php` de préprod porte `TPE_SIMULE_AUTORISE=1`.
+
+**Ce qui reste.** L'écran de caisse montre encore le sélecteur « Simulation TPE » là où le simulateur refuse : sans
+effet, mais trompeur. Un vrai terminal remplacera l'alias de `services.yaml`. Les bouchons du paiement à distance
+(D112) ne sont pas concernés.
+
+---
+
+## D129 — Pas de vente de formule sans client payeur : le contrôle se fait avant le scellement
+
+**Décidé par Maxime le 07/10/2026 (QCM), à la suite de la PR #284 ; révise G-5 de la spec caisse-abonnement.**
+
+**Ce qui était mesuré le 07/10 (#284).** Une vente au comptoir portant une ligne-formule sans client était validée
+et scellée NF525, puis la souscription la refusait faute de débiteur : `/valider` répondait 422 sur une vente déjà
+encaissée, sans abonnement possible ni reprise. C'était voulu par G-5
+(`features/caisse-abonnement/specs/spec-caisse-abonnement.md:31`, « échec `souscrire()` post-scellement → vente
+valide + reprise »), et #284 l'a gardé. Le premier mois d'une formule nominative (les quatre de la préprod) ne
+pouvait pas non plus être encaissé au comptoir : la ligne était refusée faute de bénéficiaire.
+
+**Ce qui change.**
+- Le serveur refuse **avant** le scellement (422) une vente de produit-formule sans client payeur. La vente reste
+  ouverte et se valide une fois le client rattaché.
+- G-5 vaut toujours pour les autres refus de la souscription (bénéficiaire hors périmètre, quantité supérieure à 1,
+  échec de `souscrire()`) : ils restent constatés après le scellement.
+- Le premier mois des formules nominatives est encaissable au comptoir.
+
+Le code est dans une PR en cours (branche `fix/souscription-suite`).
+
+**Ce qui reste.** La ligne G-5 de la spec n'est pas réécrite : cette décision fait foi pour le cas sans payeur.
+Les autres points ouverts sont dans la section « Reste » de #284.
+
+---
+
+## D130 — D95 tient : la bascule en absence reste hors de l'ordonnanceur, et ce qu'elle a facturé est exonéré
+
+**Décidé par Maxime le 07/10/2026 (QCM), sur le ticket #255 ; livré par la PR #281, suite en cours.**
+
+**Ce qui était mesuré.** D95 interdit `reservation:no-show:basculer` tant qu'aucun écran n'écrit la présence. Or
+`TACHES_AUTORISEES` la contenait depuis le 04/09 (#255). En préprod, la PR #281 a relevé le 07/10, en lecture seule,
+10 réservations basculées en `no_show_facture` et 10 facturations d'absence pour 140,00 €. En face : 0 émargement et
+0 présence confirmée. Ces réservations étaient donc facturables par construction, que la personne soit venue ou non.
+
+**Ce qui change.**
+- La tâche sort de la liste blanche (#281). Le garde-fou n°57 (`bin/garde-fou-no-show-hors-liste.sh`) l'y tient
+  dehors. L'ordonnanceur de préprod a redémarré le 07/10 à 17:22 UTC avec 24 tâches. Mesuré à 18:23 UTC : depuis
+  ce redémarrage, la tâche n'apparaît plus dans son journal, qui compte 47 « ok » pour les autres tâches.
+- Les 10 facturations ont été exonérées le 07/10 par l'API, avec un motif (mesuré : 10 `exoneree`, 10 motifs,
+  10 auteurs).
+- Les réservations passeront à l'état neutre « terminée sans constat », par un geste « lever l'absence » qui exige
+  un motif et une permission, et qui laisse une trace d'audit (PR en cours, branche `fix/reservation-absence-levee`).
+- Les exonérations et ces réservations entrent dans le journal d'audit.
+
+**Ce qui reste.** Les 10 réservations sont encore `no_show_facture` (mesuré le 07/10). La condition de levée de D95
+ne change pas : un écran qui appelle `/emarger` et une présence confirmée en base. #208 reste ouvert.
+
+---
+
+## D131 — La suite PHPUnit tourne sur chaque PR et devient obligatoire avant toute fusion
+
+**Décidé par Maxime le 07/10/2026 (QCM), option A de l'étude CI du jour ; livré par une branche en cours (`ci/phpunit-gate`).**
+
+**Ce qui était mesuré le 07/10.** La CI ne lançait que les garde-fous : la protection de `main` n'exige que « Banc
+d'essai des garde-fous » et « Tous les garde-fous du lanceur ». Dix tests sont restés rouges sur `main` jusqu'à
+trois semaines sans que rien ne le signale (#276).
+
+**Ce qui change.**
+- La suite complète tourne en CI sur chaque PR, en 8 lots parallèles. Un job final « PHPUnit » rend toujours un
+  verdict, et c'est le seul check à exiger. Un module de `app/tests` qui n'est dans aucun lot fait échouer la CI.
+- Le check « PHPUnit » devient obligatoire dans la protection de `main` dès qu'il est vert sur `main`. Comme
+  `enforce_admins` est actif (D120), il vaut aussi pour les administrateurs.
+- Les fixtures qui dépendent de l'année sont corrigées à part (PR en cours, branche `fix/fin-de-saison`). La
+  « Saison 2026 » finit le 31/12/2026, et quelque 216 tests de 83 classes tomberaient ce jour-là.
+
+**Ce qui reste.** Pousser le workflow exige la portée `workflow` du jeton du VPS, et on l'attend. Le check n'est
+ajouté à la protection qu'une fois vert sur `main`.

@@ -21,6 +21,7 @@ use App\Vente\State\AjoutLigneProcessor;
 use App\Vente\State\AnnulerVenteProcessor;
 use App\Vente\State\CorrectSettlementProcessor;
 use App\Vente\State\CreerVenteProcessor;
+use App\Vente\State\DeclareSettlementProcessor;
 use App\Vente\State\ModifierLigneProcessor;
 use App\Vente\State\PaiementProcessor;
 use App\Vente\State\RattacherClientProcessor;
@@ -106,15 +107,33 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/paiements',
-            description: 'Enregistre un reglement. Corps : { moyen, montant, id?, differe?, banque?, numeroCheque? }.',
+            description: 'Enregistre un reglement. Corps : { moyen, montant, cleIdempotence?, id?, differe?, banque?, numeroCheque? }. '
+                . 'Rejouer le meme appel avec la meme cleIdempotence (ou le meme id) rend le reglement deja enregistre '
+                . '(dejaEnregistre: true, 200), sans redemander au terminal ni redebiter le porte-monnaie, meme apres validation. '
+                . 'Une cle deja employee sur une autre vente, ou avec un autre moyen ou un autre montant, est refusee (422) avant tout effet. '
+                . 'Un seul reglement en cours par vente : 409 { code: payment_in_progress } si un autre est en cours, '
+                . '{ code: payment_outcome_unknown } si le terminal n\'a pas rendu d\'issue (rien ne passe avant une declaration).',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
             processor: PaiementProcessor::class,
         ),
         new Post(
+            uriTemplate: '/ventes/{id}/declarer-reglement',
+            description: 'Declare ce qu affiche un terminal reste muet (Q-A1, D122) : seule sortie d une tentative payment_outcome_unknown. '
+                . 'Corps : { tentative (id rendu par le 409), issue: accepte|non_passe, referenceCarte (obligatoire si accepte, 64 car. max) }. '
+                . 'accepte : reglement ecrit avec la cle et le montant de la tentative, sans terminal (201) ; non_passe : vente liberee (200). '
+                . 'Qui et quand restent sur la tentative. Rejouee a l identique, rend son issue (dejaEnregistre: true). '
+                . '409 payment_in_progress si la tentative attend encore le terminal, payment_outcome_known si elle a trouve son issue autrement.',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'vente.encaisser')",
+            processor: DeclareSettlementProcessor::class,
+        ),
+        new Post(
             uriTemplate: '/ventes/{id}/valider',
-            description: 'Valide la vente et emet les supports. Corps : { supports?: [...] }.',
+            description: 'Valide la vente et emet les supports. Corps : { supports?: [...] }. '
+                . 'Refusee (409, meme code et meme tentative que les paiements) tant qu un reglement tient la vente.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
@@ -122,7 +141,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/annuler',
-            description: 'Annule une vente non validee. Corps : { motif?, demandeEscalade? (jeton de rejeu) }.',
+            description: 'Annule une vente validée par contre-passation (avoir). Corps : { motif ∈ {Erreur de saisie, Client parti, Doublon}, demandeEscalade? }',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.annuler')",
