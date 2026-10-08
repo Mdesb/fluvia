@@ -1,5 +1,6 @@
 import { membres } from './client.js'
 import { idDe } from './iri.js'
+import { intentFor, pendingIntents, settle } from './paymentIntent.js'
 
 // ── ENCAISSEMENT AU COMPTOIR DE LA PREMIÈRE ÉCHÉANCE (écran de souscription) ────────────────────
 //
@@ -21,13 +22,27 @@ import { idDe } from './iri.js'
 //
 // ⚠ ET ON NE JETTE PAS. Chaque échec est raconté à l'opérateur avec l'endroit où ça s'est arrêté,
 // parce que la réparation n'est pas la même selon l'étape.
+//
+// ⚠ LE RÈGLEMENT GARDE SA CLÉ JUSQU'À UNE ISSUE DÉFINITIVE (G-2 du ticket opposable). Un délai dépassé
+// n'est pas un refus : `settle` le redemande avec la même clé. Sans issue connue, on ne dit pas
+// « reprenez-la depuis la caisse » — l'opérateur y réencaissait. L'intention reste dans l'onglet, et la
+// caisse rouvre la vente pour la vérifier avec la même clé (et faire déclarer un terminal muet).
 export async function payFirstInstalmentAtCounter(
   api,
   { abonnementId, sessionId, payeurId, beneficiaireId, produitId, tarif, moyen, montant, prixForce },
+  { storage = globalThis.sessionStorage, establishment = null, settleOptions } = {},
 ) {
   if (!tarif) {
     return "L'abonnement est souscrit, mais ce produit n'a aucun tarif au guichet : rien n'a été "
       + "encaissé. Encaissez depuis la caisse, ou laissez la première échéance se prélever."
+  }
+  // Un règlement sans issue attend dans cet onglet (une souscription précédente, une vente de la
+  // caisse) : en ouvrir un autre ferait payer deux fois si le premier est passé.
+  const enAttente = pendingIntents(storage, establishment)[0]
+  if (enAttente) {
+    return `L'abonnement est souscrit, mais un règlement de la vente ${enAttente.saleNumber ? `n° ${enAttente.saleNumber}` : 'précédente'} `
+      + "attend encore son issue : rien n'a été encaissé ici. Vérifiez-le depuis la caisse ; la première "
+      + 'échéance sera prélevée normalement.'
   }
   let vente
   try {
@@ -64,10 +79,17 @@ export async function payFirstInstalmentAtCounter(
       ligne.prixUnitaire = montant
     }
     await api.ajouterLigne(vente.id, ligne)
-    const reglement = await api.payer(vente.id, { moyen, montant })
-    if (!reglement?.reglementEnregistre) {
-      return `L'abonnement est souscrit. Le règlement a été refusé : la vente ${numero} reste `
-        + `ouverte en caisse, et la première échéance sera prélevée normalement.`
+    const intention = intentFor(storage, { saleId: vente.id, saleNumber: vente.numero ?? null, establishment, body: { moyen, montant } })
+    const reglement = await settle(api, storage, intention, settleOptions)
+    if (reglement.outcome === 'unknown' || reglement.outcome === 'pending') {
+      return `L'abonnement est souscrit. Le règlement de la vente ${numero} n'a pas d'issue connue (`
+        + `${reglement.message}) : ne l'encaissez pas une seconde fois. La caisse rouvre cette vente et le `
+        + `vérifie avec la même clé. La première échéance reste programmée : si le règlement est confirmé, `
+        + `annulez-la dans l'échéancier.`
+    }
+    if (reglement.outcome !== 'paid') {
+      return `L'abonnement est souscrit. Le règlement a été refusé (${reglement.message}) : la vente `
+        + `${numero} reste ouverte en caisse, et la première échéance sera prélevée normalement.`
     }
     try {
       await api.valider(vente.id)

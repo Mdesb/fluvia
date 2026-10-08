@@ -97,6 +97,21 @@ final class PaymentAttemptSchemaTest extends VenteApiTestCase
         self::assertGreaterThan(self::HOLD_SECONDS - 0.5, $attente);
     }
 
+    /**
+     * La validation verrouille la ligne de la vente (`FOR UPDATE`) avant de chercher une tentative qui
+     * la tient (lot 3, D-4) : une tentative qui s'ouvre pendant ce temps ATTEND la fin de la validation
+     * — la clé étrangère `sale_id` pose un verrou partagé sur la vente. Sans cette attente, une carte
+     * pouvait partir au terminal pendant le scellement d'une vente qui ne l'attendait plus.
+     */
+    public function testAnAttemptWaitsWhileTheSaleRowIsLockedForUpdate(): void
+    {
+        $vente = $this->sale();
+        [$issue, $attente] = $this->whileAnotherConnectionHolds('SELECT id FROM vente_vente WHERE id = UNHEX(:v) FOR UPDATE', ['v' => $this->hex($vente)], 'commit', $this->row($vente, open: true));
+
+        self::assertSame('inserted', $issue);
+        self::assertGreaterThan(self::HOLD_SECONDS - 0.5, $attente, 'L\'ouverture de la tentative attend la fin de la transaction qui tient la vente.');
+    }
+
     /** La même clé, écrite par deux connexions à la fois : la seconde attend, puis échoue en doublon. */
     public function testTheSameKeyFromTwoConnectionsWaitsThenFails(): void
     {

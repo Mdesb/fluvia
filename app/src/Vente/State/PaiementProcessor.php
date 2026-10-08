@@ -23,7 +23,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  * Une autre tentative tient la vente : 409, `code` = `payment_in_progress` (l'effet est en cours) ou
  * `payment_outcome_unknown` (le terminal a pu débiter ; rien ne passe avant une déclaration). Un
  * code et non un message : l'écran doit les distinguer, et le message d'une exception ne traverse
- * pas toujours la production.
+ * pas toujours la production. La réponse nomme la tentative (`tentative`) : c'est elle qu'on déclare.
  *
  * @implements ProcessorInterface<Vente, JsonResponse>
  */
@@ -42,12 +42,7 @@ final class PaiementProcessor implements ProcessorInterface
         try {
             $resultat = $this->coordinateur->settle($data, $this->lecteur->corps());
         } catch (PaymentAttemptConflict $conflit) {
-            return new JsonResponse([
-                'code' => $conflit->reason,
-                'message' => $conflit->getMessage(),
-                'vente' => (string) $data->getId(),
-                'reglementEnregistre' => false,
-            ], JsonResponse::HTTP_CONFLICT);
+            return $conflit->toResponse($data);
         }
 
         $paiement = $resultat['paiement'];
