@@ -84,6 +84,17 @@ class SerieNumerotation
     #[Groups(['serie:read'])]
     private int $dernierNumero = 0;
 
+    /**
+     * LE CODE QUI SEPARE LES SERIES DE DEUX PROFILS D'UN MEME SIREN (`FA-<code>-2026-00001`).
+     *
+     * `null` : la serie sans code, celle du premier profil du SIREN a avoir numerote. Pose a la
+     * creation de la premiere serie du profil par `GenerateurNumeroFacture`, recopie ensuite sur ses
+     * series suivantes : il ne change jamais.
+     */
+    #[ORM\Column(length: 8, nullable: true)]
+    #[Groups(['serie:read'])]
+    private ?string $code = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -138,6 +149,18 @@ class SerieNumerotation
     public function setDernierNumero(int $dernierNumero): self
     {
         $this->dernierNumero = $dernierNumero;
+
+        return $this;
+    }
+
+    public function getCode(): ?string
+    {
+        return $this->code;
+    }
+
+    public function setCode(?string $code): self
+    {
+        $this->code = $code;
 
         return $this;
     }

@@ -70,23 +70,27 @@ final class InvoiceNumberPerOperatorTest extends FacturationApiTestCase
     }
 
     /**
-     * ⚠ DEUX PROFILS, UN SEUL SIREN : UNE SEULE ENTITÉ QUI FACTURE. Deux sites d'une même société
-     * (deux SIRET) reçoivent chacun un profil (`BackfillAccountingProfilesCommand`, la préprod en a
-     * deux au SIREN 130025265). Leurs deux séries rendraient le même numéro au même vendeur : le
-     * second est refusé en 409, comme avant le correctif il l'était en 500, mais en disant pourquoi.
+     * DEUX PROFILS, UN SEUL SIREN : DEUX SÉRIES DISTINCTES (décision de Maxime du 08/10). Deux sites
+     * d'une même société (deux SIRET) reçoivent chacun un profil ; la préprod en a deux au SIREN
+     * 130025265. Le premier à numéroter garde la série sans code, et elle continue ; le second prend le
+     * NIC de son SIRET, pour ses factures comme pour ses avoirs.
      */
-    public function testSameSirenCannotIssueANumberItAlreadyIssued(): void
+    public function testSameSirenGetsADistinctSeries(): void
     {
         [$client, $headersA] = $this->adminSurA();
         [$headersB, $rateB] = $this->openSecondOperator($client, $headersA, '13002526500027');
+        $rateA = $this->idTauxTva('Taux normal 20 %');
 
-        $this->issueInvoice($client, $headersA, $this->idTauxTva('Taux normal 20 %'));
+        $firstA = $this->issueInvoice($client, $headersA, $rateA);
+        $firstB = $this->issueInvoice($client, $headersB, $rateB);
+        $secondA = $this->issueInvoice($client, $headersA, $rateA);
+        $creditB = $this->post($client, '/api/factures/' . $firstB['id'] . '/avoir', $headersB);
 
-        $draft = $this->post($client, '/api/factures', $headersB, $this->bodyWithRate($rateB));
-        $response = $client->request('POST', '/api/factures/' . $draft['id'] . '/emettre', $headersB);
-
-        self::assertSame(409, $response->getStatusCode(), $response->getContent(false));
-        self::assertStringContainsString('SIREN', $response->getContent(false));
+        $year = date('Y');
+        self::assertSame("FA-$year-00001", $firstA['numero']);
+        self::assertSame("FA-00027-$year-00001", $firstB['numero'], 'le second profil du SIREN prend le NIC de son SIRET');
+        self::assertSame("FA-$year-00002", $secondA['numero'], 'la série sans code continue');
+        self::assertSame("AVF-00027-$year-00001", $creditB['numero']);
     }
 
     /**
