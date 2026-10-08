@@ -79,9 +79,50 @@ final class GenerateurNumeroFacture
         $sequence = $serie->incrementer();
 
         $numero = sprintf('%s-%s-%05d', $prefixe->value, $exercice, $sequence);
+        $this->refuserNumeroDejaEmisAuMemeSiren($profil, $numero);
         $facture->setNumero($numero);
 
         return $numero;
+    }
+
+    /**
+     * ⚠ L'INDEX VOIT L'EXPLOITANT, LA LOI VOIT LE VENDEUR, C'EST-A-DIRE LE SIREN.
+     *
+     * Deux sites d'une meme societe (deux SIRET) recoivent chacun un profil
+     * (`BackfillAccountingProfilesCommand`) ; la preprod en a deux au SIREN 130025265. Leurs deux
+     * series rendraient le meme numero au meme vendeur, et `uniq_facture_profil_numero` les laisserait
+     * passer. On refuse donc ici, en le disant. Separer leurs series (un prefixe propre a chacune)
+     * reste a trancher (`spec-facturation.md` §4.1, point ouvert).
+     *
+     * Ce n'est pas un verrou : deux premieres emissions simultanees de ces deux profils passeraient.
+     */
+    private function refuserNumeroDejaEmisAuMemeSiren(ProfilExploitant $profil, string $numero): void
+    {
+        if ($profil->getSiren() === '') {
+            return;
+        }
+
+        $deja = (int) $this->em->createQueryBuilder()
+            ->select('COUNT(f.id)')
+            ->from(Facture::class, 'f')
+            ->join('f.profilExploitant', 'p')
+            ->andWhere('f.numero = :numero')
+            ->andWhere('p.siren = :siren')
+            ->andWhere('p.id <> :profil')
+            ->setParameter('numero', $numero)
+            ->setParameter('siren', $profil->getSiren())
+            ->setParameter('profil', $profil->getId(), 'uuid')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        if ($deja > 0) {
+            throw new ConflictHttpException(sprintf(
+                'Le numéro %s a déjà été émis par un autre exploitant du même SIREN (%s) : un vendeur ne '
+                . 'peut pas émettre deux fois le même numéro. Rattachez ce site au profil qui facture déjà.',
+                $numero,
+                $profil->getSiren(),
+            ));
+        }
     }
 
     /** Charge (ou crée) la ligne de compteur, puis la verrouille en écriture jusqu'au commit. */
