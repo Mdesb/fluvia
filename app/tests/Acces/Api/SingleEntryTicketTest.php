@@ -64,6 +64,18 @@ final class SingleEntryTicketTest extends AccesApiTestCase
         self::assertSame('refuse', $this->pass($ticket, $this->wallClock(1, '10:00'))['resultat'], 'Illimité dans la durée, pas au-delà.');
     }
 
+    /** Zéro entrée ferait un billet qui n'ouvre jamais : refusé à l'écriture. */
+    public function testAProductCannotSellZeroEntry(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->request('PATCH', '/api/produits/' . $this->idProduit(OffreFixtures::PRODUIT_ENTREE), [
+            'auth_bearer' => $entete['auth_bearer'],
+            'headers' => $entete['headers'] + ['Content-Type' => 'application/merge-patch+json'],
+            'json' => ['entryCount' => 0],
+        ]);
+        self::assertResponseStatusCodeSame(422);
+    }
+
     /** Deux jours : le jour de la vente et le suivant, jusqu'à minuit à l'établissement. */
     public function testValidityInDaysCoversTheFollowingDayAndNoMore(): void
     {

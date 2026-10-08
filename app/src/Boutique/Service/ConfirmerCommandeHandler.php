@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Service;
 
+use App\Acces\Entity\DroitAcces;
 use App\Boutique\Entity\BilletQrMeta;
 use App\Boutique\Entity\LigneCommandeMeta;
 use App\Boutique\Entity\PanierEnLigne;
@@ -284,6 +285,14 @@ final class ConfirmerCommandeHandler
             $reservation = $reservations[(string) $ligneVente->getId()] ?? null;
             if ($reservation !== null) {
                 $this->projectionAcces->projeterSiApplicable($reservation);
+            }
+
+            // Un billet daté vaut pour son créneau, pas pour le jour de l'achat (décision du 08/10) :
+            // chaque billet de la ligne, pas seulement le premier.
+            $creneau = $meta?->getCreneau();
+            foreach ($creneau !== null ? $this->em->getRepository(BilletSupport::class)->findBy(['ligne' => $ligneVente]) : [] as $billet) {
+                $this->em->getRepository(DroitAcces::class)->findOneBy(['billetSupportRef' => $billet->getId()])
+                    ?->setFenetreDebut($creneau->getDebut())->setFenetreFin($creneau->getFin());
             }
 
             $support = $this->em->getRepository(BilletSupport::class)->findOneBy(['ligne' => $ligneVente]);
