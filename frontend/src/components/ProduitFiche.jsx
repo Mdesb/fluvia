@@ -1,6 +1,8 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
+import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu, actionsStatut } from '../api/produit.js'
+import { CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, lignesManquantes, ongletInitial } from '../api/publication.js'
+import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 // Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
@@ -24,6 +26,14 @@ import { confirmer } from './Confirmation.jsx'
 // options — on affiche donc immédiatement ce qu'on sait, et on complète. Une modale qui tourne une
 // seconde sur un fond vide alors qu'on avait déjà 80 % de la réponse est une seconde perdue à chaque
 // ouverture.
+
+// Les appels du cycle de vie, dans l'ordre des actions déclarées par `actionsStatut`.
+const APPELS_STATUT = {
+  publier: api.publierProduit,
+  depublier: api.depublierProduit,
+  archiver: api.archiverProduit,
+  reactiver: api.reactiverProduit,
+}
 
 // Les trois règles de produit constaté d'avance du socle (`Offre\Enum\ReglePca`), dites en clair :
 // le code brut « etalement » ne dit pas ce qui est étalé ni pourquoi.
@@ -247,7 +257,18 @@ export default function ProduitFiche({
   //
   // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
   // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
-  const [vueFiche, setVueFiche] = useState('vitrine')
+  //
+  // ⚠ `null` TANT QU'ON N'A PAS CLIQUÉ : la fiche s'ouvre alors sur le premier onglet incomplet, ou
+  // sur Vente (lot des garde-fous, 08/10). Elle s'ouvrait sur « Présentation », loin de ce qui
+  // empêchait de vendre.
+  const [vueFiche, setVueFiche] = useState(null)
+  // Ce qui manque pour publier, dit par la garde serveur. `null` = pas encore lu.
+  const [manquants, setManquants] = useState(null)
+  // Incrémenté par les sections qui écrivent hors du cycle « Enregistrer » (zones, créneaux).
+  const [reverifier, setReverifier] = useState(0)
+  const aReverifier = () => setReverifier((n) => n + 1)
+  const [actionStatut, setActionStatut] = useState(null)
+  const [succes, setSucces] = useState(null)
 
   // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
   //
@@ -283,7 +304,7 @@ export default function ProduitFiche({
   // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
   // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
   const vueConnue = onglets.some(([cle]) => cle === vueFiche)
-  const vue = vueConnue ? vueFiche : 'vitrine'
+  const vue = vueConnue ? vueFiche : ongletInitial(manquants, onglets)
 
   // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
   //
@@ -390,6 +411,26 @@ export default function ProduitFiche({
 
   const produitId = produit?.id
 
+  // CE QUI MANQUE POUR PUBLIER, relu à chaque enregistrement (`detail` change), à chaque écriture des
+  // zones et des créneaux (`reverifier`), qui vivent hors du cycle « Enregistrer », et à chaque
+  // changement d'onglet.
+  // Le premier résultat fixe l'onglet d'ouverture, une fois : la fiche ne saute pas d'onglet à chaque
+  // manque comblé.
+  useEffect(() => {
+    if (!produitId) return undefined
+    let annule = false
+    api.pretAPublier(produitId)
+      .then((r) => {
+        if (annule) return
+        const liste = Array.isArray(r?.missing) ? r.missing : []
+        setManquants(liste)
+        setVueFiche((v) => v ?? ongletInitial(liste, onglets))
+      })
+      // Illisible n'est pas « rien ne manque » : l'encadré se tait, et le refus du serveur parlera.
+      .catch(() => { if (!annule) setManquants(null) })
+    return () => { annule = true }
+  }, [produitId, detail, vue, onglets, reverifier])
+
   useEffect(() => {
     Promise.allSettled([api.etablissements(), api.categories(), api.produits()]).then(([e, c, pr]) => {
       setEtablissements(e.status === 'fulfilled' ? membres(e.value) : [])
@@ -413,6 +454,9 @@ export default function ProduitFiche({
     setHorsSite(false)
     setOptionsIllisibles(null)
     setErreur(null)
+    setSucces(null)
+    setVueFiche(null)
+    setManquants(null)
     setChargement(true)
     ;(async () => {
       try {
@@ -505,6 +549,9 @@ export default function ProduitFiche({
   const st = statutProduit(p)
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
+  // La carte ou la formule que le TYPE exige. Sans elle le produit ne se publie pas : la fiche doit
+  // donc pouvoir la créer, et plus seulement modifier celle qui existe.
+  const complement = complementDuType(p?.type)
 
   // ⚠ IL DEPEND DU DETAIL, PAS DE L'IDENTIFIANT. Le catalogue monte d'abord la fiche avec une
   // ebauche `{ id }`, puis le detail complet arrive. Un effet qui ne suivrait que l'identifiant ne
@@ -577,6 +624,10 @@ export default function ProduitFiche({
     setErreur(null)
     setEnregistrement(true)
     try {
+      const drapeauxModifies = changements.includes('beneficiaireRequis') || changements.includes('venteSansSouscription')
+      // ⚠ LES CHAMPS PERSO SE RELISENT AVANT D'ÊTRE RÉÉCRITS : l'onglet Agenda écrit `timedEntry` sans
+      // passer par cette fiche, et repartir de `p.champsPerso` l'aurait effacé sans un mot.
+      const champsActuels = drapeauxModifies ? (await api.produit(produitId))?.champsPerso : null
       await api.majProduit(produitId, {
         // Le libelle est multilingue cote serveur : on ne remplace que le francais, sinon une
         // traduction existante disparaitrait sans que personne ne l'ait demande.
@@ -632,9 +683,9 @@ export default function ProduitFiche({
         // rangent leurs propres clés (créneaux horaires, visuel…). Écrire à chaque enregistrement
         // les effacerait ; ne l'écrire que sur un changement réel du drapeau, en repartant des clés
         // déjà présentes, ne touche que `beneficiaireRequis`.
-        ...((changements.includes('beneficiaireRequis') || changements.includes('venteSansSouscription')) ? {
+        ...(drapeauxModifies ? {
           champsPerso: {
-            ...(p.champsPerso && typeof p.champsPerso === 'object' ? p.champsPerso : {}),
+            ...(champsActuels && typeof champsActuels === 'object' ? champsActuels : {}),
             beneficiaireRequis: !!edition.beneficiaireRequis,
             venteSansSouscription: !!edition.venteSansSouscription,
           },
@@ -694,9 +745,38 @@ export default function ProduitFiche({
     }
   }
 
+  // LE CYCLE DE VIE SUR LA FICHE : « Publier » n'existait que dans la liste (lot des garde-fous,
+  // 08/10). Mêmes actions et mêmes droits que la liste (`actionsStatut`) ; le refus du serveur, qui
+  // dit ce qui manque, s'affiche tel quel.
+  async function changerStatut(action) {
+    // La publication porte sur ce qui est ENREGISTRÉ : publier par-dessus un brouillon non
+    // enregistré mettrait en vente autre chose que ce qu'on a sous les yeux.
+    if (changements.length > 0) {
+      setErreur('Enregistrez d’abord vos modifications : l’action porte sur ce qui est enregistré.')
+      return
+    }
+    if (action.confirmation && !await confirmer(action.confirmation.replace('%s', libelleProduit(p)))) return
+    setErreur(null)
+    setSucces(null)
+    setActionStatut(action.id)
+    try {
+      await APPELS_STATUT[action.id](produitId)
+      setDetail(await api.produit(produitId))
+      setSucces(`« ${libelleProduit(p)} » : ${action.confirme}`)
+      onModifie?.()
+    } catch (e) {
+      setErreur(e.message || 'L’action n’a pas abouti.')
+    } finally {
+      setActionStatut(null)
+    }
+  }
+
+  const lignesAPublier = p.statut !== 'archive' ? lignesManquantes(manquants, onglets) : []
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       <div className="fiche-ident" style={{ marginBottom: 'var(--esp-large)' }}>
         {/* ⚠ DEUX LETTRES, ET PAS UNE. La fiche client en met une seule — un client se distingue
@@ -713,6 +793,21 @@ export default function ProduitFiche({
         <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
           {st.libelle}
         </span>
+        {actionsStatut(p.statut).map((a) => {
+          const autorise = !a.droit || aLeDroit(droits, a.droit)
+          return (
+            <button
+              key={a.id}
+              type="button"
+              className={`btn ${a.ton} sm`}
+              title={autorise ? a.aide : `Ce compte n’a pas le droit « ${a.droit} ». Demandez-le à un administrateur.`}
+              disabled={!autorise || actionStatut !== null || enregistrement}
+              onClick={() => changerStatut(a)}
+            >
+              {actionStatut === a.id ? '…' : a.libelle}
+            </button>
+          )
+        })}
         {peutCreer && (
           <button
             type="button"
@@ -793,9 +888,32 @@ export default function ProduitFiche({
         </span>
       </div>
 
+      {/* POUR METTRE EN VENTE, IL MANQUE — la liste de la garde serveur, chaque ligne menant à son
+          onglet. Sur un produit déjà publié (la garde ne dépublie pas), le même encadré avertit. */}
+      {lignesAPublier.length > 0 && (
+        <div className={`banner ${p.statut === 'publie' ? 'banner-warn' : ''}`} role="status">
+          <b>{p.statut === 'publie' ? 'En vente, mais il manque :' : 'Pour mettre en vente, il manque :'}</b>
+          <ul style={{ margin: 'var(--esp-serre) 0 0', paddingLeft: 'var(--esp-large)' }}>
+            {lignesAPublier.map((l) => (
+              <li key={l.code}>
+                {l.message}
+                {l.onglet && l.onglet !== vue && (
+                  <>
+                    {' '}
+                    <button type="button" className="btn ghost sm" onClick={() => setVueFiche(l.onglet)}>
+                      Onglet {l.libelleOnglet} →
+                    </button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <Tabs
         onglets={onglets}
-        actif={vueFiche}
+        actif={vue}
         onChange={setVueFiche}
       />
 
@@ -978,7 +1096,7 @@ export default function ProduitFiche({
         titre="Zones d'accès"
         aide="Les portes que ce produit ouvre aux tourniquets. Sans zone choisie, il n’ouvre aucune porte."
       >
-        <ZonesAccesProduit produitId={produitId} droits={droits} />
+        <ZonesAccesProduit produitId={produitId} droits={droits} onChange={aReverifier} />
       </Section>
 
       <Section
@@ -1254,10 +1372,38 @@ export default function ProduitFiche({
         )}
       </div>
       </Section>
-      {/* ⚠ N'APPARAIT QUE SI LA FORMULE EXISTE. On ne propose pas d'en creer une : donner une
-          formule d'abonnement a un produit de boutique demanderait de decider ce que ca veut
-          dire, et un ecran qui propose une operation sans sens defini produit des donnees que
-          personne ne sait relire. */}
+      {/* LA CARTE OU LA FORMULE QUE LE TYPE EXIGE, ET QUI N'EXISTE PAS ENCORE (lot des garde-fous).
+          Jusqu'au 08/10 la fiche ne savait que modifier celle qui existait : une carte ou un
+          abonnement créés sans elle ne pouvaient plus l'obtenir, et se publiaient faux. Seul le
+          TYPE qui la porte la propose — une formule sur un produit de boutique n'aurait pas de sens
+          défini. Le bouton remplit le brouillon ; « Enregistrer » la crée. */}
+      {complement === 'formule' && !edition.formule && (
+        <Section titre="Formule d'abonnement" aide="Sans formule, l'abonnement se vendrait comme un article simple, sans échéancier.">
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={!peutModifier}
+            onClick={() => setEdition((s) => ({
+              ...s,
+              formule: { ...FORMULE_PAR_DEFAUT, renouvellementAuto: true, renouvellementPrix: 'fixe', modeAcces: 'illimite' },
+            }))}
+          >
+            Créer la formule
+          </button>
+        </Section>
+      )}
+      {complement === 'carte' && !edition.carte && (
+        <Section titre={t('multi_entry_card', null, 'Carte multi-entrées')} aide="Sans carte, elle se vendrait comme un billet sans limite d'entrées.">
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={!peutModifier}
+            onClick={() => setEdition((s) => ({ ...s, carte: { ...CARTE_PAR_DEFAUT, rechargeValidityMode: 'extend' } }))}
+          >
+            Créer la carte
+          </button>
+        </Section>
+      )}
       {edition.formule && (
         <Section titre="Formule d'abonnement" aide="Ce qui règle la périodicité, le prélèvement et le renouvellement.">
           <div className="field">
@@ -1271,7 +1417,7 @@ export default function ProduitFiche({
               <option value="">—</option>
               <option value="mensuel">Mensuelle</option>
               <option value="annuel">Annuelle</option>
-              <option value="personnalise">Personnalisée</option>
+              <option value="personnalise">Personnalisée — ne se souscrit pas encore</option>
             </select>
           </div>
 
@@ -1594,7 +1740,7 @@ export default function ProduitFiche({
           sous un seul titre ferait chercher les horaires dans les dates. */}
       {vue === 'agenda' && capacites.includes('reservation') && (
         <Section titre="Créneaux" aide="Les horaires de ce produit, tenus par le planning de réservation.">
-          <CreneauxProduit produitId={produitId} droits={droits} peutModifier={peutModifier} />
+          <CreneauxProduit produitId={produitId} droits={droits} peutModifier={peutModifier} onChange={aReverifier} />
         </Section>
       )}
       {vue === 'agenda' && capacites.includes('agenda') && <AgendaProduit produitId={produitId} />}

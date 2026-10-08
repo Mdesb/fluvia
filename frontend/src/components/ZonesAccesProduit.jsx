@@ -34,7 +34,8 @@ import { idDe } from '../api/iri'
 // n'est pas une erreur d'exploitation, c'est un mécanisme pas encore branché — et ça ne se dit pas
 // avec la même phrase.
 
-export default function ZonesAccesProduit({ produitId, droits = [] }) {
+// `onChange` : prévenu après chaque écriture, pour que la fiche relise ce qui manque à la publication.
+export default function ZonesAccesProduit({ produitId, droits = [], onChange }) {
   const [zones, setZones] = useState([])
   const [espaces, setEspaces] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -98,6 +99,7 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
       await api.declarerZoneProduit({ productRef: produitId, space: `/api/espace_acces/${choix}` })
       setChoix('')
       await charger()
+      onChange?.()
     } catch (err) {
       setErreur(err.message || "La zone n'a pas pu être déclarée.")
     } finally {
@@ -111,6 +113,7 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
     try {
       await api.retirerZoneProduit(zone.id)
       await charger()
+      onChange?.()
     } catch (err) {
       setErreur(err.message || "La zone n'a pas pu être retirée.")
     } finally {

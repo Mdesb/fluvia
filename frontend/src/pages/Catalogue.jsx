@@ -10,6 +10,7 @@ import GrillesTarifaires from '../components/GrillesTarifaires.jsx'
 import { humaniser } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
 import { confirmer } from '../components/Confirmation.jsx'
+import { CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, complementValide, corpsCreation } from '../api/publication.js'
 
 // MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
 // on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
@@ -39,18 +40,22 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
   const [canaux, setCanaux] = useState(['guichet'])
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
+  // LA CARTE OU LA FORMULE NAÎT AVEC LE PRODUIT (lot des garde-fous, 08/10). Une carte créée sans
+  // son nombre d'entrées devenait à la borne un billet illimité ; un abonnement sans formule, un
+  // article simple. Le type dit laquelle demander.
+  const [carte, setCarte] = useState(CARTE_PAR_DEFAUT)
+  const [formule, setFormule] = useState(FORMULE_PAR_DEFAUT)
+  const type = types.find((t) => String(t.id) === String(typeId))
+  const complement = complementDuType(type)
 
   const pret = libelle.trim() !== '' && typeId !== '' && canaux.length > 0
+    && complementValide(type, { carte, formule })
 
   async function creer() {
     setEnCours(true)
     setErreur(null)
     try {
-      await onCree({
-        libelle: { fr: libelle.trim() },
-        type: `/api/type_produits/${typeId}`,
-        canaux,
-      })
+      await onCree(corpsCreation({ libelle, typeId, canaux, type, carte, formule }))
     } catch (e) {
       setErreur(e?.message || 'La création n’a pas abouti.')
       setEnCours(false)
@@ -110,6 +115,49 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
         </div>
         {canaux.length === 0 && <p className="hint">Cochez au moins un endroit où le vendre.</p>}
       </fieldset>
+
+      {complement === 'carte' && (
+        <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap', marginTop: 'var(--esp-normal)' }}>
+          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
+            <label htmlFor="np-paye">Entrées payées *</label>
+            <input id="np-paye" className="input num" type="number" min="1" value={carte.nbPaye}
+              onChange={(e) => setCarte((c) => ({ ...c, nbPaye: e.target.value }))} />
+          </div>
+          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
+            <label htmlFor="np-cred">Entrées créditées *</label>
+            <input id="np-cred" className="input num" type="number" min="1" value={carte.nbCredite}
+              onChange={(e) => setCarte((c) => ({ ...c, nbCredite: e.target.value }))} />
+          </div>
+          <p className="hint" style={{ flexBasis: '100%' }}>
+            On paie {carte.nbPaye || '?'} entrées, on en reçoit {carte.nbCredite || '?'}.
+          </p>
+        </div>
+      )}
+
+      {complement === 'formule' && (
+        <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 'var(--esp-normal)' }}>
+          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
+            <label htmlFor="np-per">Périodicité *</label>
+            <select id="np-per" className="select" value={formule.periodicite}
+              onChange={(e) => setFormule((f) => ({ ...f, periodicite: e.target.value }))}>
+              <option value="mensuel">Mensuelle</option>
+              <option value="annuel">Annuelle</option>
+            </select>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+            <input type="checkbox" checked={formule.sepaActif}
+              onChange={(e) => setFormule((f) => ({ ...f, sepaActif: e.target.checked }))} />
+            Prélever automatiquement (SEPA)
+          </label>
+          {formule.sepaActif && (
+            <div className="field" style={{ margin: 0, flex: '0 1 140px' }}>
+              <label htmlFor="np-jour">Jour du prélèvement</label>
+              <input id="np-jour" className="input num" type="number" min="1" max="28" value={formule.jourPrelevement}
+                onChange={(e) => setFormule((f) => ({ ...f, jourPrelevement: e.target.value }))} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="banner" style={{ marginTop: 'var(--esp-normal)' }}>
         Donnez-lui un nom et un type : le produit sera créé, et tout le reste de cette fiche

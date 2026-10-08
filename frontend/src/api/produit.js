@@ -188,7 +188,7 @@ export function actionsStatut(statut) {
           droit: 'offre.publier',
           libelle: 'Publier',
           ton: 'primary',
-          aide: 'Met le produit en vente sur ses canaux. Exige un tarif et un site de commercialisation.',
+          aide: 'Met le produit en vente sur ses canaux. La fiche dit ce qui manque encore.',
           confirme: 'produit publié.',
         },
         // ⚠ ABSENT JUSQU'AU 01/09, ET LE SERVEUR L'ACCEPTAIT DEPUIS TOUJOURS.
