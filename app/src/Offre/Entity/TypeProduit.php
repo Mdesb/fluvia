@@ -129,6 +129,19 @@ class TypeProduit
         return \in_array($facette, $this->facettes, true);
     }
 
+    /**
+     * Un produit de ce type émet-il un titre (billet, carte, abonnement) à la vente ?
+     *
+     * Une seule définition : `ValiderVenteService` en tire l'émission du support, la garde de
+     * publication l'exigence d'une zone d'accès. Deux listes finiraient par diverger.
+     */
+    public function issuesTicket(): bool
+    {
+        return $this->aFacette(self::FACETTE_BILLET)
+            || $this->aFacette(self::FACETTE_CARNET)
+            || $this->aFacette(self::FACETTE_ACCES);
+    }
+
     /** @return Collection<int, TypeProduit> */
     public function getTypesCompatibles(): Collection
     {

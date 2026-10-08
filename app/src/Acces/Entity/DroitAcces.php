@@ -418,8 +418,8 @@ class DroitAcces
     /**
      * Ce droit ouvre-t-il cet espace ?
      *
-     * Vide = ouvre tout : voir le docbloc de la propriété. La comparaison porte sur la
-     * représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
+     * Vide = aucune porte (D87), sauf pour les types exemptés : voir le docbloc de la propriété.
+     * La comparaison porte sur la représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
      * comparaison stricte d'objets distinguerait à tort (D58).
      */
     public function ouvre(EspaceAcces $space): bool

@@ -35,17 +35,12 @@ use Psr\Log\LoggerInterface;
  * Il manquait **l'implémentation du port**, c'est-à-dire précisément ce que le stub annonçait tenir
  * en attendant.
  *
- * ── ⚠ POURQUOI ON NE PROJETTE PAS QUAND LE PRODUIT NE DÉCLARE AUCUNE ZONE ──────────────────────
+ * ── ⚠ ON PROJETTE MÊME QUAND LE PRODUIT NE DÉCLARE AUCUNE ZONE (D86, D87) ─────────────────────
  *
- * `DroitAcces::ouvre()` rend `true` quand la collection d'espaces est vide : **un droit sans espace
- * ouvre tout**. C'est un choix assumé et documenté — pour l'appairage manuel, où refuser par défaut
- * aurait fermé des portes devant des porteurs déjà équipés.
- *
- * Ce raisonnement ne se transporte pas ici. Mesuré le 30/08 : **0 produit sur 17 déclare une zone**,
- * et 8 espaces existent. Projeter sans condition ferait donc de **chaque billet vendu un
- * passe-partout des huit espaces** — une régression de sécurité à l'échelle de toutes les ventes, et
- * silencieuse. La compatibilité protège l'existant ; elle n'autorise pas un chemin neuf à ouvrir
- * plus grand que ce que l'exploitant a déclaré.
+ * Jusqu'au 30/08, ce port ne projetait rien pour un produit sans zone : `DroitAcces::ouvre()` rendait
+ * alors `true` sur une collection vide, et chaque billet vendu aurait ouvert toutes les portes.
+ * Depuis D87, un droit sans espace n'ouvre AUCUNE porte ; et D86 veut que tout billet vendu soit
+ * connu du contrôle. On projette donc toujours — le détail est dans `appairer()`.
  *
  * ── ⚠ ET POURQUOI « PAS DE ZONE » N'EST PAS UN ÉCHEC ──────────────────────────────────────────
  *
@@ -53,10 +48,9 @@ use Psr\Log\LoggerInterface;
  * **sa remise est bloquée**. Rendre `false` pour un produit sans zone bloquerait donc la remise de
  * tous les billets de tous les produits — c'est-à-dire casserait toutes les ventes aujourd'hui.
  *
- * Et ce serait faux au fond : une bouteille d'eau, un cadenas, un article de boutique n'ouvrent
- * aucune porte, et c'est normal. **Un produit sans zone ne rate pas son appairage : il n'en a pas.**
- * On rend donc `true` sans rien créer, exactement comme le stub, et le comportement de ces produits
- * est strictement inchangé.
+ * Et ce serait faux au fond : **un produit sans zone ne rate pas son appairage.** Il réussit, et le
+ * droit projeté n'ouvre aucune porte tant qu'aucune zone n'est déclarée (D87). On rend donc `true` :
+ * le billet est remis.
  *
  * `false` reste réservé à un vrai échec — un code déjà appairé, un support bloqué — c'est-à-dire aux
  * cas où remettre le billet serait une faute.
