@@ -14,15 +14,17 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * Le ticket vient d'un seul document (G-11), sans code d'accès (D124) ni mention d'avoir (D125).
+ * Le ticket vient d'un seul document (G-11), sans code d'accès (D124) ni mention d'avoir (D124, G-17).
  *
- * `DocumentTicketTest` prouve que l'extraction ne change pas la sortie ; ce test-ci prouve que la
- * réponse EST le document que le rendu PDF du lot 9 lira, sur une vente à deux lignes dont une
- * remisée, et que la mention DUPLICATA n'est pas relue après coup. Les deux dernières méthodes
- * sont des gardes, vertes avant comme après : elles tiennent ce que D124 et D125 interdisent
- * d'ajouter au ticket d'ici les lots 7 et 9.
+ * `DocumentTicketTest` prouve que l'extraction ne change pas la sortie. Ici : la réponse relaie,
+ * clé par clé et dans l'ordre, ce que rend `DocumentTicket`, avec les types que l'`assertEquals` du
+ * filet laisserait filer ; la mention DUPLICATA n'est pas relue après coup ; et deux gardes, vertes
+ * avant comme après, tiennent ce que D124 interdit d'ajouter au ticket d'ici les lots 7 et 9.
+ *
+ * ⚠ À rejouer et à revoir délibérément : à É23 (`DocumentTicket` construit depuis l'empreinte aura
+ * des dépendances : `new DocumentTicket()` tombera) et à É39 (la consultation ne comptera plus).
  */
-final class TicketDocumentTest extends VenteApiTestCase
+final class TicketSingleDocumentTest extends VenteApiTestCase
 {
     public function testTheTicketResponseIsTheSingleDocument(): void
     {
@@ -31,10 +33,13 @@ final class TicketDocumentTest extends VenteApiTestCase
 
         $response = $this->ticket($client, $headers, $saleId);
         $document = (new DocumentTicket())->pour($this->freshSale($saleId), $response['duplicata']);
-
-        self::assertCount(2, $document['lignes']);
-        self::assertContains('pourcentage', array_column($document['lignes'], 'remiseType'), 'Temoin : la remise passe.');
         self::assertSame($document, array_intersect_key($response, $document));
+
+        self::assertCount(2, $response['lignes']);
+        [$card, $entry] = $response['lignes'][0]['remiseType'] === null ? $response['lignes'] : array_reverse($response['lignes']);
+        self::assertSame([1, null, null], [$card['quantite'], $card['remiseLigne'], $card['remiseType']], '« Aucune remise » n\'est pas une remise de zéro.');
+        self::assertSame([1, '10.00', 'pourcentage'], [$entry['quantite'], $entry['remiseLigne'], $entry['remiseType']]);
+        self::assertTrue($response['duplicata']);
     }
 
     /**
@@ -47,7 +52,11 @@ final class TicketDocumentTest extends VenteApiTestCase
         [$client, $headers] = $this->adminSurA();
         $saleId = $this->validatedSale($client, $headers, [[OffreFixtures::PRODUIT_ENTREE, []]]);
 
-        self::assertFalse($this->ticket($client, $headers, $saleId)['duplicata']);
+        $first = $this->ticket($client, $headers, $saleId);
+        self::assertFalse($first['impressionAutomatique'], 'Temoin : la vente est bien sous le seuil.');
+        self::assertFalse($first['duplicata']);
+        // Comportement de main, témoin que la vente a bien été marquée par la première consultation.
+        // D124 (Q-C3) l'inverse au lot 9 : à É39, la consultation ne compte plus et ceci change.
         self::assertTrue($this->ticket($client, $headers, $saleId)['duplicata']);
     }
 

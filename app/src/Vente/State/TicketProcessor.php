@@ -126,7 +126,4 @@ final class TicketProcessor implements ProcessorInterface
             'canal' => $renvoye ? ($corps['canal'] ?? 'email') : null,
         ], JsonResponse::HTTP_OK);
     }
-
-    // `lignes()` vivait ici ; elle est passée dans `DocumentTicket` avec le reste du document, pour
-    // que le rendu papier lise la même — et pas une copie.
 }

@@ -14,8 +14,8 @@ use App\Tests\Vente\VenteApiTestCase;
  *
  * `TicketProcessor` fabrique le document dans sa propre méthode. Le rendu PDF du lot 9 (D124) aura
  * besoin du même document, et le construire une seconde fois créerait deux vérités sur le même
- * papier — le défaut que ce fichier-là passe son en-tête à redouter, et qui se paie au PREMIER
- * correctif.
+ * papier — le défaut que `TicketProcessor::process()` raconte déjà pour la règle d'impression, et
+ * qui se paie au PREMIER correctif.
  *
  * Extraire est donc juste. Mais un remplacement de source ne se prouve pas en vérifiant que les
  * champs sont toujours là : il se prouve par l'égalité de la SORTIE. Un extracteur qui oublie
@@ -123,13 +123,14 @@ final class DocumentTicketTest extends VenteApiTestCase
      *
      * Aujourd'hui, au-dessus du seuil et en session, `ValiderVenteService` marque la vente imprimée à
      * la validation (`TicketPrintingPolicy::marqueImprimeeALaValidation`), et la mention se lit de
-     * `imprime`. Or aucune imprimante n'est pilotée : D124 (Q-C3) dit qu'une édition ne compte que si
-     * elle produit le papier, que l'affichage à l'écran n'en est pas une, et que la mention viendra
-     * du journal des éditions. Ce test sera donc changé délibérément au lot 9 (É39), pas avant.
+     * `imprime`. Or aucune imprimante n'est pilotée : D124 dit qu'une édition ne compte que si elle
+     * produit le papier et que l'affichage à l'écran n'en est pas une (Q-C3), et la mention viendra du
+     * journal des éditions (Q-C1, G-14). Ce test sera donc changé délibérément au lot 9 (É39).
      *
-     * Ce qu'il garde d'ici là, et qui compte pour l'extraction : la valeur est LUE de l'entité au
-     * moment de l'édition, puis l'entité est modifiée dans la foulée. Un extracteur qui recalculerait
-     * la mention après coup rendrait « DUPLICATA » sur tout, y compris sur l'original.
+     * Ce qu'il NE VOIT PAS : la valeur est lue de l'entité AVANT qu'elle soit marquée imprimée, et un
+     * extracteur qui la relirait après coup rendrait « DUPLICATA » sur l'original. Ici la vente est
+     * déjà marquée à la validation, donc les deux appels rendent vrai quoi qu'il arrive : c'est
+     * `TicketSingleDocumentTest::testUnderTheThresholdTheFirstTicketIsTheOriginal` qui le tient.
      */
     public function testLePremierAppelExpliciteEstDejaUnDuplicata(): void
     {

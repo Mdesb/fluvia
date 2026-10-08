@@ -13,7 +13,7 @@ use App\Vente\Entity\Vente;
  *
  * `TicketProcessor` fabriquait ce document dans sa propre méthode. Le rendu PDF du lot 9 (D124) en
  * aura besoin du même : le construire une seconde fois créerait deux vérités sur le même papier. C'est
- * précisément ce que l'en-tête de `TicketProcessor` raconte déjà pour la règle d'impression — écrite
+ * précisément ce que `TicketProcessor::process()` raconte déjà pour la règle d'impression — écrite
  * deux fois, corrigée une seule le 29/08, divergente le jour même. **Une règle recopiée diverge au
  * PREMIER correctif, pas au dixième.**
  *
@@ -25,12 +25,9 @@ use App\Vente\Entity\Vente;
  * faire de savoir qu'un renvoi par SMS était proposé.
  *
  * Jamais ici, quel que soit le lot : le code d'accès du billet (D124 — un duplicata deviendrait un
- * second billet), ni une mention d'avoir ou de correction (D125 — l'avoir a son propre justificatif,
- * le duplicata reproduit l'original). `TicketDocumentTest` tient les deux.
- *
- * Viendront plus tard : le taux gravé par ligne et la ventilation TVA (D123, lots 6 et 7, un seul
- * calcul partagé avec les écritures) ; le vendeur figé à la validation, jamais lu en direct du profil
- * de l'exploitant, et le document construit depuis l'empreinte scellée (D124, lot 7).
+ * second billet), ni une mention d'avoir ou de correction (D124, G-17 — le duplicata reproduit
+ * l'original, l'avoir a son propre justificatif). `TicketSingleDocumentTest` tient les deux.
+ * Ce qui viendra, et d'où (taux, ventilation, vendeur figé, empreinte, journal) : plan D-9 à D-12.
  *
  * ── ⚠ `duplicata` SE REÇOIT, IL NE SE RECALCULE PAS ────────────────────────────────────────────
  *
@@ -39,23 +36,17 @@ use App\Vente\Entity\Vente;
  * relirait elle-même la lirait donc APRÈS coup, et rendrait « DUPLICATA » sur tout — y compris sur
  * l'original. Elle est donc passée en argument, par l'appelant qui l'a lue au bon instant.
  *
- * `TicketDocumentTest` le prouve sous le seuil d'impression : le premier ticket est l'original. Au
- * lot 9, D124 fera venir la mention du journal des éditions, et non plus d'`imprime`.
- *
- * @phpstan-type LigneTicket array{id: string, libelle: mixed, tarif: ?string, quantite: int,
- *     prixUnitaire: ?string, impactOptionsUnitaire: ?string, remiseLigne: ?string,
- *     remiseType: ?string, montantLigne: ?string, optionsSelectionnees: mixed,
- *     promotionsAppliquees: mixed}
- * @phpstan-type Ticket array{vente: string, numero: ?string, date: string, lignes: list<LigneTicket>,
- *     total: ?string, totalRemises: ?string, duplicata: bool}
+ * `TicketSingleDocumentTest` le prouve sous le seuil d'impression : le premier ticket est
+ * l'original. Au lot 9, la mention viendra du journal des éditions, et non plus d'`imprime`
+ * (D124, Q-C1 ; plan D-12).
  */
 final class DocumentTicket
 {
     /**
      * @param bool $duplicata lu par l'appelant AVANT de marquer la vente imprimée — voir l'en-tête
      *
-     * @return array{vente: string, numero: ?string, date: string, lignes: list<array<string, mixed>>,
-     *     total: ?string, totalRemises: ?string, duplicata: bool}
+     * @return array{vente: string, numero: string, date: string, lignes: list<array<string, mixed>>,
+     *     total: string, totalRemises: string, duplicata: bool}
      */
     public function pour(Vente $vente, bool $duplicata): array
     {
