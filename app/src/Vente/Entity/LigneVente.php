@@ -113,6 +113,35 @@ class LigneVente
     #[Groups(['vente:read', 'ticket:read'])]
     private ?string $libelleTypeTarif = null;
 
+    /**
+     * Le taux de TVA de la ligne, **gravé à sa création** (D123, G-7) : valeur, catégorie EN 16931,
+     * libellé, et la référence du `TauxTva` d'où il vient.
+     *
+     * ⚠ Même règle que `libelleProduit` : une copie datée, jamais relue. Le taux vient de la
+     * correspondance comptable de la catégorie du produit, pas de `Produit::$tauxTva`. Une
+     * correspondance changée, ou un `TauxTva` corrigé par `PATCH` après la vente, ne touchent pas la
+     * ligne : la référence seule n'aurait rien figé.
+     *
+     * Nuls quand rien n'a été résolu : ligne antérieure à ce lot, ou vente hors ligne déjà encaissée.
+     * Jamais 0 % par défaut : une vraie ligne à 0 % porte `0.00` et son libellé.
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?string $tauxTva = null;
+
+    #[ORM\Column(length: 4, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?string $tauxTvaCategorie = null;
+
+    #[ORM\Column(length: 80, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?string $tauxTvaLibelle = null;
+
+    /** Réf. logique `TauxTva` (M6), sans clé étrangère : c'est la valeur gravée qui fait foi. */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?Uuid $tauxTvaRef = null;
+
     #[ORM\Column(options: ['default' => 1])]
     #[Groups(['vente:read'])]
     private int $quantite = 1;
@@ -257,6 +286,26 @@ class LigneVente
         $this->libelleTypeTarif = $libelleTypeTarif;
 
         return $this;
+    }
+
+    public function getTauxTva(): ?string
+    {
+        return $this->tauxTva;
+    }
+
+    public function getTauxTvaCategorie(): ?string
+    {
+        return $this->tauxTvaCategorie;
+    }
+
+    public function getTauxTvaLibelle(): ?string
+    {
+        return $this->tauxTvaLibelle;
+    }
+
+    public function getTauxTvaRef(): ?Uuid
+    {
+        return $this->tauxTvaRef;
     }
 
     public function getQuantite(): int
