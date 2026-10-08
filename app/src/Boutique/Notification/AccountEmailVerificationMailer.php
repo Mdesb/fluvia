@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Notification;
 
+use App\I18n\Locales;
 use App\Securite\Entity\EmailVerificationToken;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
@@ -50,6 +51,7 @@ final class AccountEmailVerificationMailer
         $lien = $base.'/verifier-email?jeton='.rawurlencode($jetonClair);
 
         $html = $this->twig->render('boutique/email/verification_email.html.twig', [
+            'locale' => $jeton->getUtilisateur()?->getLocale() ?? Locales::SOURCE,
             'lien' => $lien,
             'heures' => 48,
         ]);

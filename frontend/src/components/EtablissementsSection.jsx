@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import ReferentielEditable from './ReferentielEditable.jsx'
+import { LANGUAGE_NAMES } from '../i18n/index.js'
 
 // Créer et modifier un établissement.
 //
@@ -84,6 +85,17 @@ export default function EtablissementsSection({ peutEcrire, onChange, params, ma
           : 'Obligatoire. C’est par la région que les tableaux de bord regroupent plusieurs sites.',
         versValeur: (l) => (l.region?.id ? `/api/regions/${l.region.id}` : ''),
         versCorps: (v) => v,
+      },
+      // La langue de travail du site : celle de ses écrans (sauf préférence d'un utilisateur) et de
+      // ses documents. Lue au chargement de l'application, d'où l'aide.
+      {
+        nom: 'locale',
+        libelle: 'Langue',
+        type: 'choix',
+        requis: true,
+        options: Object.entries(LANGUAGE_NAMES).map(([valeur, libelle]) => ({ valeur, libelle })),
+        aide: 'La langue des écrans et des documents de ce site. Prend effet au prochain chargement de l’application.',
+        versValeur: (l) => l.locale || 'fr',
       },
       {
         nom: 'actif',

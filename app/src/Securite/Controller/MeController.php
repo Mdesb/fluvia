@@ -66,6 +66,9 @@ final class MeController
             'email' => $utilisateur->getEmail(),
             'nom' => $utilisateur->getNom(),
             'actif' => $utilisateur->isActif(),
+            // La langue préférée de la personne, `null` pour suivre celle de l'établissement : le
+            // frontal en tire la langue d'affichage (`applyContextLanguage`). Champ additif.
+            'locale' => $utilisateur->getLocale(),
             'etablissementActif' => $etablissementActif !== null ? (string) $etablissementActif : null,
             'droits' => $this->calculateur->codesEffectifs($utilisateur, $etablissementActif),
             // ⚠ « SUIS-JE CHEZ MOI OU CHEZ UN CLIENT ? » — la question que se pose un employé de

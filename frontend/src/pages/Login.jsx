@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, tokenStore } from '../api/client.js'
+import { t } from '../i18n/index.js'
 
 /**
  * ⚠ `sousTitre` EXISTE PARCE QUE CET ECRAN SERT TROIS PRODUITS.
@@ -13,8 +14,11 @@ import { api, tokenStore } from '../api/client.js'
  * laquelle on doute quand on s'est trompe d'adresse. Elle doit dire ou l'on est.
  *
  * La valeur par defaut est celle du back-office : l'appelant qui ne dit rien garde l'existant.
+ *
+ * Écran témoin de la traduction (lot « socle » i18n) : tout son texte passe par `t()`, et
+ * `verifier-chaines-traduites.mjs` refuse qu'une phrase en dur y revienne.
  */
-export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse et au catalogue.' }) {
+export default function Login({ onConnecte, sousTitre = t('login.subtitle') }) {
   const [email, setEmail] = useState('admin@itcotation.com')
   // ⚠ DOIT VALOIR `SocleFixtures::ADMIN_MDP`. Les deux ont diverge le 27/08 quand les fixtures sont
   // passees a « aaa » : l'ecran a continue d'annoncer un compte de demo pre-rempli, et de proposer
@@ -50,16 +54,19 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
   // qui l'a rendue fausse.
   async function demanderMdp() {
     if (!email.trim()) {
-      setErreur('Renseignez votre adresse e-mail, puis redemandez.')
+      setErreur(t('login.reset.email_required'))
       return
     }
     setOubliEnCours(true)
     setErreur(null)
     try {
       const r = await api.demanderReinitialisation(email.trim())
-      setReponseOubli({ message: r?.message || 'Demande enregistrée.', branche: !!r?.envoiCourrielBranche })
+      // Le FAIT vient de la réponse (`envoiCourrielBranche`) ; le TEXTE, du catalogue : le serveur
+      // ne traduit pas, et sa phrase française reste pour les clients qui n'ont pas de catalogue.
+      const branche = !!r?.envoiCourrielBranche
+      setReponseOubli({ message: t(branche ? 'login.reset.sent' : 'login.reset.no_mailer'), branche })
     } catch (err) {
-      setErreur(err.message || 'La demande n’a pas pu être envoyée.')
+      setErreur(err.message || t('login.reset.failed'))
     } finally {
       setOubliEnCours(false)
     }
@@ -102,25 +109,25 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
         if (!preAuth) {
           // Défi annoncé sans jeton pour le relever : on le dit plutôt que d'afficher un champ de
           // code qui ne pourrait aboutir. Une impasse nommée vaut mieux qu'une impasse déguisée.
-          setErreur('Second facteur demandé, mais le serveur n’a pas fourni de jeton intermédiaire.')
+          setErreur(t('login.mfa.missing_challenge'))
           return
         }
         setDefiMfa(preAuth)
         setCodeMfa('')
-        setInfo('Saisissez le code de votre application d’authentification, ou un code de récupération.')
+        setInfo(t('login.mfa.prompt'))
         return
       }
 
       if (!data?.token) {
-        throw new Error("Réponse inattendue de l'API (jeton manquant).")
+        throw new Error(t('login.error.missing_token'))
       }
       tokenStore.set(data.token)
       onConnecte()
     } catch (err) {
       if (err?.status === 401) {
-        setErreur('Identifiants incorrects.')
+        setErreur(t('login.error.invalid_credentials'))
       } else {
-        setErreur(err?.message || 'Échec de la connexion.')
+        setErreur(err?.message || t('login.error.failed'))
       }
     } finally {
       setEnCours(false)
@@ -145,12 +152,13 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
     try {
       const data = await api.mfaVerifier(defiMfa, codeMfa.trim())
       if (!data?.token) {
-        throw new Error('Réponse inattendue de l’API (jeton manquant).')
+        throw new Error(t('login.error.missing_token'))
       }
       tokenStore.set(data.token)
       onConnecte()
     } catch (err) {
-      setErreur(err?.message || 'Code refusé.')
+      // `err.message` est déjà traduit quand le serveur a codé son refus (`error.auth.*`).
+      setErreur(err?.message || t('login.mfa.refused'))
     } finally {
       setEnCours(false)
     }
@@ -166,14 +174,14 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
           <div className="side-brand">
             <img className="logo" src="/fluvia-192.png" alt="" width="28" height="28" /> Fluvia
           </div>
-          <h1>Vérification en deux étapes</h1>
-          <p className="login-sub">Votre compte est protégé par une double authentification.</p>
+          <h1>{t('login.mfa.title')}</h1>
+          <p className="login-sub">{t('login.mfa.subtitle')}</p>
 
           {erreur && <div className="banner banner-error">{erreur}</div>}
           {info && <div className="banner banner-ok">{info}</div>}
 
           <div className="field">
-            <label htmlFor="code-mfa">Code à six chiffres</label>
+            <label htmlFor="code-mfa">{t('login.mfa.code')}</label>
             <input
               id="code-mfa"
               className="input"
@@ -185,20 +193,18 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
               onChange={(e) => setCodeMfa(e.target.value)}
               required
             />
-            <p className="login-hint">
-              Un code de récupération fonctionne aussi, et il est alors consommé.
-            </p>
+            <p className="login-hint">{t('login.mfa.recovery_hint')}</p>
           </div>
 
           <button className="btn primary" type="submit" disabled={enCours || !codeMfa.trim()}>
-            {enCours ? 'Vérification…' : 'Valider'}
+            {enCours ? t('login.mfa.verifying') : t('login.mfa.submit')}
           </button>
           <button
             className="btn ghost"
             type="button"
             onClick={() => { setDefiMfa(null); setCodeMfa(''); setInfo(null); setErreur(null) }}
           >
-            Revenir à la connexion
+            {t('login.mfa.back')}
           </button>
         </form>
       </div>
@@ -211,14 +217,14 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
         <div className="side-brand">
           <img className="logo" src="/fluvia-192.png" alt="" width="28" height="28" /> Fluvia
         </div>
-        <h1>Connexion</h1>
+        <h1>{t('login.title')}</h1>
         <p className="login-sub">{sousTitre}</p>
 
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {info && <div className="banner banner-ok">{info}</div>}
 
         <div className="field">
-          <label htmlFor="email">Adresse e-mail</label>
+          <label htmlFor="email">{t('login.email')}</label>
           <input
             id="email"
             className="input"
@@ -230,7 +236,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
           />
         </div>
         <div className="field">
-          <label htmlFor="mdp">Mot de passe</label>
+          <label htmlFor="mdp">{t('login.password')}</label>
           <input
             id="mdp"
             className="input"
@@ -243,7 +249,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
         </div>
 
         <button className="btn primary lg" type="submit" disabled={enCours}>
-          {enCours ? 'Connexion…' : 'Se connecter'}
+          {enCours ? t('login.submitting') : t('login.submit')}
         </button>
 
         <button
@@ -253,7 +259,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
           onClick={demanderMdp}
           disabled={oubliEnCours}
         >
-          {oubliEnCours ? 'Envoi…' : 'Mot de passe oublié ?'}
+          {oubliEnCours ? t('login.forgot_sending') : t('login.forgot')}
         </button>
 
         {reponseOubli && (
@@ -265,7 +271,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
           </div>
         )}
 
-        <p className="login-hint">Compte de démo pré-rempli · IT Cotation</p>
+        <p className="login-hint">{t('login.demo_hint')}</p>
       </form>
     </div>
   )
