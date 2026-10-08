@@ -1,5 +1,6 @@
 [
   "src/api/menu.js",
   "src/components/AppShell.jsx",
+  "src/components/ModuleInactif.jsx",
   "src/pages/Login.jsx"
 ]

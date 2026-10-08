@@ -42,6 +42,22 @@ import { aLeDroit, aUnDesDroits } from './droits.js'
 // Ne figurent pas ici les services transverses sans usage direct (OCR, Audit) : ils sont consommés
 // par d'autres modules et n'ont pas vocation à un écran propre. Une entrée pour eux serait une
 // promesse qu'on n'a pas l'intention de tenir.
+//
+// ── CHAQUE MODULE PORTE SA CAPACITÉ (décision de Maxime du 08/10) ───────────────────────────────
+//
+// Un établissement ne voit que les modules qu'il a en service (Paramètres › Modules en service) : une
+// piscine ne montre que ce qu'elle vend. Un module qu'aucun préréglage de métier n'active
+// (`App\Fonctionnalite\Config\PresetVerticale`) naît donc masqué. ⚠ LE SERVEUR NE GARDE AUCUNE DE
+// CES ROUTES PAR CAPACITÉ (mesuré le 08/10 : `ModuleAccess` n'est injecté nulle part hors des tests) :
+// c'est un masquage d'écran, pas un refus ; les droits restent la seule barrière de l'API.
+//
+// Sans `cap`, le socle : ce que tout établissement fait (caisse, catalogue, clients, facturation…),
+// les services transverses (documents, campagnes, relances, cautions…) et l'administration. Deux y
+// restent après relecture, parce qu'ils portent une donnée dont un autre écran a besoin :
+//  - « Recouvrement » : la Facturation (socle) y renvoie ses impayés — relances et blocage d'accès
+//    ne se pilotent que là. Le masquer laisserait des factures en retard sans geste possible.
+//  - « Mentions légales » (module juridique) : le panier en ligne enregistre la version des CGV
+//    publiées ici. Le masquer empêcherait de publier ce que la boutique fait accepter.
 export const NAV = [
   {
     id: 'operations',
@@ -58,10 +74,10 @@ export const NAV = [
       { id: 'catalogue', ic: 'catalog', perms: ['offre.lire', 'offre.gerer', 'offre.creer', 'offre.modifier'] },
       { id: 'reservation', ic: 'booking', cap: 'reservation' },
       // Écran métier de l'établissement (une seule entrée visible selon le type de site).
-      { id: 'piscine', ic: 'pool', perm: 'piscine.lire' },
-      { id: 'patinoire', ic: 'rink', perm: 'patinoire.lire' },
-      { id: 'padel', ic: 'padel', perm: 'padel.lire' },
-      { id: 'musee', ic: 'museum', perm: 'musee.lire' },
+      { id: 'piscine', ic: 'pool', cap: 'piscine', perm: 'piscine.lire' },
+      { id: 'patinoire', ic: 'rink', cap: 'patinoire', perm: 'patinoire.lire' },
+      { id: 'padel', ic: 'padel', cap: 'padel', perm: 'padel.lire' },
+      { id: 'musee', ic: 'museum', cap: 'musee', perm: 'musee.lire' },
       // Ouvert le 05/09 : sept routes servies, aucun ecran, et DEUX SEJOURS DEJA OUVERTS en base
       // depuis le 24/08 avec une ligne de bar — un module dont l'etat courant n'etait visible de
       // nulle part.
@@ -69,12 +85,12 @@ export const NAV = [
       // Contrairement a `relance_recettes` et `places_liberees` livres le meme jour, les quatre
       // permissions `stay.*` SONT attribuees : « Administrateur groupe » et « Responsable de site »
       // les portent. Cette entree-la se verra tout de suite.
-      { id: 'sejours', ic: 'stay', perms: ['stay.read', 'stay.write', 'stay.charge', 'stay.settle'] },
+      { id: 'sejours', ic: 'stay', cap: 'stay', perms: ['stay.read', 'stay.write', 'stay.charge', 'stay.settle'] },
       { id: 'groupes', ic: 'groups', perm: 'group.read' },
       // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.
-      { id: 'sport', ic: 'fitness', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
+      { id: 'sport', ic: 'fitness', cap: 'sport', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
       { id: 'abonnements', ic: 'subscriptions', perms: ['sport.lire', 'sport.gerer_abonnement'] },
     ],
   },
@@ -103,7 +119,7 @@ export const NAV = [
       // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.
-      { id: 'affaires', ic: 'deals', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      { id: 'affaires', ic: 'deals', cap: 'affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
       // Sous Gestion, juste apres les affaires : une campagne se decide comme une affaire, et
       // s'adresse aux memes gens. Pas sous Pilotage -- on ne l'observe pas, on la lance.
       //
@@ -113,20 +129,20 @@ export const NAV = [
       { id: 'campagnes', ic: 'campaigns', perms: ['campagne.lire', 'campagne.gerer'] },
       // « / Régie » vient du titre de l'écran, et il sert dans le menu : un régisseur cherche son
       // mot, pas « Comptabilité ». Le sous-titre de l'écran l'annonçait, le menu le cachait.
-      { id: 'comptabilite', ic: 'accounting', perm: 'compta.lire' },
+      { id: 'comptabilite', ic: 'accounting', cap: 'comptabilite', perm: 'compta.lire' },
       { id: 'boutique', ic: 'shop', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: 'staff', perm: 'personnel.lire' },
       // Sous Gestion et a cote du Personnel : un projet se distribue a des gens, et c'est la
       // qu'on va chercher qui fait quoi. Pas sous Pilotage -- un projet se conduit, il ne
       // s'observe pas.
-      { id: 'projets', ic: 'projects', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+      { id: 'projets', ic: 'projects', cap: 'projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
       // ⚠ SOUS GESTION ET PAS SOUS PISCINE (R10). Un parc de casiers se gere comme un parc de
       // materiel : on attribue, on encaisse une caution, on rend une cle. Surveiller un bassin,
       // a cote, est une exploitation continue. Deux rythmes, deux entrees.
       { id: 'casiers', ic: 'stock', cap: 'casiers', perms: ['piscine.lire', 'piscine.gerer_casier', 'piscine.gerer'] },
-      { id: 'stock', ic: 'stock', perm: 'stock.lire' },
+      { id: 'stock', ic: 'stock', cap: 'stock', perm: 'stock.lire' },
       { id: 'facturation', ic: 'invoicing', perm: 'facturation.lire' },
-      { id: 'finance', ic: 'purchases', perm: 'finance.read' },
+      { id: 'finance', ic: 'purchases', cap: 'finance', perm: 'finance.read' },
       // LES TROIS DERNIERES PORTES CONDAMNEES SONT OUVERTES (28/08), ET L'OBJECTION QUI LES
       // FERMAIT A ETE TRAITEE PLUTOT QU'IGNOREE.
       //
@@ -154,7 +170,7 @@ export const NAV = [
       //    l'entree. Une file rangee au quatrieme onglet ne se regarde que quand on y pense.
       //  - Les cautions sont transversales : elles naissent a la piscine, au padel et a la
       //    patinoire, et le solde consigne est unique. On ne pose pas la question trois fois.
-      { id: 'sepa', ic: 'sepa', perms: ['sepa.lire', 'compta.lire'] },
+      { id: 'sepa', ic: 'sepa', cap: 'sepa', perms: ['sepa.lire', 'compta.lire'] },
       { id: 'recouvrement', ic: 'collections', perms: ['recouvrement.lire', 'recouvrement.piloter', 'compta.lire'] },
       { id: 'caution', ic: 'deposits', perms: ['caution.lire', 'caution.piloter'] },
       // Ouvert le 05/09 : huit routes servies, aucun ecran, et un module qui n'avait JAMAIS tourne.
@@ -173,7 +189,7 @@ export const NAV = [
       // une HORLOGE : une place proposee expire, et le suivant attend. Le meme argument qui a
       // ouvert une porte au recouvrement vaut ici — une file rangee au cinquieme onglet d'un ecran
       // de planning ne se regarde que quand on y pense.
-      { id: 'places_liberees', ic: 'subscriptions', perms: ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own'] },
+      { id: 'places_liberees', ic: 'subscriptions', cap: 'reservation', perms: ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: 'documents', perms: ['dms.read', 'dms.write'] },
@@ -184,7 +200,7 @@ export const NAV = [
       // Ouvert le 27/08. L'ecran existe pour un etat precis : `partially_failed` -- un message
       // parti sur deux comptes, passe sur l'un, echoue sur l'autre. Sans le detail par compte,
       // on republie partout pour rattraper un seul echec.
-      { id: 'social', ic: 'social', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+      { id: 'social', ic: 'social', cap: 'social', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
       // AUCUNE PERMISSION EXIGÉE, ET C'EST DÉLIBÉRÉ.
       //
       // « Moi » n'est pas une fonctionnalité qu'on achète : tout compte rattaché à un établissement
@@ -273,6 +289,21 @@ export const NAV = [
 // devenait legitime, il s'ajouterait ICI, une fois, et pas dans une seconde liste.
 export function ongletsConnus(nav = NAV) {
   return new Set(nav.flatMap((section) => section.items.map((item) => item.id)))
+}
+
+const entrees = () => NAV.flatMap((section) => section.items)
+
+// UN LIEN DIRECT VERS UN MODULE HORS SERVICE N'EST NI UNE ERREUR NI UNE REDIRECTION : `App.jsx`
+// affiche « module non activé pour cet établissement » à la place de l'écran, qu'il ne monte pas.
+// Le socle (sans `cap`) et une adresse inconnue (son propre panneau) ne sont jamais « inactifs ».
+export function moduleInactif(id, capacites = []) {
+  const cap = entrees().find((it) => it.id === id)?.cap
+  return Boolean(cap) && !capacites.includes(cap)
+}
+
+// Les entrées qu'une capacité fait apparaître : l'écran des capacités le dit au moment d'activer.
+export function entreesDe(code) {
+  return entrees().filter((it) => it.cap === code).map((it) => it.id)
 }
 
 // Filtre les entrées selon les capacités actives, les droits effectifs de l'établissement courant

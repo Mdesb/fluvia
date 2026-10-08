@@ -13,7 +13,8 @@ import { aLeDroit } from './api/droits.js'
 import Login from './pages/Login.jsx'
 import AccesCompte, { lireDemandeDeCompte } from './pages/AccesCompte.jsx'
 import AppShell from './components/AppShell.jsx'
-import { ongletsConnus } from './api/menu.js'
+import { moduleInactif, ongletsConnus } from './api/menu.js'
+import ModuleInactif from './components/ModuleInactif.jsx'
 import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Modules from './pages/Modules.jsx'
@@ -330,7 +331,11 @@ export default function App() {
     }
   }, [me, landingApplique, ongletDemandeAuChargement])
 
-  // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
+  // Si l'onglet courant dépend d'une permission désormais absente, retour Caisse.
+  //
+  // ⚠ PLUS D'UNE CAPACITÉ, DEPUIS LE 08/10 : un module hors service n'est plus un renvoi muet à la
+  // caisse mais un panneau qui le dit (`ModuleInactif`, plus bas). La règle est celle de
+  // `api/droits.js` : on peut masquer sur « faux », on ne redirige pas.
   useEffect(() => {
     // TANT QUE LE PROFIL N'EST PAS CHARGÉ, ON NE SAIT RIEN — ET NE RIEN SAVOIR N'EST PAS UN REFUS.
     //
@@ -342,9 +347,7 @@ export default function App() {
     // Invisible avant, parce que l'onglet de départ était déjà la caisse : le renvoi ne changeait
     // rien. C'est exactement pourquoi un défaut dormant se réveille au premier usage nouveau.
     if (!me) return
-    const caps = me.capacitesActives || []
     const droits = me.droits || []
-    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', acces: 'controle_acces', boutique: 'boutique_en_ligne' }
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
@@ -354,10 +357,9 @@ export default function App() {
       // (`sepa.lire` OU `compta.lire`, `caution.lire` OU `caution.piloter`, ...) exactement comme le
       // fait le serveur. Y mettre une seule permission renverrait a la caisse un comptable qui a le
       // droit de les lire -- le piege decrit deux lignes plus bas, et paye une fois deja.
-      // Le filtrage se fait donc la ou il sait exprimer un OU : les `perms` du menu (`AppShell`).
+      // Le filtrage se fait donc la ou il sait exprimer un OU : les `perms` du menu (`api/menu.js`).
     }
     if ((onglet === 'dashboard' || onglet === 'api') && me && !estAdministrateur(me)) setOnglet('caisse')
-    else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
     // Meme piege, consequence differente et plus penible : un porteur de joker etait RENVOYE a la
     // caisse depuis n'importe quel ecran protege, sans explication et sans moyen d'y rester.
     else if (permRequise[onglet] && !aLeDroit(droits, permRequise[onglet])) setOnglet('caisse')
@@ -507,6 +509,13 @@ export default function App() {
           </div>
         </div>
       )}
+      {moduleInactif(onglet, capacites) ? (
+        <ModuleInactif
+          onglet={onglet}
+          etablissement={etablissements.find((e) => e.id === etabActif)?.nom}
+          peutActiver={aLeDroit(droits, 'fonctionnalite.gerer') || aLeDroit(droits, 'organisation.gerer')}
+        />
+      ) : (
       <Suspense fallback={<div className="center" style={{ minHeight: 240 }}><div className="spinner" /></div>}>
       {onglet === 'dashboard' && estAdmin && (
         <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
@@ -576,6 +585,7 @@ export default function App() {
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} onCapacitesChangees={rechargerMe} estEditeur={me?.estEditeur === true} me={me} envoiCourriel={me?.envoiCourrielBranche === true} />
       )}
       </Suspense>
+      )}
       </FrontiereErreur>
     </AppShell>
   )
