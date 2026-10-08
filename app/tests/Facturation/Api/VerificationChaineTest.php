@@ -96,7 +96,9 @@ final class VerificationChaineTest extends FacturationApiTestCase
 
         $client->request('GET', '/api/factures/verifier-chaine?profilExploitant=' . self::PROFIL_INEXISTANT, $entete);
 
-        self::assertResponseStatusCodeSame(422, "Une absence de périmètre n'est pas une chaîne intacte.");
+        // 404 depuis le 08/10, comme un profil d'un autre perimetre (`ChainCheckScopeTest`) : les deux
+        // cas ne doivent pas se distinguer. Ce qui compte ici ne change pas : on refuse, on ne rassure pas.
+        self::assertResponseStatusCodeSame(404, "Une absence de périmètre n'est pas une chaîne intacte.");
 
         $corps = $client->getResponse()->getContent(false);
         self::assertStringContainsString('PAS ete verifiee', $corps, 'Le message doit dire que rien n\'a été vérifié.');

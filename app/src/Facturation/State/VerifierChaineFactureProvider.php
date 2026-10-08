@@ -45,9 +45,10 @@ final class VerifierChaineFactureProvider implements ProviderInterface
             $profil = $this->em->getRepository(ProfilExploitant::class)->find(Uuid::fromString($profilId));
             // ⚠ D3 : CET IDENTIFIANT VIENT DU CLIENT. Il etait lu tel quel, et n'importe quel lecteur
             // obtenait la chaine — nombre de factures, anomalies — d'un autre exploitant (mesure du
-            // 08/10). Un profil qui ne couvre pas l'etablissement actif repond comme un profil absent.
+            // 08/10). Un profil qui ne couvre pas l'etablissement actif repond comme un profil absent :
+            // meme code, meme message, pour que la reponse ne dise pas qu'il existe ailleurs.
             if (!$profil instanceof ProfilExploitant || $etablissement === null || !$profil->couvre($etablissement)) {
-                throw new NotFoundHttpException('Profil exploitant introuvable.');
+                throw new NotFoundHttpException('La chaine n\'a PAS ete verifiee : profil exploitant introuvable.');
             }
         } elseif ($etablissement !== null) {
             $profil = $this->comptes->profilPour($etablissement);
