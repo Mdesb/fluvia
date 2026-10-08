@@ -118,7 +118,7 @@ final class GenerateurNumeroFacture
         if ($deja > 0) {
             throw new ConflictHttpException(sprintf(
                 'Le numéro %s a déjà été émis par un autre exploitant du même SIREN (%s) : un vendeur ne '
-                . 'peut pas émettre deux fois le même numéro. Rattachez ce site au profil qui facture déjà.',
+                . 'peut pas émettre deux fois le même numéro. Ce site doit facturer sous le profil qui émet déjà pour ce SIREN.',
                 $numero,
                 $profil->getSiren(),
             ));
