@@ -7,6 +7,7 @@ namespace App\Vente\Doctrine;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeTarif;
 use App\Vente\Entity\LigneVente;
+use App\Vente\Port\SaleFiscalContextInterface;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Events;
@@ -31,10 +32,20 @@ use Doctrine\ORM\Events;
  * un identifiant arbitraire quand la réservation n'a pas de produit). Écrire « Produit » ou un
  * libellé de remplacement donnerait à un ticket l'apparence d'un document complet ; un champ nul dit
  * qu'on ne sait pas, ce qui est la vérité et se corrige.
+ *
+ * **Le taux de TVA se grave ici aussi** (D123, G-7), depuis la correspondance comptable de la
+ * catégorie du produit. L'écouteur grave, il ne refuse pas : refuser est l'affaire du créateur de la
+ * ligne, avant tout paiement (`LineVatRateGuard`). Un taux qui reste nul ici est celui d'une ligne
+ * qu'on ne pouvait plus refuser, une vente hors ligne déjà encaissée.
  */
 #[AsDoctrineListener(event: Events::prePersist)]
 final class LineLabelStamper
 {
+    public function __construct(
+        private readonly SaleFiscalContextInterface $fiscalContext,
+    ) {
+    }
+
     public function prePersist(PrePersistEventArgs $args): void
     {
         $ligne = $args->getObject();
@@ -60,6 +71,10 @@ final class LineLabelStamper
             if ($tarif instanceof TypeTarif) {
                 $ligne->setLibelleTypeTarif($tarif->getNom());
             }
+        }
+
+        if ($ligne->getTauxTva() === null) {
+            $ligne->graverTauxTva($this->fiscalContext->vatRateFor($ligne->getProduit(), $ligne->getVente()?->getEtablissement()));
         }
     }
 }

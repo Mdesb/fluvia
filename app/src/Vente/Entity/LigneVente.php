@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Vente\Entity;
 
 use App\Vente\Enum\RemiseType;
+use App\Vente\Port\VatRateResolution;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -306,6 +307,17 @@ class LigneVente
     public function getTauxTvaRef(): ?Uuid
     {
         return $this->tauxTvaRef;
+    }
+
+    /** Grave le taux résolu, ses quatre attributs ensemble (`LineLabelStamper`). Non résolu : tout reste nul. */
+    public function graverTauxTva(VatRateResolution $taux): self
+    {
+        $this->tauxTva = $taux->rate;
+        $this->tauxTvaCategorie = $taux->category;
+        $this->tauxTvaLibelle = $taux->label;
+        $this->tauxTvaRef = $taux->rateRef;
+
+        return $this;
     }
 
     public function getQuantite(): int

@@ -163,6 +163,9 @@ services:
     # `ValiderVenteProcessor` APRÈS le commit de la vente (jamais dans la transaction de scellement,
     # cf. docblock de `App\Vente\Port\SaleSubscriptionInterface`).
     App\Vente\Port\SaleSubscriptionInterface: '@App\Membership\Adapter\SaleSubscriptionAdapter'
+    # Frontière M6 (ticket opposable, D123) : le taux de TVA d'une ligne vient de la correspondance
+    # comptable de la catégorie du produit, gravé par `LineLabelStamper`, exigé par chaque créateur.
+    App\Vente\Port\SaleFiscalContextInterface: '@App\Compta\Adapter\SaleFiscalContextAdapter'
 
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
