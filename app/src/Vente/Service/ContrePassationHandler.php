@@ -182,7 +182,7 @@ final class ContrePassationHandler
         }
 
         $avoir = (new Avoir())
-            ->setNumero($this->generateur->numeroAvoir())
+            ->setNumero($this->generateur->numeroAvoir($vente->getPointDeVente()))
             ->setVenteOrigine($vente)
             ->setMontant($montant)
             ->setMotif($motif)
