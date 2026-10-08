@@ -20,6 +20,7 @@ use App\Vente\Enum\StatutVente;
 use App\Vente\Nf525\Entity\OperationScellee;
 use App\Vente\Port\SaleSubscriptionInterface;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -201,6 +202,45 @@ final class CaisseAbonnementCreationTest extends AccesApiTestCase
             1,
             (int) $em->getRepository(Membership::class)->count(['sourceSaleLineId' => Uuid::fromString($ligneId)]),
             'Rejouer la souscription sur la même ligne ne doit produire aucun second abonnement.',
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function fuseaux(): iterable
+    {
+        yield 'UTC+14' => ['Pacific/Kiritimati'];
+        yield 'UTC-11' => ['Pacific/Pago_Pago'];
+    }
+
+    /**
+     * (5) LE CONTRAT COMMENCE LE JOUR DE L'ÉTABLISSEMENT, PAS LE JOUR UTC DE LA VENTE.
+     *
+     * L'instant de la vente allait tel quel dans des colonnes `date` (mesuré le 07/10/2026) : une
+     * vente entre 00:00 et 01:00 ou 02:00 à Paris ouvrait un contrat daté de la veille, et son terme
+     * tombait un jour plus tôt. Les établissements passent à UTC+14 puis UTC-11 : à toute heure,
+     * l'un des deux n'a pas le jour UTC.
+     */
+    #[DataProvider('fuseaux')]
+    public function testLAbonnementCommenceLeJourDeLEtablissement(string $fuseau): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        foreach ($this->em()->getRepository(Etablissement::class)->findAll() as $etablissement) {
+            $etablissement->setFuseauHoraire($fuseau);
+        }
+        $this->em()->flush();
+        $session = $this->ouvrirSession($client, $entete);
+        $payeur = $this->entite(Client::class, ['email' => CrmFixtures::PAYEUR_EMAIL]);
+        [$venteId, $ligneId] = $this->venteAbonnement($client, $entete, $session['id'], (string) $payeur->getId());
+
+        $reponse = $client->request('POST', '/api/ventes/' . $venteId . '/valider', $entete);
+        self::assertResponseIsSuccessful((string) $reponse->getContent(false));
+
+        $em = $this->em();
+        $em->clear();
+        $abonnement = $em->getRepository(Membership::class)->findOneBy(['sourceSaleLineId' => Uuid::fromString($ligneId)]);
+        self::assertSame(
+            (new \DateTimeImmutable('now', new \DateTimeZone($fuseau)))->format('Y-m-d'),
+            $abonnement?->getDateSouscription()->format('Y-m-d'),
         );
     }
 

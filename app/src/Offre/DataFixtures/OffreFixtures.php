@@ -41,7 +41,7 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
     public const TYPE_PRESTATION = 'prestation';
     public const TARIF_PLEIN = 'Plein tarif';
     public const TARIF_GUICHET = 'Tarif guichet uniquement';
-    public const SAISON = 'Saison 2026';
+    public const SAISON = 'Saison courante';
     public const CAT_COMPTABLE = 'Billetterie (compte 7061)';
     public const PRODUIT_ENTREE = 'Entrée unitaire piscine';
     public const PRODUIT_GOLD = 'Abonnement Gold';
@@ -112,9 +112,15 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $tarifGuichet = $this->parNom($manager, TypeTarif::class, self::TARIF_GUICHET);
         $tarifGuichet->setVisibiliteCanal(['guichet']);
 
+        // ⚠ UNE SAISON DATEE EN DUR EXPIRE AVEC SON ANNEE. « Saison 2026 » finissait le 31/12/2026 :
+        // a partir de ce jour, environ 216 tests (83 classes) tombaient en « Produit non
+        // commercialise » (mesure le 07/10/2026, horloge decalee par libfaketime). La fin suit donc
+        // l'horloge : le 31/12 de l'an prochain, calcule au chargement. Le debut reste le 01/01/2026,
+        // ou des tests datent leurs ventes en dur (`ReconductionTarifTest`, `AllYearPriceTest`) : une
+        // date hors saison se prend AVANT 2026.
         $saison = $this->parNom($manager, Saison::class, self::SAISON);
         $saison->setDateDebut(new \DateTimeImmutable('2026-01-01'))
-            ->setDateFin(new \DateTimeImmutable('2026-12-31'))
+            ->setDateFin(new \DateTimeImmutable(((int) date('Y') + 1) . '-12-31'))
             ->setPriorite(0);
         // D51 — une saison appartient a un etablissement, elle n a pas de socle : sans rattachement,
         // elle n est visible de personne et les grilles tarifaires ne resolvent plus aucun prix. Ici on
