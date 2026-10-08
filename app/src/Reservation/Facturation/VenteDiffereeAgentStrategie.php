@@ -8,6 +8,7 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Reservation\Entity\FacturationNoShow;
 use App\Reservation\Enum\ModeFacturationNoShow;
 use App\Reservation\Enum\StatutFacturationNoShow;
+use App\Reservation\Service\NoShowBillingLock;
 use App\Reservation\Service\VenteReservationHandler;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
@@ -23,6 +24,7 @@ final class VenteDiffereeAgentStrategie implements StrategieFacturationNoShow
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly VenteReservationHandler $venteHandler,
+        private readonly NoShowBillingLock $verrou,
     ) {
     }
 
@@ -60,20 +62,29 @@ final class VenteDiffereeAgentStrategie implements StrategieFacturationNoShow
             );
         }
 
-        $vente = $this->venteHandler->creerVente(
-            $session,
-            $facturation->getMontant(),
-            $clientRef,
-            'No-show / annulation tardive — réservation ' . (string) $reservation?->getId(),
-            $produitRef,
-            $reservation?->getCreneau()?->getActivite()?->getId(),
-            $reservation?->getCreneau()?->getRessource()?->getId(),
-        );
+        // Sous le verrou de la facturation (lot 4) : deux agents, ou un agent et une exonération, ne
+        // passent plus tous deux — une seule vente, et jamais pour une absence exonérée entre-temps.
+        return $this->em->getConnection()->transactional(function () use ($facturation, $session, $clientRef, $reservation, $produitRef): ResultatFacturationNoShow {
+            $statut = $this->verrou->lock($facturation);
+            if ($statut !== StatutFacturationNoShow::AFacturer) {
+                return ResultatFacturationNoShow::alreadySettled($statut);
+            }
 
-        $facturation->setVenteRattachee($vente);
-        $facturation->setStatut(StatutFacturationNoShow::Facturee);
-        $this->em->flush();
+            $vente = $this->venteHandler->creerVente(
+                $session,
+                $facturation->getMontant(),
+                $clientRef,
+                'No-show / annulation tardive — réservation ' . (string) $reservation?->getId(),
+                $produitRef,
+                $reservation?->getCreneau()?->getActivite()?->getId(),
+                $reservation?->getCreneau()?->getRessource()?->getId(),
+            );
 
-        return new ResultatFacturationNoShow(true);
+            $facturation->setVenteRattachee($vente);
+            $facturation->setStatut(StatutFacturationNoShow::Facturee);
+            $this->em->flush();
+
+            return new ResultatFacturationNoShow(true);
+        });
     }
 }

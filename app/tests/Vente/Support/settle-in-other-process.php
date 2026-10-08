@@ -9,6 +9,9 @@ declare(strict_types=1);
  * de sa réponse dans `<barrière>/response.json`.
  *
  * Usage : php settle-in-other-process.php <barrière> <vente> <jeton> <établissement> <corps JSON> [issue TPE]
+ *
+ * À la place de la vente, un chemin (« /api/… ») envoie le corps à une autre écriture : la facturation
+ * d'un no-show, qui débite le porte-monnaie (lot 4).
  */
 
 use App\Kernel;
@@ -33,7 +36,8 @@ if (($argv[6] ?? '') !== '') {
 }
 
 $kernel = new Kernel('test', true);
-$request = Request::create('/api/ventes/' . $argv[2] . '/paiements', 'POST', server: $server, content: $argv[5]);
+$chemin = str_starts_with($argv[2], '/') ? $argv[2] : '/api/ventes/' . $argv[2] . '/paiements';
+$request = Request::create($chemin, 'POST', server: $server, content: $argv[5]);
 $response = $kernel->handle($request);
 file_put_contents($argv[1] . '/response.json', json_encode(['status' => $response->getStatusCode(), 'body' => $response->getContent()]));
 $kernel->terminate($request, $response);

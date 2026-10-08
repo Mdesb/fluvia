@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Reservation\Entity\FacturationNoShow;
 use App\Reservation\Enum\StatutFacturationNoShow;
+use App\Reservation\Service\NoShowBillingLock;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -27,6 +28,7 @@ final class ExonererProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
+        private readonly NoShowBillingLock $verrou,
     ) {
     }
 
@@ -45,13 +47,20 @@ final class ExonererProcessor implements ProcessorInterface
         }
 
         $utilisateur = $this->security->getUser();
-        $data->setStatut(StatutFacturationNoShow::Exoneree);
-        $data->setMotifExoneration($motif);
-        if ($utilisateur instanceof Utilisateur) {
-            $data->setExonerePar($utilisateur);
-        }
+        // Le statut lu plus haut l'a été avant : un débit en cours peut le changer. Relu sous le
+        // verrou, il dit l'issue de ce débit, et l'exonération ne l'écrase jamais (lot 4).
+        $this->em->getConnection()->transactional(function () use ($data, $motif, $utilisateur): void {
+            if ($this->verrou->lock($data) !== StatutFacturationNoShow::AFacturer) {
+                throw new ConflictHttpException('Seule une facturation « à facturer » peut être exonérée : un autre geste vient de la traiter.');
+            }
+            $data->setStatut(StatutFacturationNoShow::Exoneree);
+            $data->setMotifExoneration($motif);
+            if ($utilisateur instanceof Utilisateur) {
+                $data->setExonerePar($utilisateur);
+            }
 
-        $this->em->flush();
+            $this->em->flush();
+        });
 
         return $data;
     }

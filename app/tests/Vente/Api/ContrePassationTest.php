@@ -13,6 +13,8 @@ use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Autorisation\AutorisationApiTestCase;
+use App\Tests\Vente\Support\RowHolder;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Remboursement / avoir / annulation par contre-passation (CA-13 / RG-M2-07) : droit requis,
@@ -20,6 +22,8 @@ use App\Tests\Autorisation\AutorisationApiTestCase;
  */
 final class ContrePassationTest extends AutorisationApiTestCase
 {
+    use RowHolder;
+
     /** CA-13 — Annulation par un habilité : avoir + support invalidé (après impression) ; lignes conservées. */
     public function testCa13AnnulationGenereAvoirEtInvalideSupport(): void
     {
@@ -131,6 +135,97 @@ final class ContrePassationTest extends AutorisationApiTestCase
         $enteteB = ['auth_bearer' => $this->jeton($clientB, 'caissier-b@test.itcotation.com', 'aaa'), 'headers' => [ContexteEtablissement::HEADER => (string) $etabB->getId()]];
         $reponse = $clientB->request('POST', '/api/ventes/' . $venteId . '/annuler', $enteteB + ['json' => ['motif' => 'Doublon']]);
         self::assertSame(404, $reponse->getStatusCode());
+    }
+
+    /**
+     * É11 du ticket opposable — JAMAIS PLUS REMBOURSÉ QUE CE QUI RESTE. Chaque remboursement était borné
+     * au total de la vente, pas à ce qui en restait : deux remboursements de 30,00 sur 45,00 rendaient 60,00.
+     */
+    public function testLesRemboursementsCumulesNeDepassentJamaisLeTotal(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $venteId = $this->venteCarteValidee($client, $entete, $this->ouvrirSession($client, $entete)['id']); // 45,00
+
+        self::assertSame(201, $this->rembourser($client, $entete, $venteId, '30.00')->getStatusCode());
+        $refus = $this->rembourser($client, $entete, $venteId, '30.00');
+        self::assertSame(422, $refus->getStatusCode());
+        self::assertStringContainsString('15.00', $refus->toArray(false)['detail'], 'Le refus dit ce qui reste remboursable.');
+        self::assertSame(201, $this->rembourser($client, $entete, $venteId, '15.00')->getStatusCode(), 'Le reste exact passe (témoin).');
+        self::assertSame(422, $this->rembourser($client, $entete, $venteId, '0.01')->getStatusCode());
+        self::assertSame('45.00', $this->totalAvoirs($venteId));
+    }
+
+    /** Sans montant, un remboursement rend ce qui reste, plus le total. */
+    public function testUnRemboursementSansMontantRendLeReste(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $venteId = $this->venteCarteValidee($client, $entete, $this->ouvrirSession($client, $entete)['id']);
+        $this->rembourser($client, $entete, $venteId, '10.00');
+
+        $avoir = $this->rembourser($client, $entete, $venteId, null);
+        self::assertSame(201, $avoir->getStatusCode());
+        self::assertSame('35.00', $avoir->toArray()['montant']);
+        self::assertSame('45.00', $this->totalAvoirs($venteId));
+    }
+
+    /** Une annulation après un remboursement partiel n'émet que le reste ; après un remboursement total, un avoir nul. */
+    public function testUneAnnulationApresDesRemboursementsNEmetQueLeReste(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete)['id'];
+        $partielle = $this->venteCarteValidee($client, $entete, $session);
+        $totale = $this->venteCarteValidee($client, $entete, $session);
+        $this->rembourser($client, $entete, $partielle, '10.00');
+        $this->rembourser($client, $entete, $totale, null);
+
+        foreach ([$partielle => '35.00', $totale => '0.00'] as $venteId => $attendu) {
+            $avoir = $client->request('POST', '/api/ventes/' . $venteId . '/annuler', $entete + ['json' => ['motif' => 'Erreur de saisie']]);
+            self::assertSame(201, $avoir->getStatusCode());
+            self::assertSame([$attendu, 'annulee'], [$avoir->toArray()['montant'], $avoir->toArray()['statutVente']]);
+            self::assertSame('45.00', $this->totalAvoirs($venteId));
+        }
+    }
+
+    /**
+     * Un remboursement concurrent tient la vente et a émis 30,00 sans avoir validé : le second attend
+     * son issue, puis ne passe plus. Lu avant le verrou, le déjà-remboursé aurait été 0,00.
+     */
+    public function testUnRemboursementConcurrentEstAttenduPuisPlafonne(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $venteId = $this->venteCarteValidee($client, $entete, $this->ouvrirSession($client, $entete)['id']);
+        $hex = str_replace('-', '', $venteId);
+        $auteur = str_replace('-', '', (string) $this->entite(Utilisateur::class, ['email' => SocleFixtures::ADMIN_EMAIL])->getId());
+
+        $autre = $this->holdRow([
+            'SELECT id FROM vente_vente WHERE id = UNHEX(?) FOR UPDATE',
+            'INSERT INTO vente_avoir (id, numero, montant, motif, date_heure, support_invalide, nature, vente_origine_id, auteur_id, etablissement_id) '
+            . "SELECT UNHEX(REPLACE(UUID(), '-', '')), 'AV-CONCURRENT', '30.00', 'Concurrent', UTC_TIMESTAMP(), 0, 'remboursement', id, UNHEX(?), etablissement_id FROM vente_vente WHERE id = UNHEX(?)",
+        ], [[$hex], [$auteur, $hex]]);
+        $debut = microtime(true);
+        $statut = $this->rembourser($client, $entete, $venteId, '30.00')->getStatusCode();
+        $attente = microtime(true) - $debut;
+        $this->releaseRow($autre);
+
+        self::assertSame(422, $statut);
+        self::assertGreaterThanOrEqual(1.5, $attente, 'Le remboursement doit attendre la contre-passation en cours sur la même vente.');
+        self::assertSame('30.00', $this->totalAvoirs($venteId));
+    }
+
+    /** @param array<string, mixed> $entete */
+    private function rembourser(object $client, array $entete, string $venteId, ?string $montant): ResponseInterface
+    {
+        return $client->request('POST', '/api/ventes/' . $venteId . '/rembourser', $entete + [
+            'json' => ['motif' => 'Geste commercial'] + ($montant === null ? [] : ['montant' => $montant]),
+        ]);
+    }
+
+    private function totalAvoirs(string $venteId): string
+    {
+        return (string) $this->em()->getConnection()->fetchOne(
+            'SELECT COALESCE(SUM(montant), 0) FROM vente_avoir WHERE vente_origine_id = UNHEX(:v)',
+            ['v' => str_replace('-', '', $venteId)],
+        );
     }
 
     private function configurerLimiteAnnuler(): void

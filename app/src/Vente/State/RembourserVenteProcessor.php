@@ -23,14 +23,14 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Rembourse une vente validée (POST /ventes/{id}/rembourser, CA-13). Droit vente.rembourser requis
  * (403 sinon). Aucun remboursement automatique : passe par cette demande explicite, tracée par
- * contre-passation (Avoir). Corps : { "motif": "…", "montant"?: "…" (partiel, défaut = total),
+ * contre-passation (Avoir). Corps : { "motif": "…", "montant"?: "…" (partiel, défaut = ce qui reste),
  * "demandeEscalade"?: "<jeton>" (rejeu) }.
  *
  * Intégration Autorisations graduées (module App\Autorisation, non modifié ici hormis ce point
  * d'insertion) : `ServiceAutorisation::evaluer()` est appelé avant `ContrePassationHandler::
- * rembourser()`, avec le montant **effectivement évalué** (partiel ou total) — reproduction minimale
- * (une ligne, `number_format`) de la résolution déjà faite dans `ContrePassationHandler::rembourser()`,
- * sans modifier ce handler. Aucune limite configurée pour `vente.rembourser` ⇒ décision AUTORISE
+ * rembourser()`, avec le montant demandé — ou, sans montant, le TOTAL, plus prudent que le reste que
+ * rend désormais `ContrePassationHandler::rembourser()` (lot 4) : une escalade peut donc approuver plus
+ * que ce qui sera rendu, jamais moins. Aucune limite configurée pour `vente.rembourser` ⇒ décision AUTORISE
  * immédiate, sans écriture : comportement strictement inchangé (rétrocompatibilité M2, CA-6).
  *
  * @implements ProcessorInterface<Vente, JsonResponse>

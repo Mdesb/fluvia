@@ -60,15 +60,23 @@ final class PorteMonnaieVirtuelAdapter implements PorteMonnaieVirtuelInterface
 
         // UPDATE conditionnel atomique (RG-M4-03, §2.2 plan-crm.md) : le statut ET le solde suffisant
         // sont vérifiés dans la même clause WHERE, évitant tout débit concurrent en survente négative.
+        //
+        // ⚠ L'ÉCHÉANCE AUSSI, PAS SEULEMENT LE STATUT. Le statut ne passe à « expiré » qu'au passage de
+        // `crm:rgpd:expirer-pmv`, une fois par jour à heure libre : un porte-monnaie échu restait
+        // dépensable jusqu'à 24 h (mesuré le 08/10/2026, `WalletPastDueDebitTest`). L'échéance est le
+        // dernier jour utilisable, au jour civil de l'établissement du client, comme pour la tâche.
         $hex = bin2hex($pmv->getId()->toBinary());
+        $jour = Etablissement::jourCivil($pmv->getClient()?->getEtablissementCreation())->format('Y-m-d');
         $affectees = (int) $this->connection->executeStatement(
-            "UPDATE crm_pmv SET solde = solde - :m WHERE id = UNHEX(:hex) AND statut = 'actif' AND solde >= :m",
-            ['m' => $montant, 'hex' => $hex],
+            "UPDATE crm_pmv SET solde = solde - :m WHERE id = UNHEX(:hex) AND statut = 'actif' AND solde >= :m"
+            . ' AND (date_echeance IS NULL OR date_echeance >= :jour)',
+            ['m' => $montant, 'hex' => $hex, 'jour' => $jour],
         );
 
         if ($affectees === 0) {
             $this->em->refresh($pmv);
-            $motif = $pmv->getStatut() !== StatutPmv::Actif
+            $echu = $pmv->getDateEcheance() !== null && $pmv->getDateEcheance()->format('Y-m-d') < $jour;
+            $motif = $pmv->getStatut() !== StatutPmv::Actif || $echu
                 ? 'PMV expiré ou inactif (RG-M4-04).'
                 : 'Solde PMV insuffisant (RG-M4-03).';
 
