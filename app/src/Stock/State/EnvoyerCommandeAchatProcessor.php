@@ -36,7 +36,7 @@ final class EnvoyerCommandeAchatProcessor implements ProcessorInterface
         }
 
         if ($data->getNumero() === '') {
-            $data->setNumero($this->generateur->genererPourCommande());
+            $data->setNumero($this->generateur->genererPourCommande($data));
         }
 
         $delaiMax = 0;

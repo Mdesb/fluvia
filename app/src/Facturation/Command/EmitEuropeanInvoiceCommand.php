@@ -17,6 +17,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use App\Facturation\Einvoicing\FacturXAssembler;
 use App\Facturation\Einvoicing\InvoiceHtmlRenderer;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * ÉMETTRE LE FICHIER EUROPÉEN D'UNE FACTURE — ou dire précisément pourquoi c'est impossible.
@@ -57,6 +58,7 @@ final class EmitEuropeanInvoiceCommand extends Command
         $this
             ->addArgument('numero', InputArgument::REQUIRED, 'Le numéro de la facture (ex. FA-2026-0001).')
             ->addOption('vers', null, InputOption::VALUE_REQUIRED, 'Écrire dans ce fichier au lieu de la sortie standard.')
+            ->addOption('exploitant', null, InputOption::VALUE_REQUIRED, 'L identifiant du profil exploitant, quand plusieurs factures portent ce numéro.')
             // ⚠ `--facturx` EXIGE UN FICHIER, et ce n'est pas une facilité manquante : un PDF est
             // binaire. L'écrire sur la sortie standard produirait un terminal illisible et, pire, un
             // fichier corrompu dès qu'on le redirige à travers quoi que ce soit qui touche aux
@@ -69,7 +71,32 @@ final class EmitEuropeanInvoiceCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $numero = (string) $input->getArgument('numero');
 
-        $facture = $this->em->getRepository(Facture::class)->findOneBy(['numero' => $numero]);
+        // ⚠ UN NUMERO NE DESIGNE PLUS UNE SEULE FACTURE : chaque exploitant tient sa serie, et deux
+        // clients ont chacun leur `FA-2026-00001`. Un `findOneBy` sur le numero seul rendait l'une
+        // des deux au hasard — le fichier europeen d'un autre client. On exige donc l'exploitant
+        // des que le numero est ambigu.
+        $criteres = ['numero' => $numero];
+        $exploitant = (string) $input->getOption('exploitant');
+        if ($exploitant !== '') {
+            if (!Uuid::isValid($exploitant)) {
+                $io->error(sprintf('« %s » n est pas un identifiant de profil exploitant.', $exploitant));
+
+                return Command::FAILURE;
+            }
+            $criteres['profilExploitant'] = Uuid::fromString($exploitant);
+        }
+        $factures = $this->em->getRepository(Facture::class)->findBy($criteres);
+        if (\count($factures) > 1) {
+            $io->error(sprintf(
+                'Le numéro « %s » est porté par %d factures d exploitants différents : précisez --exploitant (%s).',
+                $numero,
+                \count($factures),
+                implode(', ', array_map(static fn (Facture $f): string => (string) $f->getProfilExploitant()?->getId(), $factures)),
+            ));
+
+            return Command::FAILURE;
+        }
+        $facture = $factures[0] ?? null;
 
         if (!$facture instanceof Facture) {
             // ⚠ ON NOMME CE QU'ON A CHERCHÉ. « Facture introuvable » laisse croire à une erreur de

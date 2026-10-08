@@ -66,14 +66,27 @@ final class GenerateurNumero
         return sprintf('D-%s-%05d', substr(strtoupper($pdv->getId()->toRfc4122()), 0, 8), $nb + 1);
     }
 
-    public function numeroAvoir(): string
+    /**
+     * Numéro d'un avoir de caisse : sa série est celle du point de vente de la vente d'origine.
+     *
+     * ⚠ LE COMPTE ÉTAIT GLOBAL : tous les avoirs de la plateforme, tous clients confondus. Chaque point
+     * de vente voyait des trous dans sa série, et le volume d'un client se lisait dans le numéro d'un
+     * autre. La série suit désormais le point de vente, comme la chaîne NF525 (`uniq_op_pdv_sequence`)
+     * et les numéros de session et de vente directe ; le préfixe du point de vente garde le numéro
+     * unique sur la plateforme (`uniq_avoir_numero`). Les avoirs d'avant (`AV-<date>-…`) comptent dans
+     * la série de leur point de vente : elle continue, elle ne repart pas à 1.
+     */
+    public function numeroAvoir(PointDeVente $pdv): string
     {
         $nb = (int) $this->em->getRepository(Avoir::class)
             ->createQueryBuilder('a')
             ->select('COUNT(a.id)')
+            ->join('a.venteOrigine', 'v')
+            ->andWhere('v.pointDeVente = :pdv')
+            ->setParameter('pdv', $pdv->getId(), 'uuid')
             ->getQuery()
             ->getSingleScalarResult();
 
-        return sprintf('AV-%s-%05d', date('Ymd'), $nb + 1);
+        return sprintf('AV-%s-%05d', substr(strtoupper($pdv->getId()->toRfc4122()), 0, 8), $nb + 1);
     }
 }
