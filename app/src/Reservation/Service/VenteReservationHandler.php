@@ -8,6 +8,7 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\GenerateurNumero;
+use App\Vente\Service\LineVatRateGuard;
 use App\Vente\Service\PanierCalculateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -25,6 +26,7 @@ final class VenteReservationHandler
         private readonly EntityManagerInterface $em,
         private readonly GenerateurNumero $generateurNumero,
         private readonly PanierCalculateur $calculateur,
+        private readonly LineVatRateGuard $vatRate,
     ) {
     }
 
@@ -50,6 +52,10 @@ final class VenteReservationHandler
         ?Uuid $typeTarifRef = null,
     ): Vente
     {
+        // D123 (G-9) : sans taux de TVA, rien n'est écrit, et le no-show ne débite pas (le refus part
+        // avant `encaisser()`). Les cinq appelants en héritent.
+        $this->vatRate->assertResolvable($produitRef, $session->getEtablissement());
+
         $vente = new Vente();
         $vente->setSession($session)
             ->setEtablissement($session->getEtablissement())

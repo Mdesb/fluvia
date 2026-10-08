@@ -41,6 +41,7 @@ final class AjoutLigneHandler
         // moment ou on les ecrit : elles divergent au premier correctif applique a une seule des deux.
         private readonly PriceQuoter $tarif,
         private readonly CounterSellability $sellability,
+        private readonly LineVatRateGuard $vatRate,
     ) {
     }
 
@@ -114,6 +115,12 @@ final class AjoutLigneHandler
         $beneficiaire = $this->uuidOuNull($donnees['beneficiaire'] ?? null);
         if ($this->estNominatif($produit) && $beneficiaire === null) {
             throw new UnprocessableEntityHttpException('Bénéficiaire requis pour ce produit nominatif (RG-M2-04).');
+        }
+
+        // D123 (G-9) : sans taux de TVA, pas de ligne, donc rien à régler. La synchro ne refuse pas :
+        // la vente a déjà eu lieu, et sa ligne reste sans taux, ce que le ticket dira.
+        if (!$venteDejaEncaissee) {
+            $this->vatRate->assertResolvable($produit->getId(), $vente->getEtablissement());
         }
 
         $ligne = new LigneVente();
