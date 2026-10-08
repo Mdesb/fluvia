@@ -147,9 +147,13 @@ final class SaleSubscriptionAdapter implements SaleSubscriptionInterface
             // ligne à l'abonnement actif du jour, même payeur, même formule, qu'aucune ligne n'a encore
             // payé — la clé d'idempotence de `/sport/abonnements/souscrire`. L'adhérent ne départage
             // que si la ligne le désigne (l'écran le fait ; un appel d'API peut ne pas le faire).
+            // « Du jour » = le jour de l'établissement, celui qui date le contrat depuis #295 : l'instant
+            // de la vente donnait le jour UTC, et de 00:00 à 02:00 à Paris le contrat n'était plus
+            // retrouvé, puis doublé (mesuré le 08/10/2026, `CounterSubscriptionCashFirstMonthTest`).
             $criteres = [
                 'payeur' => $payeur, 'formule' => $formule, 'etablissement' => $etablissement,
-                'statut' => MembershipStatus::Actif, 'dateSouscription' => $vente->getDate(), 'sourceSaleLineId' => null,
+                'statut' => MembershipStatus::Actif, 'sourceSaleLineId' => null,
+                'dateSouscription' => Etablissement::jourCivil($etablissement, $vente->getDate()),
             ];
             if ($designe instanceof Client) {
                 $criteres['adherent'] = $adherent;

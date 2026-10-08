@@ -53,6 +53,33 @@ final class SeasonLastDayTest extends TestCase
         self::assertNull($this->prix($decembre, '2027-12-31T23:30:00+00:00'));
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function fuseaux(): iterable
+    {
+        yield 'Martinique' => ['America/Martinique'];
+        yield 'Guyane' => ['America/Cayenne'];
+        yield 'Nouvelle-Calédonie' => ['Pacific/Noumea'];
+        yield 'La Réunion' => ['Indian/Reunion'];
+    }
+
+    /**
+     * Une date civile reste la même date dans tous les fuseaux : « 2026-01-01 » (devis, souscription,
+     * ou le jour rendu par `Etablissement::jourCivil()`) est dans la saison 2026, « 2027-01-01 » non.
+     * Mesuré le 07/10/2026 : en Martinique et en Guyane, l'un et l'autre étaient relus la veille.
+     */
+    #[DataProvider('fuseaux')]
+    public function testACivilDateIsTheSameDayInEveryTimeZone(string $fuseau): void
+    {
+        $etablissement = (new Etablissement())->setFuseauHoraire($fuseau);
+        $saison = $this->saison()->setDateFin(new \DateTimeImmutable('2026-12-31'))->setEtablissement($etablissement);
+
+        foreach (['2025-12-31' => false, '2026-01-01' => true, '2026-12-31' => true, '2027-01-01' => false] as $jour => $contenu) {
+            self::assertSame($contenu, $saison->contient(new \DateTimeImmutable($jour)), $jour);
+            $midiLocal = new \DateTimeImmutable($jour . ' 12:00', new \DateTimeZone($fuseau));
+            self::assertSame($contenu, $saison->contient(Etablissement::jourCivil($etablissement, $midiLocal)), $jour . ', par jourCivil()');
+        }
+    }
+
     private function saison(): Saison
     {
         return (new Saison())->setNom('Saison')->setDateDebut(new \DateTimeImmutable('2026-01-01'))

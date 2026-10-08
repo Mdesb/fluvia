@@ -135,7 +135,7 @@ Les types PHP indiqués sont indicatifs (spec = comportement observable). Tout o
 - **Suppression d'un type de tarif / saison utilisé** — Interdite ; archivage seul ; les grilles historiques restent valides (US-L1-07).
 - **Case de grille vide** — Interprétée comme « non commercialisé » et jamais comme « gratuit » (US-L1-03).
 - **Quota de service inclus** — Non-report d'une semaine sur l'autre ; remise à zéro le lundi même si la semaine précédente n'a pas été consommée (RG-M1-12).
-- **Carte multi-entrées expirée** — Les compostages restants (bonus compris) deviennent inutilisables à la date butoir de la carte (RG-M1-13). ⚠ HYPOTHÈSE : le traitement comptable/PCA du solde perdu à l'expiration relève de M6 et n'est pas spécifié ici.
+- **Carte multi-entrées expirée** — La date butoir est le dernier jour utilisable : la carte vaut toute cette journée, jusqu'à minuit à l'heure de l'établissement, et les compostages restants (bonus compris) deviennent inutilisables le lendemain à 00:00 (RG-M1-13 ; décision de Maxime du 07/10/2026). ⚠ HYPOTHÈSE : le traitement comptable/PCA du solde perdu à l'expiration relève de M6 et n'est pas spécifié ici.
 - **Conversion vers un type incompatible** — Non proposée par l'assistant (seuls les types compatibles sont offerts) ; RG-M1-11 ne définit pas la matrice de compatibilité → ⚠ HYPOTHÈSE : matrice « types compatibles » à définir avec le métier avant implémentation.
 - **Stock partagé (pool)** — La vente d'un produit rattaché à un pool décrémente le pool pour tous les produits liés (RG-M1-10) ; risque de rupture simultanée à arbitrer avec M2.
 - **Utilisateur sans affectation sur l'établissement du produit** — Aucun accès (hérité du socle, `RG-SOCLE-05`).

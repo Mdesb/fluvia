@@ -62,7 +62,7 @@ final class StubProjectionDroit implements ProjectionDroitInterface
             $droit->setProduitRef($produit->getId());
             if ($estNouveau) {
                 // T6 — n'écrit fenetreFin qu'à la PREMIÈRE projection (cf. docblock de classe).
-                $droit->setFenetreFin($this->cardExpiry->calculer($carte, null, new \DateTimeImmutable()));
+                $droit->setFenetreFin($this->cardExpiry->calculer($carte, null, new \DateTimeImmutable(), $etablissement));
             }
         } else {
             $droit->setSourceType(TypeDroitAcces::Billet);

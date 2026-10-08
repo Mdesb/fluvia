@@ -38,12 +38,17 @@ final class ExpirerPmvCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $maintenant = new \DateTimeImmutable();
 
+        // ⚠ L'ÉCHÉANCE SE COMPARE AU JOUR DE L'ÉTABLISSEMENT, PAS AU JOUR UTC. Comparée au jour UTC,
+        // elle expirait un porte-monnaie le soir de son dernier jour à l'ouest de Greenwich, et le
+        // laissait passer la nuit suivante à l'est (mesuré le 07/10/2026, `ExpirationPmvTest`). La
+        // requête prend large (aucun établissement n'a plus d'un jour d'avance sur UTC) ; le jour de
+        // chaque établissement tranche ensuite.
         $qb = $this->em->createQueryBuilder();
         $qb->select('p')->from(PorteMonnaieVirtuel::class, 'p')
             ->where('p.statut = :actif')
-            ->andWhere('p.dateEcheance < :maintenant')
+            ->andWhere('p.dateEcheance < :demain')
             ->setParameter('actif', StatutPmv::Actif->value)
-            ->setParameter('maintenant', $maintenant, 'date_immutable');
+            ->setParameter('demain', $maintenant->modify('+1 day'), 'date_immutable');
 
         /** @var list<PorteMonnaieVirtuel> $pmvExpires */
         $pmvExpires = $qb->getQuery()->getResult();
@@ -51,6 +56,9 @@ final class ExpirerPmvCommand extends Command
         $traites = 0;
         foreach ($pmvExpires as $pmv) {
             $etablissement = $pmv->getClient()?->getEtablissementCreation();
+            if ($pmv->getDateEcheance() >= Etablissement::jourCivil($etablissement, $maintenant)) {
+                continue;
+            }
             if ($etablissement === null) {
                 // Jamais « le premier établissement venu » (04/10/2026) : on signale et on passe, sans
                 // arrêter l'expiration des autres porte-monnaie.

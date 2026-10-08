@@ -174,6 +174,8 @@ Aujourd'hui, aucune de ces trois choses n'est vraie (§3).
   - si `dateButoir` est également renseignée : `fenetreFin = min(maintenant + validiteDuree, dateButoir)` ;
   - si seule `dateButoir` est renseignée (`validiteDuree` nulle) : `fenetreFin = dateButoir` (plafond
     fixe, ne recule pas à chaque recharge) ;
+  - `dateButoir` vaut ici la fin de ce jour, 23:59:59 à l'heure de l'établissement : c'est le dernier
+    jour utilisable (décision de Maxime du 07/10/2026, `RG-M1-13`) ;
   - si aucune des deux n'est renseignée : `fenetreFin` reste `null` (carte sans expiration, comportement
     actuel inchangé).
   `DroitAcces.fenetreDebut` **n'est pas modifiée** par la recharge (elle reste `null` aujourd'hui pour
