@@ -157,11 +157,12 @@ final readonly class StructureOnboarding
         // Il active les capacites du metier -- controle d'acces, reservation, SEPA, casiers selon
         // les cas. Sans lui, un club de sport ouvre avec la configuration d'un musee : tout
         // desactive, et l'exploitant cherche pourquoi son abonnement mensuel ne trouve pas le SEPA.
-        $metier = $this->metier($donnees);
-        if ($metier instanceof Metier) {
-            $this->presets->appliquerPreset($etablissement, $metier);
-            $this->entityManager->flush();
-        }
+        //
+        // ⚠ ET MÊME SANS MÉTIER, DEPUIS LE 08/10 : le menu se garde désormais par les capacités, et
+        // une structure ouverte sans métier reconnu (un cinéma : aucun `Metier` ne le décrit) aurait
+        // perdu « Comptabilité » et « Stock », visibles de tous jusque-là. Elle reçoit les communes.
+        $this->presets->appliquerPreset($etablissement, $this->metier($donnees));
+        $this->entityManager->flush();
 
         return $etablissement;
     }

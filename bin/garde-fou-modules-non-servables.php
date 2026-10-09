@@ -52,7 +52,7 @@ declare(strict_types=1);
  *
  * Le signal frontal cherche le NOM DU MODULE dans les sources du frontal. Un ecran dont le fichier
  * porte un nom FRANCAIS lui est invisible par ce chemin : `pages/Sejours.jsx` ne contient pas la
- * chaine `stay`. Il ne voit ce module que par ses PERMISSIONS (`stay.read` dans `AppShell.jsx`) et
+ * chaine `stay`. Il ne voit ce module que par ses PERMISSIONS (`stay.read` dans `api/menu.js`) et
  * ses ROUTES (`/api/stays/`) — ce qui a suffi ici, mais ne suffira pas a un ecran qui n'appellerait
  * ni l'un ni l'autre.
  *
@@ -169,14 +169,15 @@ function peser(string $module): array
     // ⚠ ET LA v2, QUI VOYAIT ENFIN `stay`, COMPTAIT UN LIBELLÉ POUR `lodging` : la ligne
     //   `lodging: 'Hébergement'` d'un écran de paramètres. Élargir un motif ne suffit pas — il faut
     //   mesurer LA BONNE CHOSE. Ce qui fait qu'un module sert, c'est que le frontal l'APPELLE : une
-    //   route `/api/<module>` dans `api/client.js`, ou une entrée de navigation dans `AppShell.jsx`.
+    //   route `/api/<module>` dans `api/client.js`, ou une entrée de navigation dans `api/menu.js`.
     //   Un libellé ne pilote rien.
     $frontal = 0;
     $nom = strtolower($module);
 
     foreach ([
         RACINE_FRONT . '/api/client.js' => '#/api/' . preg_quote($nom, '#') . '#i',
-        RACINE_FRONT . '/components/AppShell.jsx' => "#'" . preg_quote($nom, '#') . "\\.|ic: '" . preg_quote($nom, '#') . "'#i",
+        // Le menu a quitté `AppShell.jsx` pour `api/menu.js` le 08/10 : c'est là que vivent ses entrées.
+        RACINE_FRONT . '/api/menu.js' =>"#'" . preg_quote($nom, '#') . "\\.|ic: '" . preg_quote($nom, '#') . "'#i",
     ] as $fichier => $motifPilotage) {
         $source = @file_get_contents($fichier);
 

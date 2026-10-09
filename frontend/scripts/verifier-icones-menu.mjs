@@ -2,7 +2,8 @@
 //
 // ── LE DEFAUT ───────────────────────────────────────────────────────────────────────────────────
 //
-// `AppShell.jsx` declare chaque entree du menu avec un nom d'icone : `{ id: 'legal', ic: 'legal' }`.
+// `api/menu.js` (extrait d'`AppShell.jsx` le 08/10) declare chaque entree du menu avec un nom
+// d'icone : `{ id: 'legal', ic: 'legal' }`.
 // `Icon.jsx` resout ce nom dans une table : `ICONS[name]`. Une cle absente rend `undefined`.
 //
 // Mesure du 01/09 : 35 dessins definis, 36 entrees de menu, QUATRE noms sans dessin — `dashboard`,
@@ -140,12 +141,15 @@ if (dessins.size < 10) {
   process.exit(1)
 }
 
+// ⚠ `.js` AUSSI DEPUIS LE 08/10 : le menu a quitte `AppShell.jsx` pour `api/menu.js`, testable sous
+// `node --test`. Ne lire que les `.jsx` aurait fait sortir ses trente-huit icones de ce controle sans
+// qu'il cesse d'etre vert.
 function fichiersJsx(racine) {
   const sortie = []
   for (const e of readdirSync(racine)) {
     const p = join(racine, e)
     if (statSync(p).isDirectory()) sortie.push(...fichiersJsx(p))
-    else if (p.endsWith('.jsx')) sortie.push(p)
+    else if (/\.jsx?$/.test(p) && !p.endsWith('.test.js')) sortie.push(p)
   }
   return sortie
 }
