@@ -249,17 +249,22 @@ final class ValidationPassageHandler
                 // 0 = comportement strictement inchangé, zéro régression sur /acces/passages et
                 // /terminal/passages).
                 $enConflitCredit = false;
-                if ($droit->getSourceType() === TypeDroitAcces::CarteQuota) {
+                // Une entrée unitaire se décompte comme la carte (décision du 08/10), mais à l'ENTRÉE
+                // seulement : une sortie ne consomme pas l'entrée, et la refuser enfermerait le porteur.
+                // Épuisée, elle a déjà servi : `deja_consomme`, pas `credit_epuise`, qui envoie recharger.
+                $carte = $droit->getSourceType() === TypeDroitAcces::CarteQuota;
+                if ($carte || ($droit->getCreditRestant() !== null && $sens === SensPassage::Entree)) {
+                    [$motifEpuise, $libelleEpuise] = $carte ? [CodeMotifRefus::CreditEpuise, 'Carte épuisée'] : [CodeMotifRefus::DejaConsomme, 'Entrée déjà utilisée'];
                     $plancher = $evt->autoriserCreditNegatifSiHorsLigne ? $this->plancherCreditNegatif : 0;
                     if (!$evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) <= 0) {
-                        throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée.');
+                        throw new PassageRefuseException($motifEpuise, $libelleEpuise . '.');
                     }
                     $affectees = (int) $this->connection->executeStatement(
                         'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant > :plancher',
                         ['hex' => bin2hex($droit->getId()->toBinary()), 'plancher' => $plancher],
                     );
                     if ($affectees === 0) {
-                        throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée (course concurrente).');
+                        throw new PassageRefuseException($motifEpuise, $libelleEpuise . ' (course concurrente).');
                     }
                     // RECHARGER, JAMAIS RECALCULER (même garde que `CardRechargeHandler`, CA-7). Recopier
                     // `valeur_en_mémoire - 1` sur l'objet faisait réécrire au `flush()` final une valeur

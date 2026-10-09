@@ -19,8 +19,8 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Stub L3 du port de projection (T4) : lit `BilletSupport` (M2) et le `Produit`/`CarteMultiEntrees`
  * (M1) associés pour construire/rafraîchir la projection locale. Une carte multi-entrées projette un
- * droit `carte_quota` avec `creditRestant` = compostages restants ; sinon `billet`/`abonnement` avec
- * une fenêtre ouverte (⚠ la fenêtre métier précise relève de M1, cf. Risque n°8 du plan).
+ * droit `carte_quota` avec `creditRestant` = compostages restants ; sinon un `billet`, qui vaut le
+ * nombre d'entrées et la durée de son produit (décision du 08/10), sauf le billet d'une formule.
  *
  * **T6, CQ-1 — bundle de cohérence (RG-CQ1-04 appliqué à l'émission, signalé pour arbitrage à
  * l'intégrateur, cf. rapport d'implémentation) :** avant ce correctif, `fenetreFin` n'était JAMAIS
@@ -66,9 +66,28 @@ final class StubProjectionDroit implements ProjectionDroitInterface
             }
         } else {
             $droit->setSourceType(TypeDroitAcces::Billet);
-            $droit->setCreditRestant(null);
             if ($produit instanceof Produit) {
                 $droit->setProduitRef($produit->getId());
+            }
+
+            // ── UNE ENTRÉE VAUT SES ENTRÉES, PENDANT LA DURÉE DE SON PRODUIT (décision de Maxime du 08/10) ──
+            //
+            // Le droit d'un billet n'avait ni décompte ni fenêtre : passé le délai anti-retour, il
+            // rouvrait, ce jour-là et les suivants. Il porte désormais le nombre d'entrées du produit
+            // (`null` = illimité dans la durée), décompté au passage comme une carte, et une fenêtre
+            // en jours civils de l'établissement : le jour de la vente par défaut, « N jours » = ce
+            // jour et les N-1 suivants, jusqu'à minuit. Recopiés ici pour la borne hors ligne.
+            //
+            // ⚠ À LA PREMIÈRE PROJECTION SEULEMENT : une re-projection (ré-appairage après perte)
+            //   rendrait sinon l'entrée déjà utilisée. Et pas pour le billet d'une formule : il prend
+            //   la validité de l'abonnement (#292). Un billet daté prend celle de son créneau
+            //   (`ConfirmerCommandeHandler`).
+            if ($estNouveau && $produit instanceof Produit && $produit->getFormule() === null) {
+                $jour = Etablissement::jourCivil($etablissement);
+                $dernier = max($jour, $jour->add($produit->getDureeValidite() ?? new \DateInterval('P1D'))->modify('-1 day'));
+                $droit->setCreditRestant($produit->getEntryCount())
+                    ->setFenetreDebut(Etablissement::instantLocal($etablissement, $jour->format('Y-m-d') . ' 00:00:00'))
+                    ->setFenetreFin(Etablissement::instantLocal($etablissement, $dernier->format('Y-m-d') . ' 23:59:59'));
             }
         }
 

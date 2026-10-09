@@ -57,6 +57,11 @@ final class ProduitProcessor implements ProcessorInterface
             // Un defaut n'est pas une regle : les axes deja renseignes ne sont jamais ecrases.
             $this->categoriesParDefaut->appliquer($data);
             $this->refuserSaisieContradictoire($data);
+            // Un billet vaut au moins une entrée ; vide = illimité dans la durée (décision du 08/10). Ici
+            // et non en contrainte : la duplication recopie ce champ après la validation (garde-fou n°34).
+            if ($data->getEntryCount() !== null && $data->getEntryCount() < 1) {
+                throw new UnprocessableEntityHttpException('Un billet vaut au moins une entrée. Laissez vide pour illimité dans la durée.');
+            }
             $this->rattacherALEtablissementActif($data, $operation);
             $data->toucherModifieLe();
         }

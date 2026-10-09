@@ -39,6 +39,7 @@ final class DupliquerProcessor implements ProcessorInterface
         $copie->setLibelleRecherche($data->getLibelleRecherche());
         $copie->setCanaux($data->getCanaux());
         $copie->setDureeValidite($data->getDureeValidite());
+        $copie->setEntryCount($data->getEntryCount());
         $copie->setReglePca($data->getReglePca());
         $copie->setCompteComptable($data->getCompteComptable());
         $copie->setTauxTva($data->getTauxTva());
