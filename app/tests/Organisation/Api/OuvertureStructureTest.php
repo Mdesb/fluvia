@@ -12,6 +12,7 @@ use App\Compta\Enum\VatCategory;
 use App\Facturation\Einvoicing\BusinessTerm;
 use App\Facturation\Einvoicing\InvoiceReadiness;
 use App\Facturation\Entity\Facture;
+use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Compta\LegalVatRateFixtureTrait;
 use App\Tests\Securite\SecuriteApiTestCase;
@@ -163,6 +164,50 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
 
         self::assertSame(TypeExploitant::RegieDirecte, $profil->getType());
         self::assertSame(ReferentielComptable::M57, $profil->getReferentielComptable());
+    }
+
+    /**
+     * LE MENU SE GARDE PAR LES CAPACITÉS DEPUIS LE 08/10. Une structure ouverte sans métier reconnu
+     * (un cinéma : aucun `Metier` ne le décrit) garde la comptabilité et le stock, visibles de tous
+     * jusque-là ; aucun module hors préréglage n'est activé.
+     */
+    public function testSansMetierLaStructureGardeLesCapacitesCommunes(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', '/api/organisation/structures', $entete + [
+            'json' => ['nomCommercial' => 'Cinéma de test', 'denomination' => 'COMMUNE DE TEST', 'siret' => '21240390500019', 'formeJuridique' => '4210'],
+        ]);
+        self::assertSame(201, $client->getResponse()->getStatusCode(), (string) $client->getResponse()->getContent(false));
+
+        self::assertSame(['comptabilite', 'stock'], $this->capacitesDe('Cinéma de test'));
+    }
+
+    /** Avec un métier, la structure voit son écran métier, et toujours pas « Affaires ». */
+    public function testAvecUnMetierLaStructureActiveSaVerticale(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', '/api/organisation/structures', $entete + [
+            'json' => ['nomCommercial' => 'Piscine de test', 'denomination' => 'COMMUNE DE TEST', 'siret' => '21240390500019', 'formeJuridique' => '4210', 'metier' => 'piscine'],
+        ]);
+        self::assertSame(201, $client->getResponse()->getStatusCode(), (string) $client->getResponse()->getContent(false));
+
+        $capacites = $this->capacitesDe('Piscine de test');
+        self::assertContains('piscine', $capacites);
+        self::assertContains('comptabilite', $capacites);
+        self::assertNotContains('affaires', $capacites);
+    }
+
+    /** @return list<string> */
+    private function capacitesDe(string $nomEtablissement): array
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(Etablissement::class)->findOneBy(['nom' => $nomEtablissement]);
+        self::assertInstanceOf(Etablissement::class, $etablissement, 'la structure n’a pas été créée');
+
+        return static::getContainer()->get(Fonctionnalites::class)->actives($etablissement);
     }
 
     private function profilDe(string $nomEtablissement): ProfilExploitant

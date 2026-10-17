@@ -37,6 +37,34 @@ final class PresetVerticaleTest extends TestCase
         self::assertContains('poss', $capacites);
     }
 
+    /**
+     * Décision de Maxime du 08/10 : un module qu'aucun préréglage n'active naît masqué du menu. Le
+     * préréglage porte donc sa propre verticale (sans quoi une piscine ne verrait pas l'écran
+     * « Piscine ») et jamais un module hors mission — qui doit être une capacité pour être masqué.
+     */
+    public function testChaquePresetActiveSaVerticaleEtAucunModuleHorsMission(): void
+    {
+        $horsMission = ['affaires', 'projets', 'finance', 'social', 'stay', 'lodging', 'dining', 'connecteurs'];
+        $catalogue = new CatalogueCapacites();
+        foreach ($horsMission as $code) {
+            self::assertTrue($catalogue->existe($code), sprintf('« %s » doit être une capacité pour pouvoir être masqué.', $code));
+        }
+
+        foreach (Metier::cases() as $metier) {
+            $capacites = PresetVerticale::capacites($metier);
+            self::assertContains($metier->value, $capacites, sprintf('Le preset « %s » n’active pas son propre écran.', $metier->value));
+            foreach ($horsMission as $code) {
+                self::assertNotContains($code, $capacites, sprintf('Le preset « %s » active « %s ».', $metier->value, $code));
+            }
+        }
+    }
+
+    /** Une structure sans métier reconnu (un cinéma : aucun `Metier` ne le décrit) reçoit les communes. */
+    public function testSansMetierSeulesLesCapacitesCommunes(): void
+    {
+        self::assertSame(['comptabilite', 'stock'], PresetVerticale::capacites(null));
+    }
+
     public function testPresetSportIncluLeSepaEtLAccesNocturne(): void
     {
         $capacites = PresetVerticale::capacites(Metier::Sport);
