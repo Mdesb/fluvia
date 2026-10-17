@@ -72,6 +72,8 @@ function valeursModifiables(p) {
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
+    // Entrées par billet (décision du 08/10) : une par défaut, vide = illimité dans la durée.
+    entrees: p?.entryCount === null ? '' : String(p?.entryCount ?? 1),
     // ⚠ `null` QUAND L'OBJET N'EXISTE PAS, et pas un objet vide : c'est ce qui distingue « ce
     // produit n'a pas de formule » de « il en a une, toute vide ». Le bloc ne s'affiche que sur
     // un objet present, et l'enregistrement n'envoie rien sur un `null`.
@@ -529,7 +531,7 @@ export default function ProduitFiche({
   // et on s'habituerait a l'ignorer.
   const ONGLET_DU_CHAMP = {
     libelle: 'Présentation', description: 'Présentation',
-    canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
+    canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente', entrees: 'Vente',
     couleurCaisse: 'Caisse',
     formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
     parentalConsentRequired: 'Vente',
@@ -599,6 +601,7 @@ export default function ProduitFiche({
         // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
         // courte : on renvoie `P<n>D`, ou `null` pour « sans limite ».
         dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D`,
+        entryCount: edition.entrees === '' ? null : Number(edition.entrees),
         // ⚠ ON N'ENVOIE LA FORMULE QUE SI ELLE EXISTE. Envoyer `formule: null` la SUPPRIMERAIT ;
         // ne rien envoyer la laisse intacte. La difference tient a un champ absent, pas a une
         // valeur nulle — et c'est exactement le genre d'ecart qui efface des donnees en silence.
@@ -1238,7 +1241,7 @@ export default function ProduitFiche({
           type="number"
           min="0"
           value={edition.jours}
-          placeholder="sans limite"
+          placeholder="le jour de l’achat"
           onChange={(e) => setEdition((st) => ({ ...st, jours: e.target.value }))}
         />
         {dureeNonExprimableEnJours(p.dureeValidite) ? (
@@ -1249,10 +1252,29 @@ export default function ProduitFiche({
           </div>
         ) : (
           <div className="hint">
-            Combien de temps le billet reste utilisable après l’achat. Vide = sans limite.
+            Combien de jours un billet d’entrée reste utilisable, le jour de l’achat compris,
+            jusqu’à minuit. Vide = le jour de l’achat.
           </div>
         )}
       </div>
+      {!edition.carte && !edition.formule && (
+        <div className="field">
+          <label htmlFor="pr-entrees">Entrées par billet</label>
+          <input
+            id="pr-entrees"
+            className="input"
+            type="number"
+            min="1"
+            value={edition.entrees}
+            placeholder="illimité dans la durée"
+            onChange={(e) => setEdition((st) => ({ ...st, entrees: e.target.value }))}
+          />
+          <div className="hint">
+            Combien de fois le billet passe la borne d’entrée pendant sa durée. Vide = illimité
+            dans la durée, pour les allers-retours.
+          </div>
+        </div>
+      )}
       </Section>
       {/* ⚠ N'APPARAIT QUE SI LA FORMULE EXISTE. On ne propose pas d'en creer une : donner une
           formule d'abonnement a un produit de boutique demanderait de decider ce que ca veut
