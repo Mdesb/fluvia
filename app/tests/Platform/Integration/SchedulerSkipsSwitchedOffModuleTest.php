@@ -70,23 +70,37 @@ final class SchedulerSkipsSwitchedOffModuleTest extends KernelTestCase
         self::assertNotNull($this->lastFinishedAt(), 'allumé pour A, la tâche tourne');
     }
 
-    private function run_(): string
+    /**
+     * PR 2 (c) : Personnel n'avait pas de manifeste, donc ses trois tâches tournaient quoi qu'il
+     * arrive. Il en a un ; éteint partout, ses tâches sont sautées comme celles de Padel.
+     */
+    public function testPersonnelTasksAreSkippedWhenPersonnelIsOffEverywhere(): void
+    {
+        foreach (['personnel:qualifications:verifier', 'personnel:traiter-echeances-sortie', 'personnel:recalculer-fenetres-badges'] as $task) {
+            $output = $this->run_($task);
+
+            self::assertStringContainsString('éteint', $output, $task);
+            self::assertNull($this->lastFinishedAt($task), $task);
+        }
+    }
+
+    private function run_(string $task = self::TASK): string
     {
         $output = new BufferedOutput();
         $this->application->find('platform:scheduler:run')->run(
-            new ArrayInput(['--only' => self::TASK, '--supervise' => true]),
+            new ArrayInput(['--only' => $task, '--supervise' => true]),
             $output,
         );
 
         return $output->fetch();
     }
 
-    private function lastFinishedAt(): ?\DateTimeImmutable
+    private function lastFinishedAt(string $task = self::TASK): ?\DateTimeImmutable
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
         $em->clear();
-        $trace = $em->getRepository(ScheduledTaskRun::class)->findOneBy(['command' => self::TASK]);
+        $trace = $em->getRepository(ScheduledTaskRun::class)->findOneBy(['command' => $task]);
 
         return $trace instanceof ScheduledTaskRun ? $trace->getLastFinishedAt() : null;
     }

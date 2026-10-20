@@ -85,4 +85,11 @@ enum CapaciteCode: string
     case RevenueRecovery = 'revenue_recovery';
     case Import = 'import';
     case Ocr = 'ocr';
+
+    // Recentrage, PR 2 (20/10/2026) : quatre modules masqués par la spec n'avaient pas de manifeste.
+    // Ils en reçoivent un, et une capacité pour pouvoir être éteints. Mêmes règles que ci-dessus.
+    case Caution = 'caution';
+    case Project = 'project';
+    case Marketing = 'marketing';
+    case Personnel = 'personnel';
 }

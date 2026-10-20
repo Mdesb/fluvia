@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Marketing;
 
+use App\Tests\Platform\ModuleSwitch;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Crm\DataFixtures\CrmFixtures;
@@ -22,6 +23,8 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 abstract class MarketingApiTestCase extends ApiTestCase
 {
+    use ModuleSwitch;
+
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -39,6 +42,9 @@ abstract class MarketingApiTestCase extends ApiTestCase
             $fixture = $container->get($classe);
             $fixture->load($em);
         }
+
+        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
+        $this->switchModule('marketing', true);
 
         self::ensureKernelShutdown();
     }

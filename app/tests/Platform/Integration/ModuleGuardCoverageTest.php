@@ -68,6 +68,20 @@ final class ModuleGuardCoverageTest extends SocleApiTestCase
         }
     }
 
+    /**
+     * PR 2 (c) : Caution, Project, Marketing et Personnel étaient masqués par la spec mais sans
+     * manifeste — donc sans appartenance, donc jamais gardés. Ils ont désormais chacun le leur, avec une
+     * capacité : les tests ci-dessous, qui énumèrent le registre, les couvrent sans les nommer.
+     */
+    public function testTheMaskedModulesThatHadNoManifestNowHaveOne(): void
+    {
+        foreach (['caution', 'project', 'marketing', 'personnel'] as $id) {
+            self::assertTrue($this->registry()->has($id), sprintf('« %s » sans manifeste.', $id));
+            self::assertNotNull($this->registry()->get($id)->capability(), $id);
+            self::assertNotContains($id, ModuleGuard::CORE_MODULES, $id);
+        }
+    }
+
     public function testEveryCollectionOfAMaskedModuleIs404WhenSwitchedOffAndServedWhenOn(): void
     {
         $collections = [];

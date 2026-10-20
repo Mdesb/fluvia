@@ -307,6 +307,30 @@ final class CatalogueCapacites
                 "Vos clients, abonnements et produits repris de votre ancien logiciel, vérifiés avant d'être appliqués, et annulables si la reprise est fausse.",
                 'metier',
             ),
+            CapaciteCode::Caution => new DescripteurCapacite(
+                $code->value,
+                'Cautions',
+                "Les cautions prises au guichet, leurs retenues et leurs restitutions, suivies en un seul endroit avec le solde consigné.",
+                'finance',
+            ),
+            CapaciteCode::Project => new DescripteurCapacite(
+                $code->value,
+                'Projets',
+                "Les projets de l'établissement et leurs tâches, distribués à l'équipe, avec qui fait quoi et pour quand.",
+                'metier',
+            ),
+            CapaciteCode::Marketing => new DescripteurCapacite(
+                $code->value,
+                'Campagnes et fidélité',
+                "Campagnes vers vos clients, programme de fidélité et parrainage, à partir des fiches que vous tenez déjà.",
+                'metier',
+            ),
+            CapaciteCode::Personnel => new DescripteurCapacite(
+                $code->value,
+                'Personnel',
+                "Les employés, leurs plannings, absences, qualifications et badges d'accès, tenus avec l'établissement.",
+                'metier',
+            ),
             CapaciteCode::Ocr => new DescripteurCapacite(
                 $code->value,
                 'Lecture des pièces',
