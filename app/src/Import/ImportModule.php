@@ -8,9 +8,9 @@ use App\Platform\Module\ModuleManifest;
 
 /**
  * Manifeste du module `App\Import` (reprise initiale, plan-import-i1.md §7 point 7). `capability()`
- * renvoie `null` : la reprise de données n'est pas une capacité vendue par établissement au sens du
- * catalogue `App\Fonctionnalite` — c'est un outil d'onboarding, activé une fois par client à sa
- * signature (§0.5 de la spec). ⚠ Noms de permissions **proposés par analogie**, à arbitrer avec M8
+ * renvoie `import` depuis le 20/10/2026 (recentrage, décision de Maxime) : il rendait `null` (« outil
+ * d'onboarding, pas une capacité vendue »), ce qui le rendait impossible à éteindre ; il est désormais
+ * masqué par défaut et s'allume pour la reprise d'un client. ⚠ Noms de permissions **proposés par analogie**, à arbitrer avec M8
  * avant figement (§3 du plan).
  *
  * `eventsEmitted()`/`eventsConsumed()` vides par ce lot (I1) — §7 point 8 du plan : émettre
@@ -30,7 +30,7 @@ final class ImportModule implements ModuleManifest
 
     public function capability(): ?string
     {
-        return null;
+        return 'import';
     }
 
     /** @return list<string> */

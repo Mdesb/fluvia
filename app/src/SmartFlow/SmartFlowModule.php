@@ -13,9 +13,9 @@ use App\Platform\Module\ModuleManifest;
  * par SF-1 — le manifeste est une déclaration de ce qui existe réellement (même discipline que
  * `App\Dms\DmsModule`).
  *
- * `capability()` → `null` : service réactif transverse, Smart Flow ne se vend pas, il réagit à des
- * événements déjà produits par des modules payants (D22 « Smart Flow ne vend rien et ne facture rien
- * lui-même ») — ⚠ à trancher (alternative triviale : `CapaciteCode::SmartFlow`, plan §7 risque n°6).
+ * `capability()` → `smart_flow` depuis le 20/10/2026 (recentrage, décision de Maxime) : sans capacité,
+ * le module ne pouvait pas être éteint. Il était `null` (« service réactif transverse », D22) ; le
+ * risque n°6 du plan (§7) est tranché dans le sens de l'alternative qu'il proposait.
  *
  * `dependencies()` → `[]` (transitoire, plan §7 risque n°7) : `reservation`/`acces` n'implémentent pas
  * encore `ModuleManifest`, les déclarer ferait échouer `ModuleRegistry::assertDependenciesAreResolved()`.
@@ -38,7 +38,7 @@ final class SmartFlowModule implements ModuleManifest
 
     public function capability(): ?string
     {
-        return null;
+        return 'smart_flow';
     }
 
     /** @return list<string> */

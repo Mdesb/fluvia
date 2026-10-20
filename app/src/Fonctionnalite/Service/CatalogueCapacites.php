@@ -289,6 +289,30 @@ final class CatalogueCapacites
                 "Ce qui se consomme sur place : la carte, le service, et l'addition réglée à table ou reportée sur le séjour. ⚠ Module en construction — le serveur existe, il n'a pas encore d'écran.",
                 'metier',
             ),
+            CapaciteCode::SmartFlow => new DescripteurCapacite(
+                $code->value,
+                'Smart Flow',
+                "Un créneau libéré par une annulation ou un no-show est reproposé tout seul : report proposé au client absent, liste d'attente servie dans l'ordre.",
+                'planning',
+            ),
+            CapaciteCode::RevenueRecovery => new DescripteurCapacite(
+                $code->value,
+                'Relance des paiements échoués',
+                "Un paiement qui échoue n'est pas perdu : les relances partent seules, au bon rythme, jusqu'au règlement ou à l'abandon décidé.",
+                'finance',
+            ),
+            CapaciteCode::Import => new DescripteurCapacite(
+                $code->value,
+                'Reprise de données',
+                "Vos clients, abonnements et produits repris de votre ancien logiciel, vérifiés avant d'être appliqués, et annulables si la reprise est fausse.",
+                'metier',
+            ),
+            CapaciteCode::Ocr => new DescripteurCapacite(
+                $code->value,
+                'Lecture des pièces',
+                "Les factures fournisseurs et justificatifs sont lus automatiquement : montant, date et fournisseur pré-remplis au lieu d'être ressaisis.",
+                'finance',
+            ),
         };
 
         return new DescripteurCapacite(

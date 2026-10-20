@@ -75,4 +75,14 @@ enum CapaciteCode: string
      * definitivement inaccessible, exactement l'etat ou se trouvaient les neuf autres ce matin.
      */
     case Dining = 'dining';
+
+    // ── Ajoutees le 20/10/2026 (recentrage sur la billetterie, decision de Maxime) ─────────────
+    //
+    // Quatre modules n'avaient pas de capacite, donc ne pouvaient pas etre eteints : la garde des
+    // modules masques (`App\Platform\Module\ModuleGuard`) ne sait eteindre que ce qui a un code.
+    // Valeurs = exactement ce que rend `capability()` de leur manifeste (garde-fou n°41).
+    case SmartFlow = 'smart_flow';
+    case RevenueRecovery = 'revenue_recovery';
+    case Import = 'import';
+    case Ocr = 'ocr';
 }
