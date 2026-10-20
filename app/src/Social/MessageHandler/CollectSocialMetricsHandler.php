@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Social\MessageHandler;
 
+use App\Platform\Module\ModuleGuard;
 use App\Social\Crypto\SocialTokenCipher;
 use App\Social\Dto\MetricsRequest;
 use App\Social\Entity\SocialMetricSnapshot;
@@ -42,6 +43,7 @@ final class CollectSocialMetricsHandler
         private readonly EntityManagerInterface $em,
         private readonly SocialMetricsCollectorRegistry $registry,
         private readonly SocialTokenCipher $cipher,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -57,6 +59,13 @@ final class CollectSocialMetricsHandler
         }
         if ($publication->getStatus() !== SocialPublicationStatus::Published) {
             // Rien n'est paru : il n'y a rien à mesurer, et ce n'est pas une anomalie.
+            return;
+        }
+
+        // Recentrage, PR 2 (d) : un message en file pour un établissement où Social est éteint ne
+        // part pas et n'écrit rien. Sans établissement lisible, les contrôles ci-dessous tranchent.
+        $establishment = $publication->getPost()?->getEstablishment();
+        if ($establishment !== null && $this->moduleGuard?->allows(self::class, $establishment) === false) {
             return;
         }
 
