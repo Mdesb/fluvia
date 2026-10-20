@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Patinoire;
 
+use App\Tests\Platform\ModuleSwitch;
 use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
@@ -24,6 +25,8 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 abstract class PatinoireApiTestCase extends ApiTestCase
 {
+    use ModuleSwitch;
+
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -45,6 +48,9 @@ abstract class PatinoireApiTestCase extends ApiTestCase
             $fixture = $container->get($classe);
             $fixture->load($em);
         }
+
+        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
+        $this->switchModule('patinoire', true);
 
         self::ensureKernelShutdown();
     }
