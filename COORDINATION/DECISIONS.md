@@ -3963,3 +3963,23 @@ trois semaines sans que rien ne le signale (#276).
 
 **Ce qui reste.** Pousser le workflow exige la portée `workflow` du jeton du VPS, et on l'attend. Le check n'est
 ajouté à la protection qu'une fois vert sur `main`.
+
+---
+
+## D132 — Smart Flow et Revenue Recovery ont une capacité : ils s'éteignent par établissement (remplace D22 sur ce point)
+
+**Décidé par Maxime le 20/10/2026 (QCM, option A), dans le recentrage de Fluvia sur la billetterie ; livré par la
+PR #316.**
+
+**Ce qui était posé.** D22 et les deux manifestes faisaient de Smart Flow et de Revenue Recovery des services
+réactifs transverses : `capability()` rendait `null`, donc aucun établissement ne pouvait les éteindre. Deux tests
+(`SmartFlowModuleManifestTest`, `RevenueRecoveryModuleManifestTest`) l'affirmaient.
+
+**Ce qui change.**
+- Les deux modules reçoivent une capacité (`smart_flow`, `revenue_recovery`), comme Import et Ocr dans la même PR.
+  Sans ligne d'activation, ils sont éteints : leurs routes rendent 404 et leurs tâches planifiées sont sautées.
+- Les deux tests affirment désormais la capacité, et citent cette décision.
+- Le reste de D22 (l'ordre de priorité de 08/2026, les déclencheurs d'abord) n'est pas touché.
+
+**Contrepartie acceptée.** Un établissement qui veut la relance des paiements échoués ou la reproposition des
+créneaux doit l'allumer explicitement. Les deux capacités apparaissent aussi dans le catalogue des capacités.
