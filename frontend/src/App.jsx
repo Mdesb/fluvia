@@ -439,6 +439,7 @@ export default function App() {
       onNav={naviguer}
       onLogout={deconnexion}
       capacites={capacites}
+      modules={me?.modulesActifs}
       droits={droits}
       estAdmin={estAdmin}
       epingle={enModeSupport}
