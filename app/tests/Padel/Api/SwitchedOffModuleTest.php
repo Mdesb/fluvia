@@ -116,6 +116,28 @@ final class SwitchedOffModuleTest extends PadelApiTestCase
         self::assertResponseStatusCodeSame(201);
     }
 
+    /**
+     * Retirer l'en-tête `X-Etablissement` ne contourne pas la garde : sans établissement actif, le
+     * module doit être allumé dans au moins un établissement de l'utilisateur. Témoin : allumé sur B,
+     * la même requête sans en-tête n'est plus refusée par la garde.
+     */
+    public function testDroppingTheEstablishmentHeaderDoesNotBypassTheGuard(): void
+    {
+        $this->switchModule('padel', false);
+        self::ensureKernelShutdown();
+
+        [$client, $headers] = $this->adminSurA();
+        $client->disableReboot();
+        unset($headers['headers'][ContexteEtablissement::HEADER]);
+
+        $client->request('GET', '/api/padel_terrains', $headers);
+        self::assertResponseStatusCodeSame(404, 'éteint partout, sans en-tête');
+
+        $this->switchModule('padel', true, SocleFixtures::ETAB_B_NOM);
+        $client->request('GET', '/api/padel_terrains', $headers);
+        self::assertResponseIsSuccessful();
+    }
+
     /** Les permissions ne rallument jamais un module : la garde ne lit que les capacités. */
     public function testAWildcardRoleDoesNotReopenASwitchedOffModule(): void
     {
