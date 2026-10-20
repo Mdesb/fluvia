@@ -6,10 +6,8 @@ namespace App\Platform\Module;
 
 use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Resource\Factory\ResourceMetadataCollectionFactoryInterface;
-use App\Securite\Entity\Utilisateur;
 use App\Securite\Security\EstablishmentHeaderListener;
 use App\Securite\Service\ContexteEtablissement;
-use App\Securite\Service\PlatformScope;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -37,9 +35,11 @@ use Symfony\Component\HttpKernel\KernelEvents;
  *
  * Aucune permission n'est lue : un rôle `*.*` ne rallume pas un module éteint.
  *
- * ⚠ Ce qu'elle ne garde pas : les messages asynchrones, les écouteurs d'événements et les appels
- * PHP entre modules — elle garde des ROUTES. Les tâches planifiées ont leur propre saut, dans
- * `RunScheduledTasksCommand`.
+ * La règle elle-même vit dans `ModuleGuard::isOnFor()`, que `/me` lit aussi pour le menu.
+ *
+ * ⚠ Elle garde des ROUTES. Les écouteurs d'événements de domaine sont filtrés par `SymfonyEventBus`,
+ * les autres écouteurs, messages et commandes par `ModuleGuard::allows()` ; les appels PHP entre
+ * modules ne passent par aucune garde.
  */
 final class ModuleGuardListener implements EventSubscriberInterface
 {
@@ -50,7 +50,6 @@ final class ModuleGuardListener implements EventSubscriberInterface
         private readonly ModuleGuard $guard,
         private readonly ContexteEtablissement $context,
         private readonly Security $security,
-        private readonly PlatformScope $platformScope,
         private readonly ResourceMetadataCollectionFactoryInterface $metadata,
     ) {
     }
@@ -71,17 +70,7 @@ final class ModuleGuardListener implements EventSubscriberInterface
             return;
         }
 
-        $establishment = $this->context->etablissementActif();
-        if ($establishment !== null) {
-            $on = $this->guard->isOn($module, $establishment);
-        } else {
-            $user = $this->security->getUser();
-            $on = !$user instanceof Utilisateur
-                || $this->platformScope->isGlobal($user)
-                || $this->guard->isOnAnywhere($module, $user);
-        }
-
-        if (!$on) {
+        if (!$this->guard->isOnFor($module, $this->context->etablissementActif(), $this->security->getUser())) {
             // Le message est celui d'API Platform pour une ressource introuvable : rien ne distingue
             // un module éteint d'un identifiant qui n'existe pas.
             throw new NotFoundHttpException('Not Found');

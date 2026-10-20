@@ -8,7 +8,10 @@ use App\Fonctionnalite\Entity\FonctionnaliteEtablissement;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\PlatformScope;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Ce qu'un module masqué est, et s'il est allumé (recentrage sur la billetterie, lot 1).
@@ -41,6 +44,7 @@ final class ModuleGuard
         private readonly ModuleRegistry $registry,
         private readonly ModuleAccess $access,
         private readonly EntityManagerInterface $em,
+        private readonly PlatformScope $platformScope,
     ) {
     }
 
@@ -61,6 +65,63 @@ final class ModuleGuard
     public function isOn(ModuleManifest $module, Etablissement $establishment): bool
     {
         return $this->access->hasModule($establishment, (string) $module->capability());
+    }
+
+    /**
+     * LA règle, la seule : la garde des routes (`ModuleGuardListener`) et `/me` la lisent toutes deux,
+     * pour que le menu ne montre jamais un module que le serveur refuse, ni l'inverse.
+     *
+     * Avec un établissement : allumé pour lui. Sans établissement, pour un `Utilisateur` : allumé dans
+     * au moins un de ses établissements (retirer l'en-tête ne doit pas suffire à passer). Plateforme,
+     * ou aucune identité d'utilisateur : pas de garde.
+     */
+    public function isOnFor(ModuleManifest $module, ?Etablissement $establishment, ?UserInterface $user): bool
+    {
+        if ($establishment !== null) {
+            return $this->isOn($module, $establishment);
+        }
+
+        return !$user instanceof Utilisateur
+            || $this->platformScope->isGlobal($user)
+            || $this->isOnAnywhere($module, $user);
+    }
+
+    /**
+     * Les modules actifs, au sens de `isOnFor()` : tout le cœur, plus les modules masqués allumés.
+     *
+     * @return list<string> identifiants de module, triés
+     */
+    public function activeModules(?Etablissement $establishment, ?UserInterface $user): array
+    {
+        $masked = array_map(static fn (ModuleManifest $m): string => $m->id(), $this->masked());
+        $active = [];
+        foreach ($this->registry->all() as $id => $manifest) {
+            if (!\in_array($id, $masked, true) || $this->isOnFor($manifest, $establishment, $user)) {
+                $active[] = $id;
+            }
+        }
+        sort($active);
+
+        return $active;
+    }
+
+    /**
+     * Cette classe peut-elle agir pour cet établissement ? Toujours, hors d'un module masqué ; sinon
+     * seulement si le module y est allumé. Établissement inconnu ou absent : non (échec fermé).
+     *
+     * Sert là où aucune route n'est en jeu : écouteurs d'événements, messages asynchrones, commandes.
+     */
+    public function allows(string $class, Etablissement|Uuid|null $establishment): bool
+    {
+        $module = $this->maskedModuleOf($class);
+        if ($module === null) {
+            return true;
+        }
+        if ($establishment instanceof Uuid) {
+            $establishment = $this->em->find(Etablissement::class, $establishment);
+        }
+
+        return $establishment instanceof Etablissement && $this->isOn($module, $establishment);
     }
 
     /**
