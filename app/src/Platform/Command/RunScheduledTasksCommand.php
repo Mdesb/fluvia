@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Platform\Command;
 
 use App\Platform\Entity\ScheduledTaskRun;
+use App\Platform\Module\ModuleGuard;
 use App\Platform\Scheduling\ScheduleCatalog;
 use App\Platform\Scheduling\NightlyWindow;
 use App\Platform\Scheduling\ScheduledTask;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\LazyCommand;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -45,6 +47,7 @@ final class RunScheduledTasksCommand extends Command
     public function __construct(
         private readonly ScheduleCatalog $catalog,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ModuleGuard $moduleGuard,
     ) {
         parent::__construct();
     }
@@ -153,6 +156,19 @@ final class RunScheduledTasksCommand extends Command
                 : NightlyWindow::isOpen($now, $task->nightlyAt, $trace->getLastFinishedAt());
 
             if (!$due) {
+                continue;
+            }
+
+            // Recentrage, CA-3 : la tâche d'un module masqué éteint partout ne tourne pas, et le dit.
+            // ⚠ Allumé pour UN établissement, elle tourne pour tous : la commande parcourt elle-même
+            //   les établissements, l'ordonnanceur ne sait pas la restreindre.
+            $switchedOff = $this->switchedOffModule($task);
+            if ($switchedOff !== null) {
+                $io->writeln(sprintf(
+                    '  <comment>sautée</comment> %s — module « %s » éteint dans tous les établissements.',
+                    $task->command,
+                    $switchedOff,
+                ));
                 continue;
             }
 
@@ -390,6 +406,21 @@ final class RunScheduledTasksCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /** L'identifiant du module masqué de cette tâche s'il est éteint partout, sinon `null`. */
+    private function switchedOffModule(ScheduledTask $task): ?string
+    {
+        $application = $this->getApplication();
+        if ($application === null || !$application->has($task->command)) {
+            return null;
+        }
+
+        $command = $application->find($task->command);
+        $command = $command instanceof LazyCommand ? $command->getCommand() : $command;
+        $module = $this->moduleGuard->maskedModuleOf($command::class);
+
+        return $module !== null && !$this->moduleGuard->isOnAnywhere($module) ? $module->id() : null;
     }
 
     private function traceFor(string $command): ScheduledTaskRun
