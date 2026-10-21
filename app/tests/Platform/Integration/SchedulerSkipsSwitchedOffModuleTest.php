@@ -71,17 +71,36 @@ final class SchedulerSkipsSwitchedOffModuleTest extends KernelTestCase
     }
 
     /**
-     * PR 2 (c) : Personnel n'avait pas de manifeste, donc ses trois tâches tournaient quoi qu'il
-     * arrive. Il en a un ; éteint partout, ses tâches sont sautées comme celles de Padel.
+     * Personnel est du CŒUR (décision de Maxime du 20/10, à la relecture de la PR 2) : ses tâches
+     * tournent sans aucune ligne d'activation. La sortie du personnel révoque des badges ; la sauter
+     * laisserait un ancien salarié entrer.
      */
-    public function testPersonnelTasksAreSkippedWhenPersonnelIsOffEverywhere(): void
+    public function testPersonnelTasksRunWithoutAnyActivationRow(): void
     {
-        foreach (['personnel:qualifications:verifier', 'personnel:traiter-echeances-sortie', 'personnel:recalculer-fenetres-badges'] as $task) {
+        foreach (['personnel:traiter-echeances-sortie', 'personnel:recalculer-fenetres-badges'] as $task) {
             $output = $this->run_($task);
 
-            self::assertStringContainsString('éteint', $output, $task);
-            self::assertNull($this->lastFinishedAt($task), $task);
+            self::assertStringNotContainsString('éteint', $output, $task);
+            self::assertNotNull($this->lastFinishedAt($task), $task . ' doit avoir tourné');
         }
+    }
+
+    /**
+     * Une tâche sautée se lit dans `--status` comme sautée, jamais comme « JAMAIS » : les deux
+     * appellent des gestes opposés (allumer le module, ou réparer l'ordonnanceur).
+     */
+    public function testStatusSaysASkippedTaskIsSkippedAndWhy(): void
+    {
+        $this->switchModule('padel', false);
+        $this->run_();
+
+        $output = new BufferedOutput();
+        $this->application->find('platform:scheduler:run')->run(new ArrayInput(['--status' => true]), $output);
+        $line = array_values(array_filter(explode("\n", $output->fetch()), static fn (string $l): bool => str_contains($l, self::TASK)));
+
+        self::assertCount(1, $line, 'la tâche figure une fois au tableau');
+        self::assertStringContainsString('sautée : module padel éteint', $line[0]);
+        self::assertStringNotContainsString('JAMAIS', $line[0]);
     }
 
     private function run_(string $task = self::TASK): string

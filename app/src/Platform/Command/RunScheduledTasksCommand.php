@@ -358,7 +358,14 @@ final class RunScheduledTasksCommand extends Command
             // La contrepartie est qu'une nuit REELLEMENT manquee doit se voir. On la compte en
             // NUITS, pas en minutes : « 4320 minutes de retard » ne dit rien, « 3 nuits sautees »
             // se lit.
-            if ($fin === null) {
+            // Recentrage : une tâche d'un module éteint partout est SAUTÉE, ce qui n'est ni
+            // « jamais tournée » (l'ordonnanceur à réparer) ni « en retard ». L'état se calcule ici,
+            // à la lecture, comme la décision d'exécution : une trace écrite au moment du saut
+            // mentirait dès qu'on rallume le module.
+            $sautee = $this->switchedOffModule($task);
+            if ($sautee !== null) {
+                $etat = sprintf('sautée : module %s éteint', $sautee);
+            } elseif ($fin === null) {
                 $etat = 'JAMAIS';
                 ++$jamais;
             } elseif ($task->nightlyAt !== null) {
