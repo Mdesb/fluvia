@@ -3983,3 +3983,29 @@ réactifs transverses : `capability()` rendait `null`, donc aucun établissement
 
 **Contrepartie acceptée.** Un établissement qui veut la relance des paiements échoués ou la reproposition des
 créneaux doit l'allumer explicitement. Les deux capacités apparaissent aussi dans le catalogue des capacités.
+
+---
+
+## D133 — Recentrage : les modules masqués s'éteignent en préprod au déploiement ; Personnel et les capacités du cœur ne s'éteignent pas
+
+**Décidé par Maxime le 20/10/2026, à la relecture adversariale des PR #316 et #317 ; livré par la PR #317.**
+
+**Ce qui était prévu.** Le §6 de la spec du recentrage disait : « pas d'écriture de données en préprod dans le
+lot ; l'extinction des modules masqués sur les 12 établissements de préprod se fera ensuite, sur accord ». Or la
+garde serveur fait d'un module sans ligne d'activation un module éteint : aucune écriture n'est nécessaire pour
+qu'il s'éteigne, et c'est ce qui arrive au déploiement.
+
+**Ce qui change.**
+- **Extinction au déploiement, acceptée.** Tous les modules masqués (Musée, Padel, Patinoire, Caution, Stay,
+  Lodging, Dining, Social, Project, Marketing, Smart Flow, Revenue Recovery, Finance, Ocr, connecteurs, Import)
+  s'éteignent sur les établissements de préprod dès le déploiement : leurs routes rendent 404, leurs menus
+  disparaissent, leurs tâches et écouteurs ne traitent plus ces établissements. **Rien n'est effacé** : les
+  données restent en base, et un module se rallume par l'écran des fonctionnalités (« Modules en service »).
+- **Personnel est du cœur**, comme Membership, Piscine et Sport : il ne se garde pas, ne s'éteint pas (422), et
+  ses tâches planifiées tournent toujours — la sortie d'un salarié révoque ses badges.
+- **Les capacités du cœur ne s'éteignent pas** (422) : `comptabilite`, `stock`, `reservation`, `controle_acces`,
+  `boutique_en_ligne`, `casiers`, `sepa`, `recouvrement`, `agenda`, en plus de celles des modules du cœur
+  (`piscine`, `sport`, `personnel`). Liste : `ModuleGuard::CORE_CAPABILITIES`.
+
+**Contrepartie acceptée.** Un établissement de préprod qui utilisait un module masqué le perd jusqu'à ce qu'on le
+rallume. Un établissement qui ne voulait pas d'une capacité du cœur ne peut plus l'éteindre par l'écran.
