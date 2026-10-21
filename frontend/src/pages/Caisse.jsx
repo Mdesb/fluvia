@@ -19,6 +19,7 @@ import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
+import { screenAfterValidation, validateCart } from '../api/validateCart.js'
 import {
   libelleProduit,
   prixIndicatif,
@@ -1017,6 +1018,28 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
   })
 
+  // « VALIDER LA VENTE » : UN PANIER À 0 € OUVRE SA VENTE PUIS LA VALIDE (`validateCart.js`).
+  //
+  // La vente ne s'ouvre qu'au premier règlement ; un billet gratuit n'en a aucun, et ce bouton
+  // appelait `validerVente` sans vente — qui sortait en silence. Une carte à appairer passe par la
+  // même fenêtre que pour une vente payée.
+  const validerPanier = () => seul(async () => {
+    await validateCart({
+      sale: vente,
+      remaining: reste,
+      openSale: demarrerPaiement,
+      finish: async (venteId, reglements) => {
+        const regles = reglements ?? paiements
+        const { proposables, horsPortee } = trierAppairables(panier)
+        if (proposables.length > 0 || horsPortee.length > 0) {
+          setAppairageEnAttente({ venteId, reglements: regles, proposables, horsPortee })
+        } else {
+          await validerVente(null, { venteId, paiements: regles })
+        }
+      },
+    })
+  })
+
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
 //
 // CE QUE CETTE FONCTION A CESSÉ DE FAIRE, ET POURQUOI C'EST UNE BONNE NOUVELLE.
@@ -1131,7 +1154,11 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       //
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
       const t = construireTicket(infoTicket, reglements, support, true)
-      if (infoTicket.impressionAutomatique) setTicket(t)
+      // Une vente gratuite n'a pas de ticket, mais un billet : il s'affiche et part à l'impression
+      // dans le même geste (`BilletSeul`), sans l'étape « Afficher le billet » d'avant.
+      const ecran = screenAfterValidation(infoTicket)
+      if (ecran === 'pass') setBilletSeul({ ...t, imprimerAussitot: true })
+      else if (ecran === 'receipt') setTicket(t)
       else setFinVente({ info: infoTicket, ticket: t, vente: venteValidee })
       setPanier([])
       setVente(null)
@@ -1632,7 +1659,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       avis={avis}
                       busy={busy}
                       onRegler={reglerUnMoyen}
-                      onValider={validerVente}
+                      onValider={validerPanier}
                       onAbandon={abandonner}
                       montrerAbandon={!!vente && !(attente && attente.saleId === vente.id)}
                       attente={attente && attente.saleId === vente?.id ? { ...attente.body, libelle: libelleMoyen(attente.body.moyen) } : null}
@@ -2095,29 +2122,7 @@ function FinDeVente({ info, vente, droits, onAfficher, onBillet, onSansTicket })
   if (annulation === 'formulaire') {
     return <FormulaireAnnulation vente={vente} onAnnulee={setAnnulation} onFermer={() => setAnnulation(null)} />
   }
-  // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
-  // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
-  if (info.venteGratuite) {
-    return (
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-b">
-          <div className="nm">Vente enregistrée — aucun ticket</div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            Le total est de 0 € : il n’y a rien à justifier au client. La vente est bien
-            enregistrée et comptabilisée — c’est le papier qu’on ne sort pas, pas l’opération.
-          </p>
-          {/* ⚠ PAS DE TICKET NE VEUT PAS DIRE RIEN À REMETTRE (R5). Un ticket justifie un
-              PAIEMENT ; un billet ouvre un ACCÈS. Une entrée offerte n'a rien à justifier, et le
-              client a quand même besoin de quoi passer la porte. */}
-          <div className="ticket-actions">
-            <button className="btn primary sm" type="button" onClick={onBillet}>Afficher le billet</button>
-            <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  // Une vente à 0 € n'arrive plus ici : son billet s'imprime directement (`screenAfterValidation`).
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="card-b">
@@ -2170,6 +2175,15 @@ function FinDeVente({ info, vente, droits, onAfficher, onBillet, onSansTicket })
 //
 // Il porte donc ce qu'il faut pour entrer : le produit, le numéro, le code du support.
 function BilletSeul({ ticket }) {
+  // UN GESTE DÉLIVRE ET IMPRIME : après une vente gratuite, le billet part à l'imprimante dès qu'il
+  // est affiché. Avec Chrome ou Edge lancés en `--kiosk-printing`, il sort sans boîte de dialogue
+  // (docs/support/). Une seule fois par billet : la garde survit au double effet du mode strict.
+  const dejaImprime = useRef(null)
+  useEffect(() => {
+    if (!ticket?.imprimerAussitot || !ticket?.codeSupport || dejaImprime.current === ticket) return
+    dejaImprime.current = ticket
+    window.print()
+  }, [ticket])
   // ⚠ UNE VENTE PEUT N'OUVRIR AUCUN ACCÈS — une boisson, un article de boutique. Il n'y a alors
   // pas de billet à remettre, et le dire vaut mieux que de tendre un papier vide. On ne montre pas
   // un cadre avec un trou à la place du code.
