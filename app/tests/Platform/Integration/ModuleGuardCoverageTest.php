@@ -46,7 +46,7 @@ final class ModuleGuardCoverageTest extends SocleApiTestCase
     use ModuleSwitch;
 
     /** Spec du recentrage + précision de Maxime du 20/10 (Sport) : modules du cœur qui ont une capacité. */
-    private const CORE_WITH_CAPABILITY = ['piscine', 'sport'];
+    private const CORE_WITH_CAPABILITY = ['personnel', 'piscine', 'sport'];
 
     public function testTheGuardAgreesWithTheSpecOnWhatIsCore(): void
     {
@@ -75,11 +75,15 @@ final class ModuleGuardCoverageTest extends SocleApiTestCase
      */
     public function testTheMaskedModulesThatHadNoManifestNowHaveOne(): void
     {
-        foreach (['caution', 'project', 'marketing', 'personnel'] as $id) {
+        foreach (['caution', 'project', 'marketing'] as $id) {
             self::assertTrue($this->registry()->has($id), sprintf('« %s » sans manifeste.', $id));
             self::assertNotNull($this->registry()->get($id)->capability(), $id);
             self::assertNotContains($id, ModuleGuard::CORE_MODULES, $id);
         }
+
+        // Personnel a aussi reçu son manifeste, mais il est du cœur (décision de Maxime du 20/10).
+        self::assertTrue($this->registry()->has('personnel'));
+        self::assertContains('personnel', ModuleGuard::CORE_MODULES);
     }
 
     public function testEveryCollectionOfAMaskedModuleIs404WhenSwitchedOffAndServedWhenOn(): void

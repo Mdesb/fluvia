@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Tests\Personnel;
 
-use App\Tests\Platform\ModuleSwitch;
 use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
@@ -23,8 +22,6 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 abstract class PersonnelApiTestCase extends ApiTestCase
 {
-    use ModuleSwitch;
-
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -43,9 +40,6 @@ abstract class PersonnelApiTestCase extends ApiTestCase
         $fixture = $container->get(PersonnelFixtures::class);
         \assert($fixture instanceof PersonnelFixtures);
         $fixture->load($em);
-
-        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
-        $this->switchModule('personnel', true);
 
         self::ensureKernelShutdown();
     }

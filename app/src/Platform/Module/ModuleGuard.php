@@ -31,11 +31,20 @@ use Symfony\Component\Uid\Uuid;
 final class ModuleGuard
 {
     /**
-     * Les modules du cœur (spec du recentrage du 20/10 ; Sport sur précision de Maxime, même jour).
-     * Tout module sans capacité doit y figurer : il ne peut pas être éteint, donc il n'est pas masqué.
-     * `ModuleGuardCoverageTest` le vérifie.
+     * Les modules du cœur (spec du recentrage du 20/10 ; Sport sur précision de Maxime, même jour ;
+     * Personnel à la relecture de la PR 2, même jour). Tout module sans capacité doit y figurer : il ne
+     * peut pas être éteint, donc il n'est pas masqué. `ModuleGuardCoverageTest` le vérifie.
      */
-    public const CORE_MODULES = ['dms', 'group', 'membership', 'piscine', 'sport', 'vente', 'website'];
+    public const CORE_MODULES = ['dms', 'group', 'membership', 'personnel', 'piscine', 'sport', 'vente', 'website'];
+
+    /**
+     * Les capacités du cœur qui n'ont pas de manifeste (spec du recentrage, « Cœur » : Compta, Stock,
+     * Réservation, Accès, Boutique, Sepa, Recouvrement, Calendar ; décision de Maxime du 20/10).
+     * Elles ne s'éteignent pas plus que les modules du cœur (CA-4).
+     */
+    public const CORE_CAPABILITIES = [
+        'agenda', 'boutique_en_ligne', 'casiers', 'comptabilite', 'controle_acces', 'recouvrement', 'reservation', 'sepa', 'stock',
+    ];
 
     /** @var array<string, ModuleManifest>|null préfixe de namespace => manifeste masqué */
     private ?array $masked = null;
@@ -152,13 +161,14 @@ final class ModuleGuard
     }
 
     /**
-     * Les capacités qui portent un module du cœur : elles ne s'éteignent pas (CA-4).
+     * Les capacités du cœur — celles de ses modules, et celles qui n'ont pas de manifeste : elles ne
+     * s'éteignent pas (CA-4).
      *
      * @return list<string>
      */
     public function coreCapabilities(): array
     {
-        $codes = [];
+        $codes = self::CORE_CAPABILITIES;
         foreach ($this->registry->all() as $id => $manifest) {
             if (\in_array($id, self::CORE_MODULES, true) && $manifest->capability() !== null) {
                 $codes[] = $manifest->capability();

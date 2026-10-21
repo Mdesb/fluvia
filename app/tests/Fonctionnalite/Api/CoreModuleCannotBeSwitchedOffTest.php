@@ -24,7 +24,10 @@ final class CoreModuleCannotBeSwitchedOffTest extends FonctionnaliteApiTestCase
         [$client, $headers] = $this->adminSurA();
         $url = '/api/etablissements/' . $this->idEtablissement(SocleFixtures::ETAB_A_NOM) . '/fonctionnalites';
 
-        foreach (['sport', 'piscine'] as $core) {
+        // Modules du cœur qui ont un manifeste (piscine, sport, personnel), puis capacités du cœur
+        // sans manifeste (spec du recentrage, « Cœur » ; décision de Maxime du 20/10).
+        foreach (['sport', 'piscine', 'personnel', 'comptabilite', 'stock', 'reservation', 'controle_acces',
+            'boutique_en_ligne', 'casiers', 'sepa', 'recouvrement', 'agenda'] as $core) {
             $response = $client->request('PATCH', $url, $this->entetePatch($headers) + [
                 'json' => ['capaciteCode' => $core, 'active' => false],
             ]);
