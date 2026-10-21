@@ -19,6 +19,7 @@ use App\RevenueRecovery\Enum\RecoveryCaseStatus;
 use App\RevenueRecovery\Enum\RecoveryChannel;
 use App\RevenueRecovery\Enum\RecoveryTriggerType;
 use App\Securite\Entity\Utilisateur;
+use App\Platform\Module\ModuleGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -55,6 +56,7 @@ class RecoveryEngine
         private readonly EntityManagerInterface $em,
         private readonly RecoverySubjectCustomerResolver $customerResolver,
         private readonly ClientNotifierInterface $notifier,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -236,6 +238,11 @@ class RecoveryEngine
                 // Dossier résolu/arrêté entre la programmation et l'échéance : rien à envoyer.
                 $tentative->setStatus(RecoveryAttemptStatus::Cancelled);
                 ++$compteurs['cancelled'];
+                continue;
+            }
+
+            // Recentrage : module éteint pour cet établissement, la tentative attend qu'on le rallume.
+            if ($this->moduleGuard?->allows(self::class, $case->getEstablishment()) === false) {
                 continue;
             }
 
