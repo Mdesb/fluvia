@@ -30,7 +30,7 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * Un message déjà en file au moment de l'extinction arrive quand même au gestionnaire : c'est là que
  * la garde doit tenir. Les adaptateurs réseau sont des doublures qui comptent leurs appels. Éteint :
- * aucun appel, publication inchangée. Allumé : un appel (témoin).
+ * aucun appel au réseau ; une publication en file passe « sautée » (motif `module_disabled`), un relevé ne change rien. Allumé : un appel (témoin).
  */
 final class SwitchedOffSocialHandlersTest extends SocialApiTestCase
 {
@@ -53,8 +53,13 @@ final class SwitchedOffSocialHandlersTest extends SocialApiTestCase
 
             self::assertSame($on ? 1 : 0, $publisher->calls);
             $this->em()->clear();
-            $status = $this->em()->getRepository(SocialPublication::class)->find($publication->getId())?->getStatus();
-            self::assertSame($on ? SocialPublicationStatus::Published : SocialPublicationStatus::Pending, $status);
+            $reread = $this->em()->getRepository(SocialPublication::class)->find($publication->getId());
+            // Éteint : la publication ne reste pas « en attente » pour toujours — elle est sautée, avec
+            // son motif (relecture de la PR 2, 20/10). Allumé : publiée (témoin).
+            self::assertSame($on ? SocialPublicationStatus::Published : SocialPublicationStatus::Skipped, $reread?->getStatus());
+            if (!$on) {
+                self::assertSame('module_disabled', $reread?->getErrorCode());
+            }
         }
     }
 

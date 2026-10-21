@@ -80,9 +80,13 @@ final class PublishSocialPublicationHandler
         }
 
         // Recentrage, PR 2 (d) : un message en file pour un établissement où Social est éteint ne
-        // part pas et n'écrit rien. Sans établissement lisible, les contrôles ci-dessous tranchent.
+        // part pas. La publication est SAUTÉE avec son motif plutôt que laissée « en attente » pour
+        // toujours : un état qui attend ce qui n'arrivera pas ne se lit pas. Sans établissement
+        // lisible, les contrôles ci-dessous tranchent.
         $establishment = $publication->getPost()?->getEstablishment();
         if ($establishment !== null && $this->moduleGuard?->allows(self::class, $establishment) === false) {
+            $this->finish($publication, SocialPublicationStatus::Skipped, 'module_disabled', 'Module Social éteint pour cet établissement au moment de l envoi.');
+
             return;
         }
 
