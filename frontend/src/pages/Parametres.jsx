@@ -20,6 +20,7 @@ import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
+import { moduleAllowsSubtab } from '../components/moduleMenu.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
 
@@ -539,6 +540,9 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // lien partageable en croyant en ajouter un.
   const [params, majParams] = useEtatUrl('parametres', DEFAUTS_URL)
   const sousOnglet = params.sousOnglet
+  // Recentrage : le sous-onglet d'un module éteint disparaît (table de `moduleMenu.js`).
+  const modules = me?.modulesActifs
+  const sousOnglets = SOUS.filter(([id]) => moduleAllowsSubtab(`Parametres.${id}`, modules))
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
   const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' })
@@ -631,7 +635,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
         </div>
       </div>
 
-      <Tabs onglets={SOUS} actif={sousOnglet} onChange={setSousOnglet} />
+      <Tabs onglets={sousOnglets} actif={sousOnglet} onChange={setSousOnglet} />
 
       {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
@@ -640,7 +644,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       </>)}
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
-      {sousOnglet === 'connecteurs'
+      {sousOnglet === 'connecteurs' && moduleAllowsSubtab('Parametres.connecteurs', modules)
         && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
       {sousOnglet === 'partenaires' && <PartnerAccessSettings droits={droits} etabActif={etabActif} />}
 

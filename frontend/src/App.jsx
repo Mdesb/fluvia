@@ -528,7 +528,7 @@ export default function App() {
       {/* Composter : son propre ecran, garde par son propre droit. Un guide qui controle
           l entree d une visite n a aucune raison d avoir acces a la caisse. */}
       {onglet === 'composter' && <ControleBillet ecranEntier />}
-      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} capacites={capacites} />}
+      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} capacites={capacites} modules={me?.modulesActifs} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {/* Même raison qu'à la caisse : on remonte l'écran plutôt que de le remettre à zéro. */}
       {onglet === 'supervision' && <Supervision key={etabActif} etabActif={etabActif} droits={droits} />}
@@ -562,7 +562,7 @@ export default function App() {
       {onglet === 'casiers' && <Casiers etabActif={etabActif} droits={droits} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
-      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} modules={me?.modulesActifs} />}
       {onglet === 'rgpd' && <DonneesPersonnelles etabActif={etabActif} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}

@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { MODULE_OF_MENU_ENTRY, moduleAllowsEntry } from './moduleMenu.js'
+import { MODULE_OF_MENU_ENTRY, MODULE_OF_SUBTAB, moduleAllowsEntry, moduleAllowsSubtab, isModuleActive } from './moduleMenu.js'
 
 const FRONT = new URL('../../', import.meta.url).pathname
 const SRC_PHP = join(FRONT, '../app/src')
@@ -79,4 +79,43 @@ test('une entrée de module masqué n’apparaît que si son module est actif', 
   assert.equal(moduleAllowsEntry('caisse', []), true)
   // Serveur qui ne dit pas encore ses modules : on ne cache rien, la garde serveur reste le contrôle.
   assert.equal(moduleAllowsEntry('padel', undefined), true)
+})
+
+// ── Relecture de la PR 2 (20/10) : les écrans du cœur qui touchent un module masqué ─────────────
+
+test('les sous-onglets de module existent et nomment un module masqué', () => {
+  const masked = maskedModules()
+  for (const [key, module] of Object.entries(MODULE_OF_SUBTAB)) {
+    const [page, tab] = key.split('.')
+    const src = readFileSync(join(FRONT, `src/pages/${page}.jsx`), 'utf8')
+    assert.ok(src.includes(`['${tab}', `), `« ${tab} » n'est pas un sous-onglet de ${page}.jsx`)
+    assert.ok(masked.has(module), `« ${module} » n'est pas un module masqué`)
+  }
+  assert.equal(MODULE_OF_SUBTAB['Parametres.connecteurs'], 'connecteurs')
+})
+
+test('Paramètres filtre ses sous-onglets par la table', () => {
+  const src = readFileSync(join(FRONT, 'src/pages/Parametres.jsx'), 'utf8')
+  assert.match(src, /moduleAllowsSubtab\(`Parametres\.\$\{id\}`, modules\)/)
+})
+
+test('la fiche produit ne lit les expositions que si Musée est actif', () => {
+  const src = readFileSync(join(FRONT, 'src/components/ProduitFiche.jsx'), 'utf8')
+  assert.match(src, /isModuleActive\('musee', modules\) && <AgendaProduit/)
+})
+
+test('la fiche client ne lit fidélité et parrainage que si Marketing est actif', () => {
+  const src = readFileSync(join(FRONT, 'src/pages/Clients.jsx'), 'utf8')
+  assert.match(src, /!isModuleActive\('marketing', modules\)/)
+  assert.match(src, /isModuleActive\('marketing', modules\) && <BlocParrainage/)
+})
+
+test('un sous-onglet ou un appel de module ne dépend que de son module', () => {
+  assert.equal(moduleAllowsSubtab('Parametres.connecteurs', ['connecteurs']), true)
+  assert.equal(moduleAllowsSubtab('Parametres.connecteurs', ['vente']), false)
+  assert.equal(moduleAllowsSubtab('Parametres.caisse', []), true)
+  assert.equal(isModuleActive('musee', ['musee']), true)
+  assert.equal(isModuleActive('musee', []), false)
+  // Serveur muet : rien n'est caché, rien n'est coupé (la garde serveur reste le contrôle).
+  assert.equal(isModuleActive('musee', undefined), true)
 })

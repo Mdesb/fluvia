@@ -13,7 +13,6 @@ export const MODULE_OF_MENU_ENTRY = {
   musee: 'musee',
   sejours: 'stay',
   campagnes: 'marketing',
-  personnel: 'personnel',
   projets: 'project',
   finance: 'finance',
   caution: 'caution',
@@ -28,4 +27,22 @@ export const MODULE_OF_MENU_ENTRY = {
 export function moduleAllowsEntry(entryId, modules) {
   const module = MODULE_OF_MENU_ENTRY[entryId]
   return !module || !Array.isArray(modules) || modules.includes(module)
+}
+
+// LES SOUS-ONGLETS QUI APPARTIENNENT À UN MODULE MASQUABLE — clé « Page.sousOnglet ». Même règle que
+// les entrées de menu, et même test (`moduleMenu.test.js`).
+export const MODULE_OF_SUBTAB = {
+  'Parametres.connecteurs': 'connecteurs',
+}
+
+export function moduleAllowsSubtab(key, modules) {
+  const module = MODULE_OF_SUBTAB[key]
+  return !module || isModuleActive(module, modules)
+}
+
+// Un écran du CŒUR qui lit les données d'un module masqué (fiche produit → expositions du musée,
+// fiche client → fidélité et parrainage) ne l'appelle que si le module est actif : sinon chaque
+// ouverture produirait un 404 en arrière-plan, ou une bannière « Not Found ».
+export function isModuleActive(module, modules) {
+  return !Array.isArray(modules) || modules.includes(module)
 }
