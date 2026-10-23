@@ -557,6 +557,19 @@ if ls "$RACINE"/frontend/src/api/*.test.js >/dev/null 2>&1; then
     fi
 fi
 
+# LE MENU DES MODULES MASQUÉS (recentrage, PR 2, 20/10/2026).
+#
+# `src/components/moduleMenu.test.js` lit les manifestes PHP et le cœur de `ModuleGuard` : une entrée
+# du menu dont les droits appartiennent à un module masqué, et qui manque à `moduleMenu.js`, resterait
+# affichée module éteint et mènerait à des 404. Le test échoue avant.
+if ls "$RACINE"/frontend/src/components/*.test.js >/dev/null 2>&1; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Menu des modules masqués (node --test)" sh -c "cd '$RACINE/frontend' && node --test src/components/*.test.js"
+    else
+        ignorer "Menu des modules masqués" "« node » indisponible ici."
+    fi
+fi
+
 # TRADUCTION (i18n, 08/10/2026) — deux contrôles, sans dépendance.
 #
 # `node --test src/i18n/*.test.js` : `t()`, son repli sur le français, le formatage `Intl` et le

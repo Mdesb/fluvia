@@ -38,6 +38,11 @@ final class GestionFonctionnaliteTest extends FonctionnaliteApiTestCase
         self::assertFalse($etatParCode['boutique_en_ligne']);
     }
 
+    /**
+     * L'aller-retour d'une capacité facultative. Il portait sur `boutique_en_ligne` jusqu'au 20/10 :
+     * elle est devenue une capacité du cœur, qui ne s'éteint plus (422, `CoreModuleCannotBeSwitchedOffTest`).
+     * `location_materiel` n'est pas dans le préset piscine de A : elle est réellement activée, puis désactivée.
+     */
     public function testActiverUneCapaciteAvecDesParametresPuisLaDesactiver(): void
     {
         [$client, $entete] = $this->adminSurA();
@@ -47,29 +52,29 @@ final class GestionFonctionnaliteTest extends FonctionnaliteApiTestCase
 
         // Activation avec paramètres.
         $reponse = $client->request('PATCH', $url, $entetePatch + [
-            'json' => ['capaciteCode' => 'boutique_en_ligne', 'active' => true, 'parametres' => ['delaiAnnulationHeures' => 24]],
+            'json' => ['capaciteCode' => 'location_materiel', 'active' => true, 'parametres' => ['delaiAnnulationHeures' => 24]],
         ]);
         self::assertResponseIsSuccessful();
         $donnees = $reponse->toArray();
-        self::assertSame('boutique_en_ligne', $donnees['capaciteCode']);
+        self::assertSame('location_materiel', $donnees['capaciteCode']);
         self::assertTrue($donnees['active']);
         self::assertSame(24, $donnees['parametres']['delaiAnnulationHeures']);
 
         // Confirmée dans l'état complet.
         $etat = $client->request('GET', $url, $entete)->toArray();
         $membres = $etat['member'] ?? $etat['hydra:member'];
-        $actif = current(array_filter($membres, static fn (array $i): bool => $i['capaciteCode'] === 'boutique_en_ligne'));
+        $actif = current(array_filter($membres, static fn (array $i): bool => $i['capaciteCode'] === 'location_materiel'));
         self::assertTrue($actif['active']);
 
         // Désactivation.
         $client->request('PATCH', $url, $entetePatch + [
-            'json' => ['capaciteCode' => 'boutique_en_ligne', 'active' => false],
+            'json' => ['capaciteCode' => 'location_materiel', 'active' => false],
         ]);
         self::assertResponseIsSuccessful();
 
         $etatApres = $client->request('GET', $url, $entete)->toArray();
         $membresApres = $etatApres['member'] ?? $etatApres['hydra:member'];
-        $desactive = current(array_filter($membresApres, static fn (array $i): bool => $i['capaciteCode'] === 'boutique_en_ligne'));
+        $desactive = current(array_filter($membresApres, static fn (array $i): bool => $i['capaciteCode'] === 'location_materiel'));
         self::assertFalse($desactive['active']);
     }
 

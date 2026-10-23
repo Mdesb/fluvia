@@ -23,7 +23,9 @@ final class RevenueRecoveryModuleManifestTest extends TestCase
 
         self::assertSame('revenue_recovery', $manifest->id());
         self::assertSame('0.1.0', $manifest->version());
-        self::assertNull($manifest->capability(), 'Service réactif transverse (D22) : Revenue Recovery ne se vend pas.');
+        // D132 (décision de Maxime du 20/10/2026, recentrage) remplace D22 sur ce point : le module a
+        // une capacité pour pouvoir être éteint par établissement. Il n'est plus « transverse ».
+        self::assertSame('revenue_recovery', $manifest->capability(), 'D132 : Revenue Recovery est éteignable par établissement.');
         self::assertSame([], $manifest->dependencies());
         self::assertSame(
             ['revenue_recovery.read', 'revenue_recovery.configure', 'revenue_recovery.manage'],

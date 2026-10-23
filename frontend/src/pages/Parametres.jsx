@@ -20,6 +20,7 @@ import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
+import { moduleAllowsSubtab } from '../components/moduleMenu.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
 
@@ -539,6 +540,9 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // lien partageable en croyant en ajouter un.
   const [params, majParams] = useEtatUrl('parametres', DEFAUTS_URL)
   const sousOnglet = params.sousOnglet
+  // Recentrage : le sous-onglet d'un module éteint disparaît (table de `moduleMenu.js`).
+  const modules = me?.modulesActifs
+  const sousOnglets = SOUS.filter(([id]) => moduleAllowsSubtab(`Parametres.${id}`, modules))
   // Changer de sous-onglet ferme l'écran : un `structure=1` laissé dans l'adresse rouvrirait
   // le formulaire dès qu'on reviendrait ici.
   const setSousOnglet = (v) => majParams({ sousOnglet: v, structure: '', destination: '', invitation: '', moyen: '', topologie: '', role: '', ref: '' })
@@ -631,7 +635,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
         </div>
       </div>
 
-      <Tabs onglets={SOUS} actif={sousOnglet} onChange={setSousOnglet} />
+      <Tabs onglets={sousOnglets} actif={sousOnglet} onChange={setSousOnglet} />
 
       {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
@@ -640,7 +644,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       </>)}
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
-      {sousOnglet === 'connecteurs'
+      {sousOnglet === 'connecteurs' && moduleAllowsSubtab('Parametres.connecteurs', modules)
         && <ConnecteursSortants droits={droits} etabActif={etabActif} params={params} majParams={majParams} />}
       {sousOnglet === 'partenaires' && <PartnerAccessSettings droits={droits} etabActif={etabActif} />}
 
@@ -2360,9 +2364,10 @@ function Capacites({ etabActif, onCapacitesChangees }) {
         {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
 
         <p className="hint" style={{ marginTop: 0 }}>
-          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Ce
-          n’est pas un réglage définitif : on active, on essaie, on désactive. Rien n’est effacé quand
-          on désactive — les données saisies restent et reviennent à la réactivation.
+          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Celles
+          du cœur de la billetterie restent toujours en service une fois activées ; les autres se mettent
+          en service et hors service à volonté. Rien n’est effacé quand on met hors service — les données
+          saisies restent et reviennent à la remise en service.
         </p>
 
         {/* On ne demande pas à un exploitant de deviner lesquelles vont ensemble : le serveur
@@ -2408,13 +2413,15 @@ function Capacites({ etabActif, onCapacitesChangees }) {
                         <span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'en service' : 'hors service'}</span>
                       </td>
                       <td className="num">
+                        {/* Le serveur refuse d'éteindre une capacité du cœur (422) : pas de bouton voué au refus. */}
+                        {c.estDuCoeur && c.active ? (<span className="sub">Toujours en service</span>) : (
                         <button
                           className="btn ghost sm"
                           onClick={() => basculer(c)}
                           disabled={busy === c.code || !etabActif}
                         >
                           {busy === c.code ? '…' : c.active ? 'Mettre hors service' : 'Mettre en service'}
-                        </button>
+                        </button>)}
                       </td>
                     </tr>
                   ))}

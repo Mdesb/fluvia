@@ -6,6 +6,7 @@ import ContactsClient from '../components/ContactsClient.jsx'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import { isModuleActive } from '../components/moduleMenu.js'
 import FusionClients from '../components/FusionClients.jsx'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
@@ -176,7 +177,7 @@ const STATUTS = [
 const PAR_PAGE = 50
 
 // Écran Clients (CRM) : liste large, fiche en page, état porté par l'URL.
-export default function Clients({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+export default function Clients({ etabActif, cible = null, onCibleConsommee, droits = [], modules }) {
   const [params, majParams] = useEtatUrl('clients', DEFAUTS)
   // ⚠ PLUS D'ÉTAT LOCAL ICI : c'est l'adresse qui porte le formulaire ouvert. Un état local
   // aurait survécu au « précédent » du navigateur sans que l'URL le sache, et disparu au F5
@@ -279,14 +280,15 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   // Le solde se relit APRÈS chaque geste : il se recalcule côté serveur, et le recopier ici ferait
   // diverger l'écran de la vérité au premier arrondi.
   const rechargerFidelite = useCallback(async (id) => {
-    if (!id || !aLeDroit(droits, 'fidelite.lire')) { setFidelite(null); return }
+    // La fidélité est du module Marketing : éteint, on n'appelle rien (pas de 404 en arrière-plan).
+    if (!id || !aLeDroit(droits, 'fidelite.lire') || !isModuleActive('marketing', modules)) { setFidelite(null); return }
     try {
       setFidelite(await api.fidelite(id))
     } catch {
       // Sans programme de fidélité, ou sans droit : la fiche vit très bien sans ce bloc.
       setFidelite(null)
     }
-  }, [droits])
+  }, [droits, modules])
 
   const chargerFiche = useCallback(async (id) => {
     setFiche(null)
@@ -554,6 +556,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
               mouvements={mouvements}
               mouvementsIllisibles={mouvementsIllisibles}
               fidelite={fidelite}
+              modules={modules}
               droits={droits}
               onMouvement={() => rechargerFidelite(selId)}
               onPmvRecharge={() => chargerFiche(selId)}
@@ -837,7 +840,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge, onConsentement, onDevis }) {
+function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, modules, droits, onMouvement, onPmvRecharge, onConsentement, onDevis }) {
   const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
   // `undefined` tant que `PassagesClient` n'a pas repondu ou n'a pas pu lire ;
@@ -903,7 +906,7 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
         onMouvement={onMouvement}
       />
 
-      <BlocParrainage clientId={c.id} droits={droits} onMouvement={onMouvement} />
+      {isModuleActive('marketing', modules) && <BlocParrainage clientId={c.id} droits={droits} onMouvement={onMouvement} />}
 
       <BlocFactures clientId={c.id} droits={droits} />
 

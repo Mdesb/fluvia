@@ -9,6 +9,7 @@ use App\Integrations\Service\OutboundDispatcher;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\SymfonyEventBus;
+use App\Platform\Module\ModuleGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
@@ -73,6 +74,7 @@ final class ForwardDomainEvents implements EventBus, EventSubscriberInterface
         private readonly EventBus $interne,
         private readonly EntityManagerInterface $em,
         private readonly OutboundDispatcher $expediteur,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -113,6 +115,10 @@ final class ForwardDomainEvents implements EventBus, EventSubscriberInterface
             $depot = $this->em->getRepository(OutboundEndpoint::class);
 
             foreach ($evenements as $evenement) {
+                // Recentrage, PR 2 (d) : connecteurs éteints pour cet établissement, rien ne part.
+                if ($this->moduleGuard?->allows(self::class, $evenement->tenant->establishmentId) === false) {
+                    continue;
+                }
                 /** @var list<OutboundEndpoint> $destinations */
                 $destinations = $depot->findBy([
                     // ⚠ LE PÉRIMÈTRE VIENT DE L'ÉVÉNEMENT, JAMAIS DE L'EN-TÊTE DE LA REQUÊTE.

@@ -10,6 +10,7 @@ use App\Securite\Entity\Utilisateur;
 use App\Organisation\Service\EditorTenantResolver;
 use App\Securite\Service\CalculateurDroits;
 use App\Platform\Notification\ExpediteurCourriel;
+use App\Platform\Module\ModuleGuard;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,6 +37,7 @@ final class MeController
         private readonly Fonctionnalites $fonctionnalites,
         private readonly EditorTenantResolver $editeur,
         private readonly ExpediteurCourriel $courriel,
+        private readonly ModuleGuard $moduleGuard,
     ) {
     }
 
@@ -81,6 +83,9 @@ final class MeController
             // exact, et non « tout le monde l'est ».
             'estEditeur' => $this->editeur->isEditor($etablissementActifEntite),
             'capacitesActives' => $etablissementActifEntite !== null ? $this->fonctionnalites->actives($etablissementActifEntite) : [],
+            // Recentrage, PR 2 : la même règle que la garde des routes (`ModuleGuard::isOnFor`), pour
+            // que le menu ne montre jamais un module que le serveur refuse.
+            'modulesActifs' => $this->moduleGuard->activeModules($etablissementActifEntite, $utilisateur),
             // ⚠ « MON COURRIEL PARTIRA-T-IL ? » — un fait d'exécution, pas une constante.
             //
             // Six services de ce dépôt composent un courriel et n'envoient rien : le transport

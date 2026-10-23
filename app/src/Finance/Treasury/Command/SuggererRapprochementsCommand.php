@@ -8,6 +8,7 @@ use App\Compta\Entity\LigneEcriture;
 use App\Finance\Treasury\Entity\BankStatementLine;
 use App\Finance\Treasury\Enum\BankStatementLineStatus;
 use App\Finance\Treasury\Service\BankReconciliationSuggestionCalculator;
+use App\Platform\Module\ModuleGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -35,6 +36,7 @@ final class SuggererRapprochementsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly BankReconciliationSuggestionCalculator $calculator,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -57,6 +59,10 @@ final class SuggererRapprochementsCommand extends Command
 
         $suggerees = 0;
         foreach ($lignes as $ligne) {
+            // Recentrage : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $ligne->getStatementImport()?->getBankAccount()?->getEstablishment()) === false) {
+                continue;
+            }
             $candidats = $this->calculator->candidats($ligne);
             if (\count($candidats) !== 1) {
                 continue;
