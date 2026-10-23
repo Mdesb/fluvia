@@ -342,6 +342,7 @@ final class RunScheduledTasksCommand extends Command
     {
         $lignes = [];
         $jamais = 0;
+        $sautees = 0;
         $enRetard = 0;
 
         foreach ($this->catalog->all() as $task) {
@@ -365,6 +366,7 @@ final class RunScheduledTasksCommand extends Command
             $sautee = $this->switchedOffModule($task);
             if ($sautee !== null) {
                 $etat = sprintf('sautée : module %s éteint', $sautee);
+                ++$sautees;
             } elseif ($fin === null) {
                 $etat = 'JAMAIS';
                 ++$jamais;
@@ -396,7 +398,9 @@ final class RunScheduledTasksCommand extends Command
 
         $io->table(['', 'commande', 'toutes les', 'état', 'dernière fin', 'échecs'], $lignes);
 
-        if ($jamais === \count($lignes)) {
+        // Les tâches sautées ne comptent ni pour ni contre : depuis D133 il y en a toujours, et les
+        // compter dans le tableau sans les compter comme « jamais » désarmait cette alarme.
+        if ($jamais > 0 && $jamais === \count($lignes) - $sautees) {
             $io->error(
                 "AUCUNE tâche n'a jamais tourné. L'ordonnanceur n'est appelé par personne : "
                 . 'il manque un appel périodique à `platform:scheduler:run`. '

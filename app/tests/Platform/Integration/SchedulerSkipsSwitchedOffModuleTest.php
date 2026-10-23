@@ -103,6 +103,25 @@ final class SchedulerSkipsSwitchedOffModuleTest extends KernelTestCase
         self::assertStringNotContainsString('JAMAIS', $line[0]);
     }
 
+    /**
+     * L'alarme « AUCUNE tâche n'a jamais tourné » doit tenir malgré les tâches sautées. Depuis D133 il
+     * y en a toujours (les modules masqués sont éteints) : les compter comme des lignes du tableau
+     * sans les compter comme « jamais » désarmait l'alarme. Base neuve, Padel éteint, rien n'a
+     * tourné : `--status` doit échouer.
+     */
+    public function testStatusStillAlarmsWhenNothingEverRanDespiteSkippedTasks(): void
+    {
+        $this->switchModule('padel', false);
+
+        $output = new BufferedOutput();
+        $code = $this->application->find('platform:scheduler:run')->run(new ArrayInput(['--status' => true]), $output);
+        $text = $output->fetch();
+
+        self::assertStringContainsString('sautée : module padel éteint', $text, 'montage : au moins une tâche sautée');
+        self::assertSame(\Symfony\Component\Console\Command\Command::FAILURE, $code, 'aucune tâche non sautée n\'a jamais tourné : alarme');
+        self::assertStringContainsString('AUCUNE', $text);
+    }
+
     private function run_(string $task = self::TASK): string
     {
         $output = new BufferedOutput();
