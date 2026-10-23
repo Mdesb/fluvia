@@ -3,8 +3,9 @@ import { api, membres } from '../api/client.js'
 import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
+import { idDe } from '../api/iri.js'
 import { printThermal } from '../components/thermalPrint.js'
-import { isFree, issuerLines, printedDateTime, vatRows, venueName } from '../api/receiptPrint.js'
+import { isFree, issuerLines, passesToPrint, printedDateTime, vatRows, venueName } from '../api/receiptPrint.js'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
@@ -1079,10 +1080,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
  * la clôture Z confondait le comptage et l'arrêté. On ne les sépare pas ici : ce serait toucher à un
  * comportement scellé et testé, sur un écran qu'on est en train de vérifier.
  */
-function construireTicket(infoTicket, paiements, support, premiereEdition = false) {
+function construireTicket(infoTicket, paiements, support, premiereEdition = false, billets = {}) {
   const lignes = (infoTicket.lignes || []).map((l) => {
     const nom = texte(l.libelle, 'Article')
     return {
+      // L'identifiant de la ligne relie chaque support (un par unité) au libellé de son billet.
+      id: l.id ?? null,
       // Le tarif figure sur le ticket : sans lui, deux lignes du même produit à des prix différents
       // sont illisibles, pour le client comme pour le caissier qui le relit.
       libelle: l.tarif ? `${nom} — ${l.tarif}` : nom,
@@ -1127,6 +1130,9 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     date: infoTicket.date || null,
     ventilationTva: infoTicket.ventilationTva || [],
     gratuit: isFree(infoTicket.total),
+    // « Un billet par unité » (option du point de vente) : un billet par support émis.
+    supports: billets.supports || [],
+    billetParUnite: !!billets.billetParUnite,
   }
 }
 
@@ -1160,7 +1166,12 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       // du seuil, avec un client rattache, le renvoi a un sens).
       //
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
-      const t = construireTicket(infoTicket, reglements, support, true)
+      const t = construireTicket(infoTicket, reglements, support, true, {
+        supports: (venteValidee.supports || [])
+          .filter((s) => s.identifiantSupport)
+          .map((s) => ({ code: s.identifiantSupport, ligne: idDe(s.ligne) })),
+        billetParUnite: !!pdvActif?.unBilletParUnite,
+      })
       // Une vente gratuite n'a pas de ticket, mais un billet : il s'affiche et part à l'impression
       // dans le même geste (`BilletSeul`), sans l'étape « Afficher le billet » d'avant.
       const ecran = screenAfterValidation(infoTicket)
@@ -2189,18 +2200,24 @@ function BilletSeul({ ticket }) {
   // ⚠ PAS AVANT QUE LE QR SOIT DESSINÉ. `Qr` fabrique son image en asynchrone : un `window.print()`
   // au montage (#318) sortait un billet avec un carré vide à la place du code — un billet qui ne
   // passe pas la porte. On attend `onReady`, puis le billet sort seul sur le rouleau (`printThermal`).
-  const papier = useRef(null)
-  const [qrPret, setQrPret] = useState(false)
+  //
+  // « UN BILLET PAR UNITÉ » (option du point de vente) : 3 entrées sortent 3 billets, chacun avec le
+  // code de SON support (`passesToPrint`), un par page du rouleau. On attend que tous les QR soient
+  // dessinés avant d'imprimer.
+  const billets = passesToPrint(ticket)
+  const papiers = useRef([])
+  const [qrPrets, setQrPrets] = useState(0)
   const dejaImprime = useRef(null)
+  const imprimer = () => printThermal(papiers.current.slice(0, billets.length).filter(Boolean), { titre: `Billet ${ticket?.numero}` })
   useEffect(() => {
-    if (!ticket?.imprimerAussitot || !ticket?.codeSupport || !qrPret || dejaImprime.current === ticket) return
+    if (!ticket?.imprimerAussitot || billets.length === 0 || qrPrets < billets.length || dejaImprime.current === ticket) return
     dejaImprime.current = ticket
-    printThermal(papier.current, { titre: `Billet ${ticket.numero}` })
-  }, [ticket, qrPret])
+    printThermal(papiers.current.slice(0, billets.length).filter(Boolean), { titre: `Billet ${ticket.numero}` })
+  }, [ticket, qrPrets, billets.length])
   // ⚠ UNE VENTE PEUT N'OUVRIR AUCUN ACCÈS — une boisson, un article de boutique. Il n'y a alors
   // pas de billet à remettre, et le dire vaut mieux que de tendre un papier vide. On ne montre pas
   // un cadre avec un trou à la place du code.
-  if (!ticket?.codeSupport) {
+  if (billets.length === 0) {
     return (
       <div className="card">
         <div className="card-b">
@@ -2220,40 +2237,38 @@ function BilletSeul({ ticket }) {
     <>
       {/* Le billet imprimé : l'établissement, la date et l'heure, le libellé, « Gratuit » quand le
           prix est nul, le numéro et le QR. Toujours aucun montant (R5). */}
-      <div className="ticket doc-imprimer" ref={papier}>
-        <div className="th">
-          <span className="ok">✓</span>
-          <div>
-            {lieu && <div className="t-etab">{lieu}</div>}
-            <b>Billet</b>
-            {quand && <div className="t-date">{quand}</div>}
-          </div>
-        </div>
-        <div className="tb">
-          {ticket.lignes.map((l, i) => (
-            <div className="trow" key={i}>
-              {/* La quantité et le libellé, jamais le prix. */}
-              <span>{l.quantite} × {l.libelle}</span>
-            </div>
-          ))}
-          {ticket.gratuit && <div className="t-gratuit">Gratuit</div>}
-          <div className="tqr">
-            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} onReady={() => setQrPret(true)} />
+      {billets.map((b, i) => (
+        <div key={b.code} className="ticket doc-imprimer" ref={(el) => { papiers.current[i] = el }}>
+          <div className="th">
+            <span className="ok">✓</span>
             <div>
-              <div className="t-code mono">{ticket.codeSupport}</div>
-              <div className="tnum">N° {ticket.numero}</div>
+              {lieu && <div className="t-etab">{lieu}</div>}
+              <b>Billet</b>
+              {quand && <div className="t-date">{quand}</div>}
+            </div>
+          </div>
+          <div className="tb">
+            {b.lignes.map((l, j) => (
+              <div className="trow" key={j}>
+                {/* La quantité et le libellé, jamais le prix. */}
+                <span>{l.quantite} × {l.libelle}</span>
+              </div>
+            ))}
+            {ticket.gratuit && <div className="t-gratuit">Gratuit</div>}
+            <div className="tqr">
+              <Qr value={b.code} size={84} title={`QR billet ${ticket.numero}`} onReady={() => setQrPrets((n) => n + 1)} />
+              <div>
+                <div className="t-code mono">{b.code}</div>
+                <div className="tnum">N° {ticket.numero}{billets.length > 1 ? ` · billet ${i + 1}/${billets.length}` : ''}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ))}
 
       <div className="ticket-actions noprint">
-        <button
-          className="btn ghost sm"
-          type="button"
-          onClick={() => printThermal(papier.current, { titre: `Billet ${ticket.numero}` })}
-        >
-          Imprimer le billet
+        <button className="btn ghost sm" type="button" onClick={imprimer}>
+          {billets.length > 1 ? `Imprimer les ${billets.length} billets` : 'Imprimer le billet'}
         </button>
       </div>
     </>
