@@ -3,6 +3,8 @@ import { api, membres } from '../api/client.js'
 import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
+import { printThermal } from '../components/thermalPrint.js'
+import { isFree, issuerLines, printedDateTime, vatRows, venueName } from '../api/receiptPrint.js'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
@@ -1120,6 +1122,11 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     duplicata: !premiereEdition && !!infoTicket.duplicata,
     paiements,
     codeSupport: support?.identifiantSupport || null,
+    // Les mentions du papier, telles que le serveur les rend (`ReceiptLegalMentions`).
+    etablissement: infoTicket.emetteur || null,
+    date: infoTicket.date || null,
+    ventilationTva: infoTicket.ventilationTva || [],
+    gratuit: isFree(infoTicket.total),
   }
 }
 
@@ -1693,7 +1700,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           )}
 
           {ticket && <TicketVente ticket={ticket} />}
-          {billetSeul && <BilletSeul ticket={billetSeul} />}
+          {billetSeul && <BilletSeul key={billetSeul.numero} ticket={billetSeul} />}
 
         </aside>
 
@@ -2178,12 +2185,18 @@ function BilletSeul({ ticket }) {
   // UN GESTE DÉLIVRE ET IMPRIME : après une vente gratuite, le billet part à l'imprimante dès qu'il
   // est affiché. Avec Chrome ou Edge lancés en `--kiosk-printing`, il sort sans boîte de dialogue
   // (docs/support/). Une seule fois par billet : la garde survit au double effet du mode strict.
+  //
+  // ⚠ PAS AVANT QUE LE QR SOIT DESSINÉ. `Qr` fabrique son image en asynchrone : un `window.print()`
+  // au montage (#318) sortait un billet avec un carré vide à la place du code — un billet qui ne
+  // passe pas la porte. On attend `onReady`, puis le billet sort seul sur le rouleau (`printThermal`).
+  const papier = useRef(null)
+  const [qrPret, setQrPret] = useState(false)
   const dejaImprime = useRef(null)
   useEffect(() => {
-    if (!ticket?.imprimerAussitot || !ticket?.codeSupport || dejaImprime.current === ticket) return
+    if (!ticket?.imprimerAussitot || !ticket?.codeSupport || !qrPret || dejaImprime.current === ticket) return
     dejaImprime.current = ticket
-    window.print()
-  }, [ticket])
+    printThermal(papier.current, { titre: `Billet ${ticket.numero}` })
+  }, [ticket, qrPret])
   // ⚠ UNE VENTE PEUT N'OUVRIR AUCUN ACCÈS — une boisson, un article de boutique. Il n'y a alors
   // pas de billet à remettre, et le dire vaut mieux que de tendre un papier vide. On ne montre pas
   // un cadre avec un trou à la place du code.
@@ -2201,14 +2214,19 @@ function BilletSeul({ ticket }) {
     )
   }
 
+  const lieu = venueName(ticket.etablissement)
+  const quand = printedDateTime(ticket.date)
   return (
     <>
-      <div className="ticket doc-imprimer">
+      {/* Le billet imprimé : l'établissement, la date et l'heure, le libellé, « Gratuit » quand le
+          prix est nul, le numéro et le QR. Toujours aucun montant (R5). */}
+      <div className="ticket doc-imprimer" ref={papier}>
         <div className="th">
           <span className="ok">✓</span>
           <div>
+            {lieu && <div className="t-etab">{lieu}</div>}
             <b>Billet</b>
-            <div className="tnum">{ticket.numero}</div>
+            {quand && <div className="t-date">{quand}</div>}
           </div>
         </div>
         <div className="tb">
@@ -2218,17 +2236,23 @@ function BilletSeul({ ticket }) {
               <span>{l.quantite} × {l.libelle}</span>
             </div>
           ))}
+          {ticket.gratuit && <div className="t-gratuit">Gratuit</div>}
           <div className="tqr">
-            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} onReady={() => setQrPret(true)} />
             <div>
-              <span className="mono" style={{ fontSize: 10.5, wordBreak: 'break-all' }}>{ticket.codeSupport}</span>
+              <div className="t-code mono">{ticket.codeSupport}</div>
+              <div className="tnum">N° {ticket.numero}</div>
             </div>
           </div>
         </div>
       </div>
 
       <div className="ticket-actions noprint">
-        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => printThermal(papier.current, { titre: `Billet ${ticket.numero}` })}
+        >
           Imprimer le billet
         </button>
       </div>
@@ -2237,6 +2261,10 @@ function BilletSeul({ ticket }) {
 }
 
 function TicketVente({ ticket }) {
+  const papier = useRef(null)
+  const entete = issuerLines(ticket.etablissement)
+  const quand = printedDateTime(ticket.date)
+  const tva = vatRows(ticket.ventilationTva)
   return (
     <>
       {/* ⚠ `doc-imprimer` FAIT SORTIR CE TICKET SEUL SUR LA FEUILLE, et sans lui il ne sortait
@@ -2246,12 +2274,20 @@ function TicketVente({ ticket }) {
           ⚠ CE N'EST PAS UN SECOND FORMAT. Le papier A4 porte exactement ce bloc, c'est-a-dire ce
           que `TicketProcessor` a rendu : memes lignes, meme numero, meme mention DUPLICATA. Il n'y
           a pas de gabarit A4 separe qui pourrait diverger en silence du format contraint NF525. */}
-      <div className="ticket doc-imprimer">
+      <div className="ticket doc-imprimer" ref={papier}>
       <div className="th">
         <span className="ok">✓</span>
         <h3>Vente encaissée</h3>
       </div>
       <div className="tb">
+        {/* Les mentions d'un ticket de caisse (economie.gouv.fr, 10/11/2025) : coordonnées du
+            professionnel, désignation, quantité, prix, date et heure. */}
+        {entete.length > 0 && (
+          <div className="t-emetteur">
+            {entete.map((l, i) => <div key={i} className={i === 0 ? 't-etab' : undefined}>{l}</div>)}
+          </div>
+        )}
+        {quand && <div className="t-date">{quand}</div>}
         <div className="tnum">Ticket {ticket.numero}</div>
         {ticket.lignes.map((l, i) => (
           <div key={i}>
@@ -2288,9 +2324,19 @@ function TicketVente({ ticket }) {
           </div>
         )}
         <div className="trow tt">
-          <span>Total</span>
+          <span>Total TTC</span>
           <span className="num">{euros(ticket.total)}</span>
         </div>
+        {tva.length > 0 && (
+          <div className="t-tva">
+            {tva.map((r, i) => (
+              <div className="trow" key={`t${i}`}>
+                <span>{r.libelle}</span>
+                <span className="num">HT {euros(r.ht)} · TVA {euros(r.tva)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {ticket.paiements.map((p, i) => (
           <div className="trow" key={`p${i}`}>
             <span>Règlement · {p.libelle || p.moyen}</span>
@@ -2305,7 +2351,12 @@ function TicketVente({ ticket }) {
             </span>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+        {/* Sans billet, la mention « aucun support QR » est une indication d'écran : elle ne part pas
+            sur le papier. */}
+        <div
+          className={ticket.codeSupport ? undefined : 'noprint'}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}
+        >
           {ticket.codeSupport && (
             <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
           )}
@@ -2326,7 +2377,11 @@ function TicketVente({ ticket }) {
       {/* Les commandes vivent HORS du `.doc-imprimer` : dedans, elles s'imprimeraient avec lui.
           `noprint` est une ceinture de plus, pour le cas ou ce bloc migrerait un jour. */}
       <div className="ticket-actions noprint">
-        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => printThermal(papier.current, { titre: `Ticket ${ticket.numero}` })}
+        >
           Imprimer le ticket
         </button>
       </div>
