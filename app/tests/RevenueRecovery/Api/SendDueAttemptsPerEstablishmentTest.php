@@ -61,4 +61,40 @@ final class SendDueAttemptsPerEstablishmentTest extends RevenueRecoveryApiTestCa
         self::assertNotSame(RecoveryAttemptStatus::Pending, $attempts[SocleFixtures::ETAB_A_NOM]->getStatus(), 'allumé sur A : traitée');
         self::assertSame(RecoveryAttemptStatus::Pending, $attempts[SocleFixtures::ETAB_B_NOM]->getStatus(), 'éteint sur B : laissée en attente');
     }
+
+    /**
+     * Pour un établissement éteint, rien n'est écrit — pas même l'annulation d'une tentative dont le
+     * dossier a été clos. Allumé (témoin), la même tentative est annulée.
+     */
+    public function testNothingIsWrittenForASwitchedOffEstablishmentEvenForAClosedCase(): void
+    {
+        /** @var RecoveryEngine $engine */
+        $engine = static::getContainer()->get(RecoveryEngine::class);
+        $establishment = $this->em()->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertInstanceOf(Etablissement::class, $establishment);
+        $this->em()->persist((new RecoverySequence())->setEstablishment($establishment)->setTriggerType(RecoveryTriggerType::PaymentFailed)
+            ->setActive(true)->setSteps([['delayDays' => 0, 'channel' => 'email', 'templateCode' => 'paiement_j0']]));
+        $this->em()->flush();
+        $case = $engine->handle(new DomainEvent(
+            'payment.failed',
+            new EventTenant($establishment->getId()),
+            new EventSubject('Paiement', (string) Uuid::v4()),
+            ['amount_cents' => 4200],
+        ), RecoveryTriggerType::PaymentFailed);
+        self::assertNotNull($case);
+        $attempt = $this->em()->getRepository(RecoveryAttempt::class)->findOneBy(['recoveryCase' => $case->getId()]);
+        self::assertInstanceOf(RecoveryAttempt::class, $attempt);
+        $case->setStatus(\App\RevenueRecovery\Enum\RecoveryCaseStatus::Stopped);
+        $this->em()->flush();
+
+        $this->switchModule('revenue_recovery', false, SocleFixtures::ETAB_B_NOM);
+        $engine->sendDueAttempts(new \DateTimeImmutable('+1 minute'));
+        $this->em()->refresh($attempt);
+        self::assertSame(RecoveryAttemptStatus::Pending, $attempt->getStatus(), 'éteint : la tentative n\'est pas touchée');
+
+        $this->switchModule('revenue_recovery', true, SocleFixtures::ETAB_B_NOM);
+        $engine->sendDueAttempts(new \DateTimeImmutable('+1 minute'));
+        $this->em()->refresh($attempt);
+        self::assertSame(RecoveryAttemptStatus::Cancelled, $attempt->getStatus(), 'témoin : allumé, la tentative du dossier clos est annulée');
+    }
 }

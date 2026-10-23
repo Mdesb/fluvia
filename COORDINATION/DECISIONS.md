@@ -4009,3 +4009,9 @@ qu'il s'éteigne, et c'est ce qui arrive au déploiement.
 
 **Contrepartie acceptée.** Un établissement de préprod qui utilisait un module masqué le perd jusqu'à ce qu'on le
 rallume. Un établissement qui ne voulait pas d'une capacité du cœur ne peut plus l'éteindre par l'écran.
+
+**Ce qui ne revient pas seul au rallumage.** Une publication sociale mise en file pendant que Social était éteint
+passe à `skipped`, motif `module_disabled`, et **ne repart pas d'elle-même** quand on rallume le module : un message
+daté (« aquagym samedi ») republié des jours plus tard sur le fil public d'un client serait faux, et un doublon paru
+ne se rattrape pas. La republier est un geste humain : un nouveau message. À l'inverse, une relance de paiement
+laissée en attente pendant l'extinction part au premier passage après le rallumage.
