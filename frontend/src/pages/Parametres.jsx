@@ -440,6 +440,13 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
             + "que ceux-là : un caissier qui tentera un autre moyen se verra refuser l'encaissement.",
       },
       {
+        nom: 'unBilletParUnite',
+        libelle: 'Un billet par unité',
+        type: 'bool',
+        aide: 'Coché : vendre 3 entrées imprime 3 billets séparés, chacun avec son propre QR code. '
+          + 'Décoché : un seul billet « 3 × Entrée », avec le QR du premier.',
+      },
+      {
         nom: 'tpe',
         libelle: 'Un terminal bancaire est rattaché',
         type: 'bool',

@@ -121,6 +121,14 @@ class PointDeVente
     private string $toleranceEcartCaisse = '0.00';
 
     /**
+     * Un billet par unité vendue (CIAP) : 3 entrées sortent 3 billets séparés, chacun avec le code de
+     * son support — la validation en émet déjà un par unité. Faux : un billet récapitulatif.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private bool $unBilletParUnite = false;
+
+    /**
      * Régie de recettes pour le compte de laquelle ce guichet encaisse (RG-REGIE-02).
      *
      * ── POURQUOI CE LIEN EXISTE, ET CE QU'IL DÉBLOQUE ─────────────────────────────────────
@@ -247,6 +255,18 @@ class PointDeVente
     public function getSeuilImpression(): string
     {
         return $this->seuilImpression;
+    }
+
+    public function isUnBilletParUnite(): bool
+    {
+        return $this->unBilletParUnite;
+    }
+
+    public function setUnBilletParUnite(bool $unBilletParUnite): self
+    {
+        $this->unBilletParUnite = $unBilletParUnite;
+
+        return $this;
     }
 
     public function setSeuilImpression(string $seuilImpression): self
