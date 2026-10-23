@@ -22,6 +22,8 @@ import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
+import { entreesDe } from '../api/menu.js'
+import { t } from '../i18n/index.js'
 
 const SOUS = [
   ['entites', 'Établissement & entités'],
@@ -2233,9 +2235,10 @@ const METIERS = [
 
 // CE QUE CHANGE UNE ACTIVATION, ÉCRAN PAR ÉCRAN — ET SEULEMENT CE QU'ON PEUT PROUVER.
 //
-// Trois capacités commandent une entrée du menu de gauche (`components/AppShell.jsx`). Les autres
-// ouvrent des surfaces serveur (souscription, OCR, séjours, trésorerie) sans effet visible immédiat
-// dans cette application.
+// ⚠ DEPUIS LE 08/10, CHAQUE MODULE DU MENU PORTE SA CAPACITÉ (`api/menu.js`), et la phrase se lit
+// dans le menu lui-même : la ligne « Affaires » dit « Fait apparaître dans le menu : Affaires ». La
+// table écrite à la main qui vivait ici n'en connaissait que trois ; elle aurait dit « aucun écran »
+// de quatorze capacités qui en ont un.
 //
 // ⚠ ON NE SE TAIT PLUS SUR LES AUTRES, ET LE SILENCE ÉTAIT LE DÉFAUT. Ne rien dire évitait de
 // promettre un effet non constaté — c'était le bon réflexe — mais laissait l'exploitant basculer
@@ -2248,10 +2251,15 @@ const METIERS = [
 // séjours — sans que rien ne relie la phrase au travail qui l'a rendue fausse. C'est la légende de
 // tri de Supervision, encore. Présente ici → on dit l'effet ; absente → on dit qu'il n'y en a pas.
 // Ajouter la ligne le jour venu rend les deux phrases justes ensemble.
-const EFFET_VISIBLE = {
-  controle_acces: 'Fait apparaître « Supervision » et « Badges & terminaux » dans le menu.',
-  reservation: 'Fait apparaître « Réservation » dans le menu.',
-  boutique_en_ligne: 'Fait apparaître « Boutique en ligne » dans le menu.',
+function effetVisible(code) {
+  const ids = entreesDe(code)
+  if (ids.length === 0) return t('settings.capabilities.no_menu_effect')
+  return t('settings.capabilities.menu_effect', { entries: ids.map((id) => t(`nav.${id}`)).join(', ') })
+}
+
+// Les modules entiers (Affaires, Projets, Finance, Social…) : leur catégorie s'affichait en code brut.
+function titreCategorie(cle) {
+  return cle === 'metier' ? t('settings.capabilities.category_modules') : CATEGORIES[cle] || cle || 'Autres'
 }
 
 const CATEGORIES = {
@@ -2345,7 +2353,7 @@ function Capacites({ etabActif, onCapacitesChangees }) {
   for (const c of items) {
     const groupe = parCategorie.find((g) => g.cle === c.categorie)
     if (groupe) groupe.items.push(c)
-    else parCategorie.push({ cle: c.categorie, titre: CATEGORIES[c.categorie] || c.categorie || 'Autres', items: [c] })
+    else parCategorie.push({ cle: c.categorie, titre: titreCategorie(c.categorie), items: [c] })
   }
 
   return (
@@ -2400,8 +2408,7 @@ function Capacites({ etabActif, onCapacitesChangees }) {
                         <span className="nm">{c.libelle || c.code}</span>
                         <div className="sub">{c.description || ''}</div>
                         <div className="sub">
-                          {EFFET_VISIBLE[c.code]
-                            ?? 'Ouvre une surface serveur ; aucun écran dédié dans cette application pour l’instant.'}
+                          {effetVisible(c.code)}
                         </div>
                       </td>
                       <td style={{ width: 120 }}>
