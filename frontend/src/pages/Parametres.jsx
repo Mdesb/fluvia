@@ -2364,9 +2364,10 @@ function Capacites({ etabActif, onCapacitesChangees }) {
         {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
 
         <p className="hint" style={{ marginTop: 0 }}>
-          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Ce
-          n’est pas un réglage définitif : on active, on essaie, on désactive. Rien n’est effacé quand
-          on désactive — les données saisies restent et reviennent à la réactivation.
+          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Celles
+          du cœur de la billetterie restent toujours en service une fois activées ; les autres se mettent
+          en service et hors service à volonté. Rien n’est effacé quand on met hors service — les données
+          saisies restent et reviennent à la remise en service.
         </p>
 
         {/* On ne demande pas à un exploitant de deviner lesquelles vont ensemble : le serveur
@@ -2412,13 +2413,15 @@ function Capacites({ etabActif, onCapacitesChangees }) {
                         <span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'en service' : 'hors service'}</span>
                       </td>
                       <td className="num">
+                        {/* Le serveur refuse d'éteindre une capacité du cœur (422) : pas de bouton voué au refus. */}
+                        {c.estDuCoeur && c.active ? (<span className="sub">Toujours en service</span>) : (
                         <button
                           className="btn ghost sm"
                           onClick={() => basculer(c)}
                           disabled={busy === c.code || !etabActif}
                         >
                           {busy === c.code ? '…' : c.active ? 'Mettre hors service' : 'Mettre en service'}
-                        </button>
+                        </button>)}
                       </td>
                     </tr>
                   ))}
