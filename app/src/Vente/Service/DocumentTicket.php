@@ -43,14 +43,24 @@ use App\Vente\Entity\Vente;
 final class DocumentTicket
 {
     /**
+     * Les mentions du ticket (émetteur, TVA par taux) sont FACULTATIVES ICI, et c'est voulu : les
+     * tests qui prouvent l'égalité de la sortie construisent `new DocumentTicket()` sans dépendance.
+     * Le conteneur, lui, les injecte toujours — le ticket servi aux caisses les porte.
+     */
+    public function __construct(
+        private readonly ?ReceiptLegalMentions $mentions = null,
+    ) {
+    }
+
+    /**
      * @param bool $duplicata lu par l'appelant AVANT de marquer la vente imprimée — voir l'en-tête
      *
-     * @return array{vente: string, numero: string, date: string, lignes: list<array<string, mixed>>,
-     *     total: string, totalRemises: string, duplicata: bool}
+     * @return array<string, mixed> vente, numero, date, lignes, total, totalRemises, duplicata — et,
+     *     quand les mentions sont injectées, emetteur et ventilationTva (`ReceiptLegalMentions`)
      */
     public function pour(Vente $vente, bool $duplicata): array
     {
-        return [
+        $document = [
             'vente' => (string) $vente->getId(),
             'numero' => $vente->getNumero(),
             'date' => $vente->getDate()->format(\DATE_ATOM),
@@ -59,6 +69,8 @@ final class DocumentTicket
             'totalRemises' => $vente->getTotalRemises(),
             'duplicata' => $duplicata,
         ];
+
+        return $this->mentions === null ? $document : $document + $this->mentions->pour($vente);
     }
 
     /**
