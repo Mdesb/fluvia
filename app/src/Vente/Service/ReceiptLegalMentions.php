@@ -9,8 +9,10 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Legal\Entity\LegalIdentity;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\AxeCategorie;
+use App\Organisation\Entity\Etablissement;
 use App\Vente\Entity\Vente;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * CE QU'UN TICKET DE CAISSE DOIT PORTER EN FRANCE, EN PLUS DES LIGNES : L'ÉMETTEUR ET LA TVA.
@@ -37,6 +39,9 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class ReceiptLegalMentions
 {
+    /** @var array<string, ?ProfilExploitant> profil exploitant par établissement, le temps d'une requête */
+    private array $profils = [];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
     ) {
@@ -107,9 +112,28 @@ final class ReceiptLegalMentions
         ], $parTaux));
     }
 
+    /**
+     * Le taux de TVA d'un produit vendu par cet établissement, au format « 20.00 », ou null s'il n'est
+     * pas connu. Le même que sur le ticket : les ventes par article (`SalesLinesReport`) en tirent
+     * leur hors taxes, pour qu'un export et un ticket ne donnent jamais deux HT différents.
+     */
+    public function tauxPourProduit(Etablissement $etablissement, Uuid|string $produitId): ?string
+    {
+        $cle = (string) $etablissement->getId();
+        if (!\array_key_exists($cle, $this->profils)) {
+            $this->profils[$cle] = $this->profilPour($etablissement);
+        }
+
+        return $this->taux($this->profils[$cle], $produitId);
+    }
+
     private function profil(Vente $vente): ?ProfilExploitant
     {
-        $etablissement = $vente->getEtablissement();
+        return $this->profilPour($vente->getEtablissement());
+    }
+
+    private function profilPour(?Etablissement $etablissement): ?ProfilExploitant
+    {
         if ($etablissement === null) {
             return null;
         }
@@ -124,10 +148,10 @@ final class ReceiptLegalMentions
 
     private function taux(?ProfilExploitant $profil, mixed $produitId): ?string
     {
-        if ($profil === null || $produitId === null) {
+        if ($profil === null || $produitId === null || $produitId === '') {
             return null;
         }
-        $produit = $this->em->getRepository(Produit::class)->find($produitId);
+        $produit = $this->em->getRepository(Produit::class)->find(\is_string($produitId) ? Uuid::fromString($produitId) : $produitId);
         $categorie = $produit?->getCategorieParAxe(AxeCategorie::Comptable)?->getId();
         if ($categorie === null) {
             return null;
