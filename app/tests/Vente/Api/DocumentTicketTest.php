@@ -50,6 +50,9 @@ final class DocumentTicketTest extends VenteApiTestCase
             'renvoiPropose',
             'renvoye',
             'canal',
+            // Ajoutées délibérément (CIAP, 21/10/2026) : les mentions obligatoires du ticket de caisse.
+            'emetteur',
+            'ventilationTva',
         ], array_keys($ticket), 'Une cle qui disparait est une mention qui disparait du papier.');
     }
 
@@ -81,7 +84,9 @@ final class DocumentTicketTest extends VenteApiTestCase
         [$client, $entete] = $this->adminSurA();
         $ticket = $this->ticketDUneVente($client, $entete);
 
-        $volatiles = ['vente', 'numero', 'date'];
+        // `emetteur` et `ventilationTva` dépendent de l'identité légale et du mapping comptable du
+        // jeu d'essai : leurs valeurs sont tenues par `ReceiptLegalMentionsTest`, pas ici.
+        $volatiles = ['vente', 'numero', 'date', 'emetteur', 'ventilationTva'];
         $stable = array_diff_key($ticket, array_flip($volatiles));
         $stable['lignes'][0] = array_diff_key($stable['lignes'][0], array_flip(['id']));
 
