@@ -20,6 +20,7 @@ import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import { screenAfterValidation, validateCart } from '../api/validateCart.js'
+import { CARD_TERMINAL, saleErrorMessage } from '../api/counterWording.js'
 import {
   libelleProduit,
   prixIndicatif,
@@ -771,7 +772,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         defautMoyen: moyensDispo[0] || null,
       }
     } catch (e) {
-      const msg = e.message || "Impossible d'ouvrir la vente."
+      const msg = saleErrorMessage(e, 'open', "Impossible d'ouvrir la vente.")
       // Garde « bénéficiaire requis » (RG-M2-04) : on invite à rattacher un client via la modale.
       if (/b[ée]n[ée]ficiaire/i.test(msg)) {
         setBesoinClient(true)
@@ -1169,7 +1170,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     } catch (e) {
       // D-4 : un règlement tient encore la vente (terminal muet, ou en cours) — on le fait déclarer.
       if (e?.payload?.code === 'payment_outcome_unknown') setDeclaration({ venteId, tentative: e.payload.tentative })
-      setErreur(e.message || 'Échec de la validation.')
+      setErreur(saleErrorMessage(e, 'validate', 'Échec de la validation.'))
     } finally {
       setBusy(false)
     }
@@ -2047,14 +2048,17 @@ function PanneauPaiement({
 
           {moyenCourant?.exigeReference && (
             <div className="field" style={{ margin: 0 }}>
-              <label>Simulation TPE</label>
+              {/* Un terminal EXTERNE : l'agent déclare ce qu'il lit dessus. Les codes envoyés
+                  (`X-Tpe-Simule`) et le port (`TpeMock`) ne changent pas, seulement les mots. */}
+              <label>{CARD_TERMINAL.titre}</label>
               <div className="seg">
-                {['accepte', 'refuse', 'timeout'].map((s) => (
-                  <button key={s} type="button" className={tpeSimule === s ? 'on' : ''} onClick={() => setTpeSimule(s)}>
-                    {s === 'accepte' ? 'Accepté' : s === 'refuse' ? 'Refusé' : 'Timeout'}
+                {CARD_TERMINAL.choix.map((c) => (
+                  <button key={c.code} type="button" className={tpeSimule === c.code ? 'on' : ''} onClick={() => setTpeSimule(c.code)}>
+                    {c.libelle}
                   </button>
                 ))}
               </div>
+              <div className="hint">{CARD_TERMINAL.aide}</div>
             </div>
           )}
 
