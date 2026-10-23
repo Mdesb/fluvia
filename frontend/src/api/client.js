@@ -1755,6 +1755,9 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // Billets délivrés et ventes par article de l'établissement actif (lignes de vente validées).
+  billetsDelivres: (params) => request('/reporting/billets-delivres', { query: params }),
+  ventesParArticle: (params) => request('/reporting/ventes-par-article', { query: params }),
   // LES DEUX CONSOLIDATIONS, QUE PERSONNE N'APPELAIT. Le tableau de bord d'UN site etait branche
   // depuis l'origine ; ceux de la region et du groupe — classement des sites, ecart vs objectif,
   // ecart vs n-1, badge de fraicheur — ne l'etaient par aucun ecran. C'est pourtant la vue d'un
