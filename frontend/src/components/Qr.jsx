@@ -4,7 +4,8 @@ import QRCode from 'qrcode'
 // QR réel (lib `qrcode`) rendu en image data-URL — se dimensionne exactement dans sa boîte.
 // Encode `value` (code de support signé). Fond blanc / modules sombres pour rester scannable
 // quel que soit le thème.
-export default function Qr({ value, size = 96, title = 'QR billet' }) {
+// `onReady` : appelé quand l'image est chargée. Un billet imprimé avant aurait un carré vide.
+export default function Qr({ value, size = 96, title = 'QR billet', onReady = null }) {
   const [src, setSrc] = useState('')
   const [erreur, setErreur] = useState(false)
 
@@ -46,6 +47,7 @@ export default function Qr({ value, size = 96, title = 'QR billet' }) {
       title={title}
       width={size}
       height={size}
+      onLoad={onReady || undefined}
       style={{ width: size, height: size, borderRadius: 8, background: '#fff', flex: 'none', display: 'block' }}
     />
   )
