@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\PaymentAttemptConflict;
+use App\Vente\Service\PaymentAttemptStore;
 use App\Vente\Service\SettlementCoordinator;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
@@ -19,6 +20,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  *
  * Un rejeu (même `cleIdempotence` ou même `id`) rend le règlement déjà enregistré — ou le refus du
  * terminal — avec `dejaEnregistre: true` et un 200 : rien n'a été créé, rien n'a été encaissé de nouveau.
+ *
+ * Une carte part au terminal et rend la main (spec TPE lot 1) : tant que son issue n'est pas arrivée,
+ * 202 `enAttente: true` avec la tentative à scruter (`GET /ventes/{id}/reglement-terminal`). Rejouée
+ * avec la même clé (rechargement de la page), la même attente est rendue, sans repartir au terminal.
  *
  * Une autre tentative tient la vente : 409, `code` = `payment_in_progress` (l'effet est en cours) ou
  * `payment_outcome_unknown` (le terminal a pu débiter ; rien ne passe avant une déclaration). Un
@@ -48,6 +53,17 @@ final class PaiementProcessor implements ProcessorInterface
         $paiement = $resultat['paiement'];
         $statutTpe = $resultat['statutTPE'];
         $dejaEnregistre = $resultat['dejaEnregistre'];
+        if (isset($resultat['tentative'])) {
+            return new JsonResponse([
+                'vente' => (string) $data->getId(),
+                'reglementEnregistre' => false,
+                'dejaEnregistre' => $dejaEnregistre,
+                'enAttente' => true,
+                'tentative' => PaymentAttemptStore::summary($resultat['tentative']),
+                'statutTPE' => null,
+                'resteAPayer' => $data->getResteAPayer(),
+            ], JsonResponse::HTTP_ACCEPTED);
+        }
 
         return new JsonResponse([
             'vente' => (string) $data->getId(),

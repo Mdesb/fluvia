@@ -11,6 +11,8 @@ use App\Vente\Entity\Vente;
 use App\Vente\Enum\PaymentAttemptStatus as Status;
 use App\Vente\Enum\StatutTPE;
 use App\Vente\Port\ReferentielReglementInterface;
+use App\Vente\Tpe\TerminalAttempt;
+use App\Vente\Tpe\TerminalPaiementInterface;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -33,12 +35,14 @@ use Symfony\Component\Uid\Uuid;
  *  3. La vente tenue est relue en base (`refresh`) : un règlement validé entre la lecture de la requête
  *     et la prise de la vente compte dans le reste dû.
  *  4. Sans terminal : débit du porte-monnaie, règlement et clôture de la tentative dans UNE transaction.
- *     Avec terminal : l'appel part HORS transaction — aucun verrou tenu pendant l'attente (C-9) —, puis
- *     une transaction courte écrit le règlement, ou la trace du refus, et clôt la tentative.
+ *     Avec terminal : la demande part HORS transaction — aucun verrou tenu pendant l'attente (C-9) — et
+ *     rend la main tout de suite (port asynchrone, spec TPE lot 1) : la tentative passe `sent`. L'issue
+ *     arrive plus tard par `TerminalOutcomeSink`, qui écrit le règlement ou la trace du refus.
  *  5. Les événements partent après le commit (D7-bis).
  *
- * Un terminal muet laisse la tentative `unresolved` : la vente reste tenue, rien n'y repart au
- * terminal, et la seule sortie est la déclaration du caissier ({@see declare()}, Q-A1, D122).
+ * Un terminal muet au-delà du délai de son connecteur laisse la tentative `unresolved` : la vente reste
+ * tenue, rien n'y repart au terminal, et la seule sortie est la déclaration du caissier ({@see declare()},
+ * Q-A1, D122).
  *
  * La synchronisation hors ligne et le no-show appellent `PaiementHandler::encaisser()` directement,
  * sans tentative : la première est inchangée (Q-A2) ; le no-show se sérialise sur sa facturation, dans
@@ -48,7 +52,11 @@ use Symfony\Component\Uid\Uuid;
  */
 final class SettlementCoordinator
 {
-    /** Deux fois le `proxy_read_timeout` de nginx (60 s) : au-delà, la demande qui l'a écrite n'attend plus personne. */
+    /**
+     * Une tentative `pending` — la demande qui l'a écrite est en cours — au-delà de deux fois le
+     * `proxy_read_timeout` de nginx (60 s) : cette demande n'attend plus personne. Une tentative `sent`
+     * se juge au délai de son connecteur ({@see TerminalPaiementInterface::staleAfterSeconds()}).
+     */
     public const STALE_AFTER_SECONDS = 120;
 
     public function __construct(
@@ -59,6 +67,7 @@ final class SettlementCoordinator
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
         private readonly EventBus $bus,
+        private readonly TerminalPaiementInterface $terminal,
     ) {
     }
 
@@ -155,7 +164,8 @@ final class SettlementCoordinator
             return ['attempt' => $tentative, 'status' => $issue, 'paiement' => $paiement !== null ? $this->em->find(Paiement::class, $paiement) : null, 'dejaEnregistre' => true];
         }
         if ($statut !== Status::Unresolved) {
-            throw $statut === Status::Pending ? PaymentAttemptConflict::inProgress($tentative) : PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
+            throw $statut === Status::Pending || $statut === Status::Sent
+                ? PaymentAttemptConflict::inProgress($tentative) : PaymentAttemptConflict::outcomeKnown($this->attempts->byId($id) ?? $tentative);
         }
         if ($issue === Status::DeclaredNotProcessed) {
             if (!$this->attempts->declare($id, $issue, $par->getId(), null, null)) {
@@ -222,10 +232,13 @@ final class SettlementCoordinator
         }
 
         return match ($this->releaseIfStale($tentative)) {
-            Status::Accepted, Status::DeclaredAccepted => self::replayed($this->handler->replay($vente, $donnees, $tentative['key'])
+            // Au terminal, le règlement peut être PARTIEL (CA-4) : il se retrouve par sa clé, pas par son montant.
+            Status::Accepted, Status::DeclaredAccepted => self::replayed(($tentative['usesTerminal'] ? $this->paymentOf($tentative) : $this->handler->replay($vente, $donnees, $tentative['key']))
                 ?? throw new \LogicException('Tentative acceptée sans règlement : ' . $tentative['id'])),
-            Status::Refused => ['paiement' => null, 'statutTPE' => $tentative['terminal'], 'dejaEnregistre' => true],
+            Status::Refused, Status::Cancelled => ['paiement' => null, 'statutTPE' => $tentative['terminal'], 'dejaEnregistre' => true],
             Status::Failed => $this->rerun($tentative, $vente, $donnees),
+            // La même demande, après un rechargement (CA-5) : elle attend toujours le terminal, rien n'y repart.
+            Status::Sent => self::waiting($this->attempts->byKey($tentative['key']) ?? $tentative),
             // Relue : le jugement de péremption a pu changer son statut et sa raison.
             Status::Pending, Status::Unresolved => throw PaymentAttemptConflict::holding($this->attempts->byKey($tentative['key']) ?? $tentative),
             // Le caissier a lu « non passé » sur le terminal : cette clé ne repart pas (une tentative par clé, D-4).
@@ -279,10 +292,12 @@ final class SettlementCoordinator
             throw $e;
         }
 
+        if ($tentative['usesTerminal']) {
+            // Relue : son montant vient d'être recalculé sur la vente tenue.
+            return $this->viaTerminal($this->attempts->byId($tentative['id']) ?? $tentative, $vente, $donnees);
+        }
         $evenements = new SettlementEvents();
-        $resultat = $tentative['usesTerminal']
-            ? $this->viaTerminal($tentative, $vente, $donnees, $evenements)
-            : $this->withoutTerminal($tentative, $vente, $donnees, $evenements);
+        $resultat = $this->withoutTerminal($tentative, $vente, $donnees, $evenements);
         $evenements->publishTo($this->bus);
 
         return $resultat;
@@ -317,65 +332,51 @@ final class SettlementCoordinator
     }
 
     /**
-     * @param Attempt              $tentative
+     * La demande part au terminal, HORS transaction et sans verrou (C-9), et la main revient aussitôt.
+     * Son issue arrive par `TerminalOutcomeSink` — tout de suite pour le terminal simulé, plus tard pour
+     * un vrai : on rend ce que la tentative est devenue, `sent` compris.
+     *
+     * @param Attempt              $tentative tenue par cette demande, `pending`, son montant à jour
      * @param array<string, mixed> $donnees
      *
-     * @return array{paiement: Paiement|null, statutTPE: StatutTPE|null, dejaEnregistre: bool}
+     * @return array{paiement: Paiement|null, statutTPE: StatutTPE|null, dejaEnregistre: bool, tentative?: Attempt}
      */
-    private function viaTerminal(array $tentative, Vente $vente, array $donnees, SettlementEvents $evenements): array
+    private function viaTerminal(array $tentative, Vente $vente, array $donnees): array
     {
         try {
-            $resultat = $this->handler->encaisser($vente, $donnees, $evenements);
+            $this->handler->checkTerminalRequest($vente, $donnees);
+            $pdv = $vente->getPointDeVente()
+                ?? throw new UnprocessableEntityHttpException('Aucun point de vente sur cette vente : aucun terminal à solliciter.');
+            $this->attempts->setConnector($tentative['id'], $this->terminal->connector());
         } catch (\Throwable $e) {
-            // Avant l'appel au terminal, rien n'a pu bouger. Après, un 4xx dit que le terminal n'a rien
-            // débité (contrat de `TerminalPaiementInterface`) ; toute autre erreur laisse l'issue inconnue.
-            $sansEffet = !$evenements->terminalAsked || ($e instanceof HttpExceptionInterface && $e->getStatusCode() < 500);
+            // Rien n'est parti : la vente ne reste pas tenue par une tentative sans effet.
+            $this->attempts->move($tentative['id'], [Status::Pending], Status::Failed, reason: $e->getMessage());
+
+            throw $e;
+        }
+
+        try {
+            $this->terminal->demarrer(new TerminalAttempt($tentative['id'], $tentative['key'], $tentative['method'], $tentative['amount'], $pdv));
+        } catch (\Throwable $e) {
+            // Un 4xx dit que rien n'est parti (contrat de `TerminalPaiementInterface`) ; toute autre erreur
+            // laisse l'issue inconnue. Faux si l'issue est déjà écrite : elle tient.
+            $sansEffet = $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500;
             $this->attempts->move($tentative['id'], [Status::Pending], $sansEffet ? Status::Failed : Status::Unresolved, reason: $e->getMessage());
 
             throw $e;
         }
+        // Faux quand l'issue est déjà arrivée (le terminal simulé répond aussitôt) : elle tient.
+        $this->attempts->move($tentative['id'], [Status::Pending], Status::Sent);
+        $relue = $this->attempts->byId($tentative['id']) ?? $tentative;
 
-        $statut = $resultat['statutTPE'];
-        $issue = match (true) {
-            $resultat['paiement'] !== null => Status::Accepted,
-            $statut === StatutTPE::Timeout => Status::Unresolved,
-            default => Status::Refused,
+        return match ($relue['status']) {
+            Status::Accepted => ['paiement' => $this->paymentOf($relue) ?? throw new \LogicException('Tentative acceptée sans règlement : ' . $relue['id']), 'statutTPE' => StatutTPE::Accepte, 'dejaEnregistre' => false],
+            Status::Refused, Status::Cancelled => ['paiement' => null, 'statutTPE' => $relue['terminal'], 'dejaEnregistre' => false],
+            Status::Unresolved => ['paiement' => null, 'statutTPE' => $relue['terminal'] ?? StatutTPE::Timeout, 'dejaEnregistre' => false],
+            Status::Pending, Status::Sent => self::waiting($relue, false),
+            // Déclarée par le caissier pendant que le terminal tardait : sa déclaration tient.
+            default => throw PaymentAttemptConflict::outcomeKnown($relue),
         };
-        // L'issue du terminal s'écrit même si la tentative a été jugée périmée (`unresolved`) pendant
-        // qu'il tardait : la vente est restée tenue, personne n'a pu encaisser entre-temps — sauf le
-        // caissier, par une déclaration, qui l'emporte alors (voir le `catch`).
-        $depuis = [Status::Pending, Status::Unresolved];
-        try {
-            $this->connection->transactional(function () use ($tentative, $issue, $statut, $resultat, $depuis): void {
-                $this->em->flush();
-                if (!$this->attempts->move($tentative['id'], $depuis, $issue, $statut, payment: $resultat['paiement']?->getId())) {
-                    throw PaymentAttemptConflict::outcomeUnknown();
-                }
-            });
-        } catch (\Throwable $e) {
-            // Le terminal a répondu, l'écriture a échoué. Refusé : rien n'a bougé. Sinon la carte est
-            // peut-être débitée sans règlement écrit : il faudra une déclaration — la raison garde la
-            // référence rendue par le terminal, pour que le caissier n'ait pas à la deviner.
-            $reference = $resultat['paiement']?->getRefTPE();
-            $raison = ($reference !== null ? sprintf('Accepté par le terminal (réf. %s), règlement non écrit : ', $reference) : '') . $e->getMessage();
-            if (!$this->attempts->move($tentative['id'], $depuis, $issue === Status::Refused ? Status::Refused : Status::Unresolved, $statut, $raison)) {
-                // Déclarée entre-temps par le caissier : sa déclaration tient. Si le terminal la
-                // contredit — accepté après « non passé » (client débité sans règlement), refusé après
-                // « accepté » (règlement sans débit) —, sa réponse reste écrite sur la tentative, pour
-                // le rapprochement.
-                $this->attempts->note($tentative['id'], sprintf(
-                    'Après la déclaration du caissier, le terminal a répondu « %s »%s',
-                    $statut?->value ?? 'erreur',
-                    $reference !== null ? sprintf(' (réf. %s)', $reference) : '',
-                ));
-
-                throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($tentative['id']) ?? $tentative);
-            }
-
-            throw $e;
-        }
-
-        return $resultat;
     }
 
     /**
@@ -389,14 +390,15 @@ final class SettlementCoordinator
      */
     private function releaseIfStale(?array $tentative): ?Status
     {
-        if ($tentative === null || $tentative['status'] !== Status::Pending
-            || $tentative['startedAt'] > new \DateTimeImmutable('-' . self::STALE_AFTER_SECONDS . ' seconds')) {
+        $delai = ($tentative['status'] ?? null) === Status::Sent ? $this->terminal->staleAfterSeconds() : self::STALE_AFTER_SECONDS;
+        if ($tentative === null || !\in_array($tentative['status'], [Status::Pending, Status::Sent], true)
+            || $tentative['startedAt'] > new \DateTimeImmutable('-' . $delai . ' seconds')) {
             return $tentative['status'] ?? null;
         }
 
-        $sansIssue = sprintf('Sans issue après %d s', self::STALE_AFTER_SECONDS);
+        $sansIssue = sprintf('Sans issue après %d s', $delai);
         if ($tentative['usesTerminal']) {
-            $this->attempts->move($tentative['id'], [Status::Pending], Status::Unresolved, reason: $sansIssue . ' : le terminal a pu débiter.');
+            $this->attempts->move($tentative['id'], [Status::Pending, Status::Sent], Status::Unresolved, reason: $sansIssue . ' : le terminal a pu débiter.');
         } else {
             $paiement = $this->attempts->paymentWithKey($tentative['key']);
             $this->attempts->move(
@@ -451,6 +453,30 @@ final class SettlementCoordinator
 
         return $tentative['requested'] !== null
             && $this->handler->requestedAmountCents($vente, $donnees) === $this->calculateur->centimes($tentative['requested']);
+    }
+
+    /**
+     * Le règlement écrit sous la clé de la tentative.
+     *
+     * @param Attempt $tentative
+     */
+    private function paymentOf(array $tentative): ?Paiement
+    {
+        $id = $this->attempts->paymentWithKey($tentative['key']);
+
+        return $id !== null ? $this->em->find(Paiement::class, $id) : null;
+    }
+
+    /**
+     * Elle attend le terminal : rien n'est encaissé, l'écran scrute la tentative.
+     *
+     * @param Attempt $tentative
+     *
+     * @return array{paiement: null, statutTPE: null, dejaEnregistre: bool, tentative: Attempt}
+     */
+    private static function waiting(array $tentative, bool $dejaEnregistre = true): array
+    {
+        return ['paiement' => null, 'statutTPE' => null, 'dejaEnregistre' => $dejaEnregistre, 'tentative' => $tentative];
     }
 
     /** @return array{paiement: Paiement, statutTPE: StatutTPE|null, dejaEnregistre: true} */
