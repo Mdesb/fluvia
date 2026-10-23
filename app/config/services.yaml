@@ -137,6 +137,8 @@ services:
     # Connecteur TPE (Ingenico/Nayax/PAX) — simulateur (US-L2-07), qui REFUSE toute carte tant que
     # TPE_SIMULE_AUTORISE n'est pas posé (test, démonstration en préprod). Aucun terminal réel.
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
+    # Le chemin unique de l'issue d'un terminal (spec TPE lot 1) : connecteurs, webhooks, workers.
+    App\Vente\Tpe\TerminalOutcomeSink: '@App\Vente\Service\TerminalOutcomeRecorder'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'
 
