@@ -7,6 +7,7 @@ namespace App\Vente\Service;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\PaymentAttemptStatus;
 use App\Vente\Enum\StatutTPE;
+use App\Vente\Tpe\ResultatTpe;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -19,12 +20,13 @@ use Symfony\Component\Uid\Uuid;
  * autre demande a déjà fait passer la tentative ailleurs, et l'appelant en tire la conséquence. Les
  * identifiants se comparent en `UNHEX` (garde-fou n°14).
  *
- * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable, reason: ?string, cardReference: ?string}
+ * @phpstan-type Attempt array{id: string, sale: string, key: Uuid, method: string, requested: ?string, amount: string, usesTerminal: bool, status: PaymentAttemptStatus, terminal: ?StatutTPE, startedAt: \DateTimeImmutable, reason: ?string, cardReference: ?string, connector: ?string, debited: ?string, authorization: ?string, network: ?string, customerReceipt: ?string, payment: ?string}
  */
 final class PaymentAttemptStore
 {
     private const SELECT = 'SELECT LOWER(HEX(id)) id, LOWER(HEX(sale_id)) sale, idempotency_key, payment_method_code, requested_amount, amount, '
-        . 'uses_terminal, status, terminal_status, started_at, failure_reason, card_reference FROM sale_payment_attempt WHERE ';
+        . 'uses_terminal, status, terminal_status, started_at, failure_reason, card_reference, connector, debited_amount, authorization_number, '
+        . 'card_network, customer_receipt, LOWER(HEX(payment_id)) payment FROM sale_payment_attempt WHERE ';
 
     public function __construct(private readonly Connection $connection)
     {
@@ -53,6 +55,12 @@ final class PaymentAttemptStore
             'startedAt' => new \DateTimeImmutable(),
             'reason' => null,
             'cardReference' => null,
+            'connector' => null,
+            'debited' => null,
+            'authorization' => null,
+            'network' => null,
+            'customerReceipt' => null,
+            'payment' => null,
         ];
         $this->connection->executeStatement(
             'INSERT INTO sale_payment_attempt (id, sale_id, open_sale_id, idempotency_key, payment_method_code, requested_amount, amount, uses_terminal, status, started_at) '
@@ -124,7 +132,10 @@ final class PaymentAttemptStore
      *
      * @param Attempt $attempt
      *
-     * @return array{id: string, moyen: string, montant: string, statut: string, statutTPE: ?string, depuis: string, raison: ?string}
+     * L'issue d'un terminal (montant débité, autorisation, réseau, ticket client) y est, pour l'écran
+     * d'attente et le ticket ; le ticket commerçant reste en base.
+     *
+     * @return array{id: string, moyen: string, montant: string, statut: string, statutTPE: ?string, depuis: string, raison: ?string, connecteur: ?string, montantDebite: ?string, numeroAutorisation: ?string, reseau: ?string, ticketClient: ?string, paiement: ?string}
      */
     public static function summary(array $attempt): array
     {
@@ -136,6 +147,12 @@ final class PaymentAttemptStore
             'statutTPE' => $attempt['terminal']?->value,
             'depuis' => $attempt['startedAt']->format(\DATE_ATOM),
             'raison' => self::shownReason($attempt['reason']),
+            'connecteur' => $attempt['connector'],
+            'montantDebite' => $attempt['debited'],
+            'numeroAutorisation' => $attempt['authorization'],
+            'reseau' => $attempt['network'],
+            'ticketClient' => $attempt['customerReceipt'],
+            'paiement' => $attempt['payment'] !== null ? Uuid::fromBinary((string) hex2bin($attempt['payment']))->toRfc4122() : null,
         ];
     }
 
@@ -145,7 +162,7 @@ final class PaymentAttemptStore
      */
     private static function shownReason(?string $reason): ?string
     {
-        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\)|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?/u', $reason, $m) === 1
+        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\)(?: après l\'annulation)?|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?|Montant débité incohérent \([^)]*\)/u', $reason, $m) === 1
             ? $m[0] : null;
     }
 
@@ -193,6 +210,43 @@ final class PaymentAttemptStore
         );
     }
 
+    /** Le connecteur qui reçoit la demande, écrit avant l'envoi : son délai juge la tentative, sa nature dit qui la déclare. */
+    public function setConnector(string $id, string $connector): void
+    {
+        $this->connection->executeStatement(
+            'UPDATE sale_payment_attempt SET connector = :c WHERE id = UNHEX(:id)',
+            ['c' => mb_substr($connector, 0, 24), 'id' => $id],
+        );
+    }
+
+    /**
+     * Ce que le terminal a rendu (spec TPE lot 1 §3), écrit avec l'issue. Un caissier qui l'a lu sur le
+     * terminal signe : qui, quand, et la référence recopiée.
+     */
+    public function setTerminalDetails(string $id, ?string $debited, ResultatTpe $outcome, ?Uuid $declaredBy): void
+    {
+        $court = static fn (?string $v, int $n): ?string => $v !== null && $v !== '' ? mb_substr($v, 0, $n) : null;
+        $this->connection->executeStatement(
+            'UPDATE sale_payment_attempt SET debited_amount = :debited, authorization_number = :auth, terminal_transaction_id = :tx, '
+            . 'terminal_id = :tid, card_network = :network, customer_receipt = :customer, merchant_receipt = :merchant, '
+            . 'declared_by_id = COALESCE(UNHEX(:by), declared_by_id), declared_at = IF(:by IS NULL, declared_at, :now), '
+            . 'card_reference = IF(:by IS NULL, card_reference, :ref) WHERE id = UNHEX(:id)',
+            [
+                'debited' => $debited,
+                'auth' => $court($outcome->numeroAutorisation, 32),
+                'tx' => $court($outcome->transactionTerminal, 64),
+                'tid' => $court($outcome->identifiantTerminal, 64),
+                'network' => $court($outcome->reseau, 32),
+                'customer' => $court($outcome->ticketClient, 8000),
+                'merchant' => $court($outcome->ticketCommercant, 8000),
+                'by' => $declaredBy !== null ? self::hex($declaredBy) : null,
+                'now' => self::now(),
+                'ref' => $court($outcome->reference, 64),
+                'id' => $id,
+            ],
+        );
+    }
+
     /** Le montant de l'effet, une fois la vente relue ; faux si la tentative n'est plus `pending`. */
     public function setAmount(string $id, string $amount): bool
     {
@@ -231,6 +285,12 @@ final class PaymentAttemptStore
             'startedAt' => new \DateTimeImmutable((string) $ligne['started_at']),
             'reason' => $ligne['failure_reason'] !== null ? (string) $ligne['failure_reason'] : null,
             'cardReference' => $ligne['card_reference'] !== null ? (string) $ligne['card_reference'] : null,
+            'connector' => $ligne['connector'] !== null ? (string) $ligne['connector'] : null,
+            'debited' => $ligne['debited_amount'] !== null ? (string) $ligne['debited_amount'] : null,
+            'authorization' => $ligne['authorization_number'] !== null ? (string) $ligne['authorization_number'] : null,
+            'network' => $ligne['card_network'] !== null ? (string) $ligne['card_network'] : null,
+            'customerReceipt' => $ligne['customer_receipt'] !== null ? (string) $ligne['customer_receipt'] : null,
+            'payment' => $ligne['payment'] !== null ? (string) $ligne['payment'] : null,
         ];
     }
 
