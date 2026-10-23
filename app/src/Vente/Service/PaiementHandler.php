@@ -7,9 +7,9 @@ namespace App\Vente\Service;
 use App\Vente\Entity\Paiement;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutTPE;
+use App\Vente\Port\MoyenPaiement;
 use App\Vente\Port\PorteMonnaieVirtuelInterface;
 use App\Vente\Port\ReferentielReglementInterface;
-use App\Vente\Tpe\TerminalPaiementInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -20,9 +20,13 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Encaissement scindé (RG-M2-03). Ajoute un règlement : le montant par défaut vaut le reste dû, le
  * reste à payer est recalculé après chaque ajout. Le rendu de monnaie n'est possible que sur un
- * moyen l'autorisant (espèces, RG-M2-05 / CA-9). Un règlement CB part automatiquement au TPE : seul
- * un résultat « accepté » crée le règlement, un refus/timeout n'ajoute rien (US-L2-07 / CA-10). Le
- * moyen doit être autorisé sur le point de vente (acte de régie M6, RG-M2-02).
+ * moyen l'autorisant (espèces, RG-M2-05 / CA-9). Le moyen doit être autorisé sur le point de vente
+ * (acte de régie M6, RG-M2-02).
+ *
+ * Un règlement par TERMINAL (moyen à référence : CB) ne s'écrit pas ici : la demande part au terminal
+ * par `SettlementCoordinator`, qui n'emprunte que les contrôles ({@see checkTerminalRequest()}), et le
+ * règlement s'écrit à l'arrivée de l'issue (`TerminalOutcomeRecorder`, spec TPE lot 1). Seul un
+ * résultat « accepté » crée le règlement ; un refus ou un timeout n'ajoute rien (US-L2-07 / CA-10).
  *
  * ── LE REJEU D'UN RÈGLEMENT (G-1, G-4 du ticket opposable) ─────────────────────────────────────
  *
@@ -56,25 +60,18 @@ final class PaiementHandler
 
     public function __construct(
         private readonly ReferentielReglementInterface $referentiel,
-        private readonly TerminalPaiementInterface $tpe,
         private readonly PanierCalculateur $calculateur,
         private readonly EntityManagerInterface $em,
         // Frontière M4 (RG-M4-03, CA-8, §2.3 plan-crm.md) : nullable pour préserver le comportement
         // d'origine (moyen `pmv` traité comme un code de règlement ordinaire) si aucun port n'est
         // câblé — ne casse aucun test M2 existant qui n'exerce pas le moyen `pmv` en détail.
         private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
-        // PAY-3 — nullable pour la même raison que `$pmv` : les tests unitaires qui construisent ce
-        // gestionnaire à la main n'ont pas à connaître le bus d'événements pour exercer un rendu de
-        // monnaie. En service câblé, il est toujours présent.
-        private readonly ?CardRejectionRecorder $refusCarte = null,
     ) {
     }
 
     /**
      * @param array<string, mixed> $donnees
-     * @param SettlementEvents|null $evenements fournis par qui tient la transaction : le refus de carte
-     *                                          y est retenu, sans `flush()`, jusqu'à son commit. Nul : le
-     *                                          refus est écrit et annoncé sur-le-champ, comme avant.
+     * @param SettlementEvents|null $evenements fournis par qui tient la transaction, pour ses annonces
      *
      * @return array{paiement: Paiement|null, statutTPE: StatutTPE|null, dejaEnregistre: bool}
      */
@@ -91,6 +88,72 @@ final class PaiementHandler
             return ['paiement' => $dejaEnregistre, 'statutTPE' => $dejaEnregistre->getStatutTPE(), 'dejaEnregistre' => true];
         }
 
+        [$moyen, $code, $montantCentimes, $rendu, $differe] = $this->check($vente, $donnees);
+        if ($moyen->exigeReference) {
+            // Un terminal ne répond plus ici (port asynchrone) : seul le coordinateur lui parle, et le
+            // règlement s'écrit à l'arrivée de l'issue. La synchronisation hors ligne, qui appelle ce
+            // gestionnaire directement, est refusée — comme elle l'était en production, où le terminal
+            // simulé refuse toute carte.
+            throw new UnprocessableEntityHttpException('Un règlement par terminal de paiement s\'encaisse depuis la caisse en ligne : il n\'a pas été enregistré.');
+        }
+
+        // PMV comme moyen de paiement en caisse (RG-M4-03, CA-8, frontière M4 §2.3 plan-crm.md) :
+        // débit atomique avant tout enregistrement de règlement ; un refus (solde insuffisant, PMV
+        // expiré/inexistant) bloque le règlement sans créer de Paiement (un paiement partiel PMV +
+        // complément par un autre moyen reste possible : c'est l'appelant qui scinde le montant).
+        if ($code === 'pmv' && $this->pmv !== null) {
+            $clientId = $vente->getClient();
+            if ($clientId === null) {
+                throw new UnprocessableEntityHttpException('PMV indisponible : aucun client rattaché à la vente (RG-M4-03).');
+            }
+            $resultatPmv = $this->pmv->debiter($clientId, $this->calculateur->decimal($montantCentimes), $vente->getId());
+            if (!$resultatPmv->reussi) {
+                throw new UnprocessableEntityHttpException($resultatPmv->motifRefus ?? 'Débit PMV refusé (RG-M4-03).');
+            }
+        }
+
+        $paiement = new Paiement();
+        $paiement->setMoyenCode($code);
+        $paiement->setMontant($this->calculateur->decimal($montantCentimes));
+        $paiement->setRendu($this->calculateur->decimal($rendu));
+        $paiement->setDiffere($differe);
+        $paiement->setCleIdempotence($cle);
+
+        if (isset($donnees['banque']) && \is_string($donnees['banque'])) {
+            $paiement->setBanque($donnees['banque']);
+        }
+        if (isset($donnees['numeroCheque']) && \is_string($donnees['numeroCheque'])) {
+            $paiement->setNumeroCheque($donnees['numeroCheque']);
+        }
+        $id = $this->providedId($donnees);
+        if ($id !== null) {
+            $paiement->setId($id);
+        }
+
+        $vente->addPaiement($paiement);
+        $this->calculateur->recalculerVente($vente);
+
+        return ['paiement' => $paiement, 'statutTPE' => $paiement->getStatutTPE(), 'dejaEnregistre' => false];
+    }
+
+    /**
+     * Les contrôles d'une demande au terminal (spec TPE lot 1), sans effet : ceux d'`encaisser()`. Une
+     * demande qui échoue ici n'est jamais partie.
+     *
+     * @param array<string, mixed> $donnees
+     */
+    public function checkTerminalRequest(Vente $vente, array $donnees): void
+    {
+        $this->check($vente, $donnees);
+    }
+
+    /**
+     * @param array<string, mixed> $donnees
+     *
+     * @return array{0: MoyenPaiement, 1: string, 2: int, 3: int, 4: bool} le moyen, son code, le montant et le rendu en centimes, le différé
+     */
+    private function check(Vente $vente, array $donnees): array
+    {
         if ($vente->estScellee()) {
             throw new ConflictHttpException('Vente validée : encaissement clos (NF525).');
         }
@@ -142,69 +205,7 @@ final class PaiementHandler
             $rendu = $montantCentimes - $resteCentimes;
         }
 
-        // PMV comme moyen de paiement en caisse (RG-M4-03, CA-8, frontière M4 §2.3 plan-crm.md) :
-        // débit atomique avant tout enregistrement de règlement ; un refus (solde insuffisant, PMV
-        // expiré/inexistant) bloque le règlement sans créer de Paiement (un paiement partiel PMV +
-        // complément par un autre moyen reste possible : c'est l'appelant qui scinde le montant).
-        if ($code === 'pmv' && $this->pmv !== null) {
-            $clientId = $vente->getClient();
-            if ($clientId === null) {
-                throw new UnprocessableEntityHttpException('PMV indisponible : aucun client rattaché à la vente (RG-M4-03).');
-            }
-            $resultatPmv = $this->pmv->debiter($clientId, $this->calculateur->decimal($montantCentimes), $vente->getId());
-            if (!$resultatPmv->reussi) {
-                throw new UnprocessableEntityHttpException($resultatPmv->motifRefus ?? 'Débit PMV refusé (RG-M4-03).');
-            }
-        }
-
-        $paiement = new Paiement();
-        $paiement->setMoyenCode($code);
-        $paiement->setMontant($this->calculateur->decimal($montantCentimes));
-        $paiement->setRendu($this->calculateur->decimal($rendu));
-        $paiement->setDiffere($differe);
-        $paiement->setCleIdempotence($cle);
-
-        // TPE : envoi automatique ; seul « accepté » crée le règlement (CA-10).
-        if ($moyen->exigeReference) {
-            if ($pdv === null) {
-                throw new UnprocessableEntityHttpException('Aucun point de vente sur cette vente : aucun terminal à solliciter.');
-            }
-            if ($evenements !== null) {
-                $evenements->terminalAsked = true;
-            }
-            $resultat = $this->tpe->demander($pdv, $paiement->getMontant());
-            $paiement->setStatutTPE($resultat->statut);
-            if (!$resultat->estAccepte()) {
-                // PAY-3 — **le refus est un fait, et il ne laissait aucune trace.** Aucun `Paiement`
-                // n'est créé (c'est la règle CA-10), donc jusqu'ici la seule chose qui restait d'une
-                // carte refusée était un code de statut dans une réponse HTTP que personne ne
-                // conserve. On l'écrit, puis on l'annonce — dans cet ordre, voir le service.
-                if ($evenements !== null) {
-                    $this->refusCarte?->record($vente, $code, $paiement->getMontant(), $resultat->statut, $resultat->reference, $evenements);
-                } else {
-                    $this->refusCarte?->consigner($vente, $code, $paiement->getMontant(), $resultat->statut, $resultat->reference);
-                }
-
-                return ['paiement' => null, 'statutTPE' => $resultat->statut, 'dejaEnregistre' => false];
-            }
-            $paiement->setRefTPE($resultat->reference);
-        }
-
-        if (isset($donnees['banque']) && \is_string($donnees['banque'])) {
-            $paiement->setBanque($donnees['banque']);
-        }
-        if (isset($donnees['numeroCheque']) && \is_string($donnees['numeroCheque'])) {
-            $paiement->setNumeroCheque($donnees['numeroCheque']);
-        }
-        $id = $this->providedId($donnees);
-        if ($id !== null) {
-            $paiement->setId($id);
-        }
-
-        $vente->addPaiement($paiement);
-        $this->calculateur->recalculerVente($vente);
-
-        return ['paiement' => $paiement, 'statutTPE' => $paiement->getStatutTPE(), 'dejaEnregistre' => false];
+        return [$moyen, $code, $montantCentimes, $rendu, $differe];
     }
 
     /**
