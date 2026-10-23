@@ -129,6 +129,18 @@ class TypeProduit
         return \in_array($facette, $this->facettes, true);
     }
 
+    /**
+     * Un produit de ce type délivre-t-il un support (billet, carnet, droit d'accès) à la validation ?
+     * La règle de `ValiderVenteService`, et celle du compte des billets délivrés (`SalesLinesReport`) :
+     * écrite une fois, pour que les deux ne divergent pas au premier correctif.
+     */
+    public function emetUnSupport(): bool
+    {
+        return $this->aFacette(self::FACETTE_BILLET)
+            || $this->aFacette(self::FACETTE_CARNET)
+            || $this->aFacette(self::FACETTE_ACCES);
+    }
+
     /** @return Collection<int, TypeProduit> */
     public function getTypesCompatibles(): Collection
     {
