@@ -8,6 +8,7 @@ import RegiesRecettes from '../components/RegiesRecettes.jsx'
 import TopologieAcces from './TopologieAcces.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
+import { CONNECTEURS_TPE, avecTerminal } from '../api/terminalSettings.js'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import TauxTvaLegaux from '../components/TauxTvaLegaux.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
@@ -405,8 +406,8 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
     // L'établissement n'est pas un champ du formulaire : il vient du contexte de travail, jamais
     // d'une saisie. Le proposer à choisir serait offrir de créer un point de vente chez quelqu'un
     // d'autre.
-    creer: (corps) => api.creerPointDeVente({ ...corps, etablissement: `/api/etablissements/${etabActif}` }),
-    modifier: api.majPointDeVente,
+    creer: (corps) => api.creerPointDeVente({ ...avecTerminal(corps), etablissement: `/api/etablissements/${etabActif}` }),
+    modifier: (id, corps) => api.majPointDeVente(id, avecTerminal(corps)),
     supprimer: null,
     champs: [
       {
@@ -439,11 +440,33 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
           : "Ne cochez rien pour accepter tous les moyens déclarés. Cochez-en pour n'autoriser "
             + "que ceux-là : un caissier qui tentera un autre moyen se verra refuser l'encaissement.",
       },
+      // LE TERMINAL DE PAIEMENT EST UN RÉGLAGE, PLUS UNE CASE (spec TPE lot 1 §6).
+      //
+      // Le serveur attend `{ connecteur, marque?, ref? }` ; la case « un terminal est rattaché »
+      // écrivait un booléen que la caisse ne lisait pas. Les trois champs se replient en un seul
+      // réglage à l'envoi (`avecTerminal`).
       {
         nom: 'tpe',
-        libelle: 'Un terminal bancaire est rattaché',
-        type: 'bool',
-        aide: 'Détermine si le paiement par carte passe par un terminal plutôt que par une saisie.',
+        libelle: 'Terminal de paiement par carte',
+        type: 'choix',
+        options: CONNECTEURS_TPE,
+        versValeur: (r) => r.tpe?.connecteur || 'externe',
+        aide: 'Externe : le caissier encaisse sur le terminal du guichet, puis indique le résultat '
+          + '(accepté, refusé, annulé) dans la caisse. Le terminal simulé ne sert qu’aux démonstrations.',
+      },
+      {
+        nom: 'tpeMarque',
+        libelle: 'Marque du terminal (facultatif)',
+        type: 'text',
+        exemple: 'Ingenico',
+        versValeur: (r) => r.tpe?.marque || '',
+      },
+      {
+        nom: 'tpeRef',
+        libelle: 'Référence du terminal (facultatif)',
+        type: 'text',
+        exemple: 'TPE-ACCUEIL',
+        versValeur: (r) => r.tpe?.ref || '',
       },
       // CE QUI FAIT ENFIN MONTER L'ENCAISSE D'UNE RÉGIE.
       //
@@ -487,8 +510,8 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
       {
         cle: 'tpe',
         titre: 'Terminal de paiement',
-        aide: 'Un terminal bancaire est-il rattaché à ce point de vente ?',
-        rendu: (r) => (r.tpe ? 'oui' : '—'),
+        aide: 'Comment ce point de vente encaisse une carte.',
+        rendu: (r) => CONNECTEURS_TPE.find((c) => c.valeur === (r.tpe?.connecteur || 'externe'))?.libelle || r.tpe?.connecteur,
       },
       {
         cle: 'moyensAutorises',

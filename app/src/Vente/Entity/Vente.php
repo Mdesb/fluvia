@@ -19,6 +19,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
 use App\Vente\State\AjoutLigneProcessor;
 use App\Vente\State\AnnulerVenteProcessor;
+use App\Vente\State\CancelTerminalPaymentProcessor;
 use App\Vente\State\CorrectSettlementProcessor;
 use App\Vente\State\CreerVenteProcessor;
 use App\Vente\State\DeclareSettlementProcessor;
@@ -27,6 +28,7 @@ use App\Vente\State\PaiementProcessor;
 use App\Vente\State\RattacherClientProcessor;
 use App\Vente\State\RembourserVenteProcessor;
 use App\Vente\State\RetirerLigneProcessor;
+use App\Vente\State\TerminalAttemptProvider;
 use App\Vente\State\TicketProcessor;
 use App\Vente\State\ValiderVenteProcessor;
 use App\Vente\State\ViderPanierProcessor;
@@ -129,6 +131,25 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
             processor: DeclareSettlementProcessor::class,
+        ),
+        // Spec TPE lot 1 — l'attente du terminal : l'écran la scrute (CA-1, CA-5) et peut l'annuler (CA-3).
+        new Get(
+            uriTemplate: '/ventes/{id}/reglement-terminal',
+            description: 'Le reglement au terminal de cette vente : ?tentative=<id> (rendu par le 202 des paiements), sinon celui qui tient la vente (404 sans). '
+                . 'Statut (sent : attend le terminal ; accepted, refused, cancelled ; unresolved : a declarer), montant debite, autorisation, reseau, ticket client, reste a payer. '
+                . 'Passe le delai du connecteur, une tentative sans issue y est jugee unresolved.',
+            security: "is_granted('PERM', 'vente.lire') or is_granted('PERM', 'vente.encaisser')",
+            provider: TerminalAttemptProvider::class,
+        ),
+        new Post(
+            uriTemplate: '/ventes/{id}/annuler-reglement',
+            description: 'Annule l attente du terminal (CA-3). Corps : { tentative }. 200 : cancelled, la vente est liberee ; rejouee, rend son issue. '
+                . '409 payment_outcome_known si le terminal a deja rendu son issue (une acceptation arrivee ensuite l emporte encore et ecrit son reglement), '
+                . 'payment_outcome_unknown si la tentative est sans issue (elle se declare).',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'vente.encaisser')",
+            processor: CancelTerminalPaymentProcessor::class,
         ),
         new Post(
             uriTemplate: '/ventes/{id}/valider',

@@ -102,7 +102,8 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
             ->setSeuilImpression(self::SEUIL_IMPRESSION)
             ->setSeuilAlerteRetrait('200.00')
             ->setMoyensAutorises(self::MOYENS)
-            ->setTpe([['marque' => 'ingenico', 'ref' => 'TPE-A1']]);
+            // Le terminal simulé : les tests de la caisse l'exercent (`X-Tpe-Simule`, `TpeMock::programmer()`).
+            ->setTpe(['connecteur' => 'simule', 'marque' => 'ingenico', 'ref' => 'TPE-A1']);
         if ($etabA instanceof Etablissement) {
             $pdv->setEtablissement($etabA);
         }

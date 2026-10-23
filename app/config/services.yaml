@@ -7,6 +7,9 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Le terminal de paiement d'un point de vente qui n'en déclare aucun (spec TPE lot 1 §5) : le
+    # terminal EXTERNE, déclaratif. Un paramètre, pas une variable d'environnement : rien à poser.
+    app.tpe.connecteur_par_defaut: externe
 
 services:
     # default configuration for services in *this* file
@@ -134,9 +137,12 @@ services:
     App\Vente\Port\RechercheSupportInterface: '@App\Vente\Adapter\RechercheSupportParSupport'
     # Historique d'achats par client (frontière M4, fiche 360°, §2.4 plan-crm.md).
     App\Vente\Port\HistoriqueVenteInterface: '@App\Vente\Adapter\HistoriqueVenteParClient'
-    # Connecteur TPE (Ingenico/Nayax/PAX) — simulateur (US-L2-07), qui REFUSE toute carte tant que
-    # TPE_SIMULE_AUTORISE n'est pas posé (test, démonstration en préprod). Aucun terminal réel.
+    # Le terminal SIMULÉ (connecteur « simule »), derrière le port — décoré en test (`BlockingTerminal`).
+    # Il REFUSE toute carte tant que TPE_SIMULE_AUTORISE n'est pas posé (test, démonstration en
+    # préprod). Le connecteur d'un point de vente se choisit par `TerminalRegistry`.
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
+    # Le chemin unique de l'issue d'un terminal (spec TPE lot 1) : connecteurs, webhooks, workers.
+    App\Vente\Tpe\TerminalOutcomeSink: '@App\Vente\Service\TerminalOutcomeRecorder'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'
 
@@ -428,6 +434,10 @@ services:
             - { name: 'doctrine.fixtures.purger_factory', alias: 'default' }
 
 when@test:
+    parameters:
+        # Les tests de la caisse exercent le terminal simulé : un point de vente qu'ils créent sans
+        # terminal le reçoit. Le terminal externe a ses propres tests (`ExternalTerminalTest`).
+        app.tpe.connecteur_par_defaut: simule
     services:
         App\Tests\Boutique\Support\MailCollector:
             public: true
