@@ -162,7 +162,7 @@ final class PaymentAttemptStore
      */
     private static function shownReason(?string $reason): ?string
     {
-        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\)(?: après l\'annulation)?|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?|Montant débité incohérent \([^)]*\)/u', $reason, $m) === 1
+        return $reason !== null && preg_match('/Accepté par le terminal \(réf\. [^)]*\) après [^.]*à rembourser\.|Accepté par le terminal \(réf\. [^)]*\)(?: après l\'annulation)?|Sans issue après \d+ s|le terminal a répondu « [a-z]+ »(?: \(réf\. [^)]*\))?|Montant débité incohérent \([^)]*\)/u', $reason, $m) === 1
             ? $m[0] : null;
     }
 
