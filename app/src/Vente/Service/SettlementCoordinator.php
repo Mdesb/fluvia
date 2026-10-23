@@ -11,8 +11,12 @@ use App\Vente\Entity\Vente;
 use App\Vente\Enum\PaymentAttemptStatus as Status;
 use App\Vente\Enum\StatutTPE;
 use App\Vente\Port\ReferentielReglementInterface;
+use App\Vente\Tpe\ExternalTerminal;
+use App\Vente\Tpe\ResultatTpe;
 use App\Vente\Tpe\TerminalAttempt;
+use App\Vente\Tpe\TerminalOutcomeSink;
 use App\Vente\Tpe\TerminalPaiementInterface;
+use App\Vente\Tpe\TerminalRegistry;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -67,7 +71,8 @@ final class SettlementCoordinator
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
         private readonly EventBus $bus,
-        private readonly TerminalPaiementInterface $terminal,
+        private readonly TerminalRegistry $terminals,
+        private readonly TerminalOutcomeSink $outcomes,
     ) {
     }
 
@@ -123,6 +128,8 @@ final class SettlementCoordinator
     }
 
     /**
+     * Une tentative qui attend le terminal EXTERNE se déclare d'abord ({@see declareExternal()}).
+     *
      * La déclaration du caissier sur une tentative sans issue connue (G-6, Q-A1, D122), seule sortie
      * d'un terminal muet. « accepte » écrit le règlement avec la clé et le montant de la tentative et
      * la référence du ticket CB, SANS terminal ; « non_passe » libère la vente. Qui, quand et quelle
@@ -140,6 +147,10 @@ final class SettlementCoordinator
      */
     public function declare(Vente $vente, array $donnees, Utilisateur $par): array
     {
+        $externe = $this->declareExternal($vente, $donnees, $par);
+        if ($externe !== null) {
+            return $externe;
+        }
         $issue = match ($donnees['issue'] ?? null) {
             'accepte' => Status::DeclaredAccepted,
             'non_passe' => Status::DeclaredNotProcessed,
@@ -344,7 +355,8 @@ final class SettlementCoordinator
             $this->handler->checkTerminalRequest($vente, $donnees);
             $pdv = $vente->getPointDeVente()
                 ?? throw new UnprocessableEntityHttpException('Aucun point de vente sur cette vente : aucun terminal à solliciter.');
-            $this->attempts->setConnector($tentative['id'], $this->terminal->connector());
+            $terminal = $this->terminals->forPointOfSale($pdv);
+            $this->attempts->setConnector($tentative['id'], $terminal->connector());
         } catch (\Throwable $e) {
             // Rien n'est parti : la vente ne reste pas tenue par une tentative sans effet.
             $this->attempts->move($tentative['id'], [Status::Pending], Status::Failed, reason: $e->getMessage());
@@ -353,7 +365,7 @@ final class SettlementCoordinator
         }
 
         try {
-            $this->terminal->demarrer(new TerminalAttempt($tentative['id'], $tentative['key'], $tentative['method'], $tentative['amount'], $pdv));
+            $terminal->demarrer(new TerminalAttempt($tentative['id'], $tentative['key'], $tentative['method'], $tentative['amount'], $pdv));
         } catch (\Throwable $e) {
             // Un 4xx dit que rien n'est parti (contrat de `TerminalPaiementInterface`) ; toute autre erreur
             // laisse l'issue inconnue. Faux si l'issue est déjà écrite : elle tient.
@@ -387,7 +399,8 @@ final class SettlementCoordinator
      */
     private function releaseIfStale(?array $tentative): ?Status
     {
-        $delai = ($tentative['status'] ?? null) === Status::Sent ? $this->terminal->staleAfterSeconds() : self::STALE_AFTER_SECONDS;
+        $delai = ($tentative['status'] ?? null) === Status::Sent
+            ? ($this->terminals->byName($tentative['connector'])?->staleAfterSeconds() ?? self::STALE_AFTER_SECONDS) : self::STALE_AFTER_SECONDS;
         if ($tentative === null || !\in_array($tentative['status'], [Status::Pending, Status::Sent], true)
             || $tentative['startedAt'] > new \DateTimeImmutable('-' . $delai . ' seconds')) {
             return $tentative['status'] ?? null;
@@ -529,7 +542,7 @@ final class SettlementCoordinator
         $pdv = $vente->getPointDeVente();
         try {
             if ($pdv !== null) {
-                $this->terminal->annuler(new TerminalAttempt($relue['id'], $relue['key'], $relue['method'], $relue['amount'], $pdv));
+                $this->terminals->byName($relue['connector'])?->annuler(new TerminalAttempt($relue['id'], $relue['key'], $relue['method'], $relue['amount'], $pdv));
             }
         } catch (\Throwable $e) {
             // Le terminal n'a pas pu être prévenu : la caisse cesse d'attendre quand même. S'il accepte ensuite, son acceptation gagne.
@@ -541,6 +554,64 @@ final class SettlementCoordinator
         }
 
         return ['attempt' => $this->attempts->byId($relue['id']) ?? $relue, 'dejaEnregistre' => false];
+    }
+
+    /**
+     * Le terminal EXTERNE (spec TPE lot 1 §5, CA-6) : relié à rien, il a rendu son issue au caissier,
+     * qui la déclare pendant l'attente — Accepté (référence du ticket CB obligatoire), Refusé ou Annulé.
+     * Cette déclaration EST l'issue du terminal : elle passe par le chemin de l'issue, signée, et
+     * dispute la tentative comme toute réponse (clé unique, passage conditionnel). Rejouée à
+     * l'identique, elle rend son issue.
+     *
+     * Nul quand la tentative n'attend pas le terminal externe : un terminal relié ne se déclare pas
+     * pendant qu'il attend, et une tentative sans issue se déclare par le chemin d'origine.
+     *
+     * @param array<string, mixed> $donnees { tentative, issue: accepte|refuse|annule, referenceCarte? }
+     *
+     * @return array{attempt: Attempt, status: Status, paiement: Paiement|null, dejaEnregistre: bool}|null
+     */
+    private function declareExternal(Vente $vente, array $donnees, Utilisateur $par): ?array
+    {
+        $tentative = $this->attemptOnSale($vente, $donnees['tentative'] ?? null);
+        if ($tentative === null || $tentative['connector'] !== ExternalTerminal::CONNECTOR) {
+            return null;
+        }
+        $statut = $this->releaseIfStale($tentative);
+        $tentative = $this->attempts->byId($tentative['id']) ?? $tentative;
+        if (\in_array($statut, [Status::Unresolved, Status::DeclaredAccepted, Status::DeclaredNotProcessed], true)) {
+            return null;
+        }
+
+        $reference = \is_string($donnees['referenceCarte'] ?? null) ? trim($donnees['referenceCarte']) : '';
+        $resultat = match ($donnees['issue'] ?? null) {
+            'accepte' => $reference !== '' && mb_strlen($reference) <= 64 ? new ResultatTpe(StatutTPE::Accepte, $reference)
+                : throw new UnprocessableEntityHttpException('« Accepté » exige la référence du ticket CB imprimé par le terminal (64 caractères au plus).'),
+            'refuse' => new ResultatTpe(StatutTPE::Refuse),
+            'annule', 'non_passe' => new ResultatTpe(StatutTPE::Annule),
+            default => throw new UnprocessableEntityHttpException('issue vaut « accepte », « refuse » ou « annule » : ce qu\'a rendu le terminal.'),
+        };
+        $attendu = match ($resultat->statut) {
+            StatutTPE::Accepte => Status::Accepted,
+            StatutTPE::Refuse => Status::Refused,
+            default => Status::Cancelled,
+        };
+        if ($statut === $attendu && ($attendu !== Status::Accepted || $tentative['cardReference'] === $reference)) {
+            return ['attempt' => $tentative, 'status' => $attendu, 'paiement' => $attendu === Status::Accepted ? $this->paymentOf($tentative) : null, 'dejaEnregistre' => true];
+        }
+        // « Annuler » pressé trop tôt : le terminal a pourtant accepté. L'acceptation gagne (CA-3), si la
+        // vente peut encore la recevoir — sinon la tentative le dit, « à rembourser ».
+        $acceptationTardive = $statut === Status::Cancelled && $attendu === Status::Accepted;
+        if ($statut !== Status::Sent && !$acceptationTardive) {
+            throw $statut === Status::Pending ? PaymentAttemptConflict::inProgress($tentative) : PaymentAttemptConflict::outcomeKnown($tentative);
+        }
+
+        $relue = $this->outcomes->record($tentative['id'], $resultat, $par->getId()) ?? $tentative;
+        // Une autre déclaration l'a précédée — même une autre « acceptée », sous une autre référence : elle tient.
+        if ($relue['status'] !== $attendu || ($attendu === Status::Accepted && $relue['cardReference'] !== $reference)) {
+            throw PaymentAttemptConflict::outcomeKnown($relue);
+        }
+
+        return ['attempt' => $relue, 'status' => $attendu, 'paiement' => $attendu === Status::Accepted ? $this->paymentOf($relue) : null, 'dejaEnregistre' => false];
     }
 
     /**
