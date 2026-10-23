@@ -8,10 +8,12 @@ use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\AxeCategorie;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
+use App\Vente\Service\ReceiptLegalMentions;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -47,7 +49,90 @@ final class SalesLinesReport
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly ReceiptLegalMentions $mentions,
     ) {
+    }
+
+    /**
+     * LES VENTES PAR ARTICLE : quantités, CA TTC et HT, par article et par catégorie, sur la période.
+     *
+     * La catégorie est le rayon du produit (ce que le caissier voit en caisse), à défaut sa catégorie
+     * comptable. Le HT se déduit du TTC ligne à ligne au taux du ticket (`ReceiptLegalMentions`) ; un
+     * article dont le taux est inconnu a un HT `null`, et le total HT le dit (`htComplet`).
+     *
+     * @return array{
+     *     articles: list<array{produit: string, article: string, categorie: string, quantite: int, totalTtc: string, totalHt: ?string, tauxTva: ?string}>,
+     *     categories: list<array{categorie: string, quantite: int, totalTtc: string, totalHt: ?string}>,
+     *     totalTtc: string, totalHt: string, htComplet: bool,
+     * }
+     */
+    public function salesByItem(Etablissement $etablissement, \DateTimeImmutable $du, \DateTimeImmutable $au): array
+    {
+        $articles = [];
+        foreach ($this->lignes($etablissement, $du, $au) as $l) {
+            $id = $l['produit'];
+            if (!isset($articles[$id])) {
+                $produit = $id === '' ? null : $this->em->getRepository(Produit::class)->find(Uuid::fromString($id));
+                $categorie = $produit?->getCategorieParAxe(AxeCategorie::Rayon) ?? $produit?->getCategorieParAxe(AxeCategorie::Comptable);
+                $articles[$id] = [
+                    'produit' => $id,
+                    'article' => $l['libelle'] !== 'Article' ? $l['libelle'] : ($produit?->getLibelleRecherche() ?? 'Article'),
+                    'categorie' => $categorie?->getLibelle() ?? 'Sans catégorie',
+                    'quantite' => 0,
+                    'ttc' => 0,
+                    'ht' => 0,
+                    'tauxTva' => $id === '' ? null : $this->mentions->tauxPourProduit($etablissement, $id),
+                ];
+            }
+            $ttc = (int) round(((float) $l['montant']) * 100);
+            $taux = $articles[$id]['tauxTva'];
+            $articles[$id]['quantite'] += $l['quantite'];
+            $articles[$id]['ttc'] += $ttc;
+            $articles[$id]['ht'] += $taux === null ? 0 : $ttc - (int) round($ttc * (float) $taux / (100 + (float) $taux));
+        }
+
+        $euros = static fn (int $c): string => number_format($c / 100, 2, '.', '');
+        $sortie = [];
+        $categories = [];
+        $totalTtc = 0;
+        $totalHt = 0;
+        $htComplet = true;
+        foreach ($articles as $a) {
+            $connu = $a['tauxTva'] !== null || $a['ttc'] === 0;
+            $htComplet = $htComplet && $connu;
+            $sortie[] = [
+                'produit' => $a['produit'],
+                'article' => $a['article'],
+                'categorie' => $a['categorie'],
+                'quantite' => $a['quantite'],
+                'totalTtc' => $euros($a['ttc']),
+                'totalHt' => $connu ? $euros($a['ht']) : null,
+                'tauxTva' => $a['tauxTva'],
+            ];
+            $c = $a['categorie'];
+            $categories[$c] ??= ['categorie' => $c, 'quantite' => 0, 'ttc' => 0, 'ht' => 0, 'complet' => true];
+            $categories[$c]['quantite'] += $a['quantite'];
+            $categories[$c]['ttc'] += $a['ttc'];
+            $categories[$c]['ht'] += $a['ht'];
+            $categories[$c]['complet'] = $categories[$c]['complet'] && $connu;
+            $totalTtc += $a['ttc'];
+            $totalHt += $a['ht'];
+        }
+        usort($sortie, static fn (array $x, array $y): int => [$x['categorie'], $x['article']] <=> [$y['categorie'], $y['article']]);
+        ksort($categories, \SORT_STRING);
+
+        return [
+            'articles' => $sortie,
+            'categories' => array_values(array_map(static fn (array $c): array => [
+                'categorie' => $c['categorie'],
+                'quantite' => $c['quantite'],
+                'totalTtc' => $euros($c['ttc']),
+                'totalHt' => $c['complet'] ? $euros($c['ht']) : null,
+            ], $categories)),
+            'totalTtc' => $euros($totalTtc),
+            'totalHt' => $euros($totalHt),
+            'htComplet' => $htComplet,
+        ];
     }
 
     /**

@@ -80,6 +80,33 @@ final class SalesStatisticsTest extends ComptaApiTestCase
         self::assertStringNotContainsString('"total"', (string) $client->getResponse()?->getContent(false));
     }
 
+    public function testSalesByItemGiveQuantitiesAndRevenueWithAndWithoutTax(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $payee = $this->creerVenteValidee($client, $entete, quantite: 2, sessionId: $session['id']);
+        $this->venteGratuite($client, $entete, $session['id'], 3);
+
+        $jour = $this->aujourdhui();
+        $reponse = $client->request('GET', sprintf('/reporting/ventes-par-article?du=%s&au=%s', $jour, $jour), $entete);
+        self::assertResponseIsSuccessful();
+        $r = $reponse->toArray();
+
+        self::assertCount(1, $r['articles'], 'Un seul article vendu, payé et offert.');
+        $article = $r['articles'][0];
+        self::assertSame(5, $article['quantite']);
+        self::assertSame($payee['total'], $article['totalTtc'], 'Le gratuit ne change pas le chiffre d\'affaires.');
+        self::assertNotNull($article['tauxTva'], 'Le produit vendu a une catégorie comptable mappée.');
+        $ttc = (int) round((float) $article['totalTtc'] * 100);
+        $ht = (int) round((float) $article['totalHt'] * 100);
+        self::assertSame($ttc - (int) round($ttc * (float) $article['tauxTva'] / (100 + (float) $article['tauxTva'])), $ht);
+        self::assertLessThan($ttc, $ht, 'Témoin : le HT est bien hors taxes.');
+        self::assertTrue($r['htComplet']);
+        self::assertSame($article['totalTtc'], $r['totalTtc']);
+        self::assertSame(5, $r['categories'][0]['quantite']);
+        self::assertNotSame('', $article['categorie']);
+    }
+
     public function testBadParametersAreRejected(): void
     {
         [$client, $entete] = $this->adminSurA();

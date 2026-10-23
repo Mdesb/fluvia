@@ -52,6 +52,19 @@ final class SalesStatisticsController
         ] + $this->rapport->ticketsIssued($etablissement, $du, $au, $par));
     }
 
+    #[Route('/reporting/ventes-par-article', name: 'reporting_ventes_par_article', methods: ['GET'])]
+    public function salesByItem(Request $request): JsonResponse
+    {
+        $etablissement = $this->etablissement();
+        [$du, $au] = $this->periode($request);
+
+        return new JsonResponse([
+            'etablissement' => $etablissement->getNom(),
+            'du' => $du->format('Y-m-d'),
+            'au' => $au->format('Y-m-d'),
+        ] + $this->rapport->salesByItem($etablissement, $du, $au));
+    }
+
     private function etablissement(): Etablissement
     {
         if (!$this->security->isGranted('PERM', 'reporting.lire')) {
