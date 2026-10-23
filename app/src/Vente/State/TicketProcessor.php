@@ -124,6 +124,9 @@ final class TicketProcessor implements ProcessorInterface
             'renvoiPropose' => $renvoiPropose,
             'renvoye' => $renvoye,
             'canal' => $renvoye ? ($corps['canal'] ?? 'email') : null,
+            // Les mentions obligatoires du papier (émetteur, TVA par taux) : `ReceiptLegalMentions`.
+            'emetteur' => $document['emetteur'] ?? null,
+            'ventilationTva' => $document['ventilationTva'] ?? [],
         ], JsonResponse::HTTP_OK);
     }
 }
