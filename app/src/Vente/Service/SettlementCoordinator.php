@@ -42,7 +42,7 @@ use Symfony\Component\Uid\Uuid;
  *
  * Un terminal muet au-delà du délai de son connecteur laisse la tentative `unresolved` : la vente reste
  * tenue, rien n'y repart au terminal, et la seule sortie est la déclaration du caissier ({@see declare()},
- * Q-A1, D122).
+ * Q-A1, D122). Pendant l'attente, l'écran la scrute ({@see judged()}) et « Annuler » la libère ({@see cancel()}).
  *
  * La synchronisation hors ligne et le no-show appellent `PaiementHandler::encaisser()` directement,
  * sans tentative : la première est inchangée (Q-A2) ; le no-show se sérialise sur sa facturation, dans
@@ -149,12 +149,9 @@ final class SettlementCoordinator
         if ($issue === Status::DeclaredAccepted && ($reference === '' || mb_strlen($reference) > 64)) {
             throw new UnprocessableEntityHttpException('« Accepté » exige la référence du ticket CB imprimé par le terminal (64 caractères au plus).');
         }
-        $id = \is_string($donnees['tentative'] ?? null) && Uuid::isValid($donnees['tentative'])
-            ? PaymentAttemptStore::hex(Uuid::fromString($donnees['tentative'])) : null;
-        $tentative = $id !== null ? $this->attempts->byId($id) : null;
-        if ($id === null || $tentative === null || $tentative['sale'] !== PaymentAttemptStore::hex($vente->getId())) {
-            throw new UnprocessableEntityHttpException('Aucune tentative de règlement de cet identifiant sur cette vente.');
-        }
+        $tentative = $this->attemptOnSale($vente, $donnees['tentative'] ?? null)
+            ?? throw new UnprocessableEntityHttpException('Aucune tentative de règlement de cet identifiant sur cette vente.');
+        $id = $tentative['id'];
 
         $statut = $this->releaseIfStale($tentative);
         // Rejouée à l'identique : son issue. Une autre référence CB n'est pas « la même » déclaration.
@@ -453,6 +450,85 @@ final class SettlementCoordinator
 
         return $tentative['requested'] !== null
             && $this->handler->requestedAmountCents($vente, $donnees) === $this->calculateur->centimes($tentative['requested']);
+    }
+
+    /**
+     * La tentative de cet identifiant (rendu à l'écran) si elle porte sur CETTE vente — une vente que
+     * le fournisseur a déjà trouvée dans le périmètre de l'appelant (cloisonnement, CA-8) ; sinon nulle.
+     *
+     * @return Attempt|null
+     */
+    public function attemptOnSale(Vente $vente, mixed $identifiant): ?array
+    {
+        $tentative = \is_string($identifiant) && Uuid::isValid($identifiant)
+            ? $this->attempts->byId(PaymentAttemptStore::hex(Uuid::fromString($identifiant))) : null;
+
+        return $tentative !== null && $tentative['sale'] === PaymentAttemptStore::hex($vente->getId()) ? $tentative : null;
+    }
+
+    /**
+     * Une tentative, son délai jugé — ce que l'écran scrute pendant l'attente du terminal (CA-1, CA-5).
+     *
+     * @param Attempt $tentative
+     *
+     * @return Attempt
+     */
+    public function judged(array $tentative): array
+    {
+        $this->releaseIfStale($tentative);
+
+        return $this->attempts->byId($tentative['id']) ?? $tentative;
+    }
+
+    /**
+     * « Annuler » pendant l'attente du terminal (CA-3). Le terminal est prié d'abandonner, et la
+     * tentative passe `cancelled` sans l'attendre : la vente est libérée. Si son issue est arrivée
+     * avant, elle tient (409 `payment_outcome_known`) ; si elle arrive après, une acceptation
+     * l'emporte encore ({@see TerminalOutcomeRecorder}) — le client a été débité. Rejouée, rend son issue.
+     *
+     * Une tentative `unresolved` ne s'annule pas : la carte a pu être débitée, elle se déclare.
+     *
+     * @param array<string, mixed> $donnees { tentative }
+     *
+     * @return array{attempt: Attempt, dejaEnregistre: bool}
+     *
+     * @throws PaymentAttemptConflict
+     */
+    public function cancel(Vente $vente, array $donnees): array
+    {
+        $tentative = $this->attemptOnSale($vente, $donnees['tentative'] ?? null);
+        if ($tentative === null || !$tentative['usesTerminal']) {
+            throw new UnprocessableEntityHttpException('Aucun règlement au terminal de cet identifiant sur cette vente.');
+        }
+        $statut = $this->releaseIfStale($tentative);
+        $relue = $this->attempts->byId($tentative['id']) ?? $tentative;
+        if ($statut === Status::Cancelled) {
+            return ['attempt' => $relue, 'dejaEnregistre' => true];
+        }
+        if ($statut !== Status::Sent) {
+            throw match ($statut) {
+                Status::Pending => PaymentAttemptConflict::inProgress($relue),
+                Status::Unresolved => PaymentAttemptConflict::outcomeUnknown($relue),
+                default => PaymentAttemptConflict::outcomeKnown($relue),
+            };
+        }
+
+        $raison = null;
+        $pdv = $vente->getPointDeVente();
+        try {
+            if ($pdv !== null) {
+                $this->terminal->annuler(new TerminalAttempt($relue['id'], $relue['key'], $relue['method'], $relue['amount'], $pdv));
+            }
+        } catch (\Throwable $e) {
+            // Le terminal n'a pas pu être prévenu : la caisse cesse d'attendre quand même. S'il accepte ensuite, son acceptation gagne.
+            $raison = 'Annulation non transmise au terminal : ' . $e->getMessage();
+        }
+        if (!$this->attempts->move($relue['id'], [Status::Sent], Status::Cancelled, StatutTPE::Annule, $raison)) {
+            // L'issue est arrivée entre la lecture et l'annulation : elle tient.
+            throw PaymentAttemptConflict::outcomeKnown($this->attempts->byId($relue['id']) ?? $relue);
+        }
+
+        return ['attempt' => $this->attempts->byId($relue['id']) ?? $relue, 'dejaEnregistre' => false];
     }
 
     /**
