@@ -658,6 +658,18 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .tqr { display: flex; align-items: center; gap: var(--esp-large); margin-top: var(--esp-bloc); padding-top: var(--esp-bloc); border-top: 1px solid var(--line); }
 .caisse-rayons { flex-wrap: wrap; gap: var(--esp-normal); margin-bottom: var(--esp-normal); }
 .ticket-actions { display: flex; gap: var(--esp-normal); margin-top: var(--esp-normal); flex-wrap: wrap; }
+/* Statistiques de vente (Reporting) */
+.stats-ventes { margin-bottom: var(--esp-bloc); }
+.stats-filtres { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-large); margin-bottom: var(--esp-large); }
+.stats-filtres .field { margin: 0; }
+.stats-attente { min-height: 120px; }
+/* Mentions du billet et du ticket (l'impression 80 mm a sa propre feuille : `thermalPrint.js`). */
+.ticket .t-etab { font-weight: 800; color: var(--ink); }
+.ticket .t-date, .ticket .t-emetteur { font-size: var(--txt-petit); color: var(--ink-soft); }
+.ticket .t-emetteur { margin-bottom: var(--esp-normal); }
+.ticket .t-gratuit { font-weight: 800; font-size: var(--txt-grand); color: var(--ink); margin-top: var(--esp-normal); }
+.ticket .t-code { font-size: var(--txt-mini); word-break: break-all; }
+.ticket .t-tva { border-top: 1px dashed var(--line); margin-top: var(--esp-serre); padding-top: var(--esp-serre); font-size: var(--txt-petit); }
 .ticket-ok { width: 26px; height: 26px; border-radius: 50%; background: var(--good-bg); color: var(--good); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
 
 /* ---- Clients / Fiche 360 ---- */

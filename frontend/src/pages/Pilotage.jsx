@@ -10,6 +10,7 @@ import TableauxDeBord from '../components/TableauxDeBord.jsx'
 import RapportsPlanifies from '../components/RapportsPlanifies.jsx'
 import ExportsAnalyse from '../components/ExportsAnalyse.jsx'
 import ReferentielIndicateurs from '../components/ReferentielIndicateurs.jsx'
+import SalesStatistics from '../components/SalesStatistics.jsx'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges, nonLu }) {
@@ -276,6 +277,9 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
           tableau de bord d'etablissement et la supervision, rien d'autre -- et `api.indicateurs()`
           etait declare dans le client HTTP, appele par zero ecran. La route de l'explorateur
           existait aussi, complete. Ce qui manquait etait un endroit d'ou s'en servir. */}
+      {/* Billets délivrés et ventes par article : ce que le régisseur rend à sa collectivité. Lu sur
+          les lignes de vente, pas sur la fréquentation ci-dessus (les passages aux portes). */}
+      <SalesStatistics etabActif={etabActif} />
       <ConsolidationPerimetre etabActif={etabActif} etablissements={etablissements} />
       <ExplorateurIndicateurs etabActif={etabActif} etablissements={etablissements} />
       <TableauxDeBord
