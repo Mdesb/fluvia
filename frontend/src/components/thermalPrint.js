@@ -37,6 +37,7 @@ body { width: 80mm; padding: 2mm 4mm; font: 11pt/1.3 Arial, Helvetica, sans-seri
 .t-tva .trow span:first-child { flex: 1; }
 .tqr { display: flex; flex-direction: column; align-items: center; gap: 1mm; margin-top: 2mm; padding-top: 2mm; border-top: 1px dashed #000; }
 .tqr img { width: 38mm !important; height: 38mm !important; border-radius: 0 !important; }
+.t-terminal { white-space: pre-wrap; font-family: "Courier New", monospace; font-size: 9pt; border-top: 1px dashed #000; margin-top: 2mm; padding-top: 2mm; }
 .t-code { word-break: break-all; text-align: center; font-family: "Courier New", monospace; }
 .hint { color: #000; }
 `
