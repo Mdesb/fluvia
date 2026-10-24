@@ -90,6 +90,9 @@ if (!existsSync('node_modules')) {
   console.log('Avertissements du bundler : non exécuté — pas de `node_modules` dans cet arbre.')
   console.log("  Un build impossible déclarerait « aucun avertissement » sans avoir rien construit.")
   console.log('  Le contrôle tourne dans `./bin/garde-fous.sh` et en pre-commit.')
+  // Le lanceur compte les abstentions grace a ce marqueur (voir `bin/garde-fous.sh`). Hors
+  // du lanceur -- appel direct, hooks -- la variable est absente et rien n'est imprime.
+  if (process.env.GARDE_FOU_MARQUEUR_ABSTENTION) console.log(process.env.GARDE_FOU_MARQUEUR_ABSTENTION)
   process.exit(0)
 }
 
