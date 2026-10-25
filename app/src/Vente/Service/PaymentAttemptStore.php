@@ -247,6 +247,17 @@ final class PaymentAttemptStore
         );
     }
 
+    /**
+     * Le statut de la tentative, relu SOUS VERROU (`FOR UPDATE`) : à n'appeler que dans une transaction,
+     * qui décide alors sur ce que la base tient, sans qu'aucun autre passage ne s'intercale.
+     */
+    public function lockStatus(string $id): ?PaymentAttemptStatus
+    {
+        $statut = $this->connection->fetchOne('SELECT status FROM sale_payment_attempt WHERE id = UNHEX(:id) FOR UPDATE', ['id' => $id]);
+
+        return \is_string($statut) ? PaymentAttemptStatus::from($statut) : null;
+    }
+
     /** Le montant de l'effet, une fois la vente relue ; faux si la tentative n'est plus `pending`. */
     public function setAmount(string $id, string $amount): bool
     {

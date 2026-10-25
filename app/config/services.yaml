@@ -457,3 +457,8 @@ when@test:
         App\Tests\Vente\Support\FailingWriteListener:
             public: true
             tags: [{ name: doctrine.event_listener, event: postPersist }]
+        # Glisse le geste d'une autre connexion au chargement d'une entité (course D1 du lot TPE) ;
+        # désarmé tant qu'un test ne l'arme pas.
+        App\Tests\Vente\Support\InterleaveOnLoad:
+            public: true
+            tags: [{ name: doctrine.event_listener, event: postLoad }]
