@@ -14,10 +14,13 @@ use Doctrine\Migrations\AbstractMigration;
  * la validation émet déjà un support (et un code) par unité. Avec l'option, chaque unité sort sur son
  * propre billet, avec son propre code.
  *
+ * Horodatée APRÈS le lot terminal de paiement (Version20261023130000 réécrit `tpe` sur la même
+ * table) : la séquence se joue dans l'ordre où elle a été écrite.
+ *
  * Sans perte : une colonne s'ajoute, à faux par défaut. Les points de vente existants gardent le
  * billet récapitulatif ; rien ne change tant que personne n'active l'option.
  */
-final class Version20261023095000 extends AbstractMigration
+final class Version20261025090000 extends AbstractMigration
 {
     public function getDescription(): string
     {

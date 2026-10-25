@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Platform\Event;
 
 use App\Platform\Event\Exception\EventBusOverflowException;
+use App\Platform\Module\ModuleGuard;
+use Psr\EventDispatcher\StoppableEventInterface;
+use Symfony\Component\EventDispatcher\Debug\WrappedListener;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface as ListenerRegistry;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -37,6 +41,7 @@ final class SymfonyEventBus implements EventBus
     public function __construct(
         private readonly EventDispatcherInterface $dispatcher,
         private readonly int $maxDepth = self::DEFAULT_MAX_DEPTH,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -57,7 +62,7 @@ final class SymfonyEventBus implements EventBus
         $this->publishing[] = $event->name->value;
 
         try {
-            $this->dispatcher->dispatch($event, $event->name->value);
+            $this->dispatch($event);
         } finally {
             // `finally` et non `catch` : l'exception d'un abonné doit remonter intacte à l'émetteur
             // (RG-PLAT-05). On rétablit seulement le compteur, sinon une exception laisserait le bus
@@ -65,5 +70,46 @@ final class SymfonyEventBus implements EventBus
             --$this->depth;
             array_pop($this->publishing);
         }
+    }
+
+    /**
+     * Recentrage, PR 2 (d) — un écouteur d'un module masqué n'est pas appelé pour un établissement où
+     * ce module est éteint. Un seul endroit pour tous : un écouteur ajouté demain dans `App\SmartFlow`
+     * est filtré sans rien déclarer. L'appartenance d'un écouteur se lit par sa classe (`ModuleGuard`).
+     *
+     * Sans garde (bus construit à la main dans un test unitaire), le comportement d'origine.
+     */
+    private function dispatch(DomainEvent $event): void
+    {
+        $name = $event->name->value;
+        if ($this->moduleGuard === null || !$this->dispatcher instanceof ListenerRegistry) {
+            $this->dispatcher->dispatch($event, $name);
+
+            return;
+        }
+
+        foreach ($this->dispatcher->getListeners($name) as $listener) {
+            if ($event instanceof StoppableEventInterface && $event->isPropagationStopped()) {
+                break;
+            }
+            if ($this->moduleGuard->allows(self::classOf($listener), $event->tenant->establishmentId)) {
+                $listener($event, $name, $this->dispatcher);
+            }
+        }
+    }
+
+    private static function classOf(callable $listener): string
+    {
+        if ($listener instanceof WrappedListener) {
+            $listener = $listener->getWrappedListener();
+        }
+        if (\is_array($listener)) {
+            return \is_object($listener[0]) ? $listener[0]::class : (string) $listener[0];
+        }
+        if ($listener instanceof \Closure) {
+            return (new \ReflectionFunction($listener))->getClosureScopeClass()?->getName() ?? '';
+        }
+
+        return \is_object($listener) ? $listener::class : '';
     }
 }

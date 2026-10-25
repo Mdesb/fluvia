@@ -7,6 +7,7 @@
 // Le NOYAU, pas `index.js` : il n'importe aucun catalogue JSON, que `node --test` (Node 20) refuse
 // sans attribut d'import — et `src/api/*.test.js` charge ce fichier. Les catalogues sont
 // enregistrés par `i18n/index.js`, que l'application charge avant toute requête.
+import { NETWORK_UNREACHABLE } from './counterWording.js'
 import { activeLanguage, translateApiError } from '../i18n/core.js'
 
 const TOKEN_KEY = 'billetterie.token'
@@ -261,10 +262,13 @@ async function request(
         null,
       )
     }
+    // Le serveur n'a pas pu être joint du tout. Le message s'adresse à l'agent au guichet (il
+    // nommait « l'API » et « http://localhost:8080 ») ; le code permet aux écrans d'en dire plus
+    // sans comparer des phrases (`counterWording.js`).
     throw new ApiError(
-      "Impossible de joindre l'API. Vérifiez que le back tourne sur http://localhost:8080.",
+      'Connexion perdue. Vérifiez internet, puis réessayez.',
       0,
-      null,
+      { code: NETWORK_UNREACHABLE },
     )
   } finally {
     if (timer) clearTimeout(timer)
@@ -660,9 +664,9 @@ export const api = {
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),
-  // Un règlement CB/chèque peut être simulé via l'en-tête X-Tpe-Simule (accepte|refuse|annule|timeout).
-  // Le dialogue TPE peut prendre plusieurs secondes : coupe-circuit large (45 s) pour éviter le
-  // spinner infini si le TPE ne répond pas, sans couper une transaction encore en cours.
+  // Une carte part au terminal et rend la main : 202 `enAttente` avec la tentative à scruter (spec TPE
+  // lot 1). Au terminal SIMULÉ seulement, l'en-tête X-Tpe-Simule choisit l'issue (accepte|refuse|
+  // annule|timeout|attente). Coupe-circuit large (45 s) : la réponse est immédiate en temps normal.
   // ⚠ Passé ce délai, le règlement a PEUT-ÊTRE abouti : on ne dit jamais « réessayez » (G-2). Les
   // écrans passent par `paymentIntent.js`, qui le redemande avec la même clé.
   payer: (venteId, corps, headers) =>
@@ -674,9 +678,15 @@ export const api = {
       timeoutMessage: "Résultat inconnu : le serveur n'a pas répondu à temps. Le règlement est peut-être "
         + 'passé — ne l\'encaissez pas une seconde fois ; il est vérifié avec la même clé.',
     }),
-  // Ce qu'affiche un terminal resté muet (Q-A1) : `{ tentative, issue: accepte|non_passe, referenceCarte? }`.
+  // Ce qu'affiche un terminal resté muet (Q-A1) : `{ tentative, issue: accepte|non_passe, referenceCarte? }` ;
+  // au terminal EXTERNE, pendant l'attente : `issue: accepte|refuse|annule` (spec TPE lot 1).
   declarerReglement: (venteId, corps) =>
     request(`/api/ventes/${venteId}/declarer-reglement`, { method: 'POST', body: corps, timeoutMs: 20000 }),
+  // L'attente du terminal (spec TPE lot 1) : la tentative scrutée, et « Annuler ».
+  reglementTerminal: (venteId, tentativeId) =>
+    request(`/api/ventes/${venteId}/reglement-terminal`, { query: tentativeId ? { tentative: tentativeId } : undefined, timeoutMs: 10000 }),
+  annulerReglement: (venteId, tentativeId) =>
+    request(`/api/ventes/${venteId}/annuler-reglement`, { method: 'POST', body: { tentative: tentativeId }, timeoutMs: 20000 }),
   annulerVente: (venteId, motif) =>
     request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: { motif }, timeoutMs: 20000 }),
   // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
@@ -1755,6 +1765,9 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // Billets délivrés et ventes par article de l'établissement actif (lignes de vente validées).
+  billetsDelivres: (params) => request('/reporting/billets-delivres', { query: params }),
+  ventesParArticle: (params) => request('/reporting/ventes-par-article', { query: params }),
   // LES DEUX CONSOLIDATIONS, QUE PERSONNE N'APPELAIT. Le tableau de bord d'UN site etait branche
   // depuis l'origine ; ceux de la region et du groupe — classement des sites, ecart vs objectif,
   // ecart vs n-1, badge de fraicheur — ne l'etaient par aucun ecran. C'est pourtant la vue d'un

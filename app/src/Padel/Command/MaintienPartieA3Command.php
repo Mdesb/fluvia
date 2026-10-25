@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Padel\Command;
 
+use App\Platform\Module\ModuleGuard;
 use App\Padel\Entity\ReservationPadel;
 use App\Padel\Enum\StatutPartieOuverte;
 use App\Padel\Service\RepartitionSurcoutHandler;
@@ -25,6 +26,7 @@ final class MaintienPartieA3Command extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RepartitionSurcoutHandler $repartition,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -50,6 +52,10 @@ final class MaintienPartieA3Command extends Command
 
         $traitees = 0;
         foreach ($parties as $partie) {
+            // Recentrage, PR 2 (e) : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $partie->getReservation()?->getEtablissement()) === false) {
+                continue;
+            }
             $creneau = $partie->getReservation()?->getCreneau();
             if ($creneau === null || $creneau->getDebut() > $maintenant) {
                 continue;

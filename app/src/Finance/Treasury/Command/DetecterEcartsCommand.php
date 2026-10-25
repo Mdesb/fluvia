@@ -11,6 +11,7 @@ use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Module\ModuleGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -41,6 +42,7 @@ final class DetecterEcartsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EventBus $eventBus,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -70,6 +72,10 @@ final class DetecterEcartsCommand extends Command
             $compte = $ligne->getStatementImport()?->getBankAccount();
             $etablissement = $compte?->getEstablishment();
             if ($compte === null || $etablissement === null) {
+                continue;
+            }
+            // Recentrage : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $etablissement) === false) {
                 continue;
             }
 

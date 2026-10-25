@@ -7,6 +7,7 @@ import Cloche from './Cloche.jsx'
 import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 import Icon from './Icon.jsx'
 import { HoteConfirmation } from './Confirmation.jsx'
+import { moduleAllowsEntry } from './moduleMenu.js'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -318,6 +319,8 @@ export default function AppShell({
   onNav,
   onLogout,
   capacites = [],
+  // `modulesActifs` de /me. Absent : aucune entrée n'est cachée pour raison de module.
+  modules,
   droits = [],
   estAdmin = false,
   // ⚠ LA NAVIGATION EST PARAMETRABLE, ET SA VALEUR PAR DEFAUT EST CELLE DU BACK-OFFICE.
@@ -423,6 +426,8 @@ export default function AppShell({
       items: grp.items.filter(
         (it) =>
           (!it.cap || capacites.includes(it.cap)) &&
+          // Recentrage : l'entrée d'un module masqué n'apparaît que s'il est actif (`moduleMenu.js`).
+          moduleAllowsEntry(it.id, modules) &&
           (!it.perm || aLeDroit(droits, it.perm)) &&
           (!it.perms || aUnDesDroits(droits, it.perms)) &&
           (!it.admin || estAdmin),
@@ -443,7 +448,7 @@ export default function AppShell({
     : navSource
         .map((grp) => ({
           ...grp,
-          items: grp.items.filter((it) => !it.cap && !it.admin),
+          items: grp.items.filter((it) => !it.cap && !it.admin && moduleAllowsEntry(it.id, modules)),
         }))
         .filter((grp) => grp.items.length > 0)
 

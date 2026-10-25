@@ -12,6 +12,7 @@ use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Module\ModuleGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -52,6 +53,7 @@ final class CheckThresholdsCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly ThresholdBreachProjectionCalculator $calculator,
         private readonly EventBus $eventBus,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -76,6 +78,10 @@ final class CheckThresholdsCommand extends Command
         foreach ($reglages as $reglage) {
             $etablissement = $reglage->getEstablishment();
             if ($etablissement === null) {
+                continue;
+            }
+            // Recentrage : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $etablissement) === false) {
                 continue;
             }
 

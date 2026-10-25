@@ -209,4 +209,32 @@ final class PartieOuverteTest extends PadelApiTestCase
         $client->request('POST', '/api/padel/niveaux/' . $idNiveau . '/valider', $entete + ['json' => []]);
         self::assertResponseIsSuccessful();
     }
+
+    /**
+     * Recentrage, PR 2 (e) — `padel:parties:maintenir-a-3` ne traite que les établissements où Padel
+     * est allumé. La même partie à trois que CA-4 : éteint pour A, elle n'est pas maintenue ; allumé,
+     * elle l'est (témoin).
+     */
+    public function testMaintainingAtThreeSkipsAnEstablishmentWherePadelIsOff(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $idPartie = $this->creerPartieOuverte($client, $entete, 2);
+        $this->validerNiveau($client, $entete, 3, 5);
+        $client->request('POST', '/api/padel/parties-ouvertes/' . $idPartie . '/rejoindre', $entete + [
+            'json' => ['joueur' => '/api/beneficiaires/' . $this->idJoueur(3)],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        /** @var MaintienPartieA3Command $commande */
+        $commande = static::getContainer()->get(MaintienPartieA3Command::class);
+        $apres = (new \DateTimeImmutable('next monday'))->setTime(19, 1);
+
+        $this->switchModule('padel', false, \App\DataFixtures\SocleFixtures::ETAB_A_NOM);
+        self::assertSame(0, $commande->traiter($apres), 'éteint pour A : aucune partie traitée');
+
+        $this->switchModule('padel', true, \App\DataFixtures\SocleFixtures::ETAB_A_NOM);
+        self::assertSame(1, $commande->traiter($apres), 'témoin : allumé, la partie est maintenue à 3');
+    }
 }

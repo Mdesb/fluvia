@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Social\MessageHandler;
 
+use App\Platform\Module\ModuleGuard;
 use App\Social\Crypto\SocialTokenCipher;
 use App\Social\Dto\PublicationRequest;
 use App\Social\Entity\SocialAccount;
@@ -59,6 +60,7 @@ final class PublishSocialPublicationHandler
         private readonly EntityManagerInterface $em,
         private readonly SocialPublisherRegistry $registry,
         private readonly SocialTokenCipher $cipher,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -74,6 +76,17 @@ final class PublishSocialPublicationHandler
             return;
         }
         if ($publication->getStatus()->isTerminal()) {
+            return;
+        }
+
+        // Recentrage, PR 2 (d) : un message en file pour un établissement où Social est éteint ne
+        // part pas. La publication est SAUTÉE avec son motif plutôt que laissée « en attente » pour
+        // toujours : un état qui attend ce qui n'arrivera pas ne se lit pas. Sans établissement
+        // lisible, les contrôles ci-dessous tranchent.
+        $establishment = $publication->getPost()?->getEstablishment();
+        if ($establishment !== null && $this->moduleGuard?->allows(self::class, $establishment) === false) {
+            $this->finish($publication, SocialPublicationStatus::Skipped, 'module_disabled', 'Module Social éteint pour cet établissement au moment de l envoi.');
+
             return;
         }
 
