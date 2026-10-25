@@ -74,3 +74,30 @@ export function vatRows(ventilation) {
     return { libelle, ht: nombre(v?.totalHt), tva: nombre(v?.totalTva), ttc: nombre(v?.totalTtc) }
   })
 }
+
+/**
+ * LES BILLETS À IMPRIMER POUR UNE VENTE.
+ *
+ * Par défaut, un billet récapitulatif : toutes les lignes, et le code du premier support. Avec
+ * l'option du point de vente « un billet par unité », un billet par support émis — la validation en
+ * émet déjà un par unité, chacun avec son code. Chaque billet dit « 1 × » le libellé de SA ligne.
+ * Un support sans ligne connue garde le libellé de la vente plutôt que d'en deviner un.
+ *
+ * @returns {{code: string, lignes: {quantite: number, libelle: string}[]}[]}
+ */
+export function passesToPrint(ticket) {
+  if (!ticket?.codeSupport) return []
+  const supports = (ticket.supports || []).filter((s) => s?.code)
+  if (!ticket.billetParUnite || supports.length === 0) {
+    return [{ code: ticket.codeSupport, lignes: ticket.lignes || [] }]
+  }
+  return supports.map((s) => {
+    const ligne = (ticket.lignes || []).find((l) => l.id && l.id === s.ligne)
+    return {
+      code: s.code,
+      lignes: ligne
+        ? [{ quantite: 1, libelle: ligne.libelle }]
+        : (ticket.lignes || []).map((l) => ({ quantite: l.quantite, libelle: l.libelle })),
+    }
+  })
+}

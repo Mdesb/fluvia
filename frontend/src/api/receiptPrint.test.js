@@ -1,7 +1,7 @@
 // Mentions imprimées du billet et du ticket. Lancer : `cd frontend && node --test src/api/receiptPrint.test.js`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isFree, issuerLines, printedDateTime, thermalPageCss, vatRows, venueName } from './receiptPrint.js'
+import { isFree, issuerLines, passesToPrint, printedDateTime, thermalPageCss, vatRows, venueName } from './receiptPrint.js'
 
 const emetteur = {
   nom: 'CIAP Casa Xanxo',
@@ -59,4 +59,32 @@ test('la TVA se ventile par taux, et un taux inconnu ne s’imprime pas « 0 % �
     { libelle: 'TVA non renseignée', ht: 3, tva: 0, ttc: 3 },
   ])
   assert.deepEqual(vatRows(undefined), [])
+})
+
+test('un billet récapitulatif par défaut, avec le code du premier support', () => {
+  const ticket = {
+    codeSupport: 'C1',
+    lignes: [{ id: 'l1', quantite: 3, libelle: 'Entrée' }],
+    supports: [{ code: 'C1', ligne: 'l1' }, { code: 'C2', ligne: 'l1' }, { code: 'C3', ligne: 'l1' }],
+    billetParUnite: false,
+  }
+  assert.deepEqual(passesToPrint(ticket), [{ code: 'C1', lignes: [{ id: 'l1', quantite: 3, libelle: 'Entrée' }] }])
+})
+
+test('« un billet par unité » : 3 unités, 3 billets, chacun son code et « 1 × » sa ligne', () => {
+  const ticket = {
+    codeSupport: 'C1',
+    lignes: [{ id: 'l1', quantite: 2, libelle: 'Entrée' }, { id: 'l2', quantite: 1, libelle: 'Visite guidée' }],
+    supports: [{ code: 'C1', ligne: 'l1' }, { code: 'C2', ligne: 'l1' }, { code: 'C3', ligne: 'l2' }],
+    billetParUnite: true,
+  }
+  assert.deepEqual(passesToPrint(ticket), [
+    { code: 'C1', lignes: [{ quantite: 1, libelle: 'Entrée' }] },
+    { code: 'C2', lignes: [{ quantite: 1, libelle: 'Entrée' }] },
+    { code: 'C3', lignes: [{ quantite: 1, libelle: 'Visite guidée' }] },
+  ])
+})
+
+test('sans support, aucun billet : une vente de boutique n’imprime pas un billet vide', () => {
+  assert.deepEqual(passesToPrint({ codeSupport: null, lignes: [], billetParUnite: true }), [])
 })

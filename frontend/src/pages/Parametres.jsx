@@ -446,6 +446,13 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
           : "Ne cochez rien pour accepter tous les moyens déclarés. Cochez-en pour n'autoriser "
             + "que ceux-là : un caissier qui tentera un autre moyen se verra refuser l'encaissement.",
       },
+      {
+        nom: 'unBilletParUnite',
+        libelle: 'Un billet par unité',
+        type: 'bool',
+        aide: 'Coché : vendre 3 entrées imprime 3 billets séparés, chacun avec son propre QR code. '
+          + 'Décoché : un seul billet « 3 × Entrée », avec le QR du premier.',
+      },
       // LE TERMINAL DE PAIEMENT EST UN RÉGLAGE, PLUS UNE CASE (spec TPE lot 1 §6).
       //
       // Le serveur attend `{ connecteur, marque?, ref? }` ; la case « un terminal est rattaché »
