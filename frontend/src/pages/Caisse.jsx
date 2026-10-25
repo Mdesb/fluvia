@@ -20,6 +20,8 @@ import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
+import TerminalWait from '../components/TerminalWait.jsx'
+import { attemptPhase, createPoller } from '../api/terminalWait.js'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import { screenAfterValidation, validateCart } from '../api/validateCart.js'
 import { saleErrorMessage } from '../api/counterWording.js'
@@ -125,6 +127,17 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Le règlement sans issue de la vente en cours (`paymentIntent.js`), et la tentative à déclarer.
   const [attente, setAttente] = useState(null)
   const [declaration, setDeclaration] = useState(null) // { venteId, tentative, erreur? }
+  // LA CARTE PARTIE AU TERMINAL, SANS ISSUE ENCORE (spec TPE lot 1) : `TerminalWait` la scrute. Son
+  // intention reste dans l'onglet (`paymentIntent.js`) : un F5 retrouve la même attente.
+  const [attenteTerminal, setAttenteTerminal] = useState(null) // { venteId, numero, tentative, paiementsPrecedents, lignes }
+  // Après « Annuler », le terminal peut encore accepter (CA-3) : une veille de deux minutes.
+  const [veille, setVeille] = useState(null) // { venteId, tentativeId }
+  // Les tickets client rendus par le terminal pendant la vente : imprimés avec le ticket de caisse.
+  // ⚠ UNE RÉFÉRENCE, PAS UN ÉTAT : le règlement qui solde la vente la valide dans le même geste, et
+  // `validerVente` lirait un état pas encore appliqué — le ticket sortait sans celui du terminal
+  // (constaté à l'écran, pas déduit).
+  const ticketsTerminal = useRef({}) // venteId → [texte]
+  const venteCourante = useRef(null)
   // Un double clic arrive avant que `busy` ne grise le bouton : le second ouvrirait une seconde vente.
   const reglementEnCours = useRef(false)
 
@@ -325,6 +338,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const peutEncaisser = aLeDroit(droits, 'vente.encaisser')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
+  // Le choix de l'issue n'existe qu'au terminal SIMULÉ (démonstration) : partout ailleurs, l'issue
+  // vient du terminal ou du caissier qui le lit — jamais d'un en-tête posé par l'écran.
+  const terminalSimule = pdvActif?.tpe?.connecteur === 'simule'
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
   // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
@@ -804,7 +820,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       saleNumber: venteObj.numero ?? null,
       establishment: etabActif,
       body: corps,
-      headers: moyen.exigeReference ? { 'X-Tpe-Simule': tpe } : null,
+      headers: moyen.exigeReference && terminalSimule ? { 'X-Tpe-Simule': tpe } : null,
     })
     await reglerIntention(venteObj, intention, paiementsPrecedents)
   }
@@ -822,6 +838,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     if (issue.outcome === 'paid') {
       setAvis(null)
       await apresReglement(venteObj, issue.response, paiementsPrecedents, lignes)
+    } else if (issue.outcome === 'waiting' && issue.attempt) {
+      setAvis(null)
+      setAttenteTerminal({ venteId: venteObj.id, numero: venteObj.numero ?? null, tentative: issue.attempt, paiementsPrecedents, lignes })
     } else if (issue.outcome === 'unknown') {
       setAvis(issue.message)
       setDeclaration({ venteId: venteObj.id, tentative: issue.attempt })
@@ -835,6 +854,93 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   const libelleMoyen = (code) => moyens.find((x) => x.code === code)?.libelle || code
+
+  // L'ISSUE DE LA CARTE PARTIE AU TERMINAL — lue par la scrutation, ou rendue par une déclaration, une
+  // annulation. Encaissée (même partiellement) : la vente relue fait foi. Sans issue au-delà du délai
+  // du terminal : on la fait déclarer (Q-A1), l'intention reste.
+  async function issueTerminal(t) {
+    const ctx = attenteTerminal
+    const phase = attemptPhase(t)
+    if (!ctx || phase === 'waiting') return
+    setAttenteTerminal(null)
+    if (phase === 'unknown') {
+      setDeclaration({ venteId: ctx.venteId, tentative: t })
+      return
+    }
+    forgetIntent(sessionStorage, ctx.venteId)
+    setAttente(null)
+    if (phase === 'paid') {
+      if (t.ticketClient) ticketsTerminal.current[ctx.venteId] = [...(ticketsTerminal.current[ctx.venteId] || []), t.ticketClient]
+      const debite = parseFloat(t.montantDebite ?? t.montant)
+      setAvis(debite < parseFloat(t.montant)
+        ? `Le terminal a débité ${euros(debite)} sur ${euros(t.montant)} : le reste est à régler.`
+        : null)
+      await apresReglement({ id: ctx.venteId, numero: ctx.numero }, { reglementEnregistre: true, dejaEnregistre: true }, ctx.paiementsPrecedents, ctx.lignes)
+      return
+    }
+    await relireVente(ctx.venteId).catch(() => null)
+    setAvis(phase === 'refund' ? t.raison : `Paiement carte ${phase === 'refused' ? 'refusé' : 'annulé'} — aucun règlement enregistré.`)
+  }
+
+  // « Annuler » pendant l'attente d'un terminal relié. Une issue arrivée avant tient (409) : on l'affiche.
+  const annulerTerminal = () => seul(async () => {
+    const ctx = attenteTerminal
+    if (!ctx) return
+    setBusy(true)
+    setErreur(null)
+    try {
+      const res = await api.annulerReglement(ctx.venteId, ctx.tentative.id)
+      await issueTerminal(res.tentative)
+      setVeille({ venteId: ctx.venteId, tentativeId: ctx.tentative.id })
+    } catch (e) {
+      if (e?.payload?.tentative) await issueTerminal(e.payload.tentative)
+      else setErreur(`${e.message || "L'annulation n'a pas abouti."} Le règlement reste en attente.`)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  // Le terminal EXTERNE : le caissier déclare ce que le terminal a rendu (Accepté + référence, Refusé, Annulé).
+  const declarerTerminal = (issue, reference) => seul(async () => {
+    const ctx = attenteTerminal
+    if (!ctx) return
+    setBusy(true)
+    setErreur(null)
+    try {
+      const res = await declareOutcome(api, sessionStorage, ctx.venteId, { attemptId: ctx.tentative.id, issue, cardReference: reference })
+      await issueTerminal({ ...ctx.tentative, statut: res.issue, montantDebite: res.montant ?? ctx.tentative.montant })
+    } catch (e) {
+      if (e?.payload?.tentative) await issueTerminal(e.payload.tentative)
+      else setErreur(`${e.message || 'La déclaration a échoué.'} Le règlement reste en attente.`)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  useEffect(() => { venteCourante.current = vente?.id ?? null }, [vente])
+
+  // La veille après « Annuler » : si le terminal accepte quand même, l'acceptation gagne et l'écran le
+  // dit ; si la vente ne pouvait plus la recevoir, le serveur dit « à rembourser ». Deux minutes, puis on lâche.
+  useEffect(() => {
+    if (!veille) return undefined
+    const fin = Date.now() + 120000
+    const poller = createPoller({
+      read: () => api.reglementTerminal(veille.venteId, veille.tentativeId),
+      intervalMs: 3000,
+      done: (t) => attemptPhase(t) !== 'cancelled' || Date.now() > fin,
+      onResult: (t) => {
+        const phase = attemptPhase(t)
+        if (phase === 'paid') {
+          setAvis(`Le terminal a finalement accepté ${euros(t.montantDebite ?? t.montant)} après l’annulation : le règlement est enregistré.`)
+          if (venteCourante.current === veille.venteId) relireVente(veille.venteId).catch(() => null)
+        } else if (phase === 'refund') {
+          setAvis(t.raison)
+        }
+      },
+    })
+    poller.start()
+    return () => poller.stop()
+  }, [veille])
 
   // La vente telle que le serveur la tient — règlements et reste dû — après un F5, un rejeu ou une
   // déclaration : un règlement rejoué est peut-être déjà affiché, le serveur fait foi.
@@ -1162,6 +1268,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       //
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
       const t = construireTicket(infoTicket, reglements, support, true)
+      t.ticketsTerminal = ticketsTerminal.current[venteId] || []
       // Une vente gratuite n'a pas de ticket, mais un billet : il s'affiche et part à l'impression
       // dans le même geste (`BilletSeul`), sans l'étape « Afficher le billet » d'avant.
       const ecran = screenAfterValidation(infoTicket)
@@ -1662,6 +1769,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       setMontant={setMontant}
                       tpeSimule={tpeSimule}
                       setTpeSimule={setTpeSimule}
+                      terminalSimule={terminalSimule}
+                      terminal={attenteTerminal && attenteTerminal.venteId === vente?.id ? (
+                        <TerminalWait
+                          key={attenteTerminal.tentative.id}
+                          venteId={attenteTerminal.venteId}
+                          tentative={attenteTerminal.tentative}
+                          libelleMoyen={libelleMoyen(attenteTerminal.tentative.moyen)}
+                          busy={busy}
+                          onIssue={issueTerminal}
+                          onAnnuler={annulerTerminal}
+                          onDeclarer={declarerTerminal}
+                        />
+                      ) : null}
                       reste={reste}
                       paiements={paiements}
                       avis={avis}
@@ -1981,7 +2101,7 @@ function AppairageModal({ etat, onValider, onIgnorer, busy }) {
 function PanneauPaiement({
   moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
   tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon, montrerAbandon = true,
-  attente = null,
+  attente = null, terminalSimule = false, terminal = null,
 }) {
   const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
   const paye = solde <= 0.0001
@@ -2008,7 +2128,10 @@ function PanneauPaiement({
 
       {/* UN RÈGLEMENT SANS ISSUE TIENT LE PAVÉ (G-2). Tant qu'il attend, « Régler » le redemande avec
           sa clé : proposer un autre moyen ou un autre montant ferait payer deux fois. */}
-      {attente && (
+      {/* La carte attend le terminal : l'attente, l'annulation ou la déclaration (`TerminalWait`). */}
+      {terminal}
+
+      {attente && !terminal && (
         <>
           <div className="banner banner-warn" style={{ margin: 0 }}>
             Règlement en attente : {attente.libelle} {attente.montant ? euros(attente.montant) : '(reste dû)'} — résultat
@@ -2053,13 +2176,13 @@ function PanneauPaiement({
             />
           </div>
 
-          {moyenCourant?.exigeReference && (
+          {moyenCourant?.exigeReference && terminalSimule && (
             <div className="field" style={{ margin: 0 }}>
               <label>Simulation TPE</label>
               <div className="seg">
-                {['accepte', 'refuse', 'timeout'].map((s) => (
+                {['accepte', 'refuse', 'attente', 'timeout'].map((s) => (
                   <button key={s} type="button" className={tpeSimule === s ? 'on' : ''} onClick={() => setTpeSimule(s)}>
-                    {s === 'accepte' ? 'Accepté' : s === 'refuse' ? 'Refusé' : 'Timeout'}
+                    {{ accepte: 'Accepté', refuse: 'Refusé', attente: 'En attente', timeout: 'Timeout' }[s]}
                   </button>
                 ))}
               </div>
@@ -2071,7 +2194,7 @@ function PanneauPaiement({
           </button>
           {busy && moyenCourant?.exigeReference && (
             <div className="hint" style={{ margin: 0, textAlign: 'center' }}>
-              Transaction en cours au terminal de paiement… (quelques secondes)
+              Envoi au terminal de paiement…
             </div>
           )}
         </>
@@ -2343,6 +2466,10 @@ function TicketVente({ ticket }) {
             <span>Règlement · {p.libelle || p.moyen}</span>
             <span className="num">{euros(p.montant)}</span>
           </div>
+        ))}
+        {/* Le ticket client du terminal de paiement, quand il en rend un : il sort avec celui de la caisse. */}
+        {(ticket.ticketsTerminal || []).map((recu, i) => (
+          <div className="t-terminal" key={`tpe${i}`}>{recu}</div>
         ))}
         {ticket.paiements.some((p) => parseFloat(p.rendu || '0') > 0) && (
           <div className="trow">
