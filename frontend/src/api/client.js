@@ -7,6 +7,7 @@
 // Le NOYAU, pas `index.js` : il n'importe aucun catalogue JSON, que `node --test` (Node 20) refuse
 // sans attribut d'import — et `src/api/*.test.js` charge ce fichier. Les catalogues sont
 // enregistrés par `i18n/index.js`, que l'application charge avant toute requête.
+import { NETWORK_UNREACHABLE } from './counterWording.js'
 import { activeLanguage, translateApiError } from '../i18n/core.js'
 
 const TOKEN_KEY = 'billetterie.token'
@@ -261,10 +262,13 @@ async function request(
         null,
       )
     }
+    // Le serveur n'a pas pu être joint du tout. Le message s'adresse à l'agent au guichet (il
+    // nommait « l'API » et « http://localhost:8080 ») ; le code permet aux écrans d'en dire plus
+    // sans comparer des phrases (`counterWording.js`).
     throw new ApiError(
-      "Impossible de joindre l'API. Vérifiez que le back tourne sur http://localhost:8080.",
+      'Connexion perdue. Vérifiez internet, puis réessayez.',
       0,
-      null,
+      { code: NETWORK_UNREACHABLE },
     )
   } finally {
     if (timer) clearTimeout(timer)
