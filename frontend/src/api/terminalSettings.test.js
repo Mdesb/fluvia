@@ -18,6 +18,18 @@ test('jamais le booléen d’avant : le serveur le refuse', () => {
   assert.equal(tpe.connecteur, 'simule')
 })
 
+test('modifier un point de vente garde ce que le formulaire ne montre pas (terminaux, ancien, paramètres)', () => {
+  const existant = { connecteur: 'externe', marque: 'ingenico', ref: 'TPE-A1', terminaux: [{ marque: 'ingenico', ref: 'TPE-A1' }], ancien: true, delai: 30 }
+  const { tpe } = avecTerminal({ tpe: 'externe', tpeMarque: 'Pax', tpeRef: '' }, existant)
+  assert.deepEqual(tpe, { connecteur: 'externe', marque: 'Pax', terminaux: [{ marque: 'ingenico', ref: 'TPE-A1' }], ancien: true, delai: 30 },
+    'les clés inconnues restent ; la référence vidée part ; la marque change')
+})
+
+test('un réglage d’avant ce lot (liste ou booléen) n’est pas recopié comme paramètres', () => {
+  assert.deepEqual(avecTerminal({ tpe: 'externe' }, [{ marque: 'pax' }]).tpe, { connecteur: 'externe' })
+  assert.deepEqual(avecTerminal({ tpe: 'externe' }, true).tpe, { connecteur: 'externe' })
+})
+
 test('le premier connecteur proposé est l’externe (présélectionné à la création)', () => {
   assert.equal(CONNECTEURS_TPE[0].valeur, 'externe')
 })

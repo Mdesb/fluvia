@@ -408,7 +408,12 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
     // d'une saisie. Le proposer à choisir serait offrir de créer un point de vente chez quelqu'un
     // d'autre.
     creer: (corps) => api.creerPointDeVente({ ...avecTerminal(corps), etablissement: `/api/etablissements/${etabActif}` }),
-    modifier: (id, corps) => api.majPointDeVente(id, avecTerminal(corps)),
+    // Le réglage actuel est relu : ce que le formulaire ne montre pas (migration, paramètres d'un
+    // connecteur) doit survivre à la modification (relecture D3).
+    modifier: async (id, corps) => {
+      const actuel = membres(await api.pointDeVentes()).find((p) => String(p.id) === String(id))
+      return api.majPointDeVente(id, avecTerminal(corps, actuel?.tpe))
+    },
     supprimer: null,
     champs: [
       {
