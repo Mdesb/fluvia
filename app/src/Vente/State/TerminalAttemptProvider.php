@@ -24,7 +24,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * La lecture juge le délai du connecteur : une tentative envoyée sans issue au-delà devient
  * `unresolved`, et l'écran passe à la déclaration. C'est la seule écriture d'un GET, et elle n'écrit
- * que ce que la prochaine demande aurait jugé de même.
+ * que ce que la prochaine demande aurait jugé de même — mais c'est une écriture : la route exige
+ * `vente.encaisser`, le droit de qui scrute sa propre carte, pas celui de qui consulte (relecture S3).
  *
  * @implements ProviderInterface<object>
  */

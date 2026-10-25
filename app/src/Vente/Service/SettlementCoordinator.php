@@ -411,6 +411,18 @@ final class SettlementCoordinator
     }
 
     /**
+     * Une carte de cette vente annulée il y a moins de {@see STALE_AFTER_SECONDS} : le terminal peut encore
+     * l'accepter, et l'acceptation gagne (CA-3). La clôture attend la fin de cette veille — après, une
+     * acceptation tomberait sur une session close et ne serait plus qu'un « à rembourser » (relecture D2).
+     *
+     * @return Attempt|null
+     */
+    public function recentlyCancelledAttempt(Vente $vente): ?array
+    {
+        return $this->attempts->cancelledSince($vente, new \DateTimeImmutable('-' . self::STALE_AFTER_SECONDS . ' seconds'));
+    }
+
+    /**
      * La tentative qui tient la vente, une fois sa péremption jugée : une demande morte depuis plus de
      * {@see STALE_AFTER_SECONDS} ne se présente plus « en cours ». Pour la validation et la clôture.
      *

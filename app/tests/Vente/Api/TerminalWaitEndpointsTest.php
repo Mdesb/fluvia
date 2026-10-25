@@ -120,6 +120,57 @@ final class TerminalWaitEndpointsTest extends CrmApiTestCase
         self::assertSame(['accepted', 1], [$this->statusOf($tentative), $this->paymentCount($vente)]);
     }
 
+    /**
+     * D2 (relecture) — une carte annulée peut encore être acceptée par le terminal : le Z attend la fin
+     * de cette veille, sinon l'acceptation tomberait sur une session close, hors Z et hors régie.
+     */
+    public function testTheClosureWaitsWhileACancelledCardCanStillBeAccepted(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete)['id'];
+        $vente = $this->cardSale($client, $entete, $session);
+        $tentative = $this->waiting($client, $entete, $vente);
+        self::assertSame(200, $this->cancel($client, $entete, $vente, $tentative)->getStatusCode());
+        $z = fn (): ResponseInterface => $client->request('POST', '/api/sessions-caisse/' . $session . '/cloturer', $entete + ['json' => [
+            'comptages' => [['moyen' => 'especes', 'compte' => '50.00']], 'versement' => '0.00',
+        ]]);
+
+        $refus = $z();
+        self::assertSame(422, $refus->getStatusCode(), $refus->getContent(false));
+        self::assertStringContainsString('annulé', $refus->getContent(false));
+        self::assertSame('ouverte', $this->db()->fetchOne('SELECT etat FROM caisse_session WHERE id = UNHEX(:s)', ['s' => $this->hex($session)]));
+
+        $this->db()->executeStatement('UPDATE sale_payment_attempt SET closed_at = :d WHERE id = UNHEX(:id)', [
+            'd' => (new \DateTimeImmutable('-121 seconds'))->format('Y-m-d H:i:s'), 'id' => $this->hex($tentative),
+        ]);
+        self::assertSame(200, $z()->getStatusCode(), 'La veille passée, le Z se fait.');
+    }
+
+    /**
+     * S3 (relecture) — la scrutation peut écrire (le délai jugé : `sent` → `unresolved`) : c'est un geste
+     * de caissier. Sans le droit d'encaisser, 403, et rien ne bouge.
+     */
+    public function testOnlyACashierPollsTheTerminal(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $vente = $this->cardSale($client, $entete);
+        $tentative = $this->waiting($client, $entete, $vente);
+        $this->age($tentative, '-121 seconds');
+        // Le lecteur du socle : `*.lire` sur A, aucun droit d'encaisser.
+        $agent = static::createClient();
+        $enteteAgent = [
+            'auth_bearer' => $this->jeton($agent, SocleFixtures::LECTEUR_EMAIL, SocleFixtures::LECTEUR_MDP),
+            'headers' => [ContexteEtablissement::HEADER => $this->idEtablissement(SocleFixtures::ETAB_A_NOM)],
+        ];
+        // Témoin : il lit bien les ventes — un 403 plus bas vient du droit d'encaisser, pas de la vente.
+        self::assertSame(200, $agent->request('GET', '/api/ventes/' . $vente, $enteteAgent)->getStatusCode());
+
+        $lecture = $agent->request('GET', '/api/ventes/' . $vente . '/reglement-terminal?tentative=' . $tentative, $enteteAgent);
+
+        self::assertSame(403, $lecture->getStatusCode());
+        self::assertSame('sent', $this->statusOf($tentative), 'Rien n\'a été jugé par une simple lecture.');
+    }
+
     /** CA-5 — sans identifiant, la lecture rend la tentative qui tient la vente : un autre poste, ou l'écran rechargé, la retrouve. */
     public function testWithoutAnIdThePollReturnsTheAttemptHoldingTheSale(): void
     {

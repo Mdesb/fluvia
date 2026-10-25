@@ -276,9 +276,29 @@ final class PaymentAttemptStore
     }
 
     /** @return Attempt|null */
-    private function one(string $sql, string $value): ?array
+    /**
+     * La dernière tentative au terminal de cette vente annulée après `$since` : le terminal peut encore
+     * l'accepter (CA-3). Pour la clôture, qui attend la fin de cette veille.
+     *
+     * @return Attempt|null
+     */
+    public function cancelledSince(Vente $sale, \DateTimeImmutable $since): ?array
     {
-        $ligne = $this->connection->fetchAssociative($sql, ['v' => $value]);
+        return $this->one(
+            self::SELECT . "sale_id = UNHEX(:v) AND status = 'cancelled' AND uses_terminal = 1 AND closed_at > :since ORDER BY closed_at DESC LIMIT 1",
+            self::hex($sale->getId()),
+            ['since' => $since->format('Y-m-d H:i:s')],
+        );
+    }
+
+    /**
+     * @param array<string, string> $more
+     *
+     * @return Attempt|null
+     */
+    private function one(string $sql, string $value, array $more = []): ?array
+    {
+        $ligne = $this->connection->fetchAssociative($sql, ['v' => $value] + $more);
         if ($ligne === false) {
             return null;
         }

@@ -137,8 +137,9 @@ use Symfony\Component\Uid\Uuid;
             uriTemplate: '/ventes/{id}/reglement-terminal',
             description: 'Le reglement au terminal de cette vente : ?tentative=<id> (rendu par le 202 des paiements), sinon celui qui tient la vente (404 sans). '
                 . 'Statut (sent : attend le terminal ; accepted, refused, cancelled ; unresolved : a declarer), montant debite, autorisation, reseau, ticket client, reste a payer. '
-                . 'Passe le delai du connecteur, une tentative sans issue y est jugee unresolved.',
-            security: "is_granted('PERM', 'vente.lire') or is_granted('PERM', 'vente.encaisser')",
+                . 'Passe le delai du connecteur, une tentative sans issue y est jugee unresolved : la lecture ecrit ce jugement, '
+                . 'elle est donc reservee a qui encaisse (vente.encaisser).',
+            security: "is_granted('PERM', 'vente.encaisser')",
             provider: TerminalAttemptProvider::class,
         ),
         new Post(
