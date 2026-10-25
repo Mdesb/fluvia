@@ -24,6 +24,7 @@ import TerminalWait from '../components/TerminalWait.jsx'
 import { attemptPhase, createPoller } from '../api/terminalWait.js'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import { screenAfterValidation, validateCart } from '../api/validateCart.js'
+import { saleErrorMessage } from '../api/counterWording.js'
 import {
   libelleProduit,
   prixIndicatif,
@@ -789,7 +790,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         defautMoyen: moyensDispo[0] || null,
       }
     } catch (e) {
-      const msg = e.message || "Impossible d'ouvrir la vente."
+      const msg = saleErrorMessage(e, 'open', "Impossible d'ouvrir la vente.")
       // Garde « bénéficiaire requis » (RG-M2-04) : on invite à rattacher un client via la modale.
       if (/b[ée]n[ée]ficiaire/i.test(msg)) {
         setBesoinClient(true)
@@ -1283,7 +1284,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     } catch (e) {
       // D-4 : un règlement tient encore la vente (terminal muet, ou en cours) — on le fait déclarer.
       if (e?.payload?.code === 'payment_outcome_unknown') setDeclaration({ venteId, tentative: e.payload.tentative })
-      setErreur(e.message || 'Échec de la validation.')
+      setErreur(saleErrorMessage(e, 'validate', 'Échec de la validation.'))
     } finally {
       setBusy(false)
     }
