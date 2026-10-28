@@ -1,0 +1,271 @@
+# Stack de PRODUCTION de Fluvia — conteneur LXD chez IT Cotation (Fabrice).
+# Mêmes images que la préprod (php:8.4-fpm, mariadb:11.4, nginx) => parité réelle.
+#
+# Différences volontaires avec infra/compose.preprod.yaml :
+#   - secrets lus depuis .env.prod (jamais versionnés, chmod 600, générés par deploy-prod.sh)
+#   - PAS DE NGINX SUR L'HOTE. Le conteneur LXD n'a pas d'IP publique : l'hôte de Fabrice termine le
+#     TLS de https://portal.fluvia-app.com et proxifie vers le PORT 80 DU CONTENEUR. C'est le service
+#     `front` qui l'occupe : il sert le frontend construit et relaie l'API vers `web`. Il fait ici ce
+#     que fait en préprod le Nginx natif de l'hôte (infra/nginx/billetterie-preprod.conf).
+#   - Ni certbot, ni 443, ni pare-feu : tout est en amont, chez Fabrice. Seul le port 80 est relié.
+#   - Bouchon de paiement en ligne et terminal simulé FERMÉS EN DUR (voir le service php).
+#   - Plafond LXD : 6 Go / 3 cœurs pour tout le conteneur (voir « BUDGET MEMOIRE » en bas).
+#
+# Usage (depuis la racine du dépôt, dans le conteneur) :
+#   ./infra/deploy-prod.sh
+# ou à la main :
+#   docker compose -f infra/compose.prod.yaml --env-file infra/.env.prod up -d
+
+name: fluvia-prod
+
+services:
+  php:
+    build:
+      context: ../docker/php
+    restart: unless-stopped
+    mem_limit: 1g
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      - ../docker/php/conf.d/zz-opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.prod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      # ── TROIS PROXIES, PAS UN ──────────────────────────────────────────────────────────────
+      #
+      # Apache (hôte de Fabrice) -> front -> web -> php. En préprod, « 127.0.0.1,REMOTE_ADDR »
+      # suffisait : un seul Nginx devant. Ici le pair immédiat de PHP est `front` (réseau Docker,
+      # 172.16/12) et l'hôte arrive par le pont LXD (plage privée). Sans les plages privées,
+      # Symfony prendrait l'adresse d'Apache pour celle du visiteur : tous les clients auraient la
+      # même IP, et une limite de débit par IP bloquerait tout le monde à la fois.
+      # X-Forwarded-Proto: https est posé par Apache (demandé à Fabrice le 27/10, fait le 28/10).
+      TRUSTED_PROXIES: "127.0.0.1,REMOTE_ADDR,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.prod}
+      # ── CLES DE CHIFFREMENT ET DE SCELLEMENT ───────────────────────────────────────────────
+      #
+      # ⚠ `:?` ET NON UNE VALEUR PAR DEFAUT, comme en préprod : l'absence est BRUYANTE. Le rôle de
+      # chaque clé est commenté dans infra/compose.preprod.yaml ; on ne le recopie pas ici pour
+      # n'avoir qu'un endroit à tenir à jour.
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.prod}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.prod}
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.prod}
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.prod}
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.prod}
+      INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.prod}
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.prod}
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.prod}
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.prod}
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.prod}
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
+      # ── LES DEUX BOUCHONS SONT FERMES EN DUR ───────────────────────────────────────────────
+      #
+      # En préprod ils valent `${...:-0}` et `.env.preprod` les ouvre à 1 pour les démonstrations.
+      # Ici AUCUNE variable : une ligne `=1` copiée par erreur depuis la préprod ne doit pas
+      # pouvoir faire signer de faux reçus de paiement en ligne, ni accepter une carte qu'aucun
+      # terminal n'a lue. Les ouvrir en production demande de modifier ce fichier, versionné.
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: "0"
+      TPE_SIMULE_AUTORISE: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── ORDONNANCEUR ────────────────────────────────────────────────────────────────────────────
+  #
+  # ⚠ SOUS PROFIL, comme en préprod : un déploiement de routine ne le démarre pas. Sa première
+  # exécution est un effet (révocation de droits périmés), elle se demande :
+  #
+  #     docker compose -f infra/compose.prod.yaml --env-file infra/.env.prod \
+  #         --profile ordonnanceur up -d scheduler
+  #
+  # Liste blanche et raisons : infra/ordonnanceur.sh. Ce qui a tourné :
+  #     php bin/console platform:scheduler:run --status
+  scheduler:
+    profiles: ["ordonnanceur"]
+    build:
+      context: ../docker/php
+    restart: unless-stopped
+    mem_limit: 512m
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/infra/ordonnanceur.sh"]
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../infra:/infra:ro
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.prod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      TRUSTED_PROXIES: "127.0.0.1,REMOTE_ADDR,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.prod}
+      # Les memes cles que `php` (blocs maintenus identiques, `:?`, jamais de defaut).
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.prod}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.prod}
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.prod}
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.prod}
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.prod}
+      INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.prod}
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.prod}
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.prod}
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.prod}
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.prod}
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: "0"
+      TPE_SIMULE_AUTORISE: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── LIVRAISON DES WEBHOOKS PARTENAIRES ──────────────────────────────────────────────────────
+  #
+  # Identique à la préprod (raisons dans infra/compose.preprod.yaml) : deux consommateurs, relancés
+  # toutes les heures ou au-delà de 256 Mo, interrupteur `PARTNER_WEBHOOKS_ENABLED` fermé par défaut.
+  worker:
+    build:
+      context: ../docker/php
+    restart: always
+    scale: 2
+    mem_limit: 384m
+    working_dir: /app
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M", "-vv"]
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "grep -qa messenger:consume /proc/1/cmdline"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      RES_OPTIONS: "timeout:2 attempts:1"
+      PARTNER_WEBHOOKS_ENABLED: ${PARTNER_WEBHOOKS_ENABLED:-0}
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.prod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      TRUSTED_PROXIES: "127.0.0.1,REMOTE_ADDR,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.prod}
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.prod}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.prod}
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.prod}
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.prod}
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.prod}
+      INTEGRATIONS_WEBHOOK_KEY: ${INTEGRATIONS_WEBHOOK_KEY:?INTEGRATIONS_WEBHOOK_KEY manquante dans .env.prod}
+      SUPPORT_HMAC_KEY: ${SUPPORT_HMAC_KEY:?SUPPORT_HMAC_KEY manquante dans .env.prod}
+      SEPA_IBAN_HMAC_KEY: ${SEPA_IBAN_HMAC_KEY:?SEPA_IBAN_HMAC_KEY manquante dans .env.prod}
+      PUBLIC_API_SUPPORT_REF_KEY: ${PUBLIC_API_SUPPORT_REF_KEY:?PUBLIC_API_SUPPORT_REF_KEY manquante dans .env.prod}
+      PARTNER_WEBHOOK_KEY: ${PARTNER_WEBHOOK_KEY:?PARTNER_WEBHOOK_KEY manquante dans .env.prod}
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
+      PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: "0"
+      TPE_SIMULE_AUTORISE: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── SAUVEGARDE DE LA BASE ───────────────────────────────────────────────────────────────────
+  #
+  # Sans profil : une sauvegarde qu'il faut penser à démarrer n'existera pas le jour où elle
+  # servirait. Destination HORS DU DEPOT (un dump contient des données personnelles).
+  #
+  # ⚠ ELLE VIT DANS LE MEME CONTENEUR LXD QUE LA BASE. Elle protège d'un DELETE, pas de la perte du
+  # conteneur : la copie hors serveur est l'export du conteneur entier, côté Fabrice.
+  #
+  # Restauration :
+  #     gunzip -c /srv/fluvia/sauvegardes/<fichier>.sql.gz \
+  #       | docker exec -i fluvia-prod-db-1 mariadb -u root -p<motdepasse> <base>
+  sauvegarde:
+    image: mariadb:11.4
+    restart: unless-stopped
+    mem_limit: 256m
+    entrypoint: ["/bin/sh", "/infra/sauvegarde-base.sh"]
+    volumes:
+      - ../infra:/infra:ro
+      - ${BACKUP_DIR:-/srv/fluvia/sauvegardes}:/sauvegardes
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env.prod}
+      SAUVEGARDE_RETENTION_JOURS: "14"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Le Nginx de Symfony : il ne publie plus RIEN (en préprod, 127.0.0.1:8081 pour le Nginx de
+  # l'hôte). Seul `front` lui parle, par le réseau Docker.
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    volumes:
+      - ../app:/app:ro
+      - ../docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+
+  # ── LE POINT D'ENTREE PUBLIC : LE PORT 80 DU CONTENEUR LXD ──────────────────────────────────
+  #
+  # Le contrat de Fabrice : « expose ton appli en HTTP sur le port 80 du conteneur ». L'hôte relaie
+  # https://portal.fluvia-app.com vers ce port, en préservant `Host` et en posant X-Forwarded-Proto.
+  #
+  # `"80:80"` sur toutes les interfaces, et c'est voulu, contrairement à la préprod (127.0.0.1) :
+  # le conteneur LXD n'a pas d'IP publique, et le proxy de l'hôte arrive par le pont LXD, pas par
+  # la boucle locale. Publier sur 127.0.0.1 rendrait le site injoignable de l'extérieur.
+  #
+  # Le frontend construit n'est PAS dans l'image : `deploy-prod.sh` le synchronise dans WEB_ROOT,
+  # monté ici en lecture seule. Le changer ne demande donc pas de recréer le conteneur.
+  front:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "80:80"
+    volumes:
+      - ${WEB_ROOT:-/srv/fluvia/www}:/srv/www:ro
+      - ./nginx/prod-front.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    mem_limit: 1500m
+    environment:
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env.prod}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env.prod}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+# ── BUDGET MEMOIRE ──────────────────────────────────────────────────────────────────────────────
+#
+# Plafond du conteneur LXD : 6 Go / 3 cœurs (Fabrice, 28/10). Somme des mem_limit, ordonnanceur
+# compris : php 1024 + scheduler 512 + worker 2×384 + sauvegarde 256 + web 128 + front 128 + db 1500
+# = 4316 Mo. Il reste ~1,7 Go pour le système et le conteneur jetable qui construit le frontend
+# (node, le temps de `npm run build`). Ce sont des PLAFONDS, pas des consommations : au repos la
+# stack en utilise bien moins. On garde donc les valeurs de la préprod — parité — et on demandera un
+# relèvement à Fabrice avant d'en augmenter une.
+
+volumes:
+  db_data:
+  app_var:

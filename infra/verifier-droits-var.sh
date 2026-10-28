@@ -55,7 +55,8 @@ dans_le_conteneur() {
     else
         REPO="$(cd "$(dirname "$0")/.." && pwd)"
         cd "$REPO"
-        docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod \
+        # La prod (deploy-prod.sh) exporte FLUVIA_COMPOSE_FILE / FLUVIA_ENV_FILE ; sans elles, la preprod.
+        docker compose -f "${FLUVIA_COMPOSE_FILE:-infra/compose.preprod.yaml}" --env-file "${FLUVIA_ENV_FILE:-infra/.env.preprod}" \
             exec -T php sh -c "$1"
     fi
 }
