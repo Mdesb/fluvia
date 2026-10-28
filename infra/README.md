@@ -189,6 +189,76 @@ Rejouable : un second lancement ne crée rien. `--new-link` réémet un lien exp
 base qui contient déjà d'autres établissements (la préprod) ; `--force` existe mais n'a pas lieu
 d'être utilisé hors cas exceptionnel.
 
+## Production (conteneur chez IT Cotation)
+
+Décidé le 28/10/2026 : la **production** tourne dans un conteneur LXD non privilégié (Debian 13)
+hébergé par Fabrice (IT Cotation). La préprod reste sur le VPS OVH. Base **vierge** : rien de la
+préprod n'y est copié.
+
+### Accès
+
+Depuis le VPS OVH (la clé dédiée y vit, sa partie privée n'en sort pas) :
+
+```bash
+ssh -i ~/.ssh/fluvia_migration_fabrice -o IdentitiesOnly=yes -p 2222 maxime@137.74.167.234
+```
+
+Port **2222** = SSH du conteneur (le 22 est l'hôte, hors de notre périmètre). `sudo` sans mot de
+passe. Aucun accès à l'hôte, ni à GitHub depuis le conteneur.
+
+### Contrat réseau
+
+- L'application écoute en **HTTP sur le port 80 du conteneur** (service `front`).
+- L'hôte de Fabrice termine le TLS de **https://portal.fluvia-app.com** et proxifie vers ce port,
+  en préservant `Host` et en posant `X-Forwarded-Proto: https`.
+- **Pas de certbot, pas de 443, pas de pare-feu** dans le conteneur : il n'a pas d'IP publique.
+- Nouveaux sous-domaines (`clientX.fluvia-app.com`) : à demander à Fabrice (wildcard possible).
+- Plafond : **6 Go de RAM / 3 cœurs** pour tout le conteneur (budget dans `compose.prod.yaml`).
+  Un relèvement se demande à Fabrice.
+
+### Premier déploiement
+
+```bash
+# 1. Dans le conteneur : le dépôt nu qui reçoit le code, et l'arbre servi
+sudo mkdir -p /srv/fluvia && sudo chown maxime: /srv/fluvia
+git init --bare -b main /srv/fluvia/fluvia.git
+
+# 2. Depuis le VPS OVH : pousser main (le conteneur n'a pas accès à GitHub)
+git -C ~/billetterie push ssh://maxime@137.74.167.234:2222/srv/fluvia/fluvia.git origin/main:refs/heads/main
+#    (avec GIT_SSH_COMMAND="ssh -i ~/.ssh/fluvia_migration_fabrice -o IdentitiesOnly=yes")
+
+# 3. Dans le conteneur : l'arbre, sa configuration locale, puis le déploiement
+git clone /srv/fluvia/fluvia.git /srv/fluvia/app
+cd /srv/fluvia/app
+( umask 077 && printf '%s\n' \
+    'FRONT_BASE_URL=https://portal.fluvia-app.com' \
+    'MAILER_DSN=null://null' > app/.env.local )
+./infra/deploy-prod.sh
+```
+
+- `deploy-prod.sh` crée `infra/.env.prod` (600) et **génère tous les secrets** au premier passage ;
+  il ne les affiche jamais et ne les régénère jamais.
+- `MAILER_DSN=null://null` : **aucun courriel ne part** pour l'instant (décision de Maxime du
+  28/10). Le déploiement le rappelle à chaque passage.
+- `EDITOR_TENANT_ID` : posé dans `app/.env.local` **après** la commande d'installation
+  `platform:install` (voir « Installer une base de production vierge »), qui crée l'établissement éditeur et le premier
+  administrateur sur la base vierge. Sans elle, personne ne peut se connecter.
+- L'ordonnanceur n'est **pas** démarré par le déploiement (profil `ordonnanceur`, comme en préprod).
+
+### Mises à jour
+
+```bash
+# VPS OVH, après fusion dans main :
+git -C ~/billetterie push ssh://maxime@137.74.167.234:2222/srv/fluvia/fluvia.git origin/main:refs/heads/main
+# conteneur :
+cd /srv/fluvia/app && git pull --ff-only && ./infra/deploy-prod.sh
+```
+
+### Sauvegardes
+
+Dumps quotidiens dans `/srv/fluvia/sauvegardes` (service `sauvegarde`, 14 jours). Ils sont dans le
+**même** conteneur que la base : la copie hors serveur est l'export du conteneur, côté Fabrice.
+
 ## Points de vigilance
 
 - **Données** : jamais de données clients réelles en préprod (RGPD). Dump anonymisé
