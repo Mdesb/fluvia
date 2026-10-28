@@ -169,6 +169,25 @@ a mis les trente-quatre rôles de la préprod à zéro droit le 24/08. Elle refu
 recompile pas le conteneur de services. Sans `rm -rf app/var/cache/prod` au préalable, vous mesurez
 l'état d'avant — et la commande s'exécute normalement, en affichant un résultat plausible.
 
+### Installer une base de production vierge
+
+Une base neuve, migrée, n'a ni établissement ni compte : personne ne peut s'y connecter. Les fixtures
+ne servent pas en production (données de démonstration, mot de passe `aaa`). Après le premier
+déploiement :
+
+```bash
+docker compose exec php php bin/console platform:install --admin-email=<adresse>
+```
+
+Elle crée l'établissement éditeur (son groupe, sa région), un rôle copié du modèle « Administrateur
+d'établissement » posé par migration, et l'administrateur **invité** — aucun mot de passe n'est écrit.
+Elle imprime la ligne `EDITOR_TENANT_ID=…` à poser dans `app/.env.local` (puis vider le cache) et le
+lien d'activation, valable 72 h, à transmettre à l'administrateur. Elle sème aussi les taux de TVA
+légaux ; pas les options vendables, dont le prix est provisoire.
+
+Rejouable : un second lancement ne crée rien. `--new-link` réémet un lien expiré. Elle **refuse** une
+base qui contient déjà d'autres établissements (la préprod) ; `--force` existe mais n'a pas lieu
+d'être utilisé hors cas exceptionnel.
 
 ## Production (conteneur chez IT Cotation)
 
@@ -222,7 +241,7 @@ cd /srv/fluvia/app
 - `MAILER_DSN=null://null` : **aucun courriel ne part** pour l'instant (décision de Maxime du
   28/10). Le déploiement le rappelle à chaque passage.
 - `EDITOR_TENANT_ID` : posé dans `app/.env.local` **après** la commande d'installation
-  `platform:install` (en cours d'écriture), qui crée l'établissement éditeur et le premier
+  `platform:install` (voir « Installer une base de production vierge »), qui crée l'établissement éditeur et le premier
   administrateur sur la base vierge. Sans elle, personne ne peut se connecter.
 - L'ordonnanceur n'est **pas** démarré par le déploiement (profil `ordonnanceur`, comme en préprod).
 
