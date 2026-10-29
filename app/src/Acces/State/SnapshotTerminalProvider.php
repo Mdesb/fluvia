@@ -14,7 +14,6 @@ use App\Acces\Entity\Equipement;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
-use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Security\TerminalPorteeChecker;
 use App\Acces\Security\TerminalUtilisateur;
 use App\Vente\Entity\BilletSupport;
@@ -183,7 +182,8 @@ final class SnapshotTerminalProvider implements ProviderInterface
             numeroBillet: $numeroBillet,
             typeSupport: $support->getType()?->value,
             typeDroit: $droit->getSourceType()->value,
-            compostagesRestants: $droit->getSourceType() === TypeDroitAcces::CarteQuota ? $droit->getCreditRestant() : null,
+            // Carte à quota ou entrée unitaire : tout droit qui se décompte (décision du 08/10).
+            compostagesRestants: $droit->getCreditRestant(),
             validiteDebut: $droit->getFenetreDebut()?->format(DATE_ATOM),
             validiteFin: $droit->getFenetreFin()?->format(DATE_ATOM),
             portesEligibles: $portesEligibles,

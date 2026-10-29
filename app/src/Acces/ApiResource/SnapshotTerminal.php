@@ -62,7 +62,7 @@ final class SnapshotTerminal
                 'numeroBillet' => ['type' => 'string', 'nullable' => true],
                 'typeSupport' => ['type' => 'string', 'nullable' => true],
                 'typeDroit' => ['type' => 'string', 'nullable' => true, 'description' => 'App\\Acces\\Enum\\TypeDroitAcces.'],
-                'compostagesRestants' => ['type' => 'integer', 'nullable' => true, 'description' => 'Renseigné pour une carte à quota.'],
+                'compostagesRestants' => ['type' => 'integer', 'nullable' => true, 'description' => 'Entrées restantes d\'un droit qui se décompte (carte à quota, entrée unitaire) ; `null` = non décompté.'],
                 'validiteDebut' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true],
                 'validiteFin' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true],
                 'portesEligibles' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Identifiants des équipements/portes autorisés pour ce droit.'],

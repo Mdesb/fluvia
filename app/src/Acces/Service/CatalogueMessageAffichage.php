@@ -35,6 +35,7 @@ final class CatalogueMessageAffichage
             CodeMotifRefus::HorsMarge => CodeMessageAffichage::HorsMarge,
             CodeMotifRefus::AntiPassback => CodeMessageAffichage::DejaPasse,
             CodeMotifRefus::CreditEpuise => CodeMessageAffichage::CarteEpuisee,
+            CodeMotifRefus::DejaConsomme => CodeMessageAffichage::DejaPasse,
             CodeMotifRefus::SupportBloque => CodeMessageAffichage::SupportBloque,
             CodeMotifRefus::SeuilFmi => CodeMessageAffichage::JaugeAtteinte,
             CodeMotifRefus::DroitInvalide => CodeMessageAffichage::DroitInvalide,

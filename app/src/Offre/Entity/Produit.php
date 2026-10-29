@@ -199,6 +199,16 @@ class Produit
     #[Groups(['produit:read', 'produit:write'])]
     private ?\DateInterval $dureeValidite = null;
 
+    /**
+     * Combien d'entrées vaut un billet de ce produit pendant sa durée de validité : une par défaut
+     * (décision de Maxime du 08/10). `null` = illimité dans la durée, pour les allers-retours.
+     * Recopié sur le droit d'accès à la vente (`StubProjectionDroit`), sans effet sur une carte ni
+     * sur une formule, qui ont leurs propres règles. Au moins 1 : contrôlé par `ProduitProcessor`.
+     */
+    #[ORM\Column(nullable: true, options: ['default' => 1])]
+    #[Groups(['produit:read', 'produit:write'])]
+    private ?int $entryCount = 1;
+
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['produit:read', 'produit:write'])]
     private ?string $noteInterne = null;
@@ -403,6 +413,18 @@ class Produit
     public function setDureeValidite(?\DateInterval $dureeValidite): self
     {
         $this->dureeValidite = $dureeValidite;
+
+        return $this;
+    }
+
+    public function getEntryCount(): ?int
+    {
+        return $this->entryCount;
+    }
+
+    public function setEntryCount(?int $entryCount): self
+    {
+        $this->entryCount = $entryCount;
 
         return $this;
     }
