@@ -10,6 +10,7 @@ use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\PeriodeComptable;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Regime\CompteLookupService;
+use App\Compta\Service\PeriodeComptableResolver;
 use App\Facturation\Entity\LigneFacture;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Organisation\Entity\Etablissement;
@@ -41,6 +42,7 @@ final class ResolveurComptesFacturation
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CompteLookupService $lookup,
+        private readonly PeriodeComptableResolver $periodes,
     ) {
     }
 
@@ -72,9 +74,13 @@ final class ResolveurComptesFacturation
             }
         }
 
-        throw new UnprocessableEntityHttpException(
-            sprintf('Aucune période comptable ouverte ne couvre le %s pour cet exploitant.', $date->format('Y-m-d')),
-        );
+        // ⚠ UNE STRUCTURE NEUVE N'A AUCUNE PERIODE, ET SA PREMIERE FACTURE ETAIT REFUSEE EN 422.
+        // `POST /organisation/structures` ouvre profil, comptes, taux et parametrage, pas de periode,
+        // et aucun ecran n'en cree une (seule l'API le permet, `POST /periode_comptables`) : mesure du
+        // 08/10. L'emission est une ecriture generee, comme celles des ventes et des achats : elle
+        // ouvre le mois par le meme chemin qu'eux. Dans la transaction d'emission, une emission
+        // annulee n'en laisse aucune.
+        return $this->periodes->resoudreOuCreer($profil, $date);
     }
 
     /** Journal `FAC` (migration de données §4 du plan), créé paresseusement si absent. */
