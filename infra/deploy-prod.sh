@@ -29,6 +29,21 @@ export FLUVIA_ENV_FILE="$ENV_FILE"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 
+# ── PREREQUIS DU CONTENEUR ──────────────────────────────────────────────────────────────────────
+#
+# Premier déploiement du 28/10 : le script a tout construit, puis est mort à la publication du
+# frontend sur « rsync: command not found » — le conteneur Debian de Fabrice est minimal. On le dit
+# AVANT de construire quoi que ce soit, avec la commande qui répare.
+manquants=""
+for outil in git docker rsync curl openssl; do
+    command -v "$outil" >/dev/null 2>&1 || manquants="$manquants $outil"
+done
+if [ -n "$manquants" ]; then
+    echo "✗ Outil(s) absent(s) :$manquants"
+    echo "  sudo apt-get install -y$manquants   (docker : dépôt officiel, voir infra/README.md)"
+    exit 1
+fi
+
 # ── ON NE SERT QUE CE QUI EST DANS `main` — DU DEPOT LOCAL ─────────────────────────────────────
 #
 # En préprod, la référence est `origin/main` sur GitHub. Ce serveur n'a PAS accès à GitHub : le code
@@ -124,6 +139,16 @@ done
 mkdir -p "$WEB_ROOT" "$BACKUP_DIR"
 
 log "Construction / démarrage des conteneurs"
+# ── app/.env.local LISIBLE PAR PHP-FPM ──────────────────────────────────────────────────────────
+#
+# Créé en 600 par l'exploitant (il porte EDITOR_TENANT_ID, MAILER_DSN…), il est illisible pour
+# www-data (uid 33) dans le conteneur php : le 28/10, chaque requête PHP est morte sur « Unable to
+# read the "/app/.env.local" environment file », alors que la console, lancée en root, marchait.
+# Groupe 33 + 640 : lisible par FPM, toujours fermé aux autres comptes du conteneur LXD.
+if [ -f app/.env.local ]; then
+    sudo -n chgrp 33 app/.env.local 2>/dev/null || chgrp 33 app/.env.local
+    chmod 640 app/.env.local
+fi
 "${COMPOSE[@]}" build
 "${COMPOSE[@]}" up -d
 
@@ -171,6 +196,17 @@ log "Marqueur de version pour PHP"
 
 log "Redémarrage de PHP-FPM (opcache)"
 "${COMPOSE[@]}" restart php
+
+# ── LES ERREURS PHP NE SONT PAS MONTREES AU VISITEUR ────────────────────────────────────────────
+#
+# Voir docker/php/conf.d/zz-production.ini. Un montage oublié ou un fichier renommé rallume
+# display_errors sans bruit : on le demande au PHP qui tourne, pas au fichier.
+if ! "${COMPOSE[@]}" exec -T php php -r 'exit(in_array(strtolower((string) ini_get("display_errors")), ["", "0", "off"], true) && !ini_get("expose_php") ? 0 : 1);'; then
+    echo "✗ PHP affiche ses erreurs aux visiteurs (display_errors ou expose_php actif)."
+    echo "  zz-production.ini n'est pas chargé : vérifier son montage dans infra/compose.prod.yaml."
+    exit 1
+fi
+echo "  ✓ display_errors et expose_php coupés"
 
 # Construit dans un conteneur jetable : pas de Node.js à maintenir dans le conteneur LXD.
 # ⚠ Il s'ajoute à la stack pendant sa durée : c'est lui qui consomme la marge du plafond de 6 Go
