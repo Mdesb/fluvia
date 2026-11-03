@@ -1632,3 +1632,79 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   .ticket .th, .ticket .tb, .card { break-inside: avoid; }
   @page { margin: 16mm; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+   CRÉER UN PRODUIT — la modale à étapes (refonte de la création, lot 1 ; ProductCreationModal.jsx).
+
+   Sobre à dessein, et dans les seuls jetons existants : la relecture de direction artistique que
+   le CP-1 demandait n'a pas pu être faite. Les cartes de type reprennent l'apparence d'une carte
+   (filet, rayon), et l'état choisi celle d'un lien actif (accent sur accent-soft, paires
+   validées par le contrôle des contrastes). Aucune animation : rien à couper sous
+   prefers-reduced-motion. */
+.cree-etapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-normal) var(--esp-large);
+  list-style: none;
+  margin: 0 0 var(--esp-bloc);
+  padding: 0;
+  color: var(--ink-soft);
+}
+.cree-etapes li { display: flex; align-items: center; gap: var(--esp-serre); }
+.cree-etapes li[aria-current="step"] { color: var(--ink); font-weight: 600; }
+.cree-etapes li.fait { color: var(--ink); }
+.cree-etape-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: var(--txt-petit, 0.85em);
+}
+.cree-etapes li[aria-current="step"] .cree-etape-num { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); }
+.cree-titre { margin: 0 0 var(--esp-large); font-size: var(--txt-grand); }
+.cree-titre:focus { outline: none; }
+.cree-rangee { display: flex; flex-wrap: wrap; gap: var(--esp-normal) var(--esp-bloc); align-items: flex-end; }
+.cree-rangee > .field { flex: 1 1 180px; margin: 0; }
+.cree-pleine { flex-basis: 100%; }
+.cree-legende { font-weight: 600; margin: var(--esp-bloc) 0 var(--esp-normal); }
+.cree-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--esp-normal);
+}
+.cree-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--esp-serre);
+  min-height: 44px;
+  padding: var(--esp-large);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cree-type:hover { border-color: var(--accent); }
+.cree-type:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cree-type[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.cree-type-nom { font-weight: 600; }
+.cree-type-desc { display: flex; flex-direction: column; gap: var(--esp-serre); }
+.cree-type-phrase { color: var(--ink); }
+.cree-type-ex { color: var(--accent-2); }
+.cree-groupe { border: 0; padding: 0; margin: 0 0 var(--esp-bloc); display: flex; flex-wrap: wrap; gap: var(--esp-normal) var(--esp-large); }
+.cree-groupe legend { font-weight: 600; margin-bottom: var(--esp-normal); }
+.cree-case { display: flex; align-items: center; gap: var(--esp-normal); min-height: 24px; font-weight: 400; }
+.cree-recap { display: grid; gap: var(--esp-normal); margin: 0 0 var(--esp-bloc); }
+.cree-recap > div { display: grid; grid-template-columns: minmax(120px, 30%) 1fr; gap: var(--esp-large); }
+.cree-recap dt { color: var(--ink-soft); }
+.cree-recap dd { margin: 0; }
+.cree-manques { margin: 0; padding-left: var(--esp-bloc); }
+@media (max-width: 480px) {
+  .cree-recap > div { grid-template-columns: 1fr; gap: 0; }
+}

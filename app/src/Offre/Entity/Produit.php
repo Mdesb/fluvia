@@ -25,6 +25,7 @@ use App\Offre\State\ProduitProcessor;
 use App\Offre\State\PublicationReadinessProvider;
 use App\Offre\State\PublierProcessor;
 use App\Offre\State\ReactiverProcessor;
+use App\Offre\State\ReadinessPreviewProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -97,6 +98,14 @@ use App\Vente\State\PriceQuoteProvider;
             uriTemplate: '/produits/{id}/readiness',
             security: "is_granted('PERM', 'offre.lire')",
             provider: PublicationReadinessProvider::class,
+        ),
+        // La même règle, AVANT la création : la modale choisit « Créer et mettre en vente » quand
+        // rien ne manquerait (refonte de la création, lot 1). Rien n'est écrit.
+        new Post(
+            uriTemplate: '/produits/readiness-preview',
+            security: "is_granted('PERM', 'offre.creer')",
+            denormalizationContext: ['groups' => ['produit:write', 'produit:create']],
+            processor: ReadinessPreviewProcessor::class,
         ),
         new Post(
             uriTemplate: '/produits/{id}/publier',
