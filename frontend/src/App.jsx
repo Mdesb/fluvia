@@ -19,7 +19,6 @@ import Modules from './pages/Modules.jsx'
 import BandeauSupport from './components/BandeauSupport.jsx'
 import ControleBillet from './components/ControleBillet.jsx'
 import Caisse from './pages/Caisse.jsx'
-import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
@@ -38,6 +37,10 @@ import Abonnements from './pages/Abonnements.jsx'
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
 // reservation — restent dans le paquet principal : leur decoupage ferait payer une attente
 // repetee pour un gain unique.
+// Le catalogue (et ProduitFiche, ~2 200 lignes) part dans son propre morceau : avec lui, le morceau
+// principal dépassait 500 kB et l'avertissement du bundler (garde-fou n51) refusait tout commit
+// touchant le frontal (03/11). Rendu sous le même <Suspense> que les autres pages paresseuses.
+const Catalogue = lazy(() => import('./pages/Catalogue.jsx'))
 const Piscine = lazy(() => import('./pages/Piscine.jsx'))
 const Patinoire = lazy(() => import('./pages/Patinoire.jsx'))
 const Finance = lazy(() => import('./pages/Finance.jsx'))

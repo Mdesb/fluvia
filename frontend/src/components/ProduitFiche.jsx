@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu, actionsStatut } from '../api/produit.js'
-import { CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, lignesManquantes, ongletInitial } from '../api/publication.js'
+import { codesManquants, refusAAfficher, CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, lignesManquantes, ongletInitial } from '../api/publication.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
@@ -411,6 +411,7 @@ export default function ProduitFiche({
   const [optionsIllisibles, setOptionsIllisibles] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [refusPublication, setRefusPublication] = useState(null)
 
   const produitId = produit?.id
 
@@ -760,6 +761,7 @@ export default function ProduitFiche({
     }
     if (action.confirmation && !await confirmer(action.confirmation.replace('%s', libelleProduit(p)))) return
     setErreur(null)
+    setRefusPublication(null)
     setSucces(null)
     setActionStatut(action.id)
     try {
@@ -768,7 +770,10 @@ export default function ProduitFiche({
       setSucces(`« ${libelleProduit(p)} » : ${action.confirme}`)
       onModifie?.()
     } catch (e) {
-      setErreur(e.message || 'L’action n’a pas abouti.')
+      const message = e.message || 'L’action n’a pas abouti.'
+      // Un refus de publier dit ce qui manque À CET INSTANT : voir `refusAAfficher`.
+      if (action.id === 'publier') setRefusPublication({ message, codes: codesManquants(manquants) })
+      else setErreur(message)
     } finally {
       setActionStatut(null)
     }
@@ -779,6 +784,9 @@ export default function ProduitFiche({
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
+      {refusAAfficher(refusPublication, manquants) && (
+        <div className="banner banner-error">{refusAAfficher(refusPublication, manquants)}</div>
+      )}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
       <div className="fiche-ident" style={{ marginBottom: 'var(--esp-large)' }}>

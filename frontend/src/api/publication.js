@@ -73,3 +73,21 @@ export function corpsCreation({ libelle, typeId, canaux, type, carte, formule })
   }
   return corps
 }
+
+// LE REFUS DE PUBLIER NE SURVIT PAS A CE QU'IL DISAIT (vu à l'écran le 03/11) : « Publication
+// impossible. Donnez-lui au moins un prix. … » restait affiché après l'ajout du prix, au-dessus d'un
+// encadré « il manque » déjà à jour. Le refus garde les codes manquants au moment où il a été émis ;
+// il ne s'affiche que tant que la readiness relue dit la même chose. Dès qu'un manque est comblé,
+// l'encadré, lui à jour, parle seul. Readiness illisible (null) : le refus reste, faute de mieux.
+export function codesManquants(manquants) {
+  return (manquants || []).map((m) => m.code).sort()
+}
+
+export function refusAAfficher(refus, manquants) {
+  if (!refus) return null
+  if (manquants === null || manquants === undefined) return refus.message
+  const actuels = codesManquants(manquants)
+  return actuels.length === refus.codes.length && actuels.every((c, i) => c === refus.codes[i])
+    ? refus.message
+    : null
+}
