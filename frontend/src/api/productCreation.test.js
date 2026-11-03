@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  categorieParDefaut, corpsPrix, corpsProduit, descriptionDuType, manquesEtape, prixLu,
+  categorieParDefaut, corpsApercu, corpsPrix, corpsProduit, descriptionDuType, issueDeCreation, manquesEtape, prixLu,
   recapitulatif, saisieInitiale, tarifParDefaut, toutEstPret,
 } from './productCreation.js'
 
@@ -104,4 +104,26 @@ test('chaque type connu a sa phrase et son exemple ; un type inconnu n’en inve
   // Les cinq codes de `off_type_produit` relevés le 03/11 (GET /api/type_produits).
   for (const t of [ENTREE, CARTE, ABO, { code: 'prestation' }, { code: 'boutique_stock' }]) assert.ok(descriptionDuType(t)?.exemple, t.code)
   assert.equal(descriptionDuType({ code: 'nouveau_type' }), null)
+})
+
+test('« En ligne » est pré-coché quand l’établissement vend en ligne', () => {
+  assert.deepEqual(saisieInitiale({ venteEnLigne: true }).canaux, ['guichet', 'en_ligne'])
+  assert.deepEqual(saisieInitiale({ venteEnLigne: false }).canaux, ['guichet'])
+})
+
+test('l’aperçu part avec le corps de création et le prix annoncé', () => {
+  const s = { ...saisieInitiale({ etabActif: 'e1', typesTarif: TARIFS }), libelle: 'Entrée', typeId: 't1', prix: '6,5' }
+  const c = corpsApercu(s, ENTREE)
+  assert.equal(c.prixPrevu, '6.50')
+  assert.deepEqual(c.etablissements, ['/api/etablissements/e1'])
+  assert.equal(corpsApercu({ ...s, prix: '' }, ENTREE).prixPrevu, null)
+})
+
+test('rien ne manque : « Créer et mettre en vente » ; un manque : la phrase de ce qui restera à faire', () => {
+  assert.deepEqual(issueDeCreation([]), { vendre: true, resteAFaire: null })
+  const zone = issueDeCreation([{ code: 'zone_acces', message: 'Choisissez les zones.' }])
+  assert.equal(zone.vendre, false)
+  assert.equal(zone.resteAFaire, 'Il restera à faire sur la fiche avant de le mettre en vente : Choisissez les zones.')
+  // Aperçu illisible : on ne promet rien.
+  assert.deepEqual(issueDeCreation(null), { vendre: false, resteAFaire: null })
 })

@@ -509,6 +509,9 @@ export const api = {
   // l'identifiant compte. Elles existent depuis des jours et n'étaient appelées de nulle part — un
   // produit créé depuis cet écran restait donc en brouillon à vie, invendable sur tous les canaux.
   publierProduit: (id) => request(`/api/produits/${id}/publier`, { method: 'POST' }),
+  // Ce qui manquerait pour publier un produit PAS ENCORE CRÉÉ : la garde elle-même, rien n'est écrit
+  // (modale de création, refonte lot 1).
+  apercuPublication: (corps) => request('/api/produits/readiness-preview', { method: 'POST', body: corps, ld: true }),
   // Ce qui manque pour publier, dit par la garde elle-même : `{ missing: [{ code, message }] }`.
   pretAPublier: (id) => request(`/api/produits/${id}/readiness`),
   depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),

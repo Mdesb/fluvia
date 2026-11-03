@@ -321,6 +321,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
       open={params.nouveau === '1'}
       types={types}
       etabActif={etabActif}
+      capacites={capacites}
       onClose={fermerCreation}
       onCree={async (cree) => {
         await recharger()

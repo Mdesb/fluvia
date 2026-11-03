@@ -45,7 +45,7 @@ export function categorieParDefaut(categories) {
   return comptables.length === 1 ? comptables[0] : null
 }
 
-export function saisieInitiale({ etabActif = null, typesTarif = [], categories = [] } = {}) {
+export function saisieInitiale({ etabActif = null, typesTarif = [], categories = [], venteEnLigne = false } = {}) {
   return {
     libelle: '',
     typeId: '',
@@ -55,7 +55,9 @@ export function saisieInitiale({ etabActif = null, typesTarif = [], categories =
     typeTarifId: tarifParDefaut(typesTarif)?.id || '',
     categorieId: categorieParDefaut(categories)?.id || '',
     // Le guichet est coché d'office, visible et décochable (lot 0) ; le site où l'on travaille aussi.
-    canaux: ['guichet'],
+    // « En ligne » aussi quand l'établissement vend en ligne (capacité `boutique_en_ligne`) :
+    // arbitrage de Maxime du 03/11, pour revenir à six clics.
+    canaux: venteEnLigne ? ['guichet', 'en_ligne'] : ['guichet'],
     etablissements: etabActif ? [String(etabActif)] : [],
   }
 }
@@ -138,5 +140,25 @@ export function corpsPrix(produitId, saisie) {
     produit: `/api/produits/${produitId}`,
     typeTarif: `/api/type_tarifs/${saisie.typeTarifId}`,
     prix: prixLu(saisie.prix).toFixed(2),
+  }
+}
+
+// ── LE BOUTON DU RÉCAPITULATIF (arbitrage de Maxime, 03/11) ─────────────────────────────────────
+//
+// `POST /produits/readiness-preview` juge le corps de création avec la garde de publication
+// elle-même (celle de `/readiness`) : l'écran ne recalcule aucune règle. `prixPrevu` dit au serveur
+// que le prix suivra, puisqu'il naît après le produit.
+export function corpsApercu(saisie, type) {
+  return { ...corpsProduit(saisie, type), prixPrevu: prixLu(saisie.prix)?.toFixed(2) ?? null }
+}
+
+// Ce que le récapitulatif propose. `missing` : la réponse de l'aperçu, `null` tant qu'elle n'est pas
+// lue (ou illisible). Sans réponse, on ne promet pas la mise en vente.
+export function issueDeCreation(missing) {
+  if (!Array.isArray(missing)) return { vendre: false, resteAFaire: null }
+  if (missing.length === 0) return { vendre: true, resteAFaire: null }
+  return {
+    vendre: false,
+    resteAFaire: `Il restera à faire sur la fiche avant de le mettre en vente : ${missing.map((m) => m.message).join(' ')}`,
   }
 }

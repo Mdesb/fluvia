@@ -46,19 +46,7 @@ final class ProduitProcessor implements ProcessorInterface
             if ($data->getCode() === '') {
                 $data->setCode($this->generateurCode->generer());
             }
-            $data->setLibelleRecherche($this->projeterLibelle($data));
-
-            // ACT-5 : les categories par defaut du TYPE, sur les axes encore vides.
-            //
-            // L'axe comptable est OBLIGATOIRE POUR PUBLIER (RG-M1-05). Sans ce remplissage, un produit
-            // cree sans lui reste bloque en brouillon, et l'exploitant qui ne connait pas la regle
-            // cherche pourquoi son produit ne se vend pas.
-            //
-            // Un defaut n'est pas une regle : les axes deja renseignes ne sont jamais ecrases.
-            $this->categoriesParDefaut->appliquer($data);
-            $this->refuserSaisieContradictoire($data);
-            $this->rattacherALEtablissementActif($data, $operation);
-            $data->toucherModifieLe();
+            $this->preparer($data, $operation);
         }
 
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
@@ -148,6 +136,29 @@ final class ProduitProcessor implements ProcessorInterface
      * A LA CREATION SEULEMENT. Retirer tous les etablissements d'un produit existant reste possible
      * et reste un geste explicite -- c'est ainsi qu'on promeut un produit au socle.
      */
+    /**
+     * Ce qu'une création fait au produit avant de l'écrire : projection de recherche, catégories par
+     * défaut du type, refus des saisies contradictoires, rattachement au site actif. PUBLIQUE pour
+     * `ReadinessPreviewProcessor`, qui doit juger le produit tel que la création l'écrirait — et non
+     * tel que l'écran l'envoie.
+     */
+    public function preparer(Produit $produit, Operation $operation): void
+    {
+        $produit->setLibelleRecherche($this->projeterLibelle($produit));
+
+        // ACT-5 : les categories par defaut du TYPE, sur les axes encore vides.
+        //
+        // L'axe comptable est OBLIGATOIRE POUR PUBLIER (RG-M1-05). Sans ce remplissage, un produit
+        // cree sans lui reste bloque en brouillon, et l'exploitant qui ne connait pas la regle
+        // cherche pourquoi son produit ne se vend pas.
+        //
+        // Un defaut n'est pas une regle : les axes deja renseignes ne sont jamais ecrases.
+        $this->categoriesParDefaut->appliquer($produit);
+        $this->refuserSaisieContradictoire($produit);
+        $this->rattacherALEtablissementActif($produit, $operation);
+        $produit->toucherModifieLe();
+    }
+
     private function rattacherALEtablissementActif(Produit $produit, Operation $operation): void
     {
         if (!$operation instanceof Post || !$produit->getEtablissements()->isEmpty()) {

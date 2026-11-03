@@ -4,7 +4,8 @@ import { api, membres } from '../api/client.js'
 import { CANAUX_PRODUIT } from '../api/produit.js'
 import { complementDuType } from '../api/publication.js'
 import {
-  ETAPES, corpsPrix, corpsProduit, descriptionDuType, manquesEtape, recapitulatif, saisieInitiale, toutEstPret,
+  ETAPES, corpsApercu, corpsPrix, corpsProduit, descriptionDuType, issueDeCreation, manquesEtape, recapitulatif,
+  saisieInitiale, toutEstPret,
 } from '../api/productCreation.js'
 
 /**
@@ -21,9 +22,12 @@ import {
  *
  * La logique (étapes, valeurs proposées, corps) est dans `api/productCreation.js`, testée seule.
  */
-export default function ProductCreationModal({ open, types = [], etabActif, onClose, onCree }) {
+export default function ProductCreationModal({ open, types = [], etabActif, capacites = [], onClose, onCree }) {
+  const venteEnLigne = capacites.includes('boutique_en_ligne')
   const [etape, setEtape] = useState(0)
-  const [saisie, setSaisie] = useState(() => saisieInitiale({ etabActif }))
+  const [saisie, setSaisie] = useState(() => saisieInitiale({ etabActif, venteEnLigne }))
+  // Réponse de `POST /produits/readiness-preview` au récapitulatif : `null` tant qu'elle n'est pas lue.
+  const [apercu, setApercu] = useState(null)
   const [refs, setRefs] = useState({ typesTarif: [], categories: [], etablissements: [] })
   const [montrerManques, setMontrerManques] = useState(false)
   const [enCours, setEnCours] = useState(false)
@@ -40,14 +44,14 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
       .then(([typesTarif, categories, etablissements]) => {
         if (!vivant) return
         setRefs({ typesTarif, categories, etablissements })
-        setSaisie(saisieInitiale({ etabActif, typesTarif, categories }))
+        setSaisie(saisieInitiale({ etabActif, typesTarif, categories, venteEnLigne }))
       })
     setEtape(0)
     setMontrerManques(false)
     setErreur(null)
     setEnCours(false)
     return () => { vivant = false }
-  }, [open, etabActif])
+  }, [open, etabActif, venteEnLigne])
 
   // Le focus suit l'étape : le premier champ de la nouvelle étape, sinon son titre. Sans cela il
   // restait sur « Continuer », qui venait de changer de sens sous le doigt.
@@ -61,6 +65,20 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
 
   const type = types.find((t) => String(t.id) === String(saisie.typeId)) || null
   const cle = ETAPES[etape].cle
+
+  // Au récapitulatif, la garde de publication dit ce qui manquerait (voir api/productCreation.js).
+  // Relue à chaque arrivée sur l'étape : un retour en arrière a pu tout changer.
+  useEffect(() => {
+    if (!open || cle !== 'recap') return
+    let vivant = true
+    setApercu(null)
+    api.apercuPublication(corpsApercu(saisie, type))
+      .then((r) => { if (vivant) setApercu(r?.missing ?? null) })
+      .catch(() => { if (vivant) setApercu(null) })
+    return () => { vivant = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cle])
+  const issue = issueDeCreation(apercu)
   const manques = cle === 'recap' ? [] : manquesEtape(cle, saisie, type)
   const maj = (champ, valeur) => setSaisie((s) => ({ ...s, [champ]: valeur }))
 
@@ -73,7 +91,10 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
     setEtape((e) => e + 1)
   }
 
-  async function creer() {
+  // `vendre` : créer, poser le prix, puis publier dans la foulée. Si la publication est refusée (une
+  // règle a changé entre l'aperçu et le clic), le produit existe : sa fiche s'ouvre et son encadré
+  // « il manque » dit pourquoi.
+  async function creer(vendre) {
     if (!toutEstPret(saisie, type)) return
     setEnCours(true)
     setErreur(null)
@@ -85,10 +106,19 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
       setEnCours(false)
       return
     }
+    let prixPose = true
     try {
       await api.creerGrilleTarifaire(corpsPrix(cree.id, saisie))
     } catch {
       // Voir l'en-tête : la fiche dira qu'il manque un prix.
+      prixPose = false
+    }
+    if (vendre && prixPose) {
+      try {
+        await api.publierProduit(cree.id)
+      } catch {
+        // Voir ci-dessus : la fiche dira ce qui manque.
+      }
     }
     await onCree(cree)
   }
@@ -184,10 +214,11 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
                 <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
               ))}
             </dl>
-            <p className="hint">
-              Il sera créé en <b>brouillon</b> : ni le guichet ni la boutique ne le voient avant que vous
-              l’ayez mis en vente. Sa fiche s’ouvre ensuite et dit ce qui manque encore.
-            </p>
+            {apercu === null && <p className="hint" role="status">Vérification de ce qui manquerait pour le vendre…</p>}
+            {issue.vendre && (
+              <p className="hint">Rien ne manque : il peut être mis en vente dès sa création.</p>
+            )}
+            {issue.resteAFaire && <div className="banner" role="status">{issue.resteAFaire}</div>}
           </>
         )}
 
@@ -204,11 +235,22 @@ export default function ProductCreationModal({ open, types = [], etabActif, onCl
             ← Retour
           </button>
         )}
-        {cle === 'recap' ? (
-          <button className="btn primary" type="button" disabled={enCours} onClick={creer}>
+        {cle === 'recap' && issue.vendre && (
+          <>
+            <button className="btn ghost" type="button" disabled={enCours} onClick={() => creer(false)}>
+              Créer en brouillon
+            </button>
+            <button className="btn primary" type="button" disabled={enCours} onClick={() => creer(true)}>
+              {enCours ? 'Création…' : 'Créer et mettre en vente'}
+            </button>
+          </>
+        )}
+        {cle === 'recap' && !issue.vendre && (
+          <button className="btn primary" type="button" disabled={enCours} onClick={() => creer(false)}>
             {enCours ? 'Création…' : 'Créer le produit'}
           </button>
-        ) : (
+        )}
+        {cle !== 'recap' && (
           <button className="btn primary" type="button" onClick={continuer}>Continuer</button>
         )}
       </div>
