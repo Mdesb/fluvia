@@ -70,7 +70,8 @@ final class CycleVieTest extends OffreApiTestCase
 
         $client->request('POST', '/api/produits/' . $cree['id'] . '/publier', $entete);
         self::assertResponseStatusCodeSame(422);
-        self::assertStringContainsString('categorie_comptable', $client->getResponse()->getContent(false));
+        // Le refus dit désormais des phrases, plus des codes (lot des garde-fous, 08/10).
+        self::assertStringContainsString('catégorie comptable', $client->getResponse()->toArray(false)['detail']);
     }
 
     /**
@@ -97,10 +98,10 @@ final class CycleVieTest extends OffreApiTestCase
         ])->toArray();
 
         $client->request('POST', '/api/produits/' . $cree['id'] . '/publier', $entete);
-        $corps = $client->getResponse()->getContent(false);
+        $corps = $client->getResponse()->toArray(false)['detail'];
 
         self::assertStringNotContainsString(
-            'categorie_comptable',
+            'catégorie comptable',
             $corps,
             'ACT-5 : la categorie comptable du type doit avoir ete posee a la creation.',
         );
@@ -145,10 +146,10 @@ final class CycleVieTest extends OffreApiTestCase
         ])->toArray();
         $client->request('POST', '/api/produits/' . $incomplet['id'] . '/publier', $entete);
         self::assertResponseStatusCodeSame(422);
-        $corps = $client->getResponse()->getContent(false);
+        $corps = $client->getResponse()->toArray(false)['detail'];
         self::assertStringContainsString('canal', $corps);
         self::assertStringContainsString('prix', $corps);
-        self::assertStringContainsString('categorie_comptable', $corps);
+        self::assertStringContainsString('catégorie comptable', $corps);
 
         // Produit complet (fixture) : publication OK, puis archivage OK. Il part d'un brouillon.
         $this->remettreEnBrouillon(OffreFixtures::PRODUIT_ENTREE);
@@ -184,6 +185,9 @@ final class CycleVieTest extends OffreApiTestCase
         [$client, $token, $idA] = $this->adminSurA();
         $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
 
+        // Depuis le lot des garde-fous (08/10), un produit EN VENTE ne se convertit pas en carte sans
+        // carte (`PublicationByTypeTest`) : la conversion se prouve donc sur un brouillon.
+        $this->remettreEnBrouillon(OffreFixtures::PRODUIT_ENTREE);
         $idEntree = $this->idProduit(OffreFixtures::PRODUIT_ENTREE);
         $idCarte = $this->idType(OffreFixtures::TYPE_CARTE);
         $idGold = $this->idProduit(OffreFixtures::PRODUIT_GOLD);

@@ -418,7 +418,7 @@ class DroitAcces
     /**
      * Ce droit ouvre-t-il cet espace ?
      *
-     * Vide = n'ouvre rien, sauf exemption : voir le docbloc de la propriété. La comparaison porte sur la
+     * Vide = aucune porte (D87), sauf exemption : voir le docbloc de la propriété. La comparaison porte sur la
      * représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
      * comparaison stricte d'objets distinguerait à tort (D58).
      */

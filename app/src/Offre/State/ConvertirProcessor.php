@@ -9,7 +9,9 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\ConversionType;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
+use App\Offre\Enum\StatutProduit;
 use App\Offre\Service\MappingConversion;
+use App\Offre\Service\PublicationGuard;
 use App\Offre\Service\ResolveurFacettes;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
@@ -37,6 +39,7 @@ final class ConvertirProcessor implements ProcessorInterface
         private readonly ResolveurFacettes $facettes,
         private readonly RequestStack $requestStack,
         private readonly Security $security,
+        private readonly PublicationGuard $guard,
     ) {
     }
 
@@ -73,9 +76,24 @@ final class ConvertirProcessor implements ProcessorInterface
             ], JsonResponse::HTTP_OK);
         }
 
+        // ⚠ UN PRODUIT EN VENTE NE SE CONVERTIT PAS EN PRODUIT INVENDABLE (lot des garde-fous, 08/10).
+        // Convertir une entrée publiée en carte la laissait publiée sans carte : le défaut même que la
+        // garde de publication refuse. Seuls comptent les manques que la conversion CRÉE : un défaut
+        // antérieur n'interdit pas de convertir. On s'arrête avant le `flush()` : rien n'est écrit.
+        $enVente = $data->getStatut() === StatutProduit::Publie;
+        $avant = $enVente ? $this->guard->missing($data) : [];
+
         // Application de la conversion.
         $data->setType($nouveau);
         $this->facettes->purgerOrphelins($data);
+
+        $manquants = $enVente ? array_diff_key($this->guard->missing($data), $avant) : [];
+        if ($manquants !== []) {
+            throw new UnprocessableEntityHttpException(
+                'Conversion impossible : ce produit est en vente, et il ne serait plus vendable. '
+                .implode(' ', $manquants).' Dépubliez-le, convertissez-le, complétez-le, puis republiez-le.'
+            );
+        }
         $data->toucherModifieLe();
 
         $journal = (new ConversionType())

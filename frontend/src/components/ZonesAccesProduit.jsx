@@ -34,7 +34,8 @@ import { idDe } from '../api/iri'
 // n'est pas une erreur d'exploitation, c'est un mécanisme pas encore branché — et ça ne se dit pas
 // avec la même phrase.
 
-export default function ZonesAccesProduit({ produitId, droits = [] }) {
+// `onChange` : prévenu après chaque écriture, pour que la fiche relise ce qui manque à la publication.
+export default function ZonesAccesProduit({ produitId, droits = [], onChange }) {
   const [zones, setZones] = useState([])
   const [espaces, setEspaces] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -98,6 +99,7 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
       await api.declarerZoneProduit({ productRef: produitId, space: `/api/espace_acces/${choix}` })
       setChoix('')
       await charger()
+      onChange?.()
     } catch (err) {
       setErreur(err.message || "La zone n'a pas pu être déclarée.")
     } finally {
@@ -111,6 +113,7 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
     try {
       await api.retirerZoneProduit(zone.id)
       await charger()
+      onChange?.()
     } catch (err) {
       setErreur(err.message || "La zone n'a pas pu être retirée.")
     } finally {
@@ -127,8 +130,8 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
     return (
       <div className="hint" style={{ margin: 0 }}>
         La déclaration des zones n’est pas encore ouverte par le serveur : <strong>vous ne pouvez
-        pas restreindre ce produit depuis cet écran</strong>. Ce qu’un billet ouvre reste alors décidé
-        par le paramétrage d’accès du site.
+        pas déclarer ses zones depuis cet écran</strong>. Sans zone déclarée, ses billets n’ouvrent
+        aucune porte.
       </div>
     )
   }
@@ -140,28 +143,19 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
       {chargement ? (
         <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
       ) : zones.length === 0 ? (
-        // ⚠ LA PHRASE LA PLUS IMPORTANTE DE CET ÉCRAN — ET ELLE A UNE DATE DE PÉREMPTION CONNUE.
+        // ⚠ LA PHRASE LA PLUS IMPORTANTE DE CET ÉCRAN.
         //
-        // Elle disait : « Aucune restriction : ce produit ouvre toutes les zones. » C'est vrai
-        // AUJOURD'HUI — `DroitAcces::ouvre()` rend `true` quand la collection d'espaces est vide.
-        // Ça cesse de l'être dès qu'un adaptateur de projection (en cours, hors de `main` au 30/08)
-        // ne projette plus que les produits déclarant une zone : un produit sans zone n'ouvrira
-        // alors plus RIEN, l'exact contraire.
-        //
-        // Un exploitant aurait lu « ouvre toutes les zones », conclu qu'il n'avait rien à faire, et
-        // son QR n'aurait ouvert aucune porte. C'est mot pour mot la panne signalée.
-        //
-        // ⚠ D'OÙ LA RÈGLE APPLIQUÉE ICI : **décrire le geste, jamais l'état du serveur.** « Déclarez
-        // les zones que ce billet doit ouvrir » est vrai avant la bascule et après ; « ouvre toutes
-        // les zones » n'est vrai que d'un côté, et rien ne relierait la phrase à ce qui l'annule.
-        // On perd une information exacte ce matin pour ne pas poser un mensonge la semaine
-        // prochaine — et c'est le bon échange, parce que personne ne repasse relire une phrase.
+        // Elle a dit « ouvre toutes les zones », puis « dépend du paramétrage d'accès du site » :
+        // deux états du serveur, tous deux périmés. Depuis D87, une collection de zones vide n'ouvre
+        // AUCUNE porte (`DroitAcces::ouvre()`), et la publication l'exige quand le contrôle d'accès
+        // est actif (`AccessZonePublicationPrerequisite`). La phrase dit donc la conséquence, comme
+        // l'en-tête de la section : un exploitant qui lirait « ça dépend » vendrait des billets qui
+        // n'ouvrent rien. Si la règle D87 change, cette phrase et l'en-tête changent ensemble.
         <div className="empty" style={{ padding: 12 }}>
           <strong>Aucune zone déclarée.</strong>
           <div style={{ marginTop: 6 }}>
-            Déclarez ci-dessous les zones que ce billet doit ouvrir. Tant qu’aucune n’est déclarée,
-            ce que le billet ouvre dépend du paramétrage d’accès du site — ne le supposez pas :
-            vendez-en un et présentez-le à un lecteur.
+            Déclarez ci-dessous les zones que ce billet doit ouvrir. Sans zone choisie, il
+            n’ouvre aucune porte.
           </div>
         </div>
       ) : (

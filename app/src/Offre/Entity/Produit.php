@@ -22,6 +22,7 @@ use App\Offre\State\ConvertirProcessor;
 use App\Offre\State\DepublierProcessor;
 use App\Offre\State\DupliquerProcessor;
 use App\Offre\State\ProduitProcessor;
+use App\Offre\State\PublicationReadinessProvider;
 use App\Offre\State\PublierProcessor;
 use App\Offre\State\ReactiverProcessor;
 use App\Organisation\Entity\Etablissement;
@@ -90,6 +91,12 @@ use App\Vente\State\PriceQuoteProvider;
             output: PriceQuote::class,
             normalizationContext: ['groups' => ['tarif:read']],
             provider: PriceQuoteProvider::class,
+        ),
+        // Ce qui manque pour publier, avec la phrase qui dit quoi faire : l'encadré de la fiche.
+        new Get(
+            uriTemplate: '/produits/{id}/readiness',
+            security: "is_granted('PERM', 'offre.lire')",
+            provider: PublicationReadinessProvider::class,
         ),
         new Post(
             uriTemplate: '/produits/{id}/publier',

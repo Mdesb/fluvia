@@ -131,8 +131,9 @@ class TypeProduit
 
     /**
      * Un produit de ce type délivre-t-il un support (billet, carnet, droit d'accès) à la validation ?
-     * La règle de `ValiderVenteService`, et celle du compte des billets délivrés (`SalesLinesReport`) :
-     * écrite une fois, pour que les deux ne divergent pas au premier correctif.
+     * Une seule définition, lue par `ValiderVenteService` (émission du support), `SalesLinesReport`
+     * (compte des billets délivrés) et `AccessZonePublicationPrerequisite` (une zone d'accès est
+     * exigée pour publier) : trois listes finiraient par diverger au premier correctif.
      */
     public function emetUnSupport(): bool
     {

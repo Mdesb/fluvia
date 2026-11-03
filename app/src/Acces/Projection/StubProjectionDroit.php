@@ -77,7 +77,7 @@ final class StubProjectionDroit implements ProjectionDroitInterface
         // Chacune pose `produitRef` a sa maniere ; une seule les rejoint. Recopier ici garantit que
         // le jour ou un troisieme type de titre apparait, il herite de la regle au lieu de
         // l'ignorer -- un oubli d'appel ne produirait pas d'erreur, il produirait un titre qui
-        // ouvre tout.
+        // n'ouvre aucune porte (D87), sans rien signaler.
         //
         // C'est une SYNCHRONISATION : une re-projection avec une declaration modifiee retire aussi
         // les zones qui n'y sont plus. Sans cela, retirer une zone d'un produit n'aurait aucun
