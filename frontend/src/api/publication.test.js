@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { complementDuType, complementValide, corpsCreation, lignesManquantes, ongletInitial } from './publication.js'
 
-const ONGLETS = [['vitrine', 'Présentation'], ['vente', 'Vente'], ['caisse', 'Caisse'], ['acces', 'Accès']]
+const ONGLETS = [['vitrine', 'Présentation'], ['vente', 'Vente'], ['carte', 'Carte'], ['caisse', 'Caisse'], ['acces', 'Accès']]
 
 test('chaque manque mène à son onglet, et un onglet absent ici ne mène nulle part', () => {
   const lignes = lignesManquantes([
@@ -13,7 +13,7 @@ test('chaque manque mène à son onglet, et un onglet absent ici ne mène nulle 
     { code: 'creneau', message: 'Programmez un créneau.' },
   ], ONGLETS)
   assert.deepEqual(lignes.map((l) => [l.code, l.onglet, l.libelleOnglet]), [
-    ['carte', 'vente', 'Vente'],
+    ['carte', 'carte', 'Carte'],
     ['zone_acces', 'acces', 'Accès'],
     ['creneau', null, null],
   ])

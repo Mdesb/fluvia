@@ -356,7 +356,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
               <select id="cat-statut" className="input" value={params.statut} onChange={(e) => majParams({ statut: e.target.value })}>
                 <option value="">Tous les états</option>
                 <option value="brouillon">Brouillons</option>
-                <option value="publie">Publiés</option>
+                <option value="publie">En vente</option>
                 <option value="archive">Archivés</option>
               </select>
             </div>
