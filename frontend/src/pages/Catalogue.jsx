@@ -10,7 +10,7 @@ import GrillesTarifaires from '../components/GrillesTarifaires.jsx'
 import { humaniser } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
 import { confirmer } from '../components/Confirmation.jsx'
-import { CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, complementValide, corpsCreation } from '../api/publication.js'
+import ProductCreationModal from '../components/ProductCreationModal.jsx'
 
 // MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
 // on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
@@ -18,174 +18,6 @@ import { CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, complementValid
 // `nouveau` vit dans l'URL comme `fiche` : recharger la page ne doit pas faire perdre le formulaire
 // commence, et le bouton « precedent » du navigateur doit ramener au catalogue.
 const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '', promo: '', options: '' }
-
-/**
- * LA FICHE VIERGE — ce qu'on voit apres « Nouveau produit », avant que le produit n'existe.
- *
- * ⚠ LES DEUX CHAMPS PRENNENT LA PLACE DU TITRE : c'est le titre, en cours d'ecriture. Une fois le
- * produit cree, le titre les remplace et on n'a pas change d'ecran.
- *
- * ⚠ RIEN N'EST ECRIT AVANT LE CLIC. Creer des que les deux champs sont remplis paraissait plus
- * fluide, mais un aller-retour aurait laisse des produits fantomes dans le catalogue — et aucun
- * bouton ne permet aujourd'hui d'en supprimer un.
- *
- * ⚠ LES SECTIONS SONT MONTREES ESTOMPEES, NI CACHEES NI ACTIVES. Un tarif s'attache a un produit :
- * tant qu'il n'existe pas, il n'y a rien a quoi l'attacher. Les cacher laisserait croire que la
- * fiche est pauvre ; les activer ferait saisir des valeurs qui ne partiraient nulle part.
- */
-function NouveauProduit({ types = [], onAnnule, onCree }) {
-  const [libelle, setLibelle] = useState('')
-  const [typeId, setTypeId] = useState('')
-  // Le guichet est coché d'office, mais visible et décochable : il était imposé sans le dire.
-  const [canaux, setCanaux] = useState(['guichet'])
-  const [enCours, setEnCours] = useState(false)
-  const [erreur, setErreur] = useState(null)
-  // LA CARTE OU LA FORMULE NAÎT AVEC LE PRODUIT (lot des garde-fous, 08/10). Une carte créée sans
-  // son nombre d'entrées devenait à la borne un billet illimité ; un abonnement sans formule, un
-  // article simple. Le type dit laquelle demander.
-  const [carte, setCarte] = useState(CARTE_PAR_DEFAUT)
-  const [formule, setFormule] = useState(FORMULE_PAR_DEFAUT)
-  const type = types.find((t) => String(t.id) === String(typeId))
-  const complement = complementDuType(type)
-
-  const pret = libelle.trim() !== '' && typeId !== '' && canaux.length > 0
-    && complementValide(type, { carte, formule })
-
-  async function creer() {
-    setEnCours(true)
-    setErreur(null)
-    try {
-      await onCree(corpsCreation({ libelle, typeId, canaux, type, carte, formule }))
-    } catch (e) {
-      setErreur(e?.message || 'La création n’a pas abouti.')
-      setEnCours(false)
-    }
-  }
-
-  return (
-    <>
-      <button
-        className="btn ghost sm"
-        type="button"
-        style={{ marginBottom: 'var(--esp-normal)' }}
-        onClick={onAnnule}
-      >
-        ← Retour au catalogue
-      </button>
-
-      {erreur && <div className="banner banner-error">{erreur}</div>}
-
-      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
-          <label htmlFor="np-lib">Libellé *</label>
-          <input
-            id="np-lib"
-            className="input"
-            value={libelle}
-            onChange={(e) => setLibelle(e.target.value)}
-            placeholder="Ex. Entrée adulte"
-            autoFocus
-          />
-        </div>
-        <div className="field" style={{ margin: 0, flex: '1 1 180px' }}>
-          <label htmlFor="np-type">Type *</label>
-          <select id="np-type" className="select" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-            <option value="">Choisir…</option>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>{t.libelle}</option>
-            ))}
-          </select>
-        </div>
-        <span className="badge mut">Nouveau</span>
-      </div>
-
-      <fieldset className="field" style={{ marginTop: 'var(--esp-normal)', border: 0, padding: 0 }}>
-        <legend>Où ce produit sera vendu *</legend>
-        <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
-          {CANAUX_PRODUIT.map((c) => (
-            <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
-              <input
-                type="checkbox"
-                checked={canaux.includes(c.valeur)}
-                onChange={(ev) => setCanaux((l) => (ev.target.checked ? [...l, c.valeur] : l.filter((x) => x !== c.valeur)))}
-              />
-              {c.libelle}
-            </label>
-          ))}
-        </div>
-        {canaux.length === 0 && <p className="hint">Cochez au moins un endroit où le vendre.</p>}
-      </fieldset>
-
-      {complement === 'carte' && (
-        <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap', marginTop: 'var(--esp-normal)' }}>
-          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
-            <label htmlFor="np-paye">Entrées payées *</label>
-            <input id="np-paye" className="input num" type="number" min="1" value={carte.nbPaye}
-              onChange={(e) => setCarte((c) => ({ ...c, nbPaye: e.target.value }))} />
-          </div>
-          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
-            <label htmlFor="np-cred">Entrées créditées *</label>
-            <input id="np-cred" className="input num" type="number" min="1" value={carte.nbCredite}
-              onChange={(e) => setCarte((c) => ({ ...c, nbCredite: e.target.value }))} />
-          </div>
-          <p className="hint" style={{ flexBasis: '100%' }}>
-            On paie {carte.nbPaye || '?'} entrées, on en reçoit {carte.nbCredite || '?'}.
-          </p>
-        </div>
-      )}
-
-      {complement === 'formule' && (
-        <div className="row row-champs" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 'var(--esp-normal)' }}>
-          <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
-            <label htmlFor="np-per">Périodicité *</label>
-            <select id="np-per" className="select" value={formule.periodicite}
-              onChange={(e) => setFormule((f) => ({ ...f, periodicite: e.target.value }))}>
-              <option value="mensuel">Mensuelle</option>
-              <option value="annuel">Annuelle</option>
-            </select>
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
-            <input type="checkbox" checked={formule.sepaActif}
-              onChange={(e) => setFormule((f) => ({ ...f, sepaActif: e.target.checked }))} />
-            Prélever automatiquement (SEPA)
-          </label>
-          {formule.sepaActif && (
-            <div className="field" style={{ margin: 0, flex: '0 1 140px' }}>
-              <label htmlFor="np-jour">Jour du prélèvement</label>
-              <input id="np-jour" className="input num" type="number" min="1" max="28" value={formule.jourPrelevement}
-                onChange={(e) => setFormule((f) => ({ ...f, jourPrelevement: e.target.value }))} />
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="banner" style={{ marginTop: 'var(--esp-normal)' }}>
-        Donnez-lui un nom et un type : le produit sera créé, et tout le reste de cette fiche
-        deviendra modifiable. Il naîtra en <b>brouillon</b> — invisible du guichet et de la boutique
-        tant que vous ne l’aurez pas publié.
-      </div>
-
-      <div className="row" style={{ gap: 10, marginTop: 'var(--esp-normal)' }}>
-        <button className="btn primary" type="button" disabled={!pret || enCours} onClick={creer}>
-          {enCours ? 'Création…' : 'Créer le produit'}
-        </button>
-        <button className="btn ghost" type="button" onClick={onAnnule}>Annuler</button>
-      </div>
-
-      {/* ⚠ APERCU INERTE, ET IL EST MARQUE COMME TEL. `aria-hidden` le retire de la lecture d'un
-          lecteur d'ecran : annoncer « Photos, Description » a quelqu'un qui ne peut rien y faire
-          serait la version sonore du formulaire qui ment. */}
-      <div className="fiche-endormie" aria-hidden="true">
-        <div className="fiche-sec">Photos</div>
-        <div className="hint">La première est celle qu’affiche la boutique en ligne.</div>
-        <div className="fiche-sec">Description</div>
-        <div className="hint">Ce qu’on voit, ce qu’on fait, combien de temps ça dure.</div>
-        <div className="fiche-sec">Produits complémentaires</div>
-        <div className="hint">Le casier avec l’entrée, l’audioguide avec la visite.</div>
-      </div>
-    </>
-  )
-}
 
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], modules }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
@@ -228,7 +60,9 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
   // vierge (`nouveau=1`) gardait le titre et les onglets au-dessus d'elle, et le formulaire
   // d'une promotion aurait fait pareil : le meme defaut que celui decrit ci-dessus, aux memes
   // endroits, pour n'avoir nomme qu'un seul cas.
-  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || params.nouveau === '1' || !!params.options))
+  // `nouveau=1` n'en est plus un depuis le lot 1 de la refonte : la création est une modale posée
+  // sur la liste, qui reste visible et à sa place derrière elle.
+  const ecranDeNiveau2 = (tab === 'produits' && (!!params.fiche || !!params.options))
     || (tab === 'promotions' && !!params.promo)
 
   return (
@@ -303,6 +137,9 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
 
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
   const selId = params.fiche || null
+  // Stable (useCallback) : `Modal` relance son effet d'ouverture — et vole le focus — à chaque
+  // nouvelle identité de `onClose`.
+  const fermerCreation = useCallback(() => majParams({ nouveau: '' }, { pousser: true }), [majParams])
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -326,7 +163,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
       setTotal(pc?.totalItems ?? pc?.['hydra:totalItems'] ?? membres(pc).length)
       const t = membres(tc)
       // ⚠ Plus de preselection de type : elle servait le formulaire de creation, qui n'existe
-      // plus. `NouveauProduit` ouvre son choix sur « Choisir… », ce qui vaut mieux qu'un type
+      // plus. la modale de création ouvre son choix sans type coché, ce qui vaut mieux qu'un type
       // impose que personne n'a regarde.
       setTypes(t)
     } catch (e) {
@@ -475,30 +312,28 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     )
   }
 
-  // ── LA FICHE VIERGE ─────────────────────────────────────────────────────────────────────────
+  // ── LA CRÉATION, EN MODALE (refonte, lot 1) ────────────────────────────────────────────────
   //
-  // Elle prend la page entiere, comme une fiche ordinaire : c'est le meme geste, au meme endroit,
-  // et on n'a pas change d'ecran quand le produit existe.
-  if (params.nouveau === '1') {
-    return (
-      <NouveauProduit
-        types={types}
-        onAnnule={() => majParams({ nouveau: '' }, { pousser: true })}
-        onCree={async (corps) => {
-          const cree = await api.creerProduit(corps)
-          await recharger()
-          // On enchaine sur la vraie fiche : le produit existe, il a son code, et on reste au
-          // meme endroit — seul le titre remplace les deux champs.
-          majParams({ nouveau: '', fiche: String(cree.id) }, { pousser: true })
-        }}
-      />
-    )
-  }
+  // `nouveau` reste dans l'URL : « précédent » ferme la modale, et un F5 la rouvre. Une fois le
+  // produit créé, on enchaîne sur sa fiche, qui s'ouvre sur ce qui manque encore (#310).
+  const modaleCreation = (
+    <ProductCreationModal
+      open={params.nouveau === '1'}
+      types={types}
+      etabActif={etabActif}
+      onClose={fermerCreation}
+      onCree={async (cree) => {
+        await recharger()
+        majParams({ nouveau: '', fiche: String(cree.id) }, { pousser: true })
+      }}
+    />
+  )
 
   const tronquee = total > (produits || []).length
 
   return (
     <>
+      {modaleCreation}
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
