@@ -431,7 +431,7 @@ final class ValiderVenteService
 
     private function emetSupport(TypeProduit $type): bool
     {
-        return $type->issuesTicket();
+        return $type->emetUnSupport();
     }
 
     /**

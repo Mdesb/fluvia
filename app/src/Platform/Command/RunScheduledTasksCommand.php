@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Platform\Command;
 
 use App\Platform\Entity\ScheduledTaskRun;
+use App\Platform\Module\ModuleGuard;
 use App\Platform\Scheduling\ScheduleCatalog;
 use App\Platform\Scheduling\NightlyWindow;
 use App\Platform\Scheduling\ScheduledTask;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\LazyCommand;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -45,6 +47,7 @@ final class RunScheduledTasksCommand extends Command
     public function __construct(
         private readonly ScheduleCatalog $catalog,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ModuleGuard $moduleGuard,
     ) {
         parent::__construct();
     }
@@ -153,6 +156,19 @@ final class RunScheduledTasksCommand extends Command
                 : NightlyWindow::isOpen($now, $task->nightlyAt, $trace->getLastFinishedAt());
 
             if (!$due) {
+                continue;
+            }
+
+            // Recentrage, CA-3 : la tâche d'un module masqué éteint partout ne tourne pas, et le dit.
+            // ⚠ Allumé pour UN établissement, elle tourne pour tous : la commande parcourt elle-même
+            //   les établissements, l'ordonnanceur ne sait pas la restreindre.
+            $switchedOff = $this->switchedOffModule($task);
+            if ($switchedOff !== null) {
+                $io->writeln(sprintf(
+                    '  <comment>sautée</comment> %s — module « %s » éteint dans tous les établissements.',
+                    $task->command,
+                    $switchedOff,
+                ));
                 continue;
             }
 
@@ -326,6 +342,7 @@ final class RunScheduledTasksCommand extends Command
     {
         $lignes = [];
         $jamais = 0;
+        $sautees = 0;
         $enRetard = 0;
 
         foreach ($this->catalog->all() as $task) {
@@ -342,7 +359,15 @@ final class RunScheduledTasksCommand extends Command
             // La contrepartie est qu'une nuit REELLEMENT manquee doit se voir. On la compte en
             // NUITS, pas en minutes : « 4320 minutes de retard » ne dit rien, « 3 nuits sautees »
             // se lit.
-            if ($fin === null) {
+            // Recentrage : une tâche d'un module éteint partout est SAUTÉE, ce qui n'est ni
+            // « jamais tournée » (l'ordonnanceur à réparer) ni « en retard ». L'état se calcule ici,
+            // à la lecture, comme la décision d'exécution : une trace écrite au moment du saut
+            // mentirait dès qu'on rallume le module.
+            $sautee = $this->switchedOffModule($task);
+            if ($sautee !== null) {
+                $etat = sprintf('sautée : module %s éteint', $sautee);
+                ++$sautees;
+            } elseif ($fin === null) {
                 $etat = 'JAMAIS';
                 ++$jamais;
             } elseif ($task->nightlyAt !== null) {
@@ -373,7 +398,9 @@ final class RunScheduledTasksCommand extends Command
 
         $io->table(['', 'commande', 'toutes les', 'état', 'dernière fin', 'échecs'], $lignes);
 
-        if ($jamais === \count($lignes)) {
+        // Les tâches sautées ne comptent ni pour ni contre : depuis D133 il y en a toujours, et les
+        // compter dans le tableau sans les compter comme « jamais » désarmait cette alarme.
+        if ($jamais > 0 && $jamais === \count($lignes) - $sautees) {
             $io->error(
                 "AUCUNE tâche n'a jamais tourné. L'ordonnanceur n'est appelé par personne : "
                 . 'il manque un appel périodique à `platform:scheduler:run`. '
@@ -390,6 +417,21 @@ final class RunScheduledTasksCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /** L'identifiant du module masqué de cette tâche s'il est éteint partout, sinon `null`. */
+    private function switchedOffModule(ScheduledTask $task): ?string
+    {
+        $application = $this->getApplication();
+        if ($application === null || !$application->has($task->command)) {
+            return null;
+        }
+
+        $command = $application->find($task->command);
+        $command = $command instanceof LazyCommand ? $command->getCommand() : $command;
+        $module = $this->moduleGuard->maskedModuleOf($command::class);
+
+        return $module !== null && !$this->moduleGuard->isOnAnywhere($module) ? $module->id() : null;
     }
 
     private function traceFor(string $command): ScheduledTaskRun

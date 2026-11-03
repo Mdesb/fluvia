@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Caution;
 
+use App\Tests\Platform\ModuleSwitch;
 use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
@@ -16,6 +17,8 @@ use Doctrine\ORM\EntityManagerInterface;
 /** Base des tests d'API du module socle `App\Caution` : schéma recréé, fixtures socle + caution. */
 abstract class CautionApiTestCase extends ApiTestCase
 {
+    use ModuleSwitch;
+
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -34,6 +37,9 @@ abstract class CautionApiTestCase extends ApiTestCase
         foreach ([SocleFixtures::class, CautionFixtures::class] as $classe) {
             $container->get($classe)->load($em);
         }
+
+        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
+        $this->switchModule('caution', true);
 
         self::ensureKernelShutdown();
     }

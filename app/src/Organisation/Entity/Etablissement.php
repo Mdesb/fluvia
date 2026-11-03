@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\I18n\Locales;
 use App\Organisation\State\StampCreatorAffectationProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -173,6 +174,19 @@ class Etablissement
     #[ORM\Column(length: 64, options: ['default' => 'Europe/Paris'])]
     #[Groups(['etablissement:read', 'etablissement:write'])]
     private string $fuseauHoraire = 'Europe/Paris';
+
+    /**
+     * La langue de travail de l'établissement (ISO 639-1) : celle de ses écrans, sauf préférence
+     * contraire d'un utilisateur, et celle des documents qu'il émet (`Locales::ofEstablishment()`).
+     *
+     * Elle ne se déduit pas du pays, comme la devise : une piscine de Barcelone travaille en `es` ou
+     * en `ca`, une de Perpignan en `fr`. Le défaut `fr` explicite ce que parlent tous les
+     * établissements existants (D66-ter). Les valeurs admises sont `Locales::SUPPORTED`.
+     */
+    #[ORM\Column(length: 5, options: ['default' => 'fr'])]
+    #[Assert\Choice(choices: Locales::SUPPORTED, message: 'Langue non prise en charge.')]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $locale = 'fr';
 
     /**
      * LES MOTS DU METIER, PAR ETABLISSEMENT.
@@ -391,6 +405,18 @@ class Etablissement
     public function setFiscalTerritory(string $fiscalTerritory): self
     {
         $this->fiscalTerritory = strtoupper(trim($fiscalTerritory));
+
+        return $this;
+    }
+
+    public function getLocale(): string
+    {
+        return $this->locale;
+    }
+
+    public function setLocale(string $locale): self
+    {
+        $this->locale = strtolower(trim($locale));
 
         return $this;
     }

@@ -59,7 +59,7 @@ final class RoleClientFinalIdempotentTest extends BoutiqueApiTestCase
         self::assertContains('boutique.acheter_soi', $actions);
         self::assertContains('crm.lire_soi', $actions);
         self::assertContains('reservation.reserver_soi', $actions);
-        self::assertCount(12, $actions, 'Les douze permissions du bundle doivent être posées.');
+        self::assertCount(11, $actions, 'Les onze permissions du bundle doivent être posées.');
     }
 
     /**
@@ -83,7 +83,7 @@ final class RoleClientFinalIdempotentTest extends BoutiqueApiTestCase
 
         self::assertContains('reporting.lire', $actions, 'Une permission ajoutée à la main a été retirée.');
         self::assertContains('boutique.lire_soi', $actions);
-        self::assertCount(13, $actions, 'Les douze du bundle, plus celle ajoutée à la main.');
+        self::assertCount(12, $actions, 'Les onze du bundle, plus celle ajoutée à la main.');
     }
 
     /** Le rôle dans l'état où la préproduction l'a montré : présent, sans aucune permission. */

@@ -46,10 +46,21 @@ final class ProjectionVenteDoctrineAdapter implements ProjectionVenteInterface
         // (l'expansion de la liste de paramètres n'est pas systématique) — filtrage explicite ici pour
         // rester robuste, le volume par profil restant modeste (établissements rattachés, non tout le
         // catalogue de ventes de l'application).
+        //
+        // ⚠ UNE VENTE À 0 € N'A RIEN À COMPTABILISER, ET ELLE EST ÉCARTÉE ICI, PAS PLUS LOIN.
+        //
+        // Le régime rend une écriture sans ligne pour un billet gratuit, que le générateur saute sans
+        // rien écrire : la vente restait donc « validée non comptabilisée » pour toujours, et chaque
+        // génération la rechargeait, projetait ses lignes (une requête par ligne) et la jetait — 43 000
+        // billets gratuits par an au CIAP Casa Xanxo, relus à chaque passage. Un produit gratuit sans
+        // catégorie comptable y ajoutait une anomalie, à chaque passage aussi. Écartée par la requête,
+        // elle n'est plus ni hydratée, ni projetée, ni signalée. (FreeSaleAccountingTest)
         /** @var list<Vente> $ventes */
         $ventes = $this->em->getRepository(Vente::class)->createQueryBuilder('v')
             ->andWhere('v.statut = :statut')
+            ->andWhere('v.total <> :zero')
             ->setParameter('statut', StatutVente::Validee)
+            ->setParameter('zero', '0.00')
             ->orderBy('v.date', 'ASC')
             ->getQuery()
             ->getResult();

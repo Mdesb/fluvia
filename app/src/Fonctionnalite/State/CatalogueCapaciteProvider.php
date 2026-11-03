@@ -9,6 +9,7 @@ use ApiPlatform\State\ProviderInterface;
 use App\Fonctionnalite\ApiResource\CapaciteCatalogueItem;
 use App\Fonctionnalite\Dto\DescripteurCapacite;
 use App\Fonctionnalite\Service\CatalogueCapacites;
+use App\Platform\Module\ModuleGuard;
 
 /**
  * @implements ProviderInterface<list<CapaciteCatalogueItem>>
@@ -17,12 +18,20 @@ final class CatalogueCapaciteProvider implements ProviderInterface
 {
     public function __construct(
         private readonly CatalogueCapacites $catalogue,
+        private readonly ModuleGuard $moduleGuard,
     ) {
     }
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        return array_map(self::versDto(...), $this->catalogue->toutes());
+        $coeur = $this->moduleGuard->coreCapabilities();
+
+        return array_map(static function (DescripteurCapacite $d) use ($coeur): CapaciteCatalogueItem {
+            $item = self::versDto($d);
+            $item->estDuCoeur = \in_array($d->code, $coeur, true);
+
+            return $item;
+        }, $this->catalogue->toutes());
     }
 
     private static function versDto(DescripteurCapacite $descripteur): CapaciteCatalogueItem

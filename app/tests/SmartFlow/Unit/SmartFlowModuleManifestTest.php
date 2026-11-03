@@ -16,7 +16,9 @@ final class SmartFlowModuleManifestTest extends TestCase
 
         self::assertSame('smart_flow', $manifest->id());
         self::assertSame('0.1.0', $manifest->version());
-        self::assertNull($manifest->capability(), 'Service réactif transverse, D22 : Smart Flow ne vend rien.');
+        // D132 (décision de Maxime du 20/10/2026, recentrage) remplace D22 sur ce point : le module a
+        // une capacité pour pouvoir être éteint par établissement. Il n'est plus « transverse ».
+        self::assertSame('smart_flow', $manifest->capability(), 'D132 : Smart Flow est éteignable par établissement.');
         self::assertSame([], $manifest->dependencies());
         self::assertSame(
             ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own', 'smart_flow.manage'],

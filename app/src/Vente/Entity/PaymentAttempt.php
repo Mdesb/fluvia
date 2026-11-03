@@ -98,4 +98,34 @@ class PaymentAttempt
 
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $cardReference = null;
+
+    // ── Spec TPE lot 1 : le connecteur, et ce que le terminal a rendu (§3) ────────────────────────
+
+    /** `simule`, `externe`… : son délai juge la tentative envoyée sans issue. Nul avant le lot (et sans terminal). */
+    #[ORM\Column(length: 24, nullable: true)]
+    private ?string $connector = null;
+
+    /** Le montant réellement débité ; inférieur au montant demandé, il laisse un reste dû. */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $debitedAmount = null;
+
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $authorizationNumber = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $terminalTransactionId = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $terminalId = null;
+
+    /** « CB », « international »… tel que le terminal le dit. */
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $cardNetwork = null;
+
+    /** Le ticket client du terminal, imprimé avec le ticket de caisse. */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $customerReceipt = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $merchantReceipt = null;
 }

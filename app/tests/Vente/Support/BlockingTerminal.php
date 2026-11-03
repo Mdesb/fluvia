@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Vente\Support;
 
-use App\Caisse\Entity\PointDeVente;
-use App\Vente\Tpe\ResultatTpe;
+use App\Vente\Tpe\TerminalAttempt;
 use App\Vente\Tpe\TerminalPaiementInterface;
 
 /**
@@ -13,6 +12,9 @@ use App\Vente\Tpe\TerminalPaiementInterface;
  * réponse est connue, mais elle ne revient qu'à la levée de la barrière. Partout ailleurs, il laisse
  * passer (`SettlementBarrier`). Câblé en `when@test` sur l'alias `TerminalPaiementInterface`, pour que
  * `TpeMock` reste ce que les tests vont chercher par son nom.
+ *
+ * Le terminal simulé livre son issue PENDANT `demarrer()` (port asynchrone) : la barrière se tient
+ * donc AVANT, la tentative encore `pending` — là où l'ancien terminal synchrone attendait.
  */
 final class BlockingTerminal implements TerminalPaiementInterface
 {
@@ -20,11 +22,24 @@ final class BlockingTerminal implements TerminalPaiementInterface
     {
     }
 
-    public function demander(PointDeVente $pointDeVente, string $montant): ResultatTpe
+    public function connector(): string
     {
-        $resultat = $this->inner->demander($pointDeVente, $montant);
-        SettlementBarrier::hold('terminal');
+        return $this->inner->connector();
+    }
 
-        return $resultat;
+    public function staleAfterSeconds(): int
+    {
+        return $this->inner->staleAfterSeconds();
+    }
+
+    public function demarrer(TerminalAttempt $tentative): void
+    {
+        SettlementBarrier::hold('terminal');
+        $this->inner->demarrer($tentative);
+    }
+
+    public function annuler(TerminalAttempt $tentative): void
+    {
+        $this->inner->annuler($tentative);
     }
 }

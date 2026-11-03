@@ -11,11 +11,10 @@ use App\Platform\Module\ModuleManifest;
  * (registre du noyau, `da3cb6d`), donc enregistré automatiquement par le tag de l'interface.
  *
  * `App\Ocr` est un **service partagé** (consommé en PHP par les modules Finance via `DocumentExtractor`,
- * spec-ocr.md §2/§8 ; aucun événement émis). ⚠ **Point à arbitrer par l'intégrateur (D4)** :
- * `capability()` renvoie ici `'ocr'` pour satisfaire la signature `string` de l'interface, mais D4 pose
- * qu'OCR est transverse et non activable par tenant. Si le registre doit distinguer les services
- * transverses des modules métier (capacité nulle / marqueur dédié), c'est un ajustement de contrat côté
- * `App\Platform` — je m'aligne sur ta décision.
+ * spec-ocr.md §2/§8 ; aucun événement émis). `capability()` rend `ocr` depuis le 20/10/2026 (recentrage,
+ * décision de Maxime) : il rendait `null` (D4, transverse), ce qui le rendait impossible à éteindre.
+ * Éteint, seules ses ROUTES disparaissent (`ModuleGuardListener`) : les appels PHP de Finance à
+ * `DocumentExtractor` ne passent par aucune garde.
  */
 final class OcrModule implements ModuleManifest
 {
@@ -31,10 +30,7 @@ final class OcrModule implements ModuleManifest
 
     public function capability(): ?string
     {
-        // `null` = service transverse partagé (D4, entériné par A : `ModuleManifest::capability(): ?string`).
-        // OCR n'est ni vendu ni activable par établissement — consommé en PHP par les modules Finance.
-        // `ModuleAccess::hasFeature()` garde alors les features par leur seule activation propre.
-        return null;
+        return 'ocr';
     }
 
     /** @return list<string> */

@@ -6,7 +6,7 @@ import AchatsStock from '../components/AchatsStock.jsx'
 import ValorisationStock from '../components/ValorisationStock.jsx'
 import RetoursStock from '../components/RetoursStock.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { dateHeureFr, resoudre } from '../components/Liste.jsx'
+import { dateHeureFr, jourLocal, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -14,6 +14,7 @@ import { euros, libelleProduit } from '../api/produit.js'
 import { idDe } from '../api/iri.js'
 import { confirmer } from '../components/Confirmation.jsx'
 import { useEtatUrl } from '../api/url.js'
+import { downloadCsv, toCsv } from '../api/csv.js'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
 //
@@ -570,6 +571,25 @@ function ArticlesSection({
               ? `${lus} lues sur ${total} références`
               : `${total} référence${total > 1 ? 's' : ''}`}
         </span>
+        {/* L'export suit la liste affichée (recherche comprise). Lecture incomplète : pas d'export,
+            un fichier tronqué passerait pour l'état complet du stock. */}
+        <button
+          className="btn sm"
+          type="button"
+          disabled={!articles?.length || incomplet || !lotsCharges}
+          title={incomplet ? 'La liste n’a pas été lue en entier : rechargez avant d’exporter.' : undefined}
+          onClick={() => downloadCsv(`stock_${jourLocal()}.csv`, toCsv([
+            { titre: 'Article', valeur: (a) => a.libelle },
+            { titre: 'Code-barres', valeur: (a) => a.codeEAN },
+            { titre: 'Rangé', valeur: (a) => a.storageLocation },
+            { titre: 'Unité', valeur: (a) => a.unite },
+            { titre: 'En stock', valeur: (a) => restantParArticle[a.id] || 0, nombre: true },
+            { titre: 'Seuil mini', valeur: (a) => a.seuilMin, nombre: true },
+            { titre: 'Prix d’achat HT (€)', valeur: (a) => a.prixAchatHT, nombre: true },
+          ], articles))}
+        >
+          Exporter (CSV)
+        </button>
         <div className="r" style={{ minWidth: 240 }}>
           <input
             className="input"

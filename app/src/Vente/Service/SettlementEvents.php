@@ -16,12 +16,6 @@ use App\Platform\Event\EventBus;
  */
 final class SettlementEvents
 {
-    /**
-     * Posé par `PaiementHandler` juste avant l'appel au terminal. En deçà, une erreur n'a rien pu
-     * débiter ; au-delà, seule une réponse du terminal dit ce qui s'est passé.
-     */
-    public bool $terminalAsked = false;
-
     /** @var list<DomainEvent> */
     private array $events = [];
 

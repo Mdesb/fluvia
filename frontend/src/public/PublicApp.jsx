@@ -392,6 +392,19 @@ export default function PublicApp() {
             if (v && route.retour === 'tunnel') onNaviguer({ vue: 'tunnel' })
           }}
           onNaviguer={onNaviguer}
+          // Sans la boutique, la création de compte refuse avant tout appel (« Ouvrez la boutique
+          // avant… ») : c'était le cas de 27/08 au 13/10. Le panier suit le compte créé, puis on le
+          // relit, puisqu'il appartient désormais au client.
+          vitrineId={vitrine?.id || vitrineId}
+          panierId={panier?.id}
+          onPanierRattache={async () => {
+            if (!panier?.id) return
+            try {
+              setPanier(await boutique.panier(panier.id))
+            } catch {
+              /* le panier se relira au prochain affichage */
+            }
+          }}
         />
       ) : erreur ? (
         // ⚠ LE REPLI RENDAIT LA BOUTIQUE SANS LA GARDE D'ERREUR, ET C'EST UNE PAGE PUBLIQUE.

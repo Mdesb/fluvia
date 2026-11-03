@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\SmartFlow\Command;
 
+use App\Platform\Module\ModuleGuard;
 use App\SmartFlow\Entity\RescheduleProposal;
 use App\SmartFlow\Entity\SlotWaitlistEntry;
 use App\SmartFlow\Enum\RescheduleProposalStatus;
@@ -46,6 +47,7 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SlotWaitlistPromotionService $promotionService,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -72,6 +74,10 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
 
         $traites = 0;
         foreach ($propositions as $proposition) {
+            // Recentrage, PR 2 (e) : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $proposition->getEstablishment()) === false) {
+                continue;
+            }
             // La séquence complète — clore, consommer l'inscription, servir le suivant — vit
             // désormais dans `SlotWaitlistPromotionService` : `POST .../decline` en avait besoin
             // elle aussi, et deux copies auraient divergé sur le `flush` intercalé.

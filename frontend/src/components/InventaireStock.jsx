@@ -4,6 +4,8 @@ import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { confirmer } from './Confirmation.jsx'
+import { downloadCsv, toCsv } from '../api/csv.js'
+import { idDe } from '../api/iri.js'
 
 // Le cycle d'inventaire : lancer, compter, régulariser, clôturer.
 //
@@ -237,6 +239,22 @@ function InventaireEnCours({
         </div>
       )}
 
+      <div className="ticket-actions">
+        <button
+          className="btn sm"
+          type="button"
+          disabled={lignes.length === 0}
+          onClick={() => downloadCsv(`inventaire_${inventaire.id}.csv`, toCsv([
+            { titre: 'Article', valeur: (l) => parId[idDe(l.articleStock)]?.libelle || '' },
+            { titre: 'Attendu', valeur: (l) => l.quantiteTheorique, nombre: true },
+            { titre: 'Compté', valeur: (l) => l.quantiteComptee, nombre: true },
+            { titre: 'Écart', valeur: (l) => (l.quantiteComptee == null ? null : l.ecart), nombre: true },
+            { titre: 'État', valeur: (l) => (l.quantiteComptee == null ? 'à compter' : l.mouvementRegularisation != null ? 'régularisé' : 'compté') },
+          ], lignes))}
+        >
+          Exporter l’inventaire (CSV)
+        </button>
+      </div>
       <div className="hint" style={{ marginTop: 0 }}>
         {restantes === 0
           ? 'Toutes les lignes sont comptées. Régularisez les écarts que vous acceptez, puis clôturez.'

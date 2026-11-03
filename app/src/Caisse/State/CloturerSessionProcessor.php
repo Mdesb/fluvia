@@ -86,6 +86,18 @@ final class CloturerSessionProcessor implements ProcessorInterface
                     $tentative['status']->label(),
                 ));
             }
+            // Relecture D2 : une carte annulée à l'instant peut encore être acceptée par le terminal.
+            // Clos maintenant, son acceptation tomberait hors Z et hors régie : on attend la fin de la veille.
+            $annulee = $this->reglements->recentlyCancelledAttempt($vente);
+            if ($annulee !== null) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'Clôture refusée : un paiement carte de %s € sur la vente n° %s vient d\'être annulé, et le terminal '
+                    . 'peut encore l\'accepter pendant %d s. Patientez, puis relancez la clôture.',
+                    $annulee['amount'],
+                    $vente->getNumero(),
+                    SettlementCoordinator::STALE_AFTER_SECONDS,
+                ));
+            }
             if ($vente->getStatut() === StatutVente::EnCours && !$vente->getPaiements()->isEmpty()) {
                 throw new UnprocessableEntityHttpException('Clôture refusée : des paiements sont incohérents (vente en cours réglée partiellement).');
             }

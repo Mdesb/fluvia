@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Caisse\Validator\RevenueOfficeWithinTenant;
+use App\Caisse\Validator\TerminalSettings;
 use App\Compta\Entity\RegieRecettes;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Nf525\Entity\DailyClosure;
@@ -81,9 +82,18 @@ class PointDeVente
     #[Groups(['pdv:read', 'pdv:write'])]
     private ?array $imprimante = null;
 
-    /** @var list<array<string, mixed>>|null Terminaux TPE {marque∈{ingenico,nayax,pax}, ref} (US-L2-07). */
+    /**
+     * Le terminal de paiement (US-L2-07 ; spec TPE lot 1 §6) : `{ connecteur, …paramètres }`, nul = le
+     * terminal externe (le caissier encaisse sur le terminal du commerce et déclare le résultat).
+     * `connecteur` ∈ externe | simule (démonstration) | caisse_ap_pont | nepting | stripe (lots
+     * suivants) ; `marque` et `ref` décrivent le terminal. Avant ce lot : une liste `[{marque, ref}]`,
+     * ou le booléen de l'écran Paramètres, gardés sous `terminaux` / `ancien` par la migration.
+     *
+     * @var array<string, mixed>|null
+     */
     #[ORM\Column(nullable: true)]
     #[Groups(['pdv:read', 'pdv:write'])]
+    #[TerminalSettings]
     private ?array $tpe = null;
 
     /** @var list<string>|null UUID de Produit (M1) épinglés à l'écran de caisse (US-L2-02). */
@@ -119,6 +129,14 @@ class PointDeVente
     #[Assert\PositiveOrZero]
     #[Groups(['pdv:read', 'pdv:write'])]
     private string $toleranceEcartCaisse = '0.00';
+
+    /**
+     * Un billet par unité vendue (CIAP) : 3 entrées sortent 3 billets séparés, chacun avec le code de
+     * son support — la validation en émet déjà un par unité. Faux : un billet récapitulatif.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private bool $unBilletParUnite = false;
 
     /**
      * Régie de recettes pour le compte de laquelle ce guichet encaisse (RG-REGIE-02).
@@ -216,13 +234,13 @@ class PointDeVente
         return $this;
     }
 
-    /** @return list<array<string, mixed>>|null */
+    /** @return array<string, mixed>|null */
     public function getTpe(): ?array
     {
         return $this->tpe;
     }
 
-    /** @param list<array<string, mixed>>|null $tpe */
+    /** @param array<string, mixed>|null $tpe */
     public function setTpe(?array $tpe): self
     {
         $this->tpe = $tpe;
@@ -247,6 +265,18 @@ class PointDeVente
     public function getSeuilImpression(): string
     {
         return $this->seuilImpression;
+    }
+
+    public function isUnBilletParUnite(): bool
+    {
+        return $this->unBilletParUnite;
+    }
+
+    public function setUnBilletParUnite(bool $unBilletParUnite): self
+    {
+        $this->unBilletParUnite = $unBilletParUnite;
+
+        return $this;
     }
 
     public function setSeuilImpression(string $seuilImpression): self

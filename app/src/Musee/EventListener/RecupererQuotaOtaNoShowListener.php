@@ -8,6 +8,7 @@ use App\Musee\Entity\AllocationQuotaOTA;
 use App\Musee\Entity\ReservationOTA;
 use App\Musee\Enum\StatutReservationOTA;
 use App\Musee\Port\ConnecteurOtaInterface;
+use App\Platform\Module\ModuleGuard;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutReservation;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
@@ -29,6 +30,7 @@ final class RecupererQuotaOtaNoShowListener
 {
     public function __construct(
         private readonly ConnecteurOtaInterface $connecteur,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
     }
 
@@ -39,6 +41,10 @@ final class RecupererQuotaOtaNoShowListener
 
         foreach ($uow->getScheduledEntityUpdates() as $entity) {
             if (!$entity instanceof Reservation) {
+                continue;
+            }
+            // Recentrage, PR 2 (d) : musée éteint pour cet établissement, le cœur vit seul.
+            if ($this->moduleGuard?->allows(self::class, $entity->getEtablissement()) === false) {
                 continue;
             }
             $changeSet = $uow->getEntityChangeSet($entity);

@@ -120,4 +120,29 @@ final class DispatchScheduledSocialPostsCommandTest extends SocialApiTestCase
 
         return $relue;
     }
+
+    /**
+     * Recentrage, PR 2 (e) — `social:dispatch-scheduled-posts` ne met pas en file les messages d'un
+     * établissement où Social est éteint ; allumé, le même message part (témoin).
+     */
+    public function testAScheduledPostOfASwitchedOffEstablishmentIsNotQueued(): void
+    {
+        $this->creerMessageDate('2026-08-24T09:00:00+00:00');
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $commande = new DispatchScheduledSocialPostsCommand(
+            $em,
+            static::getContainer()->get(MessageBusInterface::class),
+            static::getContainer()->get(\App\Platform\Module\ModuleGuard::class),
+        );
+
+        $this->switchModule('social', false, SocleFixtures::ETAB_A_NOM);
+        $commande->run(new ArrayInput(['--now' => '2026-08-24T10:00:00+00:00']), new BufferedOutput());
+        self::assertCount(0, $this->transport()->getSent(), 'éteint : rien en file');
+
+        $this->switchModule('social', true, SocleFixtures::ETAB_A_NOM);
+        $em->clear();
+        $commande->run(new ArrayInput(['--now' => '2026-08-24T10:05:00+00:00']), new BufferedOutput());
+        self::assertCount(1, $this->transport()->getSent(), 'témoin : allumé, le message part');
+    }
 }

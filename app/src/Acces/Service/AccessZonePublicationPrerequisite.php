@@ -19,7 +19,7 @@ use App\Offre\Port\PublicationPrerequisite;
  * (`Fonctionnalites`, la seule source d'activation). Les zones se déclarent PAR SITE
  * (`ProductAccessZoneResolver::spacesFor`) : un produit vendu sur deux sites en exige sur chacun.
  *
- * Seuls les produits qui émettent un titre sont concernés (`TypeProduit::issuesTicket`) : un mug
+ * Seuls les produits qui émettent un titre sont concernés (`TypeProduit::emetUnSupport`) : un mug
  * n'ouvre pas de porte, et une prestation réservée tient ses zones de son activité (D89).
  */
 final class AccessZonePublicationPrerequisite implements PublicationPrerequisite
@@ -32,7 +32,7 @@ final class AccessZonePublicationPrerequisite implements PublicationPrerequisite
 
     public function missing(Produit $product): array
     {
-        if (!$product->getType()?->issuesTicket()) {
+        if (!$product->getType()?->emetUnSupport()) {
             return [];
         }
 

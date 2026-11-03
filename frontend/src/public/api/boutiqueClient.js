@@ -218,8 +218,11 @@ export const boutique = {
     request(`/api/boutique/paniers/${id}/billets`, { panierToken }),
 
   // --- Tunnel ---
+  // Le mode `session` rattache le panier au client connecté : sans son jeton, le serveur ne voit
+  // personne et rend 401 (« Votre session a expiré », vécu le 13/10). L'invité n'envoie pas de jeton :
+  // un jeton périmé resté en mémoire ferait refuser toute la requête.
   identifier: (id, corps) =>
-    request(`/api/boutique/paniers/${id}/identifier`, { method: 'POST', body: corps }),
+    request(`/api/boutique/paniers/${id}/identifier`, { method: 'POST', body: corps, auth: corps?.mode === 'session' }),
   beneficiaires: (id, lignes) =>
     request(`/api/boutique/paniers/${id}/beneficiaires`, { method: 'POST', body: { lignes } }),
   consentement: (id, corps) =>
