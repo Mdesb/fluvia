@@ -10,8 +10,9 @@ const ONGLET_DU_PREREQUIS = {
   canal: 'vente',
   prix: 'vente',
   categorie_comptable: 'vente',
-  carte: 'vente',
-  formule: 'vente',
+  // Leur propre onglet depuis la refonte (lot 2) : voir `sheetTabs`.
+  carte: 'carte',
+  formule: 'formule',
   zone_acces: 'acces',
   creneau: 'agenda',
 }

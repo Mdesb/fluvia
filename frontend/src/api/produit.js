@@ -123,10 +123,12 @@ export const STATUTS_PRODUIT = {
   brouillon: {
     libelle: 'Brouillon',
     ton: 'mut',
-    aide: "Visible de vous seul. Le produit n'est en vente sur aucun canal tant qu'il n'est pas publié.",
+    aide: "Visible de vous seul. Le produit n'est en vente sur aucun canal tant qu'il n'est pas mis en vente.",
   },
   publie: {
-    libelle: 'Publié',
+    // « En vente » plutôt que « Publié » (refonte, lot 2) : le bouton dit « Mettre en vente », le
+    // badge dit l'état que ce bouton produit. Le statut serveur reste `publie`.
+    libelle: 'En vente',
     ton: 'good',
     aide: 'En vente sur les canaux configurés pour ce produit.',
   },
@@ -167,7 +169,7 @@ export function statutProduit(p) {
       // chercher un etat qui n'existe pas. C'est le TON et l'AIDE qui disent ce qui cloche.
       libelle: base.libelle,
       ton: 'warn',
-      aide: "Publié, mais sans aucun tarif : ce produit n'est vendable sur aucun canal, "
+      aide: "En vente, mais sans aucun tarif : ce produit n'est vendable sur aucun canal, "
         + 'ni au guichet ni en ligne. Ajoutez-lui une grille tarifaire.',
     }
   }
@@ -186,10 +188,10 @@ export function actionsStatut(statut) {
         {
           id: 'publier',
           droit: 'offre.publier',
-          libelle: 'Publier',
+          libelle: 'Mettre en vente',
           ton: 'primary',
           aide: 'Met le produit en vente sur ses canaux. La fiche dit ce qui manque encore.',
-          confirme: 'produit publié.',
+          confirme: 'produit mis en vente.',
         },
         // ⚠ ABSENT JUSQU'AU 01/09, ET LE SERVEUR L'ACCEPTAIT DEPUIS TOUJOURS.
         //
@@ -219,7 +221,7 @@ export function actionsStatut(statut) {
         {
           id: 'depublier',
           droit: 'offre.publier',
-          libelle: 'Dépublier',
+          libelle: 'Retirer de la vente',
           ton: 'ghost',
           aide: 'Retire le produit de la vente et le repasse en brouillon. Réversible.',
           confirme: 'produit repassé en brouillon.',

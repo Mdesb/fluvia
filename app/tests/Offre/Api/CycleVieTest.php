@@ -71,7 +71,7 @@ final class CycleVieTest extends OffreApiTestCase
         $client->request('POST', '/api/produits/' . $cree['id'] . '/publier', $entete);
         self::assertResponseStatusCodeSame(422);
         // Le refus dit désormais des phrases, plus des codes (lot des garde-fous, 08/10).
-        self::assertStringContainsString('catégorie comptable', $client->getResponse()->toArray(false)['detail']);
+        self::assertStringContainsString('catégorie de recette', $client->getResponse()->toArray(false)['detail']);
     }
 
     /**
@@ -101,7 +101,7 @@ final class CycleVieTest extends OffreApiTestCase
         $corps = $client->getResponse()->toArray(false)['detail'];
 
         self::assertStringNotContainsString(
-            'catégorie comptable',
+            'catégorie de recette',
             $corps,
             'ACT-5 : la categorie comptable du type doit avoir ete posee a la creation.',
         );
@@ -149,7 +149,7 @@ final class CycleVieTest extends OffreApiTestCase
         $corps = $client->getResponse()->toArray(false)['detail'];
         self::assertStringContainsString('canal', $corps);
         self::assertStringContainsString('prix', $corps);
-        self::assertStringContainsString('catégorie comptable', $corps);
+        self::assertStringContainsString('catégorie de recette', $corps);
 
         // Produit complet (fixture) : publication OK, puis archivage OK. Il part d'un brouillon.
         $this->remettreEnBrouillon(OffreFixtures::PRODUIT_ENTREE);

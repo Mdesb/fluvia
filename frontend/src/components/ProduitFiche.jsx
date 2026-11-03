@@ -2,6 +2,7 @@ import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { CANAUX_PRODUIT, libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu, actionsStatut } from '../api/produit.js'
 import { codesManquants, refusAAfficher, CARTE_PAR_DEFAUT, FORMULE_PAR_DEFAUT, complementDuType, lignesManquantes, ongletInitial } from '../api/publication.js'
+import { autosaveHold, changedFields, saveIndicator, sheetComplement, sheetTabs } from '../api/productSheet.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
@@ -39,9 +40,9 @@ const APPELS_STATUT = {
 // Les trois règles de produit constaté d'avance du socle (`Offre\Enum\ReglePca`), dites en clair :
 // le code brut « etalement » ne dit pas ce qui est étalé ni pourquoi.
 const REGLES_PCA = {
-  aucune: 'Aucune — le chiffre d’affaires est acquis à la vente',
-  etalement: 'Étalement — réparti sur la durée de validité',
-  consommation: 'À la consommation — acquis au fur et à mesure des entrées',
+  aucune: 'Le jour de la vente',
+  etalement: 'Réparti sur toute la durée de validité',
+  consommation: 'À chaque entrée utilisée',
 }
 
 // LA FICHE PRODUIT EST UNE PAGE, PLUS UNE MODALE -- demande de Maxime, 29/08, formulee deux fois
@@ -158,7 +159,11 @@ function nomProduitAssocie(assoc, catalogue) {
 
 // Les trois axes de catégories (RG-M1-05), indépendants : un produit porte au plus une valeur
 // par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
-const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
+//
+// Les libellés disent ce que chaque axe FAIT (refonte, lot 2) : « axe comptable » ne parlait qu'au
+// comptable, et c'est pourtant le seul des trois sans lequel la vente ne se publie pas. La création
+// (lot 1) le nomme déjà « Catégorie de recette ».
+const AXES = [['comptable', 'Catégorie de recette'], ['marketing', 'Famille (pour vos statistiques)'], ['rayon', 'Rayon de la caisse']]
 
 // ⚠ LES AXES OÙ UN PRODUIT PEUT ÊTRE DANS PLUSIEURS CASES. Une liste et non un `=== 'rayon'` :
 // le jour où un second axe d'affichage arrive, il s'ajoute ici et nulle part ailleurs.
@@ -171,6 +176,9 @@ const AXES_MULTIPLES = ['rayon']
 // de la marge sur les deux mesures sans jamais dépasser le temps où l'utilisateur regarde encore
 // le résultat de son clic.
 const DELAI_CORRECTION_MS = 1000
+
+// Le temps de finir un mot avant que la fiche ne s'enregistre seule (refonte, lot 2).
+const DELAI_SAUVEGARDE_MS = 800
 
 /**
  * Le mode, en mots de l'utilisateur.
@@ -226,6 +234,22 @@ export default function ProduitFiche({
   // `true` quand le référentiel de TVA a été REFUSÉ (403), et non trouvé vide. Les deux donnent une
   // liste vide ; un seul des deux a un remède, et ce n'est pas celui que l'écran conseillait.
   const [tvaRefusee, setTvaRefusee] = useState(false)
+  // LE COMPTE DE RECETTE EN LISTE (lot 2) : saisir « 706100 » de mémoire était le seul champ de la
+  // fiche qui supposait de connaître le plan comptable. Les comptes de produits (classe 7) déclarés
+  // dans la comptabilité sont proposés ; illisibles (`compta.lire` manquant) ou absents, le champ
+  // reste en saisie libre — une liste vide ne doit pas fermer la saisie.
+  const [comptesRecette, setComptesRecette] = useState([])
+  useEffect(() => {
+    if (!peutModifierCompta) return undefined
+    let annule = false
+    api.comptesComptables()
+      .then((r) => {
+        if (annule) return
+        setComptesRecette(membres(r).filter((c) => c.actif !== false && String(c.numero || '').startsWith('7')))
+      })
+      .catch(() => { if (!annule) setComptesRecette([]) })
+    return () => { annule = true }
+  }, [peutModifierCompta])
 
   useEffect(() => {
     if (!peutModifierCompta) return undefined
@@ -250,6 +274,12 @@ export default function ProduitFiche({
     return () => { annule = true }
   }, [peutModifierCompta])
   const [enregistrement, setEnregistrement] = useState(false)
+  // Le brouillon dont l'enregistrement a échoué (sa signature) : la sauvegarde automatique ne le
+  // renvoie pas tant qu'il n'a pas changé. Et « Enregistré » ne s'affiche qu'après une écriture.
+  const [echecSur, setEchecSur] = useState(null)
+  const [dejaEnregistre, setDejaEnregistre] = useState(false)
+  // Le produit à l'écran, lu par un enregistrement qui se termine après qu'on en a changé.
+  const produitAffiche = useRef(produit?.id)
   const [duplication, setDuplication] = useState(false)
   // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
   //
@@ -272,42 +302,6 @@ export default function ProduitFiche({
   const aReverifier = () => setReverifier((n) => n + 1)
   const [actionStatut, setActionStatut] = useState(null)
   const [succes, setSucces] = useState(null)
-
-  // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
-  //
-  // Le controle d'acces, la comptabilite et le stock sont trois MODULES SEPARES : un exploitant
-  // peut n'en avoir aucun, ou les trois. Un onglet fixe « Acces & comptabilite » serait a moitie
-  // vide chez qui n'a que l'un des deux, et mentirait sur ce que le produit sait faire.
-  //
-  // ⚠ ABSENT, JAMAIS GRISE. Un onglet grise fait chercher ce qui manque et invite a « debloquer »
-  // ce qui n'est pas bloque ; un onglet absent ne pose aucune question. Meme regle que les actions
-  // de statut, plus haut dans ce module.
-  const onglets = useMemo(() => {
-    const liste = [['vitrine', 'Présentation'], ['vente', 'Vente']]
-    // La caisse n'est pas une capacite : tout exploitant vend au guichet. L'onglet est donc
-    // toujours la, et il porte ce qui ne concerne QUE le guichet.
-    liste.push(['caisse', 'Caisse'])
-    // ⚠ DEUX CAPACITÉS POUR UN ONGLET, ET C'EST MESURÉ, PAS ÉLÉGANT.
-    //
-    // `agenda` n'est active chez AUCUN établissement (préprod, 07/09 : zéro octroi — la migration
-    // du 01/09 n'a servi que `comptabilite` et `stock`). L'onglet et sa section Expositions
-    // existaient donc sans jamais s'afficher nulle part. `reservation`, elle, est active, et c'est
-    // elle qui porte les créneaux d'un produit vendu à l'horaire.
-    //
-    // Les deux sections restent conditionnées séparément à l'intérieur : un exploitant qui n'a que
-    // `reservation` n'a pas d'expositions à voir, et réciproquement.
-    if (capacites.includes('agenda') || capacites.includes('reservation')) liste.push(['agenda', 'Agenda'])
-    if (capacites.includes('controle_acces')) liste.push(['acces', 'Accès'])
-    if (capacites.includes('stock')) liste.push(['stock', 'Stock'])
-    if (capacites.includes('comptabilite')) liste.push(['compta', 'Comptabilité'])
-    return liste
-  }, [capacites])
-
-  // ⚠ SANS CE REPLI, LA FICHE PEUT SE RENDRE VIDE. `capacitesActives` depend de l'etablissement
-  // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
-  // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
-  const vueConnue = onglets.some(([cle]) => cle === vueFiche)
-  const vue = vueConnue ? vueFiche : ongletInitial(manquants, onglets)
 
   // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
   //
@@ -415,6 +409,32 @@ export default function ProduitFiche({
 
   const produitId = produit?.id
 
+  // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
+  //
+  // Le controle d'acces, la comptabilite et le stock sont trois MODULES SEPARES : un exploitant
+  // peut n'en avoir aucun, ou les trois. Un onglet fixe « Acces & comptabilite » serait a moitie
+  // vide chez qui n'a que l'un des deux, et mentirait sur ce que le produit sait faire.
+  //
+  // ⚠ ABSENT, JAMAIS GRISE. Un onglet grise fait chercher ce qui manque et invite a « debloquer »
+  // ce qui n'est pas bloque ; un onglet absent ne pose aucune question. Meme regle que les actions
+  // de statut, plus haut dans ce module.
+  //
+  // Depuis la refonte (lot 2), le TYPE compose aussi : un abonnement a son onglet « Abonnement »,
+  // une carte le sien (CA-3). Voir `sheetTabs`, où vit aussi la raison des deux capacités de
+  // l'onglet Agenda (`agenda` n'est octroyée nulle part ; `reservation` porte les créneaux).
+  const complementFiche = sheetComplement(complementDuType((detail || produit)?.type), edition)
+  const libelleCarte = t('multi_entry_card', null, 'Carte multi-entrées')
+  const onglets = useMemo(
+    () => sheetTabs(capacites, complementFiche, libelleCarte),
+    [capacites, complementFiche, libelleCarte],
+  )
+
+  // ⚠ SANS CE REPLI, LA FICHE PEUT SE RENDRE VIDE. `capacitesActives` depend de l'etablissement
+  // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
+  // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
+  const vueConnue = onglets.some(([cle]) => cle === vueFiche)
+  const vue = vueConnue ? vueFiche : ongletInitial(manquants, onglets)
+
   // CE QUI MANQUE POUR PUBLIER, relu à chaque enregistrement (`detail` change), à chaque écriture des
   // zones et des créneaux (`reverifier`), qui vivent hors du cycle « Enregistrer », et à chaque
   // changement d'onglet.
@@ -461,6 +481,11 @@ export default function ProduitFiche({
     setSucces(null)
     setVueFiche(null)
     setManquants(null)
+    // L'écriture au départ de la fiche précédente (voir la sauvegarde automatique) a pu passer
+    // `enregistrement` à vrai ; elle ne le remettra pas, puisqu'elle ne touche plus à l'écran.
+    setEnregistrement(false)
+    setEchecSur(null)
+    setDejaEnregistre(false)
     setChargement(true)
     ;(async () => {
       try {
@@ -561,52 +586,48 @@ export default function ProduitFiche({
   // ebauche `{ id }`, puis le detail complet arrive. Un effet qui ne suivrait que l'identifiant ne
   // se rejouerait jamais : le brouillon resterait sur des valeurs vides, et le premier
   // enregistrement les AURAIT ECRITES — description, canaux et categories effaces sans un mot.
+  //
+  // ⚠ SAUVEGARDE AUTOMATIQUE (lot 2) : LE DETAIL RELU N'ECRASE PLUS CE QU'ON TAPE. Avec un bouton,
+  // personne ne tapait pendant l'enregistrement ; sauvegardé seul, le produit se relit pendant
+  // qu'on continue d'écrire, et repartir du détail effaçait les lettres tapées entre l'envoi et la
+  // relecture. Deux cas :
+  //   - la relecture suit NOTRE enregistrement : la référence est déjà l'instantané envoyé, on ne
+  //     touche à rien ;
+  //   - elle vient d'ailleurs (tarifs, mise en vente) : la référence prend les valeurs relues, et le
+  //     brouillon ne repart d'elles que si rien n'attend d'être enregistré.
+  const relectureApresEnregistrement = useRef(false)
+  const changementsEnAttente = useRef([])
   useEffect(() => {
     if (!detail) return
-    setEdition(valeursModifiables(detail))
+    if (relectureApresEnregistrement.current) {
+      relectureApresEnregistrement.current = false
+      return
+    }
     setReference(valeursModifiables(detail))
+    if (changementsEnAttente.current.length === 0) setEdition(valeursModifiables(detail))
   }, [detail])
-
-  // Le bouton « Annuler » de la barre : on repart des valeurs enregistrees.
-  function reinitialiserBrouillon() {
-    setEdition(valeursModifiables(detail || produit))
-  }
 
   // CE QUI A CHANGE, ET DANS QUEL ONGLET.
   //
-  // ⚠ LA COMPARAISON EST FAITE SUR LE CONTENU, PAS SUR L'IDENTITE. `canaux` et `categories` sont
-  // des tableaux : `!==` serait vrai a chaque frappe puisqu'on en recree un a chaque changement.
-  // On compare donc leur forme triee — sinon la barre annoncerait des modifications imaginaires,
-  // et on s'habituerait a l'ignorer.
+  // ⚠ LA COMPARAISON EST FAITE SUR LE CONTENU, PAS SUR L'IDENTITE : voir `stableForm`. Une
+  // sauvegarde automatique qui verrait une modification imaginaire enregistrerait en boucle.
+  //
+  // `compta` y est depuis le lot 2. Il n'y était pas : changer SEULEMENT le taux de TVA ou le compte
+  // ne faisait apparaître aucune barre, donc aucun bouton — la modification ne partait qu'avec une
+  // autre, ou jamais.
   const ONGLET_DU_CHAMP = {
-    libelle: 'Présentation', description: 'Présentation',
+    libelle: 'Présentation', description: 'Présentation', noteInterne: 'Présentation',
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
-    formule: 'Vente', carte: 'Vente', beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
+    formule: 'Abonnement', carte: libelleCarte, beneficiaireRequis: 'Vente', venteSansSouscription: 'Vente',
     parentalConsentRequired: 'Vente',
-    noteInterne: 'Comptabilité',
+    compta: 'Comptabilité',
   }
-  const changements = useMemo(() => {
-    if (!edition || !reference) return []
-    // Une valeur peut être une chaîne, un tableau (canaux, catégories) ou un objet (formule,
-    // carte). Les trois se comparent différemment, et se tromper de comparaison ne lève rien :
-    // ça rend simplement la barre aveugle à un champ entier.
-    const stable = (v) => {
-      if (v === null || v === undefined) return ''
-      if (Array.isArray(v)) return JSON.stringify([...v].sort())
-      if (typeof v === 'object') {
-        // Clés triées : `JSON.stringify` suit l'ordre d'insertion, et le brouillon recompose ses
-        // objets à chaque frappe. Sans le tri, un même contenu écrit dans un autre ordre passerait
-        // pour une modification.
-        return JSON.stringify(Object.keys(v).sort().map((k) => [k, stable(v[k])]))
-      }
-      return String(v)
-    }
-    const memes = (a, b) => stable(a) === stable(b)
-    return Object.keys(ONGLET_DU_CHAMP).filter((c) => !memes(edition[c], reference[c]))
-  }, [edition, reference])
-
-  const ongletsModifies = [...new Set(changements.map((c) => ONGLET_DU_CHAMP[c]))]
+  const changements = useMemo(
+    () => changedFields(edition, reference, Object.keys(ONGLET_DU_CHAMP)),
+    [edition, reference],
+  )
+  changementsEnAttente.current = changements
 
   // Vrai si l'un des trois champs comptables a bouge. On compare des CHAINES des deux cotes :
   // `p.tauxTva` revient en nombre et le champ rend une chaine, donc `5` et `'5'` sont le meme
@@ -623,16 +644,23 @@ export default function ProduitFiche({
       || avant.reglePca !== edition.compta.reglePca
   }
 
-  async function enregistrer(e) {
-    e?.preventDefault?.()
+  // Rend `true` si tout est parti : la mise en vente attend ce oui avant d'agir (voir `changerStatut`).
+  async function enregistrer() {
+    // L'INSTANTANÉ ENVOYÉ, et non `edition` relu à la fin : on continue de taper pendant l'envoi, et
+    // ce qui a été tapé entre-temps doit rester « en attente », pas passer pour enregistré.
+    const envoye = edition
+    const produitEnvoye = produitId
     setErreur(null)
+    setEchecSur(null)
     setEnregistrement(true)
     try {
       const drapeauxModifies = changements.includes('beneficiaireRequis') || changements.includes('venteSansSouscription')
       // ⚠ LES CHAMPS PERSO SE RELISENT AVANT D'ÊTRE RÉÉCRITS : l'onglet Agenda écrit `timedEntry` sans
       // passer par cette fiche, et repartir de `p.champsPerso` l'aurait effacé sans un mot.
       const champsActuels = drapeauxModifies ? (await api.produit(produitId))?.champsPerso : null
-      await api.majProduit(produitId, {
+      // Seule la comptabilité a bougé : le PATCH du produit exigerait `offre.modifier`, qu'un
+      // comptable n'a pas forcément, pour n'écrire que ce qui est déjà là.
+      if (changements.some((c) => c !== 'compta')) await api.majProduit(produitId, {
         // Le libelle est multilingue cote serveur : on ne remplace que le francais, sinon une
         // traduction existante disparaitrait sans que personne ne l'ait demande.
         libelle: { ...(p.libelle && typeof p.libelle === 'object' ? p.libelle : {}), fr: edition.libelle.trim() },
@@ -649,11 +677,21 @@ export default function ProduitFiche({
         // ecrivait donc dans le vide avec un enregistrement qui reussissait. Ne plus l'envoyer
         // n'efface pas les valeurs existantes ; elles partiront avec la table.
 
-        etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`),
+        // ⚠ ENVOYÉS SEULEMENT S'ILS ONT BOUGÉ (lot 2, mesuré le 03/11 sur la pile de test). Relu
+        // depuis le site A, un produit rattaché à A et B ne montre que A ; renvoyer [A, B] fait
+        // insérer B une seconde fois — 500, doublon de clé. Avec la sauvegarde automatique, chaque
+        // mot tapé ensuite sur la fiche renvoyait la liste et échouait.
+        ...(changements.includes('etablissements')
+          ? { etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`) }
+          : {}),
         categories: edition.categories.map((id) => `/api/categories/${id}`),
         // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
         // courte : on renvoie `P<n>D`, ou `null` pour « sans limite ».
-        dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D`,
+        //
+        // ⚠ ENVOYÉE SEULEMENT SI ELLE A BOUGÉ (lot 2). Une durée en mois (« P6M ») s'affiche en champ
+        // vide pour ne pas être écrasée ; l'envoyer à chaque enregistrement la supprimait dès qu'on
+        // touchait à n'importe quel autre champ — avec la sauvegarde automatique, au premier mot tapé.
+        ...(changements.includes('jours') ? { dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D` } : {}),
         // ⚠ ON N'ENVOIE LA FORMULE QUE SI ELLE EXISTE. Envoyer `formule: null` la SUPPRIMERAIT ;
         // ne rien envoyer la laisse intacte. La difference tient a un champ absent, pas a une
         // valeur nulle — et c'est exactement le genre d'ecart qui efface des donnees en silence.
@@ -713,17 +751,90 @@ export default function ProduitFiche({
         })
       }
       const rafraichi = await api.produit(produitId)
-      setDetail(rafraichi)
-      // ⚠ ON NE REMET PLUS `edition` A `null` : cela refermait la fiche. La reference prend les
-      // valeurs enregistrees, donc la barre disparait d'elle-meme — plus rien ne differe.
-      setReference(edition)
+      // On a changé de fiche pendant l'envoi (sauvegarde au départ, voir plus bas) : l'écriture a
+      // eu lieu, mais ce détail-là ne doit pas s'afficher sur la fiche d'un autre produit.
       onModifie?.()
+      if (produitAffiche.current !== produitEnvoye) return true
+      relectureApresEnregistrement.current = true
+      setDetail(rafraichi)
+      // La référence devient ce qui est PARTI. Ce qui a été tapé depuis reste une modification, et
+      // repartira au prochain tour.
+      setReference(envoye)
+      setDejaEnregistre(true)
+      return true
     } catch (err) {
+      if (produitAffiche.current !== produitEnvoye) return false
       setErreur(err.message || "L'enregistrement n'a pas abouti.")
+      // ⚠ UN ÉCHEC NE SE RÉPÈTE PAS TOUT SEUL. Sans ce verrou, la sauvegarde automatique renverrait
+      // le même brouillon refusé à chaque tour. Il repart dès qu'on le modifie, ou sur « Réessayer ».
+      setEchecSur(signatureBrouillon(envoye))
+      return false
     } finally {
-      setEnregistrement(false)
+      if (produitAffiche.current === produitEnvoye) setEnregistrement(false)
     }
   }
+
+  // ── LA SAUVEGARDE AUTOMATIQUE (R9, refonte lot 2) ────────────────────────────────────────────
+  //
+  // Décision de Maxime au CP-1 du 06/10 : « sauvegarde automatique partout », avec un indicateur
+  // « Enregistré ». Elle remplace la barre « N modifications — Enregistrer » (29/08), qui ne valait
+  // que pour une partie des champs : tarifs, zones, photos, compléments et créneaux s'écrivaient
+  // déjà au geste. La fiche n'a plus qu'une règle : ce qu'on change est enregistré.
+  //
+  // Le délai laisse finir un mot avant d'écrire ; une case cochée part au même rythme, ce qui évite
+  // deux règles. Deux brouillons ne partent pas seuls : voir `autosaveHold`.
+  const retenue = autosaveHold(edition, etabActif)
+  const signatureBrouillon = (ed) => JSON.stringify(changedFields(ed, {}, Object.keys(ONGLET_DU_CHAMP)).map((c) => [c, ed[c]]))
+  const signatureCourante = changements.length > 0 ? signatureBrouillon(edition) : ''
+  const peutEnregistrer = peutModifier || peutModifierCompta
+  // ⚠ ASSIGNÉ DANS UN EFFET, PAS PENDANT LE RENDU. Au changement de produit, le nettoyage plus bas
+  // tourne APRÈS le rendu du nouveau produit : assignée au rendu, la fonction aurait été celle du
+  // nouveau — et elle aurait écrit le brouillon de l'ancien sur le nouveau. Assignée dans un effet,
+  // elle reste celle de l'ancien jusqu'à ce que les nettoyages aient tourné.
+  const enregistrerDernier = useRef(enregistrer)
+  const retenueCourante = useRef(retenue)
+  const peutEnregistrerCourant = useRef(peutEnregistrer)
+  useEffect(() => {
+    enregistrerDernier.current = enregistrer
+    retenueCourante.current = retenue
+    peutEnregistrerCourant.current = peutEnregistrer
+  })
+  useEffect(() => {
+    if (!peutEnregistrer || !signatureCourante || enregistrement || retenue) return undefined
+    if (echecSur === signatureCourante) return undefined
+    const minuteur = setTimeout(() => enregistrerDernier.current(), DELAI_SAUVEGARDE_MS)
+    return () => clearTimeout(minuteur)
+  }, [signatureCourante, enregistrement, retenue, echecSur, peutEnregistrer])
+
+  // ⚠ ON QUITTE LA FICHE PENDANT LE DÉLAI : ce qui était tapé part quand même. Sans cela, changer de
+  // produit ou revenir au catalogue moins d'une seconde après la dernière frappe la perdait sans un
+  // mot — le défaut même qu'un bouton « Enregistrer » n'avait pas. Un brouillon retenu (nom vide,
+  // sortie du périmètre) ne part pas : il n'est pas parti non plus quand on était là.
+  useEffect(() => {
+    produitAffiche.current = produitId
+    return () => {
+      const enAttente = changementsEnAttente.current.length > 0
+      if (enAttente && !retenueCourante.current && peutEnregistrerCourant.current) enregistrerDernier.current()
+    }
+  }, [produitId])
+
+  // Fermer l'onglet du navigateur pendant une écriture ou avec un brouillon retenu : le navigateur
+  // demande confirmation. On ne peut rien envoyer de fiable pendant `beforeunload`.
+  const aPerdre = enregistrement || changements.length > 0
+  useEffect(() => {
+    if (!aPerdre) return undefined
+    const retenir = (ev) => { ev.preventDefault(); ev.returnValue = '' }
+    window.addEventListener('beforeunload', retenir)
+    return () => window.removeEventListener('beforeunload', retenir)
+  }, [aPerdre])
+
+  const indicateur = saveIndicator({
+    enCours: enregistrement,
+    echec: !!echecSur && echecSur === signatureCourante,
+    enAttente: changements.length > 0,
+    retenue: changements.length > 0 ? retenue : null,
+    dejaEnregistre,
+  })
 
   /**
    * ⚠ ON ATTERRIT SUR LA COPIE, ON NE RESTE PAS SUR L'ORIGINAL.
@@ -754,12 +865,21 @@ export default function ProduitFiche({
   // dit ce qui manque, s'affiche tel quel.
   async function changerStatut(action) {
     // La publication porte sur ce qui est ENREGISTRÉ : publier par-dessus un brouillon non
-    // enregistré mettrait en vente autre chose que ce qu'on a sous les yeux.
+    // enregistré mettrait en vente autre chose que ce qu'on a sous les yeux. Depuis la sauvegarde
+    // automatique, on enregistre d'abord ce qui attend — sauf un brouillon retenu, qui attend un
+    // geste de l'exploitant et non un clic sur un autre bouton.
     if (changements.length > 0) {
-      setErreur('Enregistrez d’abord vos modifications : l’action porte sur ce qui est enregistré.')
-      return
+      if (retenue) {
+        setErreur(retenue === 'libelle'
+          ? 'Donnez d’abord un nom au produit : l’action porte sur ce qui est enregistré.'
+          : 'Confirmez d’abord le choix des sites (onglet Vente) : l’action porte sur ce qui est enregistré.')
+        return
+      }
+      if (!await enregistrer()) return
     }
-    if (action.confirmation && !await confirmer(action.confirmation.replace('%s', libelleProduit(p)))) return
+    // Le nom à l'écran, pas celui du détail : il vient peut-être d'être enregistré juste au-dessus.
+    const nom = edition.libelle.trim() || libelleProduit(p)
+    if (action.confirmation && !await confirmer(action.confirmation.replace('%s', nom))) return
     setErreur(null)
     setRefusPublication(null)
     setSucces(null)
@@ -767,7 +887,7 @@ export default function ProduitFiche({
     try {
       await APPELS_STATUT[action.id](produitId)
       setDetail(await api.produit(produitId))
-      setSucces(`« ${libelleProduit(p)} » : ${action.confirme}`)
+      setSucces(`« ${nom} » : ${action.confirme}`)
       onModifie?.()
     } catch (e) {
       const message = e.message || 'L’action n’a pas abouti.'
@@ -801,7 +921,15 @@ export default function ProduitFiche({
             {p.code || '—'} · {p.type?.libelle || humaniser(p.typeCode)}
           </div>
         </div>
-        <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
+        {/* L'INDICATEUR DE SAUVEGARDE (lot 2). La région annonce reste montée même vide : une région
+            `aria-live` qui apparaît en même temps que son texte n'est pas lue. */}
+        <span className="fiche-sauvegarde" role="status" aria-live="polite" style={{ marginLeft: 'auto' }}>
+          {indicateur && <span className={`badge ${indicateur.ton}`}>{indicateur.texte}</span>}
+          {indicateur?.ton === 'crit' && (
+            <button type="button" className="btn ghost sm" onClick={() => enregistrer()}>Réessayer</button>
+          )}
+        </span>
+        <span className={`badge ${st.ton}`} title={st.aide}>
           {st.libelle}
         </span>
         {actionsStatut(p.statut).map((a) => {
@@ -811,7 +939,7 @@ export default function ProduitFiche({
               key={a.id}
               type="button"
               className={`btn ${a.ton} sm`}
-              title={autorise ? a.aide : `Ce compte n’a pas le droit « ${a.droit} ». Demandez-le à un administrateur.`}
+              title={autorise ? a.aide : 'Votre compte n’a pas ce droit. Demandez-le à un administrateur.'}
               disabled={!autorise || actionStatut !== null || enregistrement}
               onClick={() => changerStatut(a)}
             >
@@ -1075,8 +1203,21 @@ export default function ProduitFiche({
           </p>
         </div>
 
-        <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
           </Section>
+
+      {/* LA NOTE INTERNE VIT ICI DEPUIS LE LOT 2. Elle était dans « Comptabilité », un onglet qui
+          n'existe que chez qui a le module : ailleurs, elle ne se lisait ni ne s'écrivait nulle part. */}
+      <div className="field">
+        <label htmlFor="pr-note">Note interne</label>
+        <textarea
+          id="pr-note"
+          className="input"
+          rows={3}
+          value={edition.noteInterne}
+          onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
+        />
+        <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
+      </div>
         </>
       )}
 
@@ -1155,7 +1296,7 @@ export default function ProduitFiche({
       <Section
         titre="Diffusion"
         ancre="prod-diffusion"
-        aide="Ou le produit est vendu, sur quels sites, dans quelles categories, et pour combien de temps."
+        aide="Où le produit est vendu, sur quels sites, dans quelles catégories, et pour combien de temps."
       >
       <div className="field">
         <label>Où ce produit est vendu</label>
@@ -1179,7 +1320,7 @@ export default function ProduitFiche({
           ))}
         </div>
         <div className="hint">
-          Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
+          Si vous ne cochez rien, le produit ne sera vendable nulle part, même mis en vente.
         </div>
       </div>
       {/* ⚠ BÉNÉFICIAIRE OBLIGATOIRE — décoché par défaut (demande de Maxime). Coché, la vente exige
@@ -1267,7 +1408,7 @@ export default function ProduitFiche({
             geste correspondant : on constatait, on ne pouvait pas agir. */}
         <div className="hint">
           Cochez les sites où ce produit se vend. <b>Sans site coché, il ne peut pas être
-          publié.</b>
+          mis en vente.</b>
         </div>
         {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
             Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
@@ -1280,9 +1421,15 @@ export default function ProduitFiche({
         {edition.etablissements.length > 0 && etabActif
           && !edition.etablissements.includes(etabActif) && (
           <div className="banner banner-warn">
-            <b>Vous n’avez pas coché l’établissement où vous êtes.</b> L’enregistrement
-            réussira, puis ce produit sortira de votre périmètre&nbsp;: la fiche ne sera plus
-            accessible d’ici, et il faudra basculer sur l’un des sites cochés pour la rouvrir.
+            <b>Vous n’avez pas coché l’établissement où vous êtes.</b> Une fois enregistré, ce
+            produit sortira de votre périmètre&nbsp;: la fiche ne sera plus accessible d’ici, et il
+            faudra basculer sur l’un des sites cochés pour la rouvrir. Ce choix ne s’enregistre
+            donc pas tout seul.
+            <div style={{ marginTop: 'var(--esp-serre)' }}>
+              <button type="button" className="btn sm" disabled={enregistrement} onClick={() => enregistrer()}>
+                Enregistrer ce choix
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1353,10 +1500,10 @@ export default function ProduitFiche({
           })}
         </div>
         <div className="hint">
-          Une seule catégorie pour l’axe marketing et pour l’axe comptable&nbsp;; <b>plusieurs
-          rayons</b> possibles, parce qu’un rayon range un écran et qu’un article peut tenir à
-          deux endroits. L’axe <b>comptable</b> décide du compte de produit&nbsp;: sans lui, la
-          vente n’est pas comptabilisée et ressort en anomalie à la clôture.
+          La <b>catégorie de recette</b> dit où ses ventes s’inscrivent en comptabilité&nbsp;: sans
+          elle, le produit ne peut pas être mis en vente. Une seule famille, mais <b>plusieurs
+          rayons</b> possibles&nbsp;: un rayon range la grille de la caisse, et un article peut
+          tenir à deux endroits.
         </div>
       </div>
       <div className="field">
@@ -1373,8 +1520,8 @@ export default function ProduitFiche({
         {dureeNonExprimableEnJours(p.dureeValidite) ? (
           <div className="banner banner-warn">
             La durée enregistrée (<code>{p.dureeValidite}</code>) n’est pas exprimable en jours.
-            Ce champ est resté vide pour ne pas l’écraser par erreur — <b>enregistrer avec un
-            nombre de jours la remplacera</b>, et le laisser vide la supprimera.
+            Ce champ est resté vide pour ne pas l’écraser par erreur — <b>saisir un nombre de
+            jours la remplacera</b>.
           </div>
         ) : (
           <div className="hint">
@@ -1383,11 +1530,19 @@ export default function ProduitFiche({
         )}
       </div>
       </Section>
+      </>
+      )}
+
+      {/* ABONNEMENT OU CARTE — l'onglet que le TYPE ajoute (refonte, lot 2, CA-3). Ces réglages
+          vivaient en bas de « Vente », sous la diffusion : on ne les trouvait qu'en descendant, et
+          rien dans les onglets ne disait qu'un abonnement avait une formule. */}
+      {(vue === 'formule' || vue === 'carte') && (
+      <>
       {/* LA CARTE OU LA FORMULE QUE LE TYPE EXIGE, ET QUI N'EXISTE PAS ENCORE (lot des garde-fous).
           Jusqu'au 08/10 la fiche ne savait que modifier celle qui existait : une carte ou un
           abonnement créés sans elle ne pouvaient plus l'obtenir, et se publiaient faux. Seul le
           TYPE qui la porte la propose — une formule sur un produit de boutique n'aurait pas de sens
-          défini. Le bouton remplit le brouillon ; « Enregistrer » la crée. */}
+          défini. Le bouton remplit le brouillon ; la sauvegarde automatique la crée. */}
       {complement === 'formule' && !edition.formule && (
         <Section titre="Formule d'abonnement" aide="Sans formule, l'abonnement se vendrait comme un article simple, sans échéancier.">
           <button
@@ -1549,7 +1704,10 @@ export default function ProduitFiche({
         </Section>
       )}
 
+      </>
+      )}
 
+      {/* COMPTABILITE — n'existe que si l'etablissement tient ses comptes ici. */}
       {/* TROIS CHAMPS ÉCRIVABLES DEPUIS LE DÉBUT, AFFICHÉS ET JAMAIS PROPOSÉS.
           `PATCH /produits/{id}/compta` existe, protégée par `offre.modifier_compta`, et accepte
           `tauxTva`, `compteComptable` et `reglePca`. Le client ne l'appelait de nulle part : la
@@ -1559,27 +1717,8 @@ export default function ProduitFiche({
           que ça existe et conclut que le logiciel ne le permet pas. Maxime l'a vu de lui-même.
           Bouton séparé, parce que le DROIT est séparé : `offre.modifier_compta` n'est pas
           `offre.modifier`. Qui peut renommer un produit ne peut pas forcément changer son compte. */}
-      </>
-      )}
-
-      {/* COMPTABILITE — n'existe que si l'etablissement tient ses comptes ici. La note interne la
-          suit : c'est le seul autre endroit de la fiche qui ne regarde ni le client ni la vente. */}
       {vue === 'compta' && (
       <>
-      <div className="field">
-        <label htmlFor="pr-note">Note interne</label>
-        <textarea
-          id="pr-note"
-          className="input"
-          rows={3}
-          value={edition.noteInterne}
-          onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
-        />
-        <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
-      </div>
-
-      <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Vitrine</div>
-
       <Section titre="Comptabilité">
         {chargement && !detail ? (
           <div className="hint">Chargement…</div>
@@ -1587,12 +1726,11 @@ export default function ProduitFiche({
           <>
             {!peutModifierCompta ? (
               <>
-                <Ligne libelle="Compte comptable" valeur={p.compteComptable || '—'} />
+                <Ligne libelle="Compte de recette" valeur={p.compteComptable || '—'} />
                 <Ligne libelle="Taux de TVA" valeur={p.tauxTva != null ? `${p.tauxTva} %` : '—'} />
                 <Ligne
-                  libelle="Règle PCA"
+                  libelle="Quand la vente compte dans le chiffre d’affaires"
                   valeur={REGLES_PCA[p.reglePca] || p.reglePca || '—'}
-                  aide="Produit constaté d'avance : comment le chiffre d'affaires est étalé dans le temps."
                 />
               </>
             ) : (
@@ -1626,31 +1764,54 @@ export default function ProduitFiche({
                   </select>
                   <p className="hint">
                     {tauxTva.length > 0
-                      ? 'Ce taux sert aux factures des échéances d’abonnement. Pour les ventes, la comptabilité prend le taux de la catégorie choisie dans « Axe comptable » (onglet Vente).'
+                      ? 'Ce taux sert aux factures des échéances d’abonnement. Pour les ventes, la comptabilité prend le taux de la catégorie de recette (onglet Vente).'
                       : tvaRefusee
-                        ? 'Les taux déclarés n’ont pas pu être lus : ce compte peut régler la comptabilité d’un produit, mais pas lire le référentiel de TVA (droit compta.lire). Il en existe peut-être — n’en déclarez pas un double ; le taux saisi ici reste enregistré.'
+                        ? 'Les taux déclarés n’ont pas pu être lus : votre compte peut régler la comptabilité d’un produit, mais pas consulter la liste des taux de TVA. Il en existe peut-être — n’en déclarez pas un double ; le taux saisi ici reste enregistré.'
                         : 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'}
                   </p>
                 </div>
 
                 <div className="field">
-                  <label htmlFor="pr-compte">Compte comptable</label>
-                  <input
-                    id="pr-compte"
-                    className="input mono"
-                    maxLength={32}
-                    placeholder="706100"
-                    value={edition.compta.compteComptable}
-                    onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, compteComptable: e.target.value } }))}
-                  />
+                  <label htmlFor="pr-compte">Compte de recette</label>
+                  {comptesRecette.length > 0 ? (
+                    <select
+                      id="pr-compte"
+                      className="input"
+                      value={edition.compta.compteComptable}
+                      onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, compteComptable: e.target.value } }))}
+                    >
+                      <option value="">— aucun —</option>
+                      {comptesRecette.map((c) => (
+                        <option key={c.id} value={c.numero}>{c.libelle} ({c.numero})</option>
+                      ))}
+                      {/* Un compte saisi avant la liste, ou retiré depuis : l'omettre lui ferait
+                          perdre sa valeur au premier enregistrement. */}
+                      {edition.compta.compteComptable !== ''
+                        && !comptesRecette.some((c) => c.numero === edition.compta.compteComptable) && (
+                          <option value={edition.compta.compteComptable}>{edition.compta.compteComptable} (hors de votre plan)</option>
+                        )}
+                    </select>
+                  ) : (
+                    <input
+                      id="pr-compte"
+                      className="input mono"
+                      maxLength={32}
+                      value={edition.compta.compteComptable}
+                      onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, compteComptable: e.target.value } }))}
+                    />
+                  )}
+                  {/* ⚠ CE CHAMP N'IMPUTE RIEN (vérifié le 03/11) : aucune écriture ne lit
+                      `Produit::compteComptable` — seule la duplication le recopie. Les ventes vont
+                      au compte de la correspondance de leur catégorie de recette. L'aide le dit, au
+                      lieu de laisser croire qu'il décide. */}
                   <p className="hint">
-                    Le compte de produit sur lequel les ventes de cet article seront imputées.
-                    Saisie libre : le plan comptable n’est pas exposé à cet écran.
+                    Les ventes s’inscrivent sur le compte de la catégorie de recette (onglet Vente),
+                    réglé dans la comptabilité. Ce compte-ci est une indication pour votre comptable.
                   </p>
                 </div>
 
                 <div className="field">
-                  <label htmlFor="pr-pca">Règle de produit constaté d’avance</label>
+                  <label htmlFor="pr-pca">Quand la vente compte dans le chiffre d’affaires</label>
                   <select
                     id="pr-pca"
                     className="input"
@@ -1662,8 +1823,8 @@ export default function ProduitFiche({
                     ))}
                   </select>
                   <p className="hint">
-                    Décide du moment où l’argent encaissé devient du chiffre d’affaires. Un
-                    abonnement annuel vendu en janvier ne se gagne pas en janvier.
+                    L’argent est encaissé à la vente, mais un abonnement annuel vendu en janvier ne
+                    se gagne pas en janvier&nbsp;: votre expert-comptable vous dira lequel choisir.
                   </p>
                 </div>
               </>
@@ -1672,11 +1833,6 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      {p.noteInterne && (
-        <Section titre="Note interne">
-          <div className="hint">{p.noteInterne}</div>
-        </Section>
-      )}
       </>
       )}
 
@@ -1755,38 +1911,6 @@ export default function ProduitFiche({
         </Section>
       )}
       {vue === 'agenda' && capacites.includes('agenda') && isModuleActive('musee', modules) && <AgendaProduit produitId={produitId} />}
-
-      {/* ── UN SEUL ENREGISTREMENT POUR TOUTE LA FICHE ─────────────────────────────────────
-          Demande de Maxime : « naviguer entre les onglets pour modifier les parametres puis avoir
-          un seul bouton enregistrer ».
-
-          ⚠ ELLE DIT DANS QUELS ONGLETS. Enregistrer six onglets d'un coup sans savoir ce qu'on
-          emporte serait pire que six boutons. Et elle n'apparait que s'il y a quelque chose a
-          enregistrer : une barre permanente devient un meuble qu'on ne lit plus. */}
-      {peutModifier && changements.length > 0 && (
-        <div className="barre-enregistrement">
-          <span className="be-compte">
-            {changements.length === 1 ? '1 modification' : `${changements.length} modifications`}
-            {' — '}{ongletsModifies.join(', ')}
-          </span>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={reinitialiserBrouillon}
-            disabled={enregistrement}
-          >
-            Annuler
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={enregistrer}
-            disabled={enregistrement}
-          >
-            {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-          </button>
-        </div>
-      )}
 
     </>
   )
@@ -2191,7 +2315,7 @@ function PhotosProduit({ produitId, peutModifier }) {
       {!etat.visiblePubliquement && (
         <div className="hint" style={{ marginBottom: 'var(--esp-normal)' }}>
           Ce produit n’est pas vendu en ligne : ses photos ne s’afficheront nulle part tant qu’il
-          n’est pas <strong>publié</strong> et ouvert au canal <strong>en ligne</strong>.
+          n’est pas <strong>en vente</strong> et ouvert au canal <strong>en ligne</strong>.
         </div>
       )}
 

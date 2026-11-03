@@ -51,7 +51,7 @@ final class PublicationGuard
             'site' => $produit->getEtablissements()->isEmpty() ? 'Choisissez au moins un site où le vendre.' : null,
             'canal' => $produit->getCanaux() === [] ? 'Choisissez au moins un canal de vente.' : null,
             'prix' => !$produit->aPrixValide() ? 'Donnez-lui au moins un prix.' : null,
-            'categorie_comptable' => !$produit->aCategorieComptable() ? 'Rattachez-le à une catégorie comptable.' : null,
+            'categorie_comptable' => !$produit->aCategorieComptable() ? 'Choisissez sa catégorie de recette : c’est elle qui range ses ventes en comptabilité.' : null,
             'carte' => $type?->aFacette(TypeProduit::FACETTE_CARNET) && $produit->getCarte() === null
                 ? "Créez sa carte, avec le nombre d'entrées qu'elle donne : sans elle, elle se vendrait comme un billet sans limite d'entrées."
                 : null,

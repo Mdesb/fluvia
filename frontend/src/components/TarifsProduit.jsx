@@ -213,7 +213,7 @@ export default function TarifsProduit({ produit, grilles, peutModifier, onChange
             <span className="hint" style={{ margin: 0 }}>
               Les types de tarif n'ont pas pu être lus : ce compte n'a pas le droit de lire le
               catalogue. <strong>Il en existe peut-être</strong> — n'en créez pas un double.
-              Demandez la permission <code>offre.lire</code> à un administrateur.
+              Demandez à un administrateur le droit de consulter le catalogue.
             </span>
           )}
           {/* Dit une fois, calmement, plutôt que découvert au moment où l'on cherche le bouton. */}
