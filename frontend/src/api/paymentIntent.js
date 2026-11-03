@@ -15,6 +15,10 @@
 //
 // ⚠ Un terminal muet ne se relance JAMAIS (Q-A1) : le serveur répond 409 `payment_outcome_unknown`,
 // avec la tentative à déclarer. L'écran demande au caissier ce qu'affiche le terminal.
+//
+// ⚠ Une carte qui ATTEND le terminal (202 `enAttente`, spec TPE lot 1) n'est ni payée ni refusée :
+// l'intention reste, et l'écran scrute la tentative (`terminalWait.js`). Un F5 redemande la même clé
+// et retrouve la même attente, sans repartir au terminal.
 
 const STORE_KEY = 'fluvia.reglements-en-attente'
 
@@ -80,6 +84,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 // - `paid`     : encaissé ; l'intention est close ;
 // - `refused`  : le terminal a refusé ; close ;
 // - `rejected` : la demande est refusée (4xx), rien d'encaissé ; close ;
+// - `waiting`  : le terminal n'a pas encore rendu son issue ; `attempt` est la tentative à scruter ;
+//                l'intention reste ;
 // - `unknown`  : le terminal est muet ; `attempt` est la tentative à déclarer ; l'intention reste ;
 // - `pending`  : toujours sans issue après les relances ; l'intention reste.
 export async function settle(api, storage, intent, { pause = wait, tries = 10, delayMs = 3000, onRetry } = {}) {
@@ -90,6 +96,8 @@ export async function settle(api, storage, intent, { pause = wait, tries = 10, d
         forgetIntent(storage, intent.saleId)
         return { outcome: 'paid', response: res }
       }
+      // AVANT le « refusé » ci-dessous, qui oublierait l'intention d'une carte en cours de paiement.
+      if (res?.enAttente) return { outcome: 'waiting', attempt: res.tentative ?? null, response: res }
       // Un timeout rendu tel quel ne nomme pas sa tentative : la clé, redemandée, répond 409 avec elle
       // — sans repartir au terminal.
       if (res?.statutTPE !== 'timeout') {
@@ -120,10 +128,15 @@ export async function settle(api, storage, intent, { pause = wait, tries = 10, d
 // La déclaration du caissier : ce qu'affiche le terminal. Une issue définitive clôt l'intention de la
 // vente — aussi quand la tentative a trouvé son issue ailleurs (409 `payment_outcome_known`). Un refus
 // de la déclaration (référence manquante, réseau) la garde : rien n'a changé.
-export async function declareOutcome(api, storage, saleId, { attemptId, accepted, cardReference }) {
-  const corps = accepted
-    ? { tentative: attemptId, issue: 'accepte', referenceCarte: cardReference }
-    : { tentative: attemptId, issue: 'non_passe' }
+//
+// `issue` (terminal externe, spec TPE lot 1) : 'accepte' | 'refuse' | 'annule' — ce que le terminal a
+// rendu pendant l'attente ; sans lui, la déclaration d'un terminal muet (accepté / non passé).
+export async function declareOutcome(api, storage, saleId, { attemptId, accepted, cardReference, issue }) {
+  const corps = issue
+    ? { tentative: attemptId, issue, ...(issue === 'accepte' ? { referenceCarte: cardReference } : {}) }
+    : accepted
+      ? { tentative: attemptId, issue: 'accepte', referenceCarte: cardReference }
+      : { tentative: attemptId, issue: 'non_passe' }
   try {
     const res = await api.declarerReglement(saleId, corps)
     forgetIntent(storage, saleId)

@@ -12,6 +12,7 @@ use App\Acces\Entity\Support;
 use App\Acces\Enum\CodeMotifRefus;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
+use App\Organisation\Entity\Etablissement;
 use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -44,12 +45,14 @@ final class VerdictBilletHandler
     }
 
     /**
-     * @param bool $ignorerRevocationSiPosterieure rejeu hors ligne : voir `VerdictBillet::$enConflitRevocation`
+     * @param bool               $ignorerRevocationSiPosterieure rejeu hors ligne : voir `VerdictBillet::$enConflitRevocation`
+     * @param Etablissement|null $site                           le site qui contrôle : un support dont le droit n'y vaut pas y est inconnu
      */
     public function evaluer(
         ?string $identifiantSupport,
         bool $ignorerRevocationSiPosterieure = false,
         ?\DateTimeImmutable $horodatage = null,
+        ?Etablissement $site = null,
     ): VerdictBillet {
         if ($identifiantSupport === null || trim($identifiantSupport) === '') {
             return VerdictBillet::refuse(CodeMotifRefus::DroitInvalide, 'Support requis.');
@@ -64,8 +67,11 @@ final class VerdictBilletHandler
             return VerdictBillet::refuse(CodeMotifRefus::SignatureInvalide, 'Code de support forgé ou altéré (signature invalide).');
         }
 
+        // Le support d'un autre établissement est INCONNU ici, avec le même message que l'absence :
+        // le valider laissait entrer chez un client avec le billet d'un autre, et le refuser en
+        // le nommant aurait dit au site tiers ce que contient ce billet.
         $support = $this->em->getRepository(Support::class)->findOneBy(['identifiant' => $identifiantSupport]);
-        if (!$support instanceof Support) {
+        if (!$support instanceof Support || ($site !== null && !$this->isValidAt($support, $site))) {
             return VerdictBillet::refuse(CodeMotifRefus::DroitInvalide, 'Support inconnu.');
         }
 
@@ -94,6 +100,16 @@ final class VerdictBilletHandler
         }
 
         return VerdictBillet::valide($support, $droit, $enConflit);
+    }
+
+    /** Le droit appairé vaut-il sur ce site ? Sans droit, le support n'est connu que de son établissement. */
+    private function isValidAt(Support $support, Etablissement $site): bool
+    {
+        $droit = $this->em->getRepository(Appairage::class)->findOneBy(['support' => $support, 'actif' => true])?->getDroit();
+
+        return $droit instanceof DroitAcces
+            ? $droit->isValidAt($site)
+            : (string) $support->getEtablissement()?->getId() === (string) $site->getId();
     }
 
     private function revoqueApresPassage(Support $support, \DateTimeImmutable $horodatagePassage): bool

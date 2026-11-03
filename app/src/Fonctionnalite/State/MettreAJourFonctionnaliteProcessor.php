@@ -10,6 +10,7 @@ use App\Fonctionnalite\Entity\FonctionnaliteEtablissement;
 use App\Fonctionnalite\Security\GardeFonctionnaliteEtablissement;
 use App\Fonctionnalite\Service\CatalogueCapacites;
 use App\Fonctionnalite\Service\Fonctionnalites;
+use App\Platform\Module\ModuleGuard;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -30,6 +31,7 @@ final class MettreAJourFonctionnaliteProcessor implements ProcessorInterface
         private readonly Fonctionnalites $fonctionnalites,
         private readonly CatalogueCapacites $catalogue,
         private readonly LecteurCorps $lecteur,
+        private readonly ModuleGuard $moduleGuard,
     ) {
     }
 
@@ -45,6 +47,10 @@ final class MettreAJourFonctionnaliteProcessor implements ProcessorInterface
         }
         if (!\array_key_exists('active', $corps) || !\is_bool($corps['active'])) {
             throw new UnprocessableEntityHttpException('« active » (booléen) est requis.');
+        }
+        // Recentrage, CA-4 : un module du cœur ne s'éteint pas, même par erreur. L'allumer reste permis.
+        if ($corps['active'] === false && \in_array($code, $this->moduleGuard->coreCapabilities(), true)) {
+            throw new UnprocessableEntityHttpException(sprintf('« %s » est un module du cœur de Fluvia : il ne peut pas être éteint.', $code));
         }
         $parametres = \is_array($corps['parametres'] ?? null) ? $corps['parametres'] : null;
 

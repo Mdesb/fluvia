@@ -136,7 +136,15 @@ final class ActivityCapabilities
             CapaciteCode::AccesNocturne,
             CapaciteCode::Finance,
             CapaciteCode::Social,
-            CapaciteCode::Connecteurs => CapabilityCoverage::OwnRule,
+            CapaciteCode::Connecteurs,
+            CapaciteCode::SmartFlow,
+            CapaciteCode::RevenueRecovery,
+            CapaciteCode::Import,
+            CapaciteCode::Ocr,
+            CapaciteCode::Caution,
+            CapaciteCode::Project,
+            CapaciteCode::Marketing,
+            CapaciteCode::Personnel => CapabilityCoverage::OwnRule,
 
             // Les cinq verticales sont deja sorties plus haut. Les nommer ici serait la recopie
             // qu'on refuse ; ce `match` n'a donc pas a les traiter, et c'est pourquoi il peut

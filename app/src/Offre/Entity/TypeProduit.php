@@ -130,12 +130,12 @@ class TypeProduit
     }
 
     /**
-     * Un produit de ce type émet-il un titre (billet, carte, abonnement) à la vente ?
-     *
-     * Une seule définition : `ValiderVenteService` en tire l'émission du support, la garde de
-     * publication l'exigence d'une zone d'accès. Deux listes finiraient par diverger.
+     * Un produit de ce type délivre-t-il un support (billet, carnet, droit d'accès) à la validation ?
+     * Une seule définition, lue par `ValiderVenteService` (émission du support), `SalesLinesReport`
+     * (compte des billets délivrés) et `AccessZonePublicationPrerequisite` (une zone d'accès est
+     * exigée pour publier) : trois listes finiraient par diverger au premier correctif.
      */
-    public function issuesTicket(): bool
+    public function emetUnSupport(): bool
     {
         return $this->aFacette(self::FACETTE_BILLET)
             || $this->aFacette(self::FACETTE_CARNET)

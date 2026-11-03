@@ -74,7 +74,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
 
     /** @var list<string> Bundle de permissions `_soi` du rôle système (miroir de CreationCompteHandler). */
     private const PERMISSIONS_CLIENT_FINAL = [
-        ['crm', 'lire_soi'], ['crm', 'modifier_soi'], ['crm', 'pmv_lire_soi'], ['crm', 'pmv_recharger_soi'],
+        ['crm', 'lire_soi'], ['crm', 'modifier_soi'], ['crm', 'pmv_lire_soi'],
         ['crm', 'consentement_gerer_soi'], ['reservation', 'reserver_soi'], ['reservation', 'lire_soi'],
         ['reservation', 'annuler_soi'], ['boutique', 'acheter_soi'], ['boutique', 'lire_soi'],
         ['boutique', 'gerer_famille_soi'], ['boutique', 'demander_remboursement_soi'],

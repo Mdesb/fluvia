@@ -15,8 +15,8 @@ use App\Platform\Module\ModuleManifest;
  * reste hors périmètre de ce lot, non déclarée ici tant qu'elle n'est pas réellement câblée (le
  * manifeste est une déclaration de ce qui existe réellement, même discipline que `App\SmartFlow\SmartFlowModule`).
  *
- * `capability()` → `null` : service réactif transverse (comme Smart Flow, D22) — Revenue Recovery ne se
- * vend pas, il réagit à des événements déjà produits par des modules payants.
+ * `capability()` → `revenue_recovery` depuis le 20/10/2026 (recentrage, décision de Maxime) : il était
+ * `null` (« service réactif transverse », comme Smart Flow), donc impossible à éteindre.
  *
  * `eventsEmitted()` → `[]` **volontairement** : les cinq événements `revenue_recovery.*` (§8 spec) ne
  * figurent pas encore à `COORDINATION/CONTRACT/catalogue-evenements.md` — les émettre ferait refuser le
@@ -38,7 +38,7 @@ final class RevenueRecoveryModule implements ModuleManifest
 
     public function capability(): ?string
     {
-        return null;
+        return 'revenue_recovery';
     }
 
     /** @return list<string> */

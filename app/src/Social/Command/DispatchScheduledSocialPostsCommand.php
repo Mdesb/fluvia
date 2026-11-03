@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Social\Command;
 
+use App\Platform\Module\ModuleGuard;
 use App\Social\Entity\SocialPublication;
 use App\Social\Enum\SocialPublicationStatus;
 use App\Social\Message\PublishSocialPublication;
@@ -43,6 +44,7 @@ final class DispatchScheduledSocialPostsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly MessageBusInterface $bus,
+        private readonly ?ModuleGuard $moduleGuard = null,
     ) {
         parent::__construct();
     }
@@ -84,6 +86,10 @@ final class DispatchScheduledSocialPostsCommand extends Command
 
         $mises = 0;
         foreach ($publications as $publication) {
+            // Recentrage, PR 2 (e) : un établissement où le module est éteint n'est pas traité.
+            if ($this->moduleGuard?->allows(self::class, $publication->getPost()?->getEstablishment()) === false) {
+                continue;
+            }
             $this->bus->dispatch(new PublishSocialPublication((string) $publication->getId()));
             $publication->setQueuedAt($now);
             // Un enregistrement par publication, et non un seul à la fin : si le passage s'interrompt,

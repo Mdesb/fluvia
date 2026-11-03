@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Import;
 
+use App\Tests\Platform\ModuleSwitch;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Crm\Entity\Client as CrmClient;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 abstract class ImportApiTestCase extends ApiTestCase
 {
+    use ModuleSwitch;
+
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -41,6 +44,9 @@ abstract class ImportApiTestCase extends ApiTestCase
         foreach ([SocleFixtures::class, ImportFixtures::class] as $classe) {
             $container->get($classe)->load($em);
         }
+
+        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
+        $this->switchModule('import', true);
 
         self::ensureKernelShutdown();
     }

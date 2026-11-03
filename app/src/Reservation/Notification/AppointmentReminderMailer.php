@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reservation\Notification;
 
+use App\I18n\Locales;
 use App\Reservation\Entity\Reservation;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -67,6 +68,7 @@ final class AppointmentReminderMailer
         );
 
         $html = $this->twig->render('reservation/email/appointment_reminder.html.twig', [
+            'locale' => Locales::ofEstablishment($reservation->getEtablissement()),
             'prestation' => $prestation,
             'debut' => $debut,
             'lieu' => $lieu,

@@ -139,7 +139,7 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
   )
 }
 
-export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], modules }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
   // Le droit de creer se lit ICI et plus dans `OngletProduits` : le bouton qu'il commande vit
@@ -223,6 +223,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
           onCibleConsommee={onCibleConsommee}
           droits={droits}
           capacites={capacites}
+          modules={modules}
           params={params}
           majParams={majParams}
         />
@@ -239,7 +240,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], params, majParams }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], modules, params, majParams }) {
   // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sur une lecture refusee, ce tableau affichait
   // « Aucun produit. » — un exploitant lit alors que son catalogue est vide. Le message du serveur
   // etait bien la, mais dans un bandeau separe que rien ne relie a la ligne du tableau.
@@ -412,6 +413,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
           droits={droits}
           capacites={capacites}
+          modules={modules}
           onModifie={recharger}
           peutCreer={aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')}
           onDuplique={(copie) => {

@@ -7,11 +7,15 @@ namespace App\Acces\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Acces\Dto\EvenementPassageDto;
+use App\Acces\Entity\Equipement;
 use App\Acces\Entity\Passage;
 use App\Acces\Enum\SensPassage;
 use App\Acces\Service\ValidationPassageHandler;
+use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -39,6 +43,8 @@ final class PassageIngestionProcessor implements ProcessorInterface
     public function __construct(
         private readonly LecteurCorps $lecteur,
         private readonly ValidationPassageHandler $handler,
+        private readonly EntityManagerInterface $em,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -49,6 +55,15 @@ final class PassageIngestionProcessor implements ProcessorInterface
         $equipementId = $this->uuid($corps['equipement'] ?? null);
         if ($equipementId === null) {
             throw new UnprocessableEntityHttpException('Référence d\'équipement obligatoire.');
+        }
+
+        // L'équipement vient du corps : il doit être une porte du site de l'appelant, sinon un agent
+        // d'un établissement ouvrait la porte d'un autre (même garde que `PassageManuelProcessor`,
+        // D8). 404 et non 403 : rien ne doit confirmer qu'il existe ailleurs.
+        $site = $this->contexte->etablissementActif();
+        $equipement = $this->em->getRepository(Equipement::class)->find($equipementId);
+        if ($equipement instanceof Equipement && ($site === null || (string) $equipement->getEtablissement()?->getId() !== (string) $site->getId())) {
+            throw new NotFoundHttpException('Équipement introuvable.');
         }
 
         $evt = new EvenementPassageDto(

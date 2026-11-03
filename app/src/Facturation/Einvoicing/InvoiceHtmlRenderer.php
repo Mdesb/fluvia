@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\Einvoicing;
 
+use App\I18n\Locales;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\LigneFacture;
 use Twig\Environment;
@@ -51,6 +52,7 @@ final class InvoiceHtmlRenderer
         }
 
         return $this->twig->render(self::GABARIT, [
+            'locale' => Locales::ofEstablishment($facture->getEtablissement()),
             'numero' => $facture->getNumero(),
             'dateEmission' => $facture->getDateEmission(),
             'destinataire' => $facture->getDestinataire()?->denomination(),

@@ -16,6 +16,7 @@ use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -58,6 +59,11 @@ final class DeposerDemandeRemboursementProcessor implements ProcessorInterface
 
         $ligneId = PanierProprietaireGuard::estUuid($corps['ligne'] ?? null);
         $ligne = $ligneId !== null ? $this->em->getRepository(LigneVente::class)->find($ligneId) : null;
+        // D8 : la ligne doit être une ligne de CETTE commande. Le `find()` seul rattachait à la demande
+        // la ligne de la commande d'un autre client ; d'ailleurs ou inexistante, même réponse (D3).
+        if (isset($corps['ligne']) && $ligne?->getVente()?->getId()->equals($vente->getId()) !== true) {
+            throw new NotFoundHttpException('Ligne de commande introuvable.');
+        }
 
         $demande = new DemandeRemboursement();
         $demande->setVente($vente)

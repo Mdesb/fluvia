@@ -16,6 +16,7 @@ use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -38,6 +39,14 @@ final class PmvRechargerProcessor implements ProcessorInterface
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): JsonResponse
     {
         \assert($data instanceof Client);
+
+        // ⚠ UNE RECHARGE « SOI » N'A AUCUN PAIEMENT DERRIÈRE ELLE. Le montant envoyé était crédité
+        //    tel quel : un porteur de `crm.pmv_recharger_soi` se créditait 1 000 € et les dépensait à
+        //    toutes les caisses du groupe. Elle exige un paiement en ligne réel, et il n'y en a pas
+        //    (bouchons, D112) : seul l'agent habilité au guichet (`crm.pmv_recharger`) recharge.
+        if (!$this->security->isGranted('PERM', 'crm.pmv_recharger')) {
+            throw new AccessDeniedHttpException('La recharge du porte-monnaie par le client exige un paiement en ligne, qui n’est pas encore disponible : la recharge se fait au guichet.');
+        }
 
         $corps = $this->lecteur->corps();
         $montant = isset($corps['montant']) ? number_format((float) $corps['montant'], 2, '.', '') : null;

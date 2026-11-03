@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Securite\Controller;
 
 use App\Audit\Service\JournalAudit;
+use App\I18n\CodedHttpException;
 use App\Securite\Crypto\ChiffreurSecret;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Security\EcouteurConnexion;
@@ -44,11 +45,11 @@ final class VerificationMfaController
     {
         $utilisateur = $this->security->getUser();
         if (!$utilisateur instanceof Utilisateur) {
-            return new JsonResponse(['message' => 'Non authentifié.'], 401);
+            return (new CodedHttpException(401, 'auth.unauthenticated', 'Non authentifié.'))->toResponse();
         }
 
         if ($utilisateur->estVerrouille()) {
-            return new JsonResponse(['message' => 'Compte temporairement verrouillé.'], 401);
+            return (new CodedHttpException(401, 'auth.account_locked', 'Compte temporairement verrouillé.'))->toResponse();
         }
 
         $donnees = json_decode($request->getContent(), true) ?: [];
@@ -62,7 +63,7 @@ final class VerificationMfaController
             $this->journal->enregistrer('connexion.mfa_echec', Utilisateur::class, (string) $utilisateur->getId(), null, $utilisateur->getEmail());
             $this->em->flush();
 
-            return new JsonResponse(['message' => 'Code invalide.'], 401);
+            return (new CodedHttpException(401, 'auth.mfa_invalid_code', 'Code invalide.'))->toResponse();
         }
 
         $utilisateur->setTentativesEchouees(0);

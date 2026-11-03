@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Securite\Entity;
 
 use App\Securite\Enum\AccountKind;
+use App\I18n\Locales;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -264,9 +265,31 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?Uuid $clientLie = null;
 
+    /**
+     * La langue que cette personne préfère (ISO 639-1). `null` : celle de l'établissement sur lequel
+     * elle travaille, c'est-à-dire le cas courant. Lue par le frontal dans `/me`.
+     */
+    #[ORM\Column(length: 5, nullable: true)]
+    #[Assert\Choice(choices: Locales::SUPPORTED, message: 'Langue non prise en charge.')]
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
+    private ?string $locale = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
+    }
+
+    public function getLocale(): ?string
+    {
+        return $this->locale;
+    }
+
+    public function setLocale(?string $locale): self
+    {
+        $locale = $locale === null ? '' : strtolower(trim($locale));
+        $this->locale = $locale === '' ? null : $locale;
+
+        return $this;
     }
 
     public function getId(): Uuid

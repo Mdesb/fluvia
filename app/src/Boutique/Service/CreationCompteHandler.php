@@ -41,7 +41,7 @@ final class CreationCompteHandler
         ['crm', 'lire_soi'],
         ['crm', 'modifier_soi'],
         ['crm', 'pmv_lire_soi'],
-        ['crm', 'pmv_recharger_soi'],
+        // Pas de `crm.pmv_recharger_soi` : sans paiement en ligne réel, elle créditait sans payer.
         ['crm', 'consentement_gerer_soi'],
         ['reservation', 'reserver_soi'],
         ['reservation', 'lire_soi'],

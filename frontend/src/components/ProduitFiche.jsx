@@ -14,6 +14,7 @@ import TarifsProduit from './TarifsProduit.jsx'
 import CreneauxProduit from './CreneauxProduit.jsx'
 import { idDe as idDeRef } from '../api/iri'
 import { confirmer } from './Confirmation.jsx'
+import { isModuleActive } from './moduleMenu.js'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
 // modale est le défaut, créer un écran est l'exception ; consulter un produit depuis sa liste ne
@@ -194,6 +195,8 @@ export default function ProduitFiche({
   // « tout afficher » aurait rendu la composition invisible tant qu'aucun appelant ne passe la
   // prop — l'écran aurait paru marcher, et n'aurait rien composé.
   capacites = [],
+  // `modulesActifs` de /me : l'agenda d'exposition est celui du Musée, lu seulement s'il est actif.
+  modules,
 }) {
   // ⚠ INITIALISATION PARESSEUSE, PAS `null`. Les champs des onglets lisent `edition.libelle` des
   // le premier rendu : un etat nul les ferait lire dans le vide, et l'ecran ne s'afficherait pas.
@@ -1597,7 +1600,7 @@ export default function ProduitFiche({
           <CreneauxProduit produitId={produitId} droits={droits} peutModifier={peutModifier} />
         </Section>
       )}
-      {vue === 'agenda' && capacites.includes('agenda') && <AgendaProduit produitId={produitId} />}
+      {vue === 'agenda' && capacites.includes('agenda') && isModuleActive('musee', modules) && <AgendaProduit produitId={produitId} />}
 
       {/* ── UN SEUL ENREGISTREMENT POUR TOUTE LA FICHE ─────────────────────────────────────
           Demande de Maxime : « naviguer entre les onglets pour modifier les parametres puis avoir

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Finance;
 
+use App\Tests\Platform\ModuleSwitch;
 use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
@@ -33,6 +34,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 abstract class FinanceApiTestCase extends ApiTestCase
 {
+    use ModuleSwitch;
+
     protected static ?bool $alwaysBootKernel = true;
 
     protected function setUp(): void
@@ -51,6 +54,9 @@ abstract class FinanceApiTestCase extends ApiTestCase
         foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, ComptaFixtures::class, StockFixtures::class, FinanceFixtures::class] as $classe) {
             $container->get($classe)->load($em);
         }
+
+        // Recentrage, CA-5 : un module masqué est éteint par défaut ; le test l'allume explicitement.
+        $this->switchModule('finance', true);
 
         self::ensureKernelShutdown();
     }

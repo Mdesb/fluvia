@@ -3,6 +3,9 @@ import { api, membres } from '../api/client.js'
 import { useEtatUrl } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
+import { idDe } from '../api/iri.js'
+import { printThermal } from '../components/thermalPrint.js'
+import { isFree, issuerLines, passesToPrint, printedDateTime, vatRows, venueName } from '../api/receiptPrint.js'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
@@ -18,7 +21,11 @@ import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
+import TerminalWait from '../components/TerminalWait.jsx'
+import { attemptPhase, createPoller } from '../api/terminalWait.js'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
+import { screenAfterValidation, validateCart } from '../api/validateCart.js'
+import { saleErrorMessage } from '../api/counterWording.js'
 import {
   libelleProduit,
   prixIndicatif,
@@ -121,6 +128,17 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Le règlement sans issue de la vente en cours (`paymentIntent.js`), et la tentative à déclarer.
   const [attente, setAttente] = useState(null)
   const [declaration, setDeclaration] = useState(null) // { venteId, tentative, erreur? }
+  // LA CARTE PARTIE AU TERMINAL, SANS ISSUE ENCORE (spec TPE lot 1) : `TerminalWait` la scrute. Son
+  // intention reste dans l'onglet (`paymentIntent.js`) : un F5 retrouve la même attente.
+  const [attenteTerminal, setAttenteTerminal] = useState(null) // { venteId, numero, tentative, paiementsPrecedents, lignes }
+  // Après « Annuler », le terminal peut encore accepter (CA-3) : une veille de deux minutes.
+  const [veille, setVeille] = useState(null) // { venteId, tentativeId }
+  // Les tickets client rendus par le terminal pendant la vente : imprimés avec le ticket de caisse.
+  // ⚠ UNE RÉFÉRENCE, PAS UN ÉTAT : le règlement qui solde la vente la valide dans le même geste, et
+  // `validerVente` lirait un état pas encore appliqué — le ticket sortait sans celui du terminal
+  // (constaté à l'écran, pas déduit).
+  const ticketsTerminal = useRef({}) // venteId → [texte]
+  const venteCourante = useRef(null)
   // Un double clic arrive avant que `busy` ne grise le bouton : le second ouvrirait une seconde vente.
   const reglementEnCours = useRef(false)
 
@@ -321,6 +339,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const peutEncaisser = aLeDroit(droits, 'vente.encaisser')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
+  // Le choix de l'issue n'existe qu'au terminal SIMULÉ (démonstration) : partout ailleurs, l'issue
+  // vient du terminal ou du caissier qui le lit — jamais d'un en-tête posé par l'écran.
+  const terminalSimule = pdvActif?.tpe?.connecteur === 'simule'
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
   // Le panier porte-t-il un abonnement ? Si oui, l'encaissement passe par la modale de souscription
@@ -770,7 +791,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         defautMoyen: moyensDispo[0] || null,
       }
     } catch (e) {
-      const msg = e.message || "Impossible d'ouvrir la vente."
+      const msg = saleErrorMessage(e, 'open', "Impossible d'ouvrir la vente.")
       // Garde « bénéficiaire requis » (RG-M2-04) : on invite à rattacher un client via la modale.
       if (/b[ée]n[ée]ficiaire/i.test(msg)) {
         setBesoinClient(true)
@@ -800,7 +821,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       saleNumber: venteObj.numero ?? null,
       establishment: etabActif,
       body: corps,
-      headers: moyen.exigeReference ? { 'X-Tpe-Simule': tpe } : null,
+      headers: moyen.exigeReference && terminalSimule ? { 'X-Tpe-Simule': tpe } : null,
     })
     await reglerIntention(venteObj, intention, paiementsPrecedents)
   }
@@ -818,6 +839,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     if (issue.outcome === 'paid') {
       setAvis(null)
       await apresReglement(venteObj, issue.response, paiementsPrecedents, lignes)
+    } else if (issue.outcome === 'waiting' && issue.attempt) {
+      setAvis(null)
+      setAttenteTerminal({ venteId: venteObj.id, numero: venteObj.numero ?? null, tentative: issue.attempt, paiementsPrecedents, lignes })
     } else if (issue.outcome === 'unknown') {
       setAvis(issue.message)
       setDeclaration({ venteId: venteObj.id, tentative: issue.attempt })
@@ -831,6 +855,93 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   }
 
   const libelleMoyen = (code) => moyens.find((x) => x.code === code)?.libelle || code
+
+  // L'ISSUE DE LA CARTE PARTIE AU TERMINAL — lue par la scrutation, ou rendue par une déclaration, une
+  // annulation. Encaissée (même partiellement) : la vente relue fait foi. Sans issue au-delà du délai
+  // du terminal : on la fait déclarer (Q-A1), l'intention reste.
+  async function issueTerminal(t) {
+    const ctx = attenteTerminal
+    const phase = attemptPhase(t)
+    if (!ctx || phase === 'waiting') return
+    setAttenteTerminal(null)
+    if (phase === 'unknown') {
+      setDeclaration({ venteId: ctx.venteId, tentative: t })
+      return
+    }
+    forgetIntent(sessionStorage, ctx.venteId)
+    setAttente(null)
+    if (phase === 'paid') {
+      if (t.ticketClient) ticketsTerminal.current[ctx.venteId] = [...(ticketsTerminal.current[ctx.venteId] || []), t.ticketClient]
+      const debite = parseFloat(t.montantDebite ?? t.montant)
+      setAvis(debite < parseFloat(t.montant)
+        ? `Le terminal a débité ${euros(debite)} sur ${euros(t.montant)} : le reste est à régler.`
+        : null)
+      await apresReglement({ id: ctx.venteId, numero: ctx.numero }, { reglementEnregistre: true, dejaEnregistre: true }, ctx.paiementsPrecedents, ctx.lignes)
+      return
+    }
+    await relireVente(ctx.venteId).catch(() => null)
+    setAvis(phase === 'refund' ? t.raison : `Paiement carte ${phase === 'refused' ? 'refusé' : 'annulé'} — aucun règlement enregistré.`)
+  }
+
+  // « Annuler » pendant l'attente d'un terminal relié. Une issue arrivée avant tient (409) : on l'affiche.
+  const annulerTerminal = () => seul(async () => {
+    const ctx = attenteTerminal
+    if (!ctx) return
+    setBusy(true)
+    setErreur(null)
+    try {
+      const res = await api.annulerReglement(ctx.venteId, ctx.tentative.id)
+      await issueTerminal(res.tentative)
+      setVeille({ venteId: ctx.venteId, tentativeId: ctx.tentative.id })
+    } catch (e) {
+      if (e?.payload?.tentative) await issueTerminal(e.payload.tentative)
+      else setErreur(`${e.message || "L'annulation n'a pas abouti."} Le règlement reste en attente.`)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  // Le terminal EXTERNE : le caissier déclare ce que le terminal a rendu (Accepté + référence, Refusé, Annulé).
+  const declarerTerminal = (issue, reference) => seul(async () => {
+    const ctx = attenteTerminal
+    if (!ctx) return
+    setBusy(true)
+    setErreur(null)
+    try {
+      const res = await declareOutcome(api, sessionStorage, ctx.venteId, { attemptId: ctx.tentative.id, issue, cardReference: reference })
+      await issueTerminal({ ...ctx.tentative, statut: res.issue, montantDebite: res.montant ?? ctx.tentative.montant })
+    } catch (e) {
+      if (e?.payload?.tentative) await issueTerminal(e.payload.tentative)
+      else setErreur(`${e.message || 'La déclaration a échoué.'} Le règlement reste en attente.`)
+    } finally {
+      setBusy(false)
+    }
+  })
+
+  useEffect(() => { venteCourante.current = vente?.id ?? null }, [vente])
+
+  // La veille après « Annuler » : si le terminal accepte quand même, l'acceptation gagne et l'écran le
+  // dit ; si la vente ne pouvait plus la recevoir, le serveur dit « à rembourser ». Deux minutes, puis on lâche.
+  useEffect(() => {
+    if (!veille) return undefined
+    const fin = Date.now() + 120000
+    const poller = createPoller({
+      read: () => api.reglementTerminal(veille.venteId, veille.tentativeId),
+      intervalMs: 3000,
+      done: (t) => attemptPhase(t) !== 'cancelled' || Date.now() > fin,
+      onResult: (t) => {
+        const phase = attemptPhase(t)
+        if (phase === 'paid') {
+          setAvis(`Le terminal a finalement accepté ${euros(t.montantDebite ?? t.montant)} après l’annulation : le règlement est enregistré.`)
+          if (venteCourante.current === veille.venteId) relireVente(veille.venteId).catch(() => null)
+        } else if (phase === 'refund') {
+          setAvis(t.raison)
+        }
+      },
+    })
+    poller.start()
+    return () => poller.stop()
+  }, [veille])
 
   // La vente telle que le serveur la tient — règlements et reste dû — après un F5, un rejeu ou une
   // déclaration : un règlement rejoué est peut-être déjà affiché, le serveur fait foi.
@@ -1017,6 +1128,28 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     await encaisserMoyen(venteObj, moyenCourant, montant, tpeSimule, paiementsPrec)
   })
 
+  // « VALIDER LA VENTE » : UN PANIER À 0 € OUVRE SA VENTE PUIS LA VALIDE (`validateCart.js`).
+  //
+  // La vente ne s'ouvre qu'au premier règlement ; un billet gratuit n'en a aucun, et ce bouton
+  // appelait `validerVente` sans vente — qui sortait en silence. Une carte à appairer passe par la
+  // même fenêtre que pour une vente payée.
+  const validerPanier = () => seul(async () => {
+    await validateCart({
+      sale: vente,
+      remaining: reste,
+      openSale: demarrerPaiement,
+      finish: async (venteId, reglements) => {
+        const regles = reglements ?? paiements
+        const { proposables, horsPortee } = trierAppairables(panier)
+        if (proposables.length > 0 || horsPortee.length > 0) {
+          setAppairageEnAttente({ venteId, reglements: regles, proposables, horsPortee })
+        } else {
+          await validerVente(null, { venteId, paiements: regles })
+        }
+      },
+    })
+  })
+
   // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
 //
 // CE QUE CETTE FONCTION A CESSÉ DE FAIRE, ET POURQUOI C'EST UNE BONNE NOUVELLE.
@@ -1054,10 +1187,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
  * la clôture Z confondait le comptage et l'arrêté. On ne les sépare pas ici : ce serait toucher à un
  * comportement scellé et testé, sur un écran qu'on est en train de vérifier.
  */
-function construireTicket(infoTicket, paiements, support, premiereEdition = false) {
+function construireTicket(infoTicket, paiements, support, premiereEdition = false, billets = {}) {
   const lignes = (infoTicket.lignes || []).map((l) => {
     const nom = texte(l.libelle, 'Article')
     return {
+      // L'identifiant de la ligne relie chaque support (un par unité) au libellé de son billet.
+      id: l.id ?? null,
       // Le tarif figure sur le ticket : sans lui, deux lignes du même produit à des prix différents
       // sont illisibles, pour le client comme pour le caissier qui le relit.
       libelle: l.tarif ? `${nom} — ${l.tarif}` : nom,
@@ -1097,6 +1232,14 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     duplicata: !premiereEdition && !!infoTicket.duplicata,
     paiements,
     codeSupport: support?.identifiantSupport || null,
+    // Les mentions du papier, telles que le serveur les rend (`ReceiptLegalMentions`).
+    etablissement: infoTicket.emetteur || null,
+    date: infoTicket.date || null,
+    ventilationTva: infoTicket.ventilationTva || [],
+    gratuit: isFree(infoTicket.total),
+    // « Un billet par unité » (option du point de vente) : un billet par support émis.
+    supports: billets.supports || [],
+    billetParUnite: !!billets.billetParUnite,
   }
 }
 
@@ -1130,8 +1273,18 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       // du seuil, avec un client rattache, le renvoi a un sens).
       //
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
-      const t = construireTicket(infoTicket, reglements, support, true)
-      if (infoTicket.impressionAutomatique) setTicket(t)
+      const t = construireTicket(infoTicket, reglements, support, true, {
+        supports: (venteValidee.supports || [])
+          .filter((s) => s.identifiantSupport)
+          .map((s) => ({ code: s.identifiantSupport, ligne: idDe(s.ligne) })),
+        billetParUnite: !!pdvActif?.unBilletParUnite,
+      })
+      t.ticketsTerminal = ticketsTerminal.current[venteId] || []
+      // Une vente gratuite n'a pas de ticket, mais un billet : il s'affiche et part à l'impression
+      // dans le même geste (`BilletSeul`), sans l'étape « Afficher le billet » d'avant.
+      const ecran = screenAfterValidation(infoTicket)
+      if (ecran === 'pass') setBilletSeul({ ...t, imprimerAussitot: true })
+      else if (ecran === 'receipt') setTicket(t)
       else setFinVente({ info: infoTicket, ticket: t, vente: venteValidee })
       setPanier([])
       setVente(null)
@@ -1142,7 +1295,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     } catch (e) {
       // D-4 : un règlement tient encore la vente (terminal muet, ou en cours) — on le fait déclarer.
       if (e?.payload?.code === 'payment_outcome_unknown') setDeclaration({ venteId, tentative: e.payload.tentative })
-      setErreur(e.message || 'Échec de la validation.')
+      setErreur(saleErrorMessage(e, 'validate', 'Échec de la validation.'))
     } finally {
       setBusy(false)
     }
@@ -1627,12 +1780,25 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                       setMontant={setMontant}
                       tpeSimule={tpeSimule}
                       setTpeSimule={setTpeSimule}
+                      terminalSimule={terminalSimule}
+                      terminal={attenteTerminal && attenteTerminal.venteId === vente?.id ? (
+                        <TerminalWait
+                          key={attenteTerminal.tentative.id}
+                          venteId={attenteTerminal.venteId}
+                          tentative={attenteTerminal.tentative}
+                          libelleMoyen={libelleMoyen(attenteTerminal.tentative.moyen)}
+                          busy={busy}
+                          onIssue={issueTerminal}
+                          onAnnuler={annulerTerminal}
+                          onDeclarer={declarerTerminal}
+                        />
+                      ) : null}
                       reste={reste}
                       paiements={paiements}
                       avis={avis}
                       busy={busy}
                       onRegler={reglerUnMoyen}
-                      onValider={validerVente}
+                      onValider={validerPanier}
                       onAbandon={abandonner}
                       montrerAbandon={!!vente && !(attente && attente.saleId === vente.id)}
                       attente={attente && attente.saleId === vente?.id ? { ...attente.body, libelle: libelleMoyen(attente.body.moyen) } : null}
@@ -1666,7 +1832,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           )}
 
           {ticket && <TicketVente ticket={ticket} />}
-          {billetSeul && <BilletSeul ticket={billetSeul} />}
+          {billetSeul && <BilletSeul key={billetSeul.numero} ticket={billetSeul} />}
 
         </aside>
 
@@ -1946,7 +2112,7 @@ function AppairageModal({ etat, onValider, onIgnorer, busy }) {
 function PanneauPaiement({
   moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
   tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon, montrerAbandon = true,
-  attente = null,
+  attente = null, terminalSimule = false, terminal = null,
 }) {
   const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
   const paye = solde <= 0.0001
@@ -1973,7 +2139,10 @@ function PanneauPaiement({
 
       {/* UN RÈGLEMENT SANS ISSUE TIENT LE PAVÉ (G-2). Tant qu'il attend, « Régler » le redemande avec
           sa clé : proposer un autre moyen ou un autre montant ferait payer deux fois. */}
-      {attente && (
+      {/* La carte attend le terminal : l'attente, l'annulation ou la déclaration (`TerminalWait`). */}
+      {terminal}
+
+      {attente && !terminal && (
         <>
           <div className="banner banner-warn" style={{ margin: 0 }}>
             Règlement en attente : {attente.libelle} {attente.montant ? euros(attente.montant) : '(reste dû)'} — résultat
@@ -2018,13 +2187,13 @@ function PanneauPaiement({
             />
           </div>
 
-          {moyenCourant?.exigeReference && (
+          {moyenCourant?.exigeReference && terminalSimule && (
             <div className="field" style={{ margin: 0 }}>
               <label>Simulation TPE</label>
               <div className="seg">
-                {['accepte', 'refuse', 'timeout'].map((s) => (
+                {['accepte', 'refuse', 'attente', 'timeout'].map((s) => (
                   <button key={s} type="button" className={tpeSimule === s ? 'on' : ''} onClick={() => setTpeSimule(s)}>
-                    {s === 'accepte' ? 'Accepté' : s === 'refuse' ? 'Refusé' : 'Timeout'}
+                    {{ accepte: 'Accepté', refuse: 'Refusé', attente: 'En attente', timeout: 'Timeout' }[s]}
                   </button>
                 ))}
               </div>
@@ -2036,7 +2205,7 @@ function PanneauPaiement({
           </button>
           {busy && moyenCourant?.exigeReference && (
             <div className="hint" style={{ margin: 0, textAlign: 'center' }}>
-              Transaction en cours au terminal de paiement… (quelques secondes)
+              Envoi au terminal de paiement…
             </div>
           )}
         </>
@@ -2095,29 +2264,7 @@ function FinDeVente({ info, vente, droits, onAfficher, onBillet, onSansTicket })
   if (annulation === 'formulaire') {
     return <FormulaireAnnulation vente={vente} onAnnulee={setAnnulation} onFermer={() => setAnnulation(null)} />
   }
-  // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
-  // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
-  if (info.venteGratuite) {
-    return (
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-b">
-          <div className="nm">Vente enregistrée — aucun ticket</div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            Le total est de 0 € : il n’y a rien à justifier au client. La vente est bien
-            enregistrée et comptabilisée — c’est le papier qu’on ne sort pas, pas l’opération.
-          </p>
-          {/* ⚠ PAS DE TICKET NE VEUT PAS DIRE RIEN À REMETTRE (R5). Un ticket justifie un
-              PAIEMENT ; un billet ouvre un ACCÈS. Une entrée offerte n'a rien à justifier, et le
-              client a quand même besoin de quoi passer la porte. */}
-          <div className="ticket-actions">
-            <button className="btn primary sm" type="button" onClick={onBillet}>Afficher le billet</button>
-            <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  // Une vente à 0 € n'arrive plus ici : son billet s'imprime directement (`screenAfterValidation`).
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="card-b">
@@ -2170,10 +2317,31 @@ function FinDeVente({ info, vente, droits, onAfficher, onBillet, onSansTicket })
 //
 // Il porte donc ce qu'il faut pour entrer : le produit, le numéro, le code du support.
 function BilletSeul({ ticket }) {
+  // UN GESTE DÉLIVRE ET IMPRIME : après une vente gratuite, le billet part à l'imprimante dès qu'il
+  // est affiché. Avec Chrome ou Edge lancés en `--kiosk-printing`, il sort sans boîte de dialogue
+  // (docs/support/). Une seule fois par billet : la garde survit au double effet du mode strict.
+  //
+  // ⚠ PAS AVANT QUE LE QR SOIT DESSINÉ. `Qr` fabrique son image en asynchrone : un `window.print()`
+  // au montage (#318) sortait un billet avec un carré vide à la place du code — un billet qui ne
+  // passe pas la porte. On attend `onReady`, puis le billet sort seul sur le rouleau (`printThermal`).
+  //
+  // « UN BILLET PAR UNITÉ » (option du point de vente) : 3 entrées sortent 3 billets, chacun avec le
+  // code de SON support (`passesToPrint`), un par page du rouleau. On attend que tous les QR soient
+  // dessinés avant d'imprimer.
+  const billets = passesToPrint(ticket)
+  const papiers = useRef([])
+  const [qrPrets, setQrPrets] = useState(0)
+  const dejaImprime = useRef(null)
+  const imprimer = () => printThermal(papiers.current.slice(0, billets.length).filter(Boolean), { titre: `Billet ${ticket?.numero}` })
+  useEffect(() => {
+    if (!ticket?.imprimerAussitot || billets.length === 0 || qrPrets < billets.length || dejaImprime.current === ticket) return
+    dejaImprime.current = ticket
+    printThermal(papiers.current.slice(0, billets.length).filter(Boolean), { titre: `Billet ${ticket.numero}` })
+  }, [ticket, qrPrets, billets.length])
   // ⚠ UNE VENTE PEUT N'OUVRIR AUCUN ACCÈS — une boisson, un article de boutique. Il n'y a alors
   // pas de billet à remettre, et le dire vaut mieux que de tendre un papier vide. On ne montre pas
   // un cadre avec un trou à la place du code.
-  if (!ticket?.codeSupport) {
+  if (billets.length === 0) {
     return (
       <div className="card">
         <div className="card-b">
@@ -2187,35 +2355,44 @@ function BilletSeul({ ticket }) {
     )
   }
 
+  const lieu = venueName(ticket.etablissement)
+  const quand = printedDateTime(ticket.date)
   return (
     <>
-      <div className="ticket doc-imprimer">
-        <div className="th">
-          <span className="ok">✓</span>
-          <div>
-            <b>Billet</b>
-            <div className="tnum">{ticket.numero}</div>
-          </div>
-        </div>
-        <div className="tb">
-          {ticket.lignes.map((l, i) => (
-            <div className="trow" key={i}>
-              {/* La quantité et le libellé, jamais le prix. */}
-              <span>{l.quantite} × {l.libelle}</span>
-            </div>
-          ))}
-          <div className="tqr">
-            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+      {/* Le billet imprimé : l'établissement, la date et l'heure, le libellé, « Gratuit » quand le
+          prix est nul, le numéro et le QR. Toujours aucun montant (R5). */}
+      {billets.map((b, i) => (
+        <div key={b.code} className="ticket doc-imprimer" ref={(el) => { papiers.current[i] = el }}>
+          <div className="th">
+            <span className="ok">✓</span>
             <div>
-              <span className="mono" style={{ fontSize: 10.5, wordBreak: 'break-all' }}>{ticket.codeSupport}</span>
+              {lieu && <div className="t-etab">{lieu}</div>}
+              <b>Billet</b>
+              {quand && <div className="t-date">{quand}</div>}
+            </div>
+          </div>
+          <div className="tb">
+            {b.lignes.map((l, j) => (
+              <div className="trow" key={j}>
+                {/* La quantité et le libellé, jamais le prix. */}
+                <span>{l.quantite} × {l.libelle}</span>
+              </div>
+            ))}
+            {ticket.gratuit && <div className="t-gratuit">Gratuit</div>}
+            <div className="tqr">
+              <Qr value={b.code} size={84} title={`QR billet ${ticket.numero}`} onReady={() => setQrPrets((n) => n + 1)} />
+              <div>
+                <div className="t-code mono">{b.code}</div>
+                <div className="tnum">N° {ticket.numero}{billets.length > 1 ? ` · billet ${i + 1}/${billets.length}` : ''}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ))}
 
       <div className="ticket-actions noprint">
-        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
-          Imprimer le billet
+        <button className="btn ghost sm" type="button" onClick={imprimer}>
+          {billets.length > 1 ? `Imprimer les ${billets.length} billets` : 'Imprimer le billet'}
         </button>
       </div>
     </>
@@ -2223,6 +2400,10 @@ function BilletSeul({ ticket }) {
 }
 
 function TicketVente({ ticket }) {
+  const papier = useRef(null)
+  const entete = issuerLines(ticket.etablissement)
+  const quand = printedDateTime(ticket.date)
+  const tva = vatRows(ticket.ventilationTva)
   return (
     <>
       {/* ⚠ `doc-imprimer` FAIT SORTIR CE TICKET SEUL SUR LA FEUILLE, et sans lui il ne sortait
@@ -2232,12 +2413,20 @@ function TicketVente({ ticket }) {
           ⚠ CE N'EST PAS UN SECOND FORMAT. Le papier A4 porte exactement ce bloc, c'est-a-dire ce
           que `TicketProcessor` a rendu : memes lignes, meme numero, meme mention DUPLICATA. Il n'y
           a pas de gabarit A4 separe qui pourrait diverger en silence du format contraint NF525. */}
-      <div className="ticket doc-imprimer">
+      <div className="ticket doc-imprimer" ref={papier}>
       <div className="th">
         <span className="ok">✓</span>
         <h3>Vente encaissée</h3>
       </div>
       <div className="tb">
+        {/* Les mentions d'un ticket de caisse (economie.gouv.fr, 10/11/2025) : coordonnées du
+            professionnel, désignation, quantité, prix, date et heure. */}
+        {entete.length > 0 && (
+          <div className="t-emetteur">
+            {entete.map((l, i) => <div key={i} className={i === 0 ? 't-etab' : undefined}>{l}</div>)}
+          </div>
+        )}
+        {quand && <div className="t-date">{quand}</div>}
         <div className="tnum">Ticket {ticket.numero}</div>
         {ticket.lignes.map((l, i) => (
           <div key={i}>
@@ -2274,14 +2463,28 @@ function TicketVente({ ticket }) {
           </div>
         )}
         <div className="trow tt">
-          <span>Total</span>
+          <span>Total TTC</span>
           <span className="num">{euros(ticket.total)}</span>
         </div>
+        {tva.length > 0 && (
+          <div className="t-tva">
+            {tva.map((r, i) => (
+              <div className="trow" key={`t${i}`}>
+                <span>{r.libelle}</span>
+                <span className="num">HT {euros(r.ht)} · TVA {euros(r.tva)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {ticket.paiements.map((p, i) => (
           <div className="trow" key={`p${i}`}>
             <span>Règlement · {p.libelle || p.moyen}</span>
             <span className="num">{euros(p.montant)}</span>
           </div>
+        ))}
+        {/* Le ticket client du terminal de paiement, quand il en rend un : il sort avec celui de la caisse. */}
+        {(ticket.ticketsTerminal || []).map((recu, i) => (
+          <div className="t-terminal" key={`tpe${i}`}>{recu}</div>
         ))}
         {ticket.paiements.some((p) => parseFloat(p.rendu || '0') > 0) && (
           <div className="trow">
@@ -2291,7 +2494,12 @@ function TicketVente({ ticket }) {
             </span>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+        {/* Sans billet, la mention « aucun support QR » est une indication d'écran : elle ne part pas
+            sur le papier. */}
+        <div
+          className={ticket.codeSupport ? undefined : 'noprint'}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}
+        >
           {ticket.codeSupport && (
             <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
           )}
@@ -2312,7 +2520,11 @@ function TicketVente({ ticket }) {
       {/* Les commandes vivent HORS du `.doc-imprimer` : dedans, elles s'imprimeraient avec lui.
           `noprint` est une ceinture de plus, pour le cas ou ce bloc migrerait un jour. */}
       <div className="ticket-actions noprint">
-        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+        <button
+          className="btn ghost sm"
+          type="button"
+          onClick={() => printThermal(papier.current, { titre: `Ticket ${ticket.numero}` })}
+        >
           Imprimer le ticket
         </button>
       </div>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Notification;
 
+use App\I18n\Locales;
 use App\Boutique\Billet\GenerateurPdfBillet;
 use App\Boutique\Billet\GenerateurPdfFacture;
 use App\Boutique\Entity\PanierEnLigne;
@@ -43,6 +44,7 @@ final class ConfirmationCommandeMailer
         $pdfFacture = $this->generateurPdfFacture->genererSiDisponible($vente);
 
         $html = $this->twig->render('boutique/email/confirmation.html.twig', [
+            'locale' => Locales::ofEstablishment($vente->getEtablissement()),
             'etablissementNom' => $vente->getEtablissement()?->getNom() ?? '',
             'numeroCommande' => $vente->getNumero(),
             'total' => $vente->getTotal(),

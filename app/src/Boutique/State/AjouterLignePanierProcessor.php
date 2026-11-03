@@ -18,11 +18,13 @@ use App\Crm\Entity\Beneficiaire;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Offre\Enum\StatutProduit;
+use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Creneau;
 use App\Vente\Service\LecteurCorps;
 use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -89,6 +91,13 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
 
         $creneauRef = $corps['creneau'] ?? null;
         $creneau = $creneauRef !== null ? $this->resoudre(Creneau::class, $creneauRef) : null;
+        // D8 : le créneau reçu doit être celui que la vitrine propose pour ce produit, c'est-à-dire
+        // de son activité et sur le site du panier. Un simple `find()` laissait poser le créneau d'un
+        // autre exploitant ou d'un autre produit, et la confirmation y prenait la place. Un créneau
+        // d'ailleurs répond comme un créneau inexistant (D3).
+        if ($creneauRef !== null && !($creneau instanceof Creneau && $this->offersSlot($produit, $etablissementPanier, $creneau))) {
+            throw new NotFoundHttpException('Créneau introuvable.');
+        }
 
         if ($this->disponibilite->estTimedEntry($produit)) {
             if (!$creneau instanceof Creneau) {
@@ -141,6 +150,14 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         $this->tarification->calculer($data);
 
         return $data;
+    }
+
+    /** Même rattachement que `CreneauxProduitProvider` : l'activité du créneau vend ce produit, sur ce site. */
+    private function offersSlot(Produit $produit, ?Etablissement $site, Creneau $creneau): bool
+    {
+        return $site !== null
+            && $creneau->getActivite()?->getProduitTarifReference()?->getId()->equals($produit->getId()) === true
+            && $creneau->getEtablissement()?->getId()->equals($site->getId()) === true;
     }
 
     /** @param array<string, mixed>|null $beneficiaireSimple */

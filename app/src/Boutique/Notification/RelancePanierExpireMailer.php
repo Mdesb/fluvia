@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Notification;
 
+use App\I18n\Locales;
 use App\Boutique\Entity\PanierEnLigne;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -30,6 +31,7 @@ final class RelancePanierExpireMailer
         }
 
         $html = $this->twig->render('boutique/email/relance_panier.html.twig', [
+            'locale' => Locales::ofEstablishment($panier->getEtablissement()),
             'nbLignes' => $panier->getLignes()->count(),
         ]);
 

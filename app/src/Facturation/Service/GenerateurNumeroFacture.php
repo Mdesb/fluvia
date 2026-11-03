@@ -78,10 +78,52 @@ final class GenerateurNumeroFacture
 
         $sequence = $serie->incrementer();
 
-        $numero = sprintf('%s-%s-%05d', $prefixe->value, $exercice, $sequence);
+        $code = $serie->getCode() === null ? '' : $serie->getCode() . '-';
+        $numero = sprintf('%s-%s%s-%05d', $prefixe->value, $code, $exercice, $sequence);
         $facture->setNumero($numero);
 
         return $numero;
+    }
+
+    /**
+     * ⚠ L'INDEX VOIT L'EXPLOITANT, LA LOI VOIT LE VENDEUR, C'EST-A-DIRE LE SIREN.
+     *
+     * Deux sites d'une meme societe (deux SIRET) recoivent chacun un profil
+     * (`BackfillAccountingProfilesCommand`) ; la preprod en a deux au SIREN 130025265. Sans code, leurs
+     * deux series rendraient le meme numero au meme vendeur. Decision de Maxime du 08/10 : une serie
+     * distincte par profil. Le premier profil d'un SIREN a numeroter garde la serie sans code — celle
+     * de la preprod continue donc a `FA-2026-00007`. Chaque profil suivant du meme SIREN prend, a sa
+     * premiere facture, un code court (le NIC de son SIRET, sinon le debut de son identifiant) :
+     * `FA-00027-2026-00001`. Le code est porte par ses series, et ne change plus ensuite.
+     *
+     * Les profils du SIREN sont verrouilles le temps de decider : deux premieres emissions
+     * simultanees ne peuvent pas garder toutes deux la serie sans code.
+     */
+    private function codeDuProfil(ProfilExploitant $profil): ?string
+    {
+        $existante = $this->em->getRepository(SerieNumerotation::class)->findOneBy(['profilExploitant' => $profil->getId()]);
+        if ($existante instanceof SerieNumerotation || $profil->getSiren() === '') {
+            return $existante?->getCode();
+        }
+
+        $this->em->createQuery('SELECT p.id FROM ' . ProfilExploitant::class . ' p WHERE p.siren = :siren ORDER BY p.id')
+            ->setParameter('siren', $profil->getSiren())
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getResult();
+        // Lecture verrouillante : elle voit ce qu'une emission concurrente vient de valider.
+        $pris = $this->em->createQuery('SELECT DISTINCT s.code FROM ' . SerieNumerotation::class . ' s JOIN s.profilExploitant p WHERE p.siren = :siren AND p.id <> :profil')
+            ->setParameter('siren', $profil->getSiren())
+            ->setParameter('profil', $profil->getId(), 'uuid')
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getSingleColumnResult();
+        if ($pris === []) {
+            return null;
+        }
+
+        $siret = (string) $profil->getSiret();
+        $code = \strlen($siret) === 14 && str_starts_with($siret, $profil->getSiren()) ? substr($siret, 9) : '';
+
+        return $code === '' || \in_array($code, $pris, true) ? strtoupper(substr($profil->getId()->toRfc4122(), 0, 8)) : $code;
     }
 
     /** Charge (ou crée) la ligne de compteur, puis la verrouille en écriture jusqu'au commit. */
@@ -99,7 +141,8 @@ final class GenerateurNumeroFacture
             $serie = (new SerieNumerotation())
                 ->setProfilExploitant($profil)
                 ->setExercice($exercice)
-                ->setPrefixe($prefixe);
+                ->setPrefixe($prefixe)
+                ->setCode($this->codeDuProfil($profil));
             $this->em->persist($serie);
             // La ligne doit exister en base avant de pouvoir être verrouillée : ce flush reste dans la
             // transaction d'émission ouverte par l'appelant, il n'est donc jamais visible seul.

@@ -60,7 +60,10 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'facturation_facture')]
-#[ORM\UniqueConstraint(name: 'uniq_facture_numero', columns: ['numero'])]
+// ⚠ UNIQUE PAR EXPLOITANT, PAS SUR TOUTE LA TABLE : la série est tenue par exploitant
+// (`SerieNumerotation`), et le numéro porte déjà son préfixe et son année. Unique sur le numéro seul,
+// le premier exploitant prenait `FA-2026-00001` et le second recevait une 500 (mesuré le 08/10/2026).
+#[ORM\UniqueConstraint(name: 'uniq_facture_profil_numero', columns: ['profil_exploitant_id', 'numero'])]
 #[ORM\UniqueConstraint(name: 'uniq_facture_vente_origine', columns: ['vente_origine_id'])]
 #[ORM\UniqueConstraint(name: 'uniq_facturation_facture_corrigee', columns: ['facture_corrigee_id'])]
 #[ORM\Index(name: 'idx_facture_chaine', columns: ['profil_exploitant_id', 'nature', 'numero_sequence'])]

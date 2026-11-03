@@ -54,4 +54,11 @@ final class CapaciteCatalogueItem
      */
     #[Groups(['capacite_catalogue:read'])]
     public bool $estVerticale = false;
+
+    /**
+     * Capacité du cœur : elle ne s'éteint pas (422). Même source que le refus,
+     * `ModuleGuard::coreCapabilities()` — l'écran n'offre donc pas de bouton voué à l'échec.
+     */
+    #[Groups(['capacite_catalogue:read'])]
+    public bool $estDuCoeur = false;
 }

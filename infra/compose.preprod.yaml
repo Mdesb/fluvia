@@ -23,6 +23,7 @@ services:
       - ../app:/app
       - app_var:/app/var
       - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      - ../docker/php/conf.d/zz-production.ini:/usr/local/etc/php/conf.d/zz-production.ini:ro
       - ../docker/php/conf.d/zz-opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini:ro
     environment:
       APP_ENV: prod
@@ -118,6 +119,7 @@ services:
       - app_var:/app/var
       - ../infra:/infra:ro
       - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      - ../docker/php/conf.d/zz-production.ini:/usr/local/etc/php/conf.d/zz-production.ini:ro
     environment:
       APP_ENV: prod
       APP_DEBUG: "0"
@@ -199,6 +201,7 @@ services:
       - ../app:/app
       - app_var:/app/var
       - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      - ../docker/php/conf.d/zz-production.ini:/usr/local/etc/php/conf.d/zz-production.ini:ro
     environment:
       APP_ENV: prod
       APP_DEBUG: "0"
