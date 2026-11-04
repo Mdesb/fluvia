@@ -273,31 +273,42 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
 
         $actif = $this->contexte->idActif();
 
-        // LA JOINTURE EST EXTERNE, ET C'EST TOUT LE CORRECTIF.
-        //
-        // En interne, un produit sans établissement ne satisfait aucune ligne : il n'était visible de
-        // personne. Or « sans établissement » est précisément la façon dont ce dépôt écrit « socle,
-        // partagé par tous » pour cette entité — elle n'a ni discriminant `portee` ni colonne
-        // `etablissement`, donc ni l'un ni l'autre des deux patrons de D51.
-        $queryBuilder->leftJoin($aliasProduit . '.etablissements', 'perim_etab');
-
+        // Un produit SANS établissement est le socle, partagé par tous : cette entité n'a ni
+        // discriminant `portee` ni colonne `etablissement`, donc ni l'un ni l'autre des deux patrons
+        // de D51. D'où le `SIZE(...) = 0` des deux branches.
         if ($actif === null) {
             // Fermeture par défaut, même règle que `ScopedReferenceQuery` : sans établissement actif,
             // le socle et rien d'autre. Montrer « tout » serait la seule erreur irrattrapable ici.
-            $queryBuilder
-                ->andWhere(sprintf('SIZE(%s.etablissements) = 0', $aliasProduit))
-                ->distinct();
+            $queryBuilder->andWhere(sprintf('SIZE(%s.etablissements) = 0', $aliasProduit));
 
             return;
         }
 
-        // `perim_etab.id = :param` typé `'uuid'` explicitement : sur un identifiant à type
-        // personnalisé, une comparaison sans type ne compte rien **et ne lève pas** (D58). Ici, elle
-        // ne rendrait pas « moins » — elle rendrait *le socle seul*, ce qui ressemble à une
-        // configuration incomplète bien plus qu'à un bug.
+        // ⚠ UNE SOUS-REQUÊTE, JAMAIS UNE JOINTURE SUR `etablissements` — corrigé le 04/11/2026.
+        //
+        // Jusque-là : `LEFT JOIN etablissements perim_etab WHERE perim_etab.id = :actif`. Pour choisir
+        // les produits, c'était juste. Mais la lecture d'un produit charge sa relation `etablissements`
+        // en RÉUTILISANT la jointure déjà présente sur ce chemin : la collection hydratée était la
+        // collection FILTRÉE, réduite au site actif. Un produit vendu à Piscine A et Patinoire B, lu
+        // depuis A, ne montrait que A — la base avait les deux. L'écran renvoyait [A, B] en croyant
+        // ajouter B : 500, `1062 Duplicate entry`. Et décocher B était impossible : il n'était pas lu.
+        // `ProductSitesTest`.
+        //
+        // `:perim_actif` typé `'uuid'` explicitement : sur un identifiant à type personnalisé, une
+        // comparaison sans type ne compte rien **et ne lève pas** (D58). Ici, elle ne rendrait pas
+        // « moins » — elle rendrait *le socle seul*, ce qui ressemble à une configuration incomplète
+        // bien plus qu'à un bug.
         $queryBuilder
-            ->andWhere(sprintf('(perim_etab.id = :perim_actif OR SIZE(%s.etablissements) = 0)', $aliasProduit))
-            ->setParameter('perim_actif', $actif, 'uuid')
-            ->distinct();
+            ->andWhere(sprintf(
+                '(EXISTS (SELECT perim_sous.id FROM %s perim_sous_produit INNER JOIN perim_sous_produit.etablissements perim_sous'
+                . ' WHERE perim_sous_produit = %s AND perim_sous.id = :perim_actif) OR SIZE(%s.etablissements) = 0)',
+                // L'entité qui PORTE les sites : le produit, ou la ressource elle-même quand elle en a
+                // (`Promotion`, chemin `null`). Une sous-requête sur `Produit` rendait toute promotion
+                // invisible — `CatalogueTest::testUnePromotionCreeeSansSiteEstRattacheeAuSiteActif`.
+                $chemin === null ? $resourceClass : Produit::class,
+                $aliasProduit,
+                $aliasProduit,
+            ))
+            ->setParameter('perim_actif', $actif, 'uuid');
     }
 }
