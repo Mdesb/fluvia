@@ -10,6 +10,9 @@ import Tabs from './Tabs.jsx'
 // publique ; réutilisé ici pour que la description s'affiche EXACTEMENT comme elle
 // s'affichera devant un client, et pour ne pas inventer un second format.
 import Markdown from '../public/components/Markdown.jsx'
+import ShopCard from '../public/components/ShopCard.jsx'
+import ProductTile from './ProductTile.jsx'
+import { shopCardPreview, tilePreview } from '../api/productPreview.js'
 import { humaniser, mot } from '../api/vocabulaire.js'
 import { useVocabulaireVerticales } from '../api/vocabulaire-verticales.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
@@ -359,6 +362,8 @@ export default function ProduitFiche({
   const [tousProduits, setTousProduits] = useState([])
   const [liaisons, setLiaisons] = useState([])
   const [complements, setComplements] = useState([])
+  // Les photos du produit, remontées par `PhotosProduit` pour l'aperçu de la carte en ligne.
+  const [photosApercu, setPhotosApercu] = useState([])
   const [ajoutComplement, setAjoutComplement] = useState({ produit: '', mode: 'suggested', quantite: 1 })
 
   // ⚠ CES DEUX GESTES ECRIVENT IMMEDIATEMENT, hors du cycle « Enregistrer / Annuler » de la fiche.
@@ -1072,7 +1077,7 @@ export default function ProduitFiche({
 
           {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
               de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
-          <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
+          <PhotosProduit produitId={p.id} peutModifier={peutModifier} onPhotos={setPhotosApercu} />
 
           <Section titre="Description" aide="Le texte que le visiteur lit avant d'acheter.">
         <div className="field">
@@ -1110,6 +1115,11 @@ export default function ProduitFiche({
             Ce sont des entités à part, avec leurs propres routes. Mélanger les deux temps ferait
             qu'un lien ajouté puis « annulé » resterait posé — un bouton qui ne défait pas ce
             qu'il annonce. */}
+          </Section>
+
+          {/* L'APERÇU SUIT LA SAISIE : nom et canaux du brouillon, photos telles que téléversées. */}
+          <Section titre="En boutique en ligne" aide="La carte que le visiteur voit dans la liste des billets.">
+            <ApercuBoutique apercu={shopCardPreview(edition, p, photosApercu)} />
           </Section>
 
           <Section titre="Produits complémentaires" aide="Ce qu'on propose avec — le casier avec l'entrée.">
@@ -1864,6 +1874,12 @@ export default function ProduitFiche({
           </div>
           <div className="hint">Aide le vendeur à repérer le produit d'un coup d'œil. Facultatif.</div>
         </div>
+        <div className="field">
+          <span className="sub">Sur la grille du guichet</span>
+          <div className="apercu-tuile">
+            <ProductTile {...tilePreview(edition, p)} />
+          </div>
+        </div>
         </Section>
       )}
 
@@ -2253,7 +2269,31 @@ function ZoneDepotPhoto({ fichier, onFichier, onRefus }) {
  *
  * La première photo est celle que la boutique montre. Les suivantes attendent une galerie.
  */
-function PhotosProduit({ produitId, peutModifier }) {
+// La carte de la boutique, telle que le visiteur la verra — ou la phrase qui dit pourquoi il ne la
+// verra pas. Le prix est une fourchette : la boutique ne retient que les tarifs ouverts en ligne.
+function ApercuBoutique({ apercu }) {
+  if (!apercu.enLigne) {
+    return (
+      <div className="hint">
+        Ce produit n’est pas vendu en ligne : aucune carte ne s’affichera dans la boutique. Pour l’y
+        mettre, cochez <strong>En ligne</strong> dans l’onglet Vente.
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="apercu-carte">
+        <ShopCard produit={apercu.carte} langue="fr" />
+      </div>
+      <div className="hint">
+        Le prix affiché en ligne ne retient que les tarifs ouverts à la vente en ligne pour la
+        saison en cours.
+      </div>
+    </>
+  )
+}
+
+function PhotosProduit({ produitId, peutModifier, onPhotos }) {
   const [etat, setEtat] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -2305,6 +2345,10 @@ function PhotosProduit({ produitId, peutModifier }) {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    onPhotos?.(etat?.photos || [])
+  }, [etat, onPhotos])
 
   if (!etat) return null
 

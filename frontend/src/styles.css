@@ -591,6 +591,11 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    ne servait a rien et laissait croire que le reglage etait ailleurs. Une seule, et le fond
    passe en `--panel-2` : un produit indisponible doit se lire comme une surface inerte,
    pas comme une tuile normale qu'on aurait ternie. */
+/* Aperçus de la fiche produit (lot 3) : la tuile et la carte réelles, à leur largeur réelle. */
+.apercu-tuile { max-width: 190px; display: flex; }
+.apercu-tuile > .prodtile { flex: 1; }
+.apercu-carte { max-width: 280px; }
+.prodtile.apercu, .prodtile.apercu:hover { cursor: default; background: var(--panel); border-color: var(--line); }
 .prodtile:disabled { opacity: .55; cursor: not-allowed; background: var(--panel-2); }
 .prodtile:active:not(:disabled) { transform: scale(.98); }
 .prodtile .pn { font-weight: 600; font-size: var(--txt-normal); }

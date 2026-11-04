@@ -11,6 +11,7 @@ import { texte } from '../components/Liste.jsx'
 import HistoriqueVentes, { FormulaireAnnulation } from '../components/HistoriqueVentesModal.jsx'
 import FactureRendu, { useFactureLue } from '../components/FactureRendu.jsx'
 import Modal from '../components/Modal.jsx'
+import ProductTile from '../components/ProductTile.jsx'
 // Chargés à part : le paquet principal frôlait les 500 kB, que le garde-fou n°51 refuse. Le bandeau des
 // scans se dessine un instant après la caisse ; l'écran d'ouverture et de Z, à l'ouverture de sa
 // modale. Rien ne change à l'encaissement.
@@ -1911,8 +1912,13 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                        l'autre. Ils sont donc frères dans une enveloppe positionnée — c'est ce qui
                        permet d'épingler sans déclencher la vente. */
                     <div className="prodcase" key={p.id}>
-                      <button
-                        className="prodtile"
+                      {/* La même tuile que l'aperçu de la fiche produit (`ProductTile`). */}
+                      <ProductTile
+                        libelle={libelleProduit(p)}
+                        code={p.code}
+                        prix={prixIndicatif(p)}
+                        raison={raison}
+                        couleur={p.couleurCaisse || null}
                         disabled={!vendable}
                         onClick={() => choisirPuisAjouter(p)}
                         title={
@@ -1924,11 +1930,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                                 ? 'Ajouter au panier'
                                 : expliqueNonVendable(p) || ''
                         }
-                      >
-                        <span className="pn">{libelleProduit(p)}</span>
-                        {p.code && <span className="pc">{p.code}</span>}
-                        {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
-                      </button>
+                      />
                       {peutEpingler && (
                         <button
                           type="button"

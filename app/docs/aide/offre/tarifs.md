@@ -6,7 +6,7 @@ portee: global
 moduleLie: offre
 statut: publie
 resume: "Créer un produit, régler sa fiche (enregistrée automatiquement), ses tarifs par saison, et le mettre en vente."
-motsCles: [offre, produit, tarif, grille tarifaire, saison, promotion, mettre en vente, enregistrement automatique]
+motsCles: [offre, produit, aperçu, tarif, grille tarifaire, saison, promotion, mettre en vente, enregistrement automatique]
 ---
 ## Principe général
 
@@ -22,6 +22,10 @@ donné.
 2. Sur la fiche du produit, chaque onglet règle une partie : **Présentation** (nom, photos,
    description, note interne), **Vente** (tarifs, canaux, sites, catégories), puis selon le type
    **Abonnement** ou **Carte**, et selon vos modules **Accès**, **Stock**, **Comptabilité**.
+   Deux aperçus suivent votre saisie : l'onglet **Caisse** montre la tuile telle que le vendeur la
+   verra sur la grille du guichet, avec sa couleur ; **Présentation** montre la carte de la boutique
+   en ligne. Le prix de la carte est indicatif : en ligne, seuls comptent les tarifs ouverts à la
+   vente en ligne pour la saison en cours.
 3. **La fiche s'enregistre toute seule** : l'indicateur en haut passe de « Modifications en cours… »
    à « Enregistré ». S'il affiche « Non enregistré », le message dit pourquoi ; corrigez puis cliquez
    sur **Réessayer**. Deux cas attendent votre geste : un nom vide, et un choix de sites qui
