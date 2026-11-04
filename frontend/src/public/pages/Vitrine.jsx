@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { libelleProduit, libellePrix } from '../lib/format.js'
+import { libelleProduit } from '../lib/format.js'
+import ShopCard from '../components/ShopCard.jsx'
 import { Vide } from '../components/Etats.jsx'
 
 // Catalogue public d'une vitrine (GET /boutique/vitrines/{id}/catalogue).
@@ -63,53 +64,11 @@ export default function Vitrine({ catalogue, langue, onNaviguer }) {
         <ul className="bq-grille" aria-label="Liste des billets">
           {filtres.map((p) => (
             <li key={p.produit}>
-              <ProduitCarte produit={p} langue={langue} onNaviguer={onNaviguer} />
+              <ShopCard produit={p} langue={langue} onNaviguer={onNaviguer} />
             </li>
           ))}
         </ul>
       )}
     </section>
-  )
-}
-
-function ProduitCarte({ produit, langue, onNaviguer }) {
-  const nom = libelleProduit(produit, langue)
-  const enRupture = typeof produit.disponibilite === 'number' && produit.disponibilite <= 0
-  const dispoConnue = typeof produit.disponibilite === 'number'
-  const prix = libellePrix(produit.prix)
-
-  return (
-    <article className="bq-carte">
-      <div className="bq-carte-img">
-        {produit.visuel ? (
-          <img src={produit.visuel} alt={nom} loading="lazy" />
-        ) : (
-          <span aria-hidden="true">{nom.slice(0, 1).toUpperCase()}</span>
-        )}
-      </div>
-      <div className="bq-carte-b">
-        <h2 className="bq-carte-t">{nom}</h2>
-        {produit.code && <p className="bq-carte-code">{produit.code}</p>}
-        {prix && <p className="bq-carte-prix">{prix}</p>}
-        <div className="bq-carte-tags">
-          {produit.timedEntry && <span className="badge info">Horaire à choisir</span>}
-          {enRupture ? (
-            <span className="badge crit">Épuisé</span>
-          ) : dispoConnue ? (
-            <span className="badge good">{produit.disponibilite} dispo.</span>
-          ) : (
-            <span className="badge mut">Disponible</span>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn primary bq-carte-cta"
-          disabled={enRupture}
-          onClick={() => onNaviguer({ vue: 'produit', produitId: produit.produit })}
-        >
-          {enRupture ? 'Indisponible' : produit.timedEntry ? 'Choisir un horaire' : 'Voir le billet'}
-        </button>
-      </div>
-    </article>
   )
 }
