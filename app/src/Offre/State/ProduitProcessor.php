@@ -9,8 +9,11 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
+use App\Organisation\Entity\Etablissement;
+use App\Platform\Security\EstablishmentScopeAsserter;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\PersistentCollection;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use App\Offre\Service\GenerateurCodeProduit;
 use App\Offre\Service\ResolveurFacettes;
@@ -37,6 +40,7 @@ final class ProduitProcessor implements ProcessorInterface
         private readonly GenerateurCodeProduit $generateurCode,
         private readonly ContexteEtablissement $contexte,
         private readonly EntityManagerInterface $em,
+        private readonly EstablishmentScopeAsserter $scope,
     ) {
     }
 
@@ -47,9 +51,37 @@ final class ProduitProcessor implements ProcessorInterface
                 $data->setCode($this->generateurCode->generer());
             }
             $this->preparer($data, $operation);
+            $this->refuserSitesHorsDePortee($data);
         }
 
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
+    }
+
+    /**
+     * ON NE RATTACHE PAS UN PRODUIT À UN SITE QU'ON N'ATTEINT PAS — ET ON NE L'EN RETIRE PAS NON PLUS.
+     *
+     * `EstablishmentScopeWriteGuard` ne regarde que `getEtablissement()`, au singulier : la collection
+     * `etablissements` lui échappe. Depuis le 04/11/2026, la lecture rend TOUS les sites du produit
+     * (`PerimetreProduitExtension`) : un appel peut donc renvoyer la liste sans un site qu'il ne gère
+     * pas, et le retirer de la vente là-bas. Retirer un produit d'un site reste un geste de ce site.
+     *
+     * Seuls les sites qui CHANGENT sont contrôlés : un produit partagé avec un site qu'on n'atteint pas
+     * reste modifiable pour tout le reste. 404, pas 403 (D3) : un 403 confirmerait que le site existe.
+     */
+    private function refuserSitesHorsDePortee(Produit $produit): void
+    {
+        $sites = $produit->getEtablissements();
+        $avant = $sites instanceof PersistentCollection ? $sites->getSnapshot() : [];
+        $apres = $sites->toArray();
+
+        $changes = array_merge(
+            array_udiff($apres, $avant, static fn (Etablissement $a, Etablissement $b): int => strcmp((string) $a->getId(), (string) $b->getId())),
+            array_udiff($avant, $apres, static fn (Etablissement $a, Etablissement $b): int => strcmp((string) $a->getId(), (string) $b->getId())),
+        );
+
+        foreach ($changes as $site) {
+            $this->scope->assertReachable($site);
+        }
     }
 
     /**
