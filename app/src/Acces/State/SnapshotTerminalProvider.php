@@ -188,6 +188,7 @@ final class SnapshotTerminalProvider implements ProviderInterface
             validiteFin: $droit->getFenetreFin()?->format(DATE_ATOM),
             portesEligibles: $portesEligibles,
             sousReseauId: $droit->getSousReseau()?->getId()->toRfc4122(),
+            headcount: $droit->getHeadcount(),
         );
     }
 }

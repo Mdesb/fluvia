@@ -112,7 +112,9 @@ use Symfony\Component\Uid\Uuid;
                                             'droit_invalide', 'sens_interdit', 'non_nominatif', 'ouverture_manuelle',
                                             'federation_inactive', 'signature_invalide', 'hors_portee', 'cle_idempotence_invalide',
                                             'zone_non_autorisee', 'credit_epuise_hors_ligne_litige', 'hors_horaires_ouverture', 'deja_consomme',
+                                            'group_headcount',
                                         ]],
+                                        'headcount' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Personnes à laisser passer (titre de groupe) ; 0 sur un refus.'],
                                         'horodatageServeur' => ['type' => 'string', 'format' => 'date-time'],
                                         'message' => [
                                             'type' => 'object',

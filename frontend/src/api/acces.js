@@ -93,6 +93,7 @@ export const MOTIF_REFUS = {
     geste: 'Corrigez le sens de l’équipement dans le plan du site si le matériel a été retourné.',
   },
   non_nominatif: { libelle: 'Passage non nominatif', quoi: 'Comptage sans support identifié.', geste: '' },
+  group_headcount: { libelle: 'Membre d’un groupe', quoi: 'Personne entrée avec un titre de groupe (un scan, plusieurs personnes).', geste: '' },
   ouverture_manuelle: { libelle: 'Ouverture manuelle', quoi: 'Un agent a forcé le passage, avec motif.', geste: '' },
   federation_inactive: {
     libelle: 'Fédération inactive',

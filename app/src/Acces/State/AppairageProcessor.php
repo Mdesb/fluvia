@@ -10,6 +10,8 @@ use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\TypeSupport;
+use App\Acces\Hardware\CredentialFormat;
+use App\Acces\Hardware\CredentialNormalizer;
 use App\Acces\Port\ProjectionDroitInterface;
 use App\Acces\Service\AppairageHandler;
 use App\Securite\Entity\Utilisateur;
@@ -40,6 +42,7 @@ final class AppairageProcessor implements ProcessorInterface
         private readonly ContexteEtablissement $contexte,
         private readonly Security $security,
         private readonly ProjectionDroitInterface $projection,
+        private readonly CredentialNormalizer $normalizer,
     ) {
     }
 
@@ -90,6 +93,33 @@ final class AppairageProcessor implements ProcessorInterface
 
         if (!$droit instanceof DroitAcces) {
             throw new UnprocessableEntityHttpException('Droit introuvable (fournir « droit » ou « billetSupportRef »).');
+        }
+
+        // Format du lecteur du comptoir (#337), facultatif : un badge lu en décimal ou en hexadécimal
+        // inversé est ramené à la forme que les portes reconnaissent. Sans format, l'identifiant est
+        // pris tel quel — comportement antérieur, inchangé.
+        if (isset($corps['format'])) {
+            $format = CredentialFormat::tryFrom((string) $corps['format']);
+            if ($format === null) {
+                throw new UnprocessableEntityHttpException('Format de lecteur inconnu (raw|hex_msb_first|hex_lsb_first|decimal).');
+            }
+            try {
+                $identifiant = $this->normalizer->normalize($identifiant, $format);
+            } catch (\InvalidArgumentException $e) {
+                throw new UnprocessableEntityHttpException($e->getMessage());
+            }
+        }
+
+        // Titre de groupe (#337), facultatif : le nombre de personnes qu'un passage de ce badge fait
+        // entrer. Enregistré par le `flush()` de l'appairage : un appairage refusé ne laisse pas un
+        // droit modifié derrière lui.
+        if (\array_key_exists('headcount', $corps)) {
+            $headcount = filter_var($corps['headcount'], FILTER_VALIDATE_INT);
+            try {
+                $droit->setHeadcount($headcount === false ? 0 : $headcount);
+            } catch (\InvalidArgumentException $e) {
+                throw new UnprocessableEntityHttpException($e->getMessage());
+            }
         }
 
         $mode = ModeAppairage::tryFrom((string) ($corps['mode'] ?? 'caisse')) ?? ModeAppairage::Caisse;

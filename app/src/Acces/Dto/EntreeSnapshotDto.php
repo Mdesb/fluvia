@@ -25,6 +25,8 @@ final class EntreeSnapshotDto
         public readonly ?string $validiteFin = null,
         public readonly array $portesEligibles = [],
         public readonly ?string $sousReseauId = null,
+        /** Personnes qu'un passage de ce titre fait entrer (titre de groupe, #337). */
+        public readonly int $headcount = 1,
     ) {
     }
 
@@ -44,6 +46,7 @@ final class EntreeSnapshotDto
             'portesEligibles' => $this->portesEligibles,
             'sousReseauId' => $this->sousReseauId,
             'versionMaj' => $this->versionMaj,
+            'headcount' => $this->headcount,
         ];
     }
 }
