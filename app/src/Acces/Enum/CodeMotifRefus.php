@@ -78,4 +78,10 @@ enum CodeMotifRefus: string
      * casserait le jour où on corrige une faute d'orthographe.
      */
     case DejaConsomme = 'deja_consomme';
+    /**
+     * Personne d'un titre de groupe (#337) : passage ACCEPTÉ, posé sur les N-1 passages qui
+     * accompagnent celui du titre. Même dérogation que `NonNominatif` — un code sur un passage
+     * accepté — pour que le journal dise pourquoi un seul scan a fait entrer N personnes.
+     */
+    case GroupHeadcount = 'group_headcount';
 }

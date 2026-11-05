@@ -26,6 +26,7 @@ use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -123,6 +124,10 @@ final class ValidationPassageHandler
                 $verdict->message,
             );
         }
+
+        // Titre de groupe (#337) : un seul scan fait entrer `headcount` personnes. Tout ce qui suit
+        // (crédit, jauge, passages enregistrés, commande d'ouverture) compte ce nombre, pas « 1 ».
+        $headcount = max(1, $droit->getHeadcount());
 
         // Sous-réseau / fédération (US-L3-12, CA-13).
         //
@@ -242,7 +247,7 @@ final class ValidationPassageHandler
 
         // Étapes 7-8-9 — décompte crédit + FMI + enregistrement, atomiques (rollback SQL sur refus).
         try {
-            $passage = $this->connection->transactional(function () use ($droit, $sens, $espace, $controleur, $equipement, $support, $evt, $enConflit): Passage {
+            $passage = $this->connection->transactional(function () use ($droit, $sens, $espace, $controleur, $equipement, $support, $evt, $enConflit, $headcount): Passage {
                 // Réconciliation gracieuse du crédit épuisé hors-ligne (CA-8, plan-acces-terminal.md
                 // §4.2) : le plancher n'est abaissé sous 0 que si `autoriserCreditNegatifSiHorsLigne`
                 // est explicitement positionné (jamais par le chemin en ligne, défaut `false` = plancher
@@ -251,12 +256,14 @@ final class ValidationPassageHandler
                 $enConflitCredit = false;
                 if ($droit->getSourceType() === TypeDroitAcces::CarteQuota) {
                     $plancher = $evt->autoriserCreditNegatifSiHorsLigne ? $this->plancherCreditNegatif : 0;
-                    if (!$evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) <= 0) {
+                    // Un groupe consomme une entrée par personne : 20 nageurs sur une carte de 10
+                    // entrées, c'est un refus, pas 10 entrées offertes.
+                    if (!$evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) < $headcount) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée.');
                     }
                     $affectees = (int) $this->connection->executeStatement(
-                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant > :plancher',
-                        ['hex' => bin2hex($droit->getId()->toBinary()), 'plancher' => $plancher],
+                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - :n, updated_at = UTC_TIMESTAMP() WHERE id = UNHEX(:hex) AND credit_restant - :n >= :plancher',
+                        ['hex' => bin2hex($droit->getId()->toBinary()), 'plancher' => $plancher, 'n' => $headcount],
                     );
                     if ($affectees === 0) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée (course concurrente).');
@@ -288,22 +295,22 @@ final class ValidationPassageHandler
                         // comptée, même au-delà du seuil, et signalée. Seule l'entrée en ligne est bloquée.
                         if ($jauge->getMode() === ModeSeuil::Blocage && !$evt->origineHorsLigne) {
                             $affectees = (int) $this->connection->executeStatement(
-                                'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + 1, cumul_jour = cumul_jour + 1 WHERE id = UNHEX(:hex) AND valeur_courante < seuil',
-                                ['hex' => $hexJauge],
+                                'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + :n, cumul_jour = cumul_jour + :n WHERE id = UNHEX(:hex) AND valeur_courante + :n <= seuil',
+                                ['hex' => $hexJauge, 'n' => $headcount],
                             );
                             if ($affectees === 0) {
                                 throw new PassageRefuseException(CodeMotifRefus::SeuilFmi, 'Seuil de jauge FMI atteint.');
                             }
                         } else {
                             $this->connection->executeStatement(
-                                'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + 1, cumul_jour = cumul_jour + 1 WHERE id = UNHEX(:hex)',
-                                ['hex' => $hexJauge],
+                                'UPDATE acces_jauge_fmi SET valeur_courante = valeur_courante + :n, cumul_jour = cumul_jour + :n WHERE id = UNHEX(:hex)',
+                                ['hex' => $hexJauge, 'n' => $headcount],
                             );
                         }
                     } else {
                         $this->connection->executeStatement(
-                            'UPDATE acces_jauge_fmi SET valeur_courante = GREATEST(valeur_courante - 1, 0) WHERE id = UNHEX(:hex)',
-                            ['hex' => $hexJauge],
+                            'UPDATE acces_jauge_fmi SET valeur_courante = GREATEST(valeur_courante - :n, 0) WHERE id = UNHEX(:hex)',
+                            ['hex' => $hexJauge, 'n' => $headcount],
                         );
                     }
                     // RECHARGER, JAMAIS RECALCULER (#267, même remède que le crédit ci-dessus). Recopier
@@ -339,6 +346,19 @@ final class ValidationPassageHandler
                 }
                 $this->em->persist($passage);
 
+                // Titre de groupe (#337) : N-1 passages accompagnent celui du titre, pour que la
+                // fréquentation, l'export et le journal comptent des PERSONNES sans qu'aucun lecteur
+                // n'ait à apprendre une colonne de multiplicité. Clés dérivées de celle du scan
+                // (UUID v5) : un rejeu du même lot les retrouve, il ne les recrée pas.
+                for ($rang = 2; $rang <= $headcount; ++$rang) {
+                    $membre = $this->construirePassage($espace, $controleur, $equipement, $support, $droit, $sens, $evt);
+                    $membre->setCleIdempotence(Uuid::v5($evt->cleIdempotence, 'group-headcount-' . $rang));
+                    $membre->setResultat(ResultatPassage::Valide);
+                    $membre->setCodeMotif(CodeMotifRefus::GroupHeadcount);
+                    $membre->setMotif(sprintf('Personne %d sur %d du titre de groupe.', $rang, $headcount));
+                    $this->em->persist($membre);
+                }
+
                 if ($enConflitCredit) {
                     $journal = new JournalReconciliation();
                     $journal->setPassage($passage)
@@ -356,7 +376,7 @@ final class ValidationPassageHandler
             return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, $e->codeMotif, $e->getMessage());
         }
 
-        $this->pilote->ouvrir($equipement, new OuvertureContexte());
+        $this->pilote->ouvrir($equipement, new OuvertureContexte(headcount: $headcount));
 
         return $passage;
     }

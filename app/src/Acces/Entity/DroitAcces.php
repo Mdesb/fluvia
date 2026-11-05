@@ -69,6 +69,20 @@ class DroitAcces
     #[Groups(['droit:read'])]
     private ?int $creditRestant = null;
 
+    /**
+     * Nombre de personnes qu'UN passage de ce titre fait entrer — titre de groupe d'un club ou d'une
+     * école (#337). 1 pour tout titre individuel, ce qui reproduit le comportement antérieur.
+     *
+     * Recopié dans la liste locale des bornes : une borne déconnectée doit savoir combien de
+     * rotations accorder, et c'est précisément quand elle est déconnectée que la question se pose.
+     */
+    #[ORM\Column(options: ['default' => 1])]
+    #[Groups(['droit:read'])]
+    private int $headcount = 1;
+
+    /** Borne haute d'un titre de groupe : au-delà, c'est une saisie erronée, pas un groupe. */
+    public const MAX_HEADCOUNT = 200;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['droit:read'])]
     private ?int $margeAvanceDefaut = null;
@@ -308,6 +322,21 @@ class DroitAcces
     public function setCreditRestant(?int $creditRestant): self
     {
         $this->creditRestant = $creditRestant;
+
+        return $this;
+    }
+
+    public function getHeadcount(): int
+    {
+        return $this->headcount;
+    }
+
+    public function setHeadcount(int $headcount): self
+    {
+        if ($headcount < 1 || $headcount > self::MAX_HEADCOUNT) {
+            throw new \InvalidArgumentException(sprintf('Un titre compte de 1 à %d personnes (reçu : %d).', self::MAX_HEADCOUNT, $headcount));
+        }
+        $this->headcount = $headcount;
 
         return $this;
     }
