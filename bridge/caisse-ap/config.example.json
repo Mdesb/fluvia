@@ -1,0 +1,8 @@
+{
+  "allowedOrigins": ["https://votre-adresse-fluvia"],
+  "listen": { "host": "127.0.0.1", "port": 8765 },
+  "terminal": { "host": "192.168.1.60", "port": 8888, "register": "01", "timeoutMs": 180000, "id": "TPE-ACCUEIL" },
+  "drawer": { "mode": "none" },
+  "keyPath": "bridge-key.pem",
+  "journalPath": "journal.jsonl"
+}

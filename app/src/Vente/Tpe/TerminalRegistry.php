@@ -17,20 +17,22 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * d'environnement ; seul l'environnement de test le pose sur le terminal simulé, que les tests de la
  * caisse exercent depuis toujours.
  *
- * Les connecteurs des lots suivants (`caisse_ap_pont`, `nepting`, `stripe`) n'existent pas encore : un
- * point de vente qui les déclarerait — la validation l'empêche — reçoit un 422, rien n'est envoyé.
+ * `caisse_ap_pont` : le terminal piloté par le pont local du poste de caisse (#340, {@see LocalBridgeTerminal}).
+ * Les connecteurs des lots suivants (`nepting`, `stripe`) n'existent pas encore : un point de vente
+ * qui les déclarerait — la validation l'empêche — reçoit un 422, rien n'est envoyé.
  */
 final class TerminalRegistry
 {
     /** Ce que `PointDeVente.tpe.connecteur` peut valoir, et ce qui existe aujourd'hui. */
     public const KNOWN = ['externe', 'simule', 'caisse_ap_pont', 'nepting', 'stripe'];
-    public const AVAILABLE = ['externe', 'simule'];
+    public const AVAILABLE = ['externe', 'simule', 'caisse_ap_pont'];
 
     public function __construct(
         // L'alias du port : le terminal simulé — décoré en test (`BlockingTerminal`), voir services.yaml.
         #[Autowire(service: TerminalPaiementInterface::class)]
         private readonly TerminalPaiementInterface $simulated,
         private readonly ExternalTerminal $external,
+        private readonly LocalBridgeTerminal $bridge,
         #[Autowire('%app.tpe.connecteur_par_defaut%')]
         private readonly string $defaultConnector = ExternalTerminal::CONNECTOR,
     ) {
@@ -53,6 +55,7 @@ final class TerminalRegistry
         return match ($nom) {
             ExternalTerminal::CONNECTOR => $this->external,
             TpeMock::CONNECTOR => $this->simulated,
+            LocalBridgeTerminal::CONNECTOR => $this->bridge,
             default => null,
         };
     }

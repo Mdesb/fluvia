@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Caisse\Validator;
 
+use App\Vente\Tpe\BridgeOutcomeAuthenticator;
+use App\Vente\Tpe\LocalBridgeTerminal;
 use App\Vente\Tpe\TerminalRegistry;
 use App\Vente\Tpe\TpeMock;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -50,6 +52,21 @@ final class TerminalSettingsValidator extends ConstraintValidator
             $this->context->buildViolation('Le terminal simulé est réservé aux démonstrations et aux tests : il accepterait une carte que personne n\'a présentée. Choisissez « externe ».')->addViolation();
 
             return;
+        }
+        if ($connecteur === LocalBridgeTerminal::CONNECTOR) {
+            $cle = $value['clePont'] ?? null;
+            if (!\is_string($cle) || BridgeOutcomeAuthenticator::decodeKey($cle) === null) {
+                $this->context->buildViolation('Le pont du terminal demande sa clé (« clePont ») : collez celle qu\'affiche « fluvia-bridge init » sur le poste de caisse.')->addViolation();
+            }
+        }
+        // Le pont de caisse sert aussi au tiroir, quel que soit le terminal : son adresse est celle du
+        // poste lui-même, jamais une machine du réseau (le navigateur n'y enverrait rien d'autre).
+        $pont = $value['pont'] ?? null;
+        if ($pont !== null && (!\is_string($pont) || preg_match('#^http://(127\.0\.0\.1|localhost):\d{2,5}$#', $pont) !== 1)) {
+            $this->context->buildViolation('L\'adresse du pont est celle du poste lui-même : « http://127.0.0.1:8765 ».')->addViolation();
+        }
+        if (isset($value['tiroir']) && !\is_bool($value['tiroir'])) {
+            $this->context->buildViolation('« tiroir » vaut vrai ou faux.')->addViolation();
         }
         foreach (['marque', 'ref'] as $cle) {
             if (isset($value[$cle]) && (!\is_string($value[$cle]) || mb_strlen($value[$cle]) > 64)) {
