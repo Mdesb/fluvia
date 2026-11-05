@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
+import { EN_LIGNE, HORS_LIGNE } from '../api/connectivity.js'
+import { connectivity, offlineAccess } from '../api/offline.js'
 
 /**
  * CONTRÔLER UN BILLET À LA MAIN — l'outil des sites sans tourniquet.
@@ -29,13 +31,56 @@ import { euros } from '../api/produit.js'
  *
  * D'où la conséquence sur cet écran : **l'heure du contrôle précédent doit être visible**, sinon on
  * lui retire le seul élément sur lequel il peut fonder son jugement.
+ *
+ * ── ET SANS RÉSEAU (#338) ───────────────────────────────────────────────────────────────────────
+ *
+ * Pendant une coupure, l'écran décide sur la LISTE LOCALE téléchargée en ligne (empreintes, jamais
+ * de code en clair), consomme localement, et remonte ses décisions au retour. Il le DIT : un verdict
+ * hors connexion porte l'âge de la liste, parce qu'un billet vendu après elle y est inconnu.
  */
-export default function ControleBillet({ ecranEntier = false }) {
+export default function ControleBillet({ ecranEntier = false, etabActif = null }) {
   const [code, setCode] = useState('')
   const [verdict, setVerdict] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [enCours, setEnCours] = useState(false)
+  const [reseau, setReseau] = useState(() => connectivity().state)
+  const [liste, setListe] = useState(null) // { genereeLe, taille } | null
+  const [remontee, setRemontee] = useState(null) // bilan de la dernière remontée
   const champ = useRef(null)
+
+  useEffect(() => connectivity().subscribe(setReseau), [])
+
+  // EN LIGNE : d'abord remonter ce qui a été décidé hors ligne, PUIS rafraîchir la liste. Dans
+  // l'autre ordre, la liste neuve ne saurait pas encore que ces billets ont servi (la file rejoue de
+  // toute façon ses consommations sur la liste neuve, mais un rafraîchissement suffit à les solder).
+  useEffect(() => {
+    if (!etabActif) return undefined
+    let annule = false
+    offlineAccess.listInfo(etabActif).then((i) => !annule && setListe(i)).catch(() => {})
+    if (reseau !== EN_LIGNE) return () => { annule = true }
+    ;(async () => {
+      try {
+        const bilan = await offlineAccess.syncChecks(etabActif, (corps) => api.remonterControlesHorsLigne(corps))
+        if (bilan.erreur) connectivity().reportFailure(bilan.erreur)
+        else if (!annule && bilan.remontes + bilan.rejetes > 0) setRemontee(bilan)
+        const info = await offlineAccess.refreshList(etabActif, (query) => api.listeControleHorsLigne(query))
+        if (!annule) setListe(info)
+      } catch (e) {
+        // Liste non rafraîchie : l'ancienne reste, et son âge reste affiché. Rien n'est inventé.
+        connectivity().reportFailure(e)
+      }
+    })()
+    return () => { annule = true }
+  }, [etabActif, reseau])
+
+  async function controlerHorsLigne(saisi) {
+    if (!etabActif) {
+      setVerdict(null)
+      setErreur('Aucun établissement actif : contrôle hors connexion impossible.')
+      return
+    }
+    setVerdict(await offlineAccess.check(etabActif, saisi))
+  }
 
   async function controler(e) {
     e.preventDefault()
@@ -45,10 +90,23 @@ export default function ControleBillet({ ecranEntier = false }) {
     setEnCours(true)
     setErreur(null)
     try {
-      setVerdict(await api.controlerBillet(saisi))
+      if (connectivity().state === HORS_LIGNE) await controlerHorsLigne(saisi)
+      else setVerdict(await api.controlerBillet(saisi))
     } catch (err) {
-      setVerdict(null)
-      setErreur(err.message || "Le contrôle n'a pas abouti.")
+      // La coupure découverte AU SCAN : on décide aussitôt sur la liste locale, sans faire
+      // rescanner. Un refus du serveur (4xx), lui, est une réponse et s'affiche tel quel.
+      connectivity().reportFailure(err)
+      if (connectivity().state === HORS_LIGNE) {
+        try {
+          await controlerHorsLigne(saisi)
+        } catch (err2) {
+          setVerdict(null)
+          setErreur(err2.message || "Le contrôle n'a pas abouti.")
+        }
+      } else {
+        setVerdict(null)
+        setErreur(err.message || "Le contrôle n'a pas abouti.")
+      }
     } finally {
       setEnCours(false)
       // ⚠ LE CHAMP SE VIDE ET REPREND LE FOCUS, MÊME EN CAS DE REFUS.
@@ -102,6 +160,20 @@ export default function ControleBillet({ ecranEntier = false }) {
           </button>
         </form>
 
+        {reseau === HORS_LIGNE && (
+          <div className="banner banner-warn" role="status">
+            <b>Hors connexion.</b>{' '}
+            {liste
+              ? `Contrôle sur la liste locale du ${new Date(liste.genereeLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} (${liste.taille} titres). Un billet vendu depuis y est inconnu.`
+              : 'Aucune liste locale sur ce poste : ouvrez cet écran une fois en ligne pour la télécharger.'}
+          </div>
+        )}
+        {remontee && (
+          <div className="banner banner-info" role="status">
+            {remontee.remontes} contrôle(s) hors connexion remonté(s)
+            {remontee.conflits > 0 ? `, dont ${remontee.conflits} en conflit (à voir dans la supervision)` : ''}.
+          </div>
+        )}
         {erreur && <div className="banner banner-error">{erreur}</div>}
 
         {verdict && (
@@ -113,6 +185,7 @@ export default function ControleBillet({ ecranEntier = false }) {
           >
             <b className="cb-verdict">{dejaControle ? 'Déjà contrôlé' : refuse ? 'Refusé' : 'Valide'}</b>
             {verdict.libelleMotif ? ` — ${verdict.libelleMotif}` : ''}
+            {verdict.horsLigne && <div className="sub">Décision prise hors connexion, sur la liste locale.</div>}
 
             {/* ⚠ L'HEURE DU CONTRÔLE PRÉCÉDENT EST LA DONNÉE QUI PERMET DE DÉCIDER. Sans elle,
                 « déjà contrôlé » ne dit pas si c'était il y a trente secondes — l'agent qui a

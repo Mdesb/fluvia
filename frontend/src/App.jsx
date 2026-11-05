@@ -18,7 +18,8 @@ import Dashboard from './pages/Dashboard.jsx'
 import Modules from './pages/Modules.jsx'
 import BandeauSupport from './components/BandeauSupport.jsx'
 import ControleBillet from './components/ControleBillet.jsx'
-import Caisse from './pages/Caisse.jsx'
+// La caisse passe par son enveloppe hors connexion (#338) : bandeau de coupure, file, vente sans réseau.
+import CounterWithOffline from './components/OfflineCounter.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
@@ -518,7 +519,7 @@ export default function App() {
           « achat ouvert a qui administre l'etablissement ». */}
       {onglet === 'modules' && estAdmin && <Modules capacites={capacites} me={me} />}
       {onglet === 'caisse' && (
-        <Caisse
+        <CounterWithOffline
           me={me}
           etabActif={etabActif}
           etablissements={etablissements}
@@ -530,7 +531,7 @@ export default function App() {
       )}
       {/* Composter : son propre ecran, garde par son propre droit. Un guide qui controle
           l entree d une visite n a aucune raison d avoir acces a la caisse. */}
-      {onglet === 'composter' && <ControleBillet ecranEntier />}
+      {onglet === 'composter' && <ControleBillet ecranEntier etabActif={etabActif} />}
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} capacites={capacites} modules={me?.modulesActifs} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {/* Même raison qu'à la caisse : on remonte l'écran plutôt que de le remettre à zéro. */}
