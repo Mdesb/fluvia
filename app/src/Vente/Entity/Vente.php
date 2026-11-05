@@ -19,6 +19,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
 use App\Vente\State\AjoutLigneProcessor;
 use App\Vente\State\AnnulerVenteProcessor;
+use App\Vente\State\BridgeOutcomeProcessor;
 use App\Vente\State\CancelTerminalPaymentProcessor;
 use App\Vente\State\CorrectSettlementProcessor;
 use App\Vente\State\CreerVenteProcessor;
@@ -151,6 +152,19 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
             processor: CancelTerminalPaymentProcessor::class,
+        ),
+        // #340 — l'issue du terminal piloté par le pont local, relayée par le navigateur de la caisse.
+        new Post(
+            uriTemplate: '/ventes/{id}/issue-pont',
+            description: 'Relaie l issue rendue par le pont local du terminal (connecteur caisse_ap_pont). '
+                . 'Corps : { tentative, resultat, signature } tels que le pont les a rendus. L issue n est recue que signee (Ed25519) '
+                . 'par le pont de CE point de vente (tpe.clePont), pour CETTE tentative et CE montant : sinon 422, rien ne change. '
+                . 'Refus et annulation n ecrivent aucun reglement ; une issue relayee deux fois n en ecrit qu un. '
+                . '200 : la tentative relue. 409 si la tentative n a pas ete confiee au pont.',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'vente.encaisser')",
+            processor: BridgeOutcomeProcessor::class,
         ),
         new Post(
             uriTemplate: '/ventes/{id}/valider',

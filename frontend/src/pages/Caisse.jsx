@@ -23,6 +23,7 @@ import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SouscriptionAbonnement from '../components/SouscriptionAbonnement.jsx'
 import DeclarationReglement from '../components/DeclarationReglement.jsx'
 import TerminalWait from '../components/TerminalWait.jsx'
+import { bridgeAddress, openDrawer } from '../api/localBridge.js'
 import { attemptPhase, createPoller } from '../api/terminalWait.js'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import { screenAfterValidation, validateCart } from '../api/validateCart.js'
@@ -839,6 +840,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setAttente(pendingIntent(sessionStorage, venteObj.id))
     if (issue.outcome === 'paid') {
       setAvis(null)
+      // #340 — des espèces encaissées : le pont ouvre le tiroir (impulsion à l'imprimante ticket).
+      // Sans attendre, et sans rien bloquer : un tiroir qui ne s'ouvre pas s'ouvre à la clé.
+      if (issue.response?.moyen === 'especes' && pdvActif?.tpe?.tiroir === true) {
+        openDrawer(bridgeAddress(pdvActif)).catch((e) => setAvis(`Tiroir-caisse non ouvert : ${e.message}`))
+      }
       await apresReglement(venteObj, issue.response, paiementsPrecedents, lignes)
     } else if (issue.outcome === 'waiting' && issue.attempt) {
       setAvis(null)
@@ -1787,6 +1793,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                           key={attenteTerminal.tentative.id}
                           venteId={attenteTerminal.venteId}
                           tentative={attenteTerminal.tentative}
+                          pont={bridgeAddress(pdvActif)}
                           libelleMoyen={libelleMoyen(attenteTerminal.tentative.moyen)}
                           busy={busy}
                           onIssue={issueTerminal}
