@@ -1692,3 +1692,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 @media (max-width: 480px) {
   .cree-recap > div { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* Épuration RGPD (#344) : une ligne de champs et de boutons, et une case « j'ai compris ». */
+.rgpd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-normal); margin: var(--esp-large) 0; }
+.rgpd-check { display: flex; gap: var(--esp-normal); align-items: flex-start; margin: var(--esp-large) 0; }
