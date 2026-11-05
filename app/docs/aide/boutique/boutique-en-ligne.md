@@ -14,8 +14,9 @@ motsCles: [boutique, vitrine, panier, paiement en ligne, click and collect]
    création de compte pour la simple consultation).
 2. Il ajoute des articles à son **panier**, éventuellement en désignant des bénéficiaires (billets
    nominatifs).
-3. Le paiement en ligne (carte bancaire) valide la commande ; un compte client est créé ou retrouvé
-   automatiquement à cette étape.
+3. Le paiement en ligne valide la commande : **PayFiP** pour un établissement en régie, la **carte
+   bancaire** chez le prestataire de l'exploitant sinon (voir « Paiement en ligne »). Un compte client
+   est créé ou retrouvé automatiquement à cette étape.
 
 ## Retrait des billets
 

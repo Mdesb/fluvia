@@ -259,6 +259,36 @@ cd /srv/fluvia/app && git pull --ff-only && ./infra/deploy-prod.sh
 Dumps quotidiens dans `/srv/fluvia/sauvegardes` (service `sauvegarde`, 14 jours). Ils sont dans le
 **même** conteneur que la base : la copie hors serveur est l'export du conteneur, côté Fabrice.
 
+## Paiement en ligne (PayFiP, PSP CB) — #339
+
+Aucune valeur n'est dans le code ni dans le dépôt. Elles se posent dans **`app/.env.local`** (comme
+`FRONT_BASE_URL`), puis on redémarre PHP-FPM. Tant qu'un prestataire n'a pas sa configuration complète,
+il reste éteint et c'est le bouchon de démonstration qui répond — lui-même refusé hors préproduction
+(`PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE`).
+
+| Variable | Valeur | Obligatoire |
+| --- | --- | --- |
+| `BOUTIQUE_BASE_URL` | URL publique de la boutique, sans `/` final. Le retour de paiement est `<BOUTIQUE_BASE_URL>/b/<vitrine>/retour-paiement`. | oui, pour tout prestataire réel |
+| `PAYFIP_NUMCLI` | Numéro de client PayFiP de la régie (6 chiffres), donné par la DDFiP. | oui (PayFiP) |
+| `PAYFIP_ENTRY_MODE` | `T` paiements de test, `X` paiement d'activation, `W` paiements réels. Défaut : `T`. | non |
+| `PAYFIP_NOTIFICATION_URL` | `https://<domaine>/api/boutique/paiement-en-ligne/notification/payfip`. Le domaine doit être déclaré au correspondant DDFiP ; son certificat ne doit pas dépendre de SNI. | oui (PayFiP) |
+| `PAYFIP_SERVICE_URL` | Web service. Défaut : `https://www.payfip.gouv.fr/tpa/services/securite`. | non |
+| `PAYFIP_PAYMENT_PAGE_URL` | Page de paiement. Défaut : `https://www.payfip.gouv.fr/tpa/paiementws.web`. | non |
+| `STRIPE_SECRET_KEY` | Clé secrète de l'exploitant (`sk_test_…` en préproduction). **Secret** : jamais dans un ticket, jamais en clair dans un journal. | oui (PSP CB) |
+| `STRIPE_API_BASE` | Défaut : `https://api.stripe.com`. | non |
+
+Côté Stripe, déclarer le webhook `https://<domaine>/api/boutique/paiement-en-ligne/notification/stripe`
+(événements `checkout.session.completed`, `checkout.session.expired`). La notification n'est qu'une
+invitation : l'issue est toujours redemandée au prestataire avec la clé secrète.
+
+**Mise en service PayFiP** (guide DGFiP « PayFiP Régie Web service », V18.0 d'août 2019 ; l'édition de
+juin 2025 se demande au correspondant moyens de paiement de la DDFiP) :
+
+1. `PAYFIP_ENTRY_MODE=T` : paiement de test avec une carte de test DGFiP, **montant en euros ronds**,
+   différent à chaque essai. Vérifier que la vente est validée et que le bordereau PayFiP porte P.
+2. `PAYFIP_ENTRY_MODE=X` : paiement d'activation (carte puis prélèvement).
+3. Le lendemain : `PAYFIP_ENTRY_MODE=W`. Un mode T ou X en service ne débite rien.
+
 ## Points de vigilance
 
 - **Données** : jamais de données clients réelles en préprod (RGPD). Dump anonymisé
