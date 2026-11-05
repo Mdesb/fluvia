@@ -3,6 +3,7 @@ import { aLeDroit } from '../api/droits.js'
 import { api, membres } from '../api/client.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { offlineSales } from '../api/offline.js'
 
 // Gestion de la session de caisse (M2) : ouverture (point de vente, caisse, fond, régisseur)
 // et clôture Z (comptages, écart de régie, versement, fond reporté).
@@ -35,6 +36,24 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
   const [fondReporte, setFondReporte] = useState('')
   const [cloture, setCloture] = useState(false)
   const [recapZ, setRecapZ] = useState(null)
+  // ⚠ UN Z PRIS AVANT LA REMONTÉE DES VENTES HORS CONNEXION LES PERD (#338). Le serveur refuse
+  // d'ancrer une vente dans une session close : celles qui attendent sur CE poste ne pourraient plus
+  // entrer dans aucune journée. Le serveur ne peut pas le savoir — elles ne sont que sur le poste —,
+  // c'est donc l'écran qui retient le geste, et il dit pourquoi.
+  const [horsLigneEnAttente, setHorsLigneEnAttente] = useState(0)
+  useEffect(() => {
+    let annule = false
+    if (!session?.id) return undefined
+    offlineSales.pending(etabActif)
+      // Seules les ventes EN ATTENTE retiennent le Z. Une vente en quarantaine ne passera pas sans un
+      // responsable : bloquer la journée pour elle bloquerait le site entier ; elle reste affichée
+      // à la caisse, avec sa raison.
+      .then((v) => !annule && setHorsLigneEnAttente(v.filter((x) => x.session === session.id && x.etat === 'en_attente').length))
+      .catch(() => {})
+    return () => {
+      annule = true
+    }
+  }, [etabActif, session?.id])
 
   useEffect(() => {
     let annule = false
@@ -245,14 +264,23 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
       <button
         className="btn primary lg"
         type="submit"
-        disabled={cloture || !peutCloturer}
-        title={peutCloturer
-          ? undefined
-          : 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'}
+        disabled={cloture || !peutCloturer || horsLigneEnAttente > 0}
+        title={!peutCloturer
+          ? 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'
+          : horsLigneEnAttente > 0
+            ? 'Des ventes faites hors connexion attendent d’être remontées : remontez-les depuis la caisse avant le Z.'
+            : undefined}
         style={{ marginTop: 14 }}
       >
         {cloture ? 'Clôture…' : 'Clôturer la journée (Z)'}
       </button>
+      {horsLigneEnAttente > 0 && (
+        <div className="banner banner-warn" role="status">
+          {horsLigneEnAttente} vente(s) faite(s) hors connexion sur ce poste ne sont pas encore
+          remontées. Remontez-les depuis la caisse avant de clôturer : après le Z, elles ne pourraient
+          plus entrer dans cette journée.
+        </div>
+      )}
       <div className="hint">
         Le « Z » est le comptage de fin de journée (terme de caisse NF525). Sans comptage saisi, chaque
         moyen est réputé conforme. La clôture scelle la session (NF525) : elle est irréversible.
