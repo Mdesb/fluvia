@@ -54,6 +54,16 @@ final class HashChainSignataire implements SignataireOperation
 
     public function verifieChaine(iterable $operations): RapportVerification
     {
+        return $this->verifieSegment($operations, null, 1);
+    }
+
+    /**
+     * #342 — la même vérification, sur un SEGMENT de chaîne (celui qu'une archive annuelle emporte) :
+     * il commence au rang `$premiereSequence` et s'accroche à `$empreinteAvant`. La chaîne entière en
+     * est le cas particulier (rang 1, aucune empreinte avant) — une seule boucle pour les deux.
+     */
+    public function verifieSegment(iterable $operations, ?string $empreinteAvant, int $premiereSequence): RapportVerification
+    {
         $liste = [];
         foreach ($operations as $operation) {
             $liste[] = $operation;
@@ -61,8 +71,8 @@ final class HashChainSignataire implements SignataireOperation
         usort($liste, static fn (OperationScellee $a, OperationScellee $b): int => $a->getNumeroSequence() <=> $b->getNumeroSequence());
 
         $anomalies = [];
-        $attendue = 1;
-        $empreintePrecedente = null;
+        $attendue = $premiereSequence;
+        $empreintePrecedente = $empreinteAvant;
 
         foreach ($liste as $operation) {
             $seq = $operation->getNumeroSequence();
