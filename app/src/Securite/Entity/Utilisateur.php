@@ -15,6 +15,8 @@ use App\Securite\Enum\StatutUtilisateur;
 use App\Securite\State\MfaActivationProcessor;
 use App\Securite\State\MfaConfirmationProcessor;
 use App\Securite\State\MfaDesactivationProcessor;
+use App\Securite\State\CashPinProcessor;
+use App\Securite\State\CashPinResetProcessor;
 use App\Securite\State\MfaReinitialisationProcessor;
 use App\Securite\State\ReinvitationProcessor;
 use App\Securite\State\SuspensionUtilisateurProcessor;
@@ -104,6 +106,24 @@ use Symfony\Component\Validator\Constraints as Assert;
             input: false,
             security: "is_granted('PERM', 'securite.gerer')",
             processor: MfaReinitialisationProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        // Code agent de caisse (#346) : posé par son titulaire seul (mot de passe du compte exigé),
+        // effacé par un administrateur (code oublié ou bloqué après trop d'échecs).
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/cash-pin',
+            read: true,
+            input: false,
+            security: "is_granted('IS_AUTHENTICATED_FULLY') and object == user",
+            processor: CashPinProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/cash-pin/reset',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'securite.gerer')",
+            processor: CashPinResetProcessor::class,
             normalizationContext: ['groups' => ['utilisateur:read']],
         ),
     ],
@@ -255,6 +275,24 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $verrouilleJusqua = null;
+
+    /**
+     * CODE AGENT DE CAISSE (#346) — code personnel à 4-8 chiffres, haché (`password_hash`), jamais
+     * exposé. Il dit QUI est physiquement au guichet quand plusieurs agents partagent un poste : saisi à
+     * l'ouverture d'une session (si le point de vente l'exige) et, pour le régisseur, à la réouverture
+     * d'une caisse sécurisée. Posé par son titulaire (`CashPinProcessor`, mot de passe requis), effacé
+     * par un administrateur (`CashPinResetProcessor`). Lu et vérifié par `AgentPinChecker` seul.
+     */
+    #[ORM\Column(name: 'cash_pin_hash', length: 255, nullable: true)]
+    private ?string $cashPinHash = null;
+
+    /**
+     * Échecs CONSÉCUTIFS de saisie du code agent. À `AgentPinChecker::MAX_FAILURES`, le code est
+     * bloqué — même juste, il est refusé — jusqu'à ce que son titulaire le redéfinisse (mot de passe)
+     * ou qu'un administrateur l'efface. Sans ce compteur, quatre chiffres se devinent en 10 000 essais.
+     */
+    #[ORM\Column(name: 'cash_pin_failures', options: ['default' => 0])]
+    private int $cashPinFailures = 0;
 
     /**
      * Réf. logique `App\Crm\Entity\Client` (M4) — lie un compte back-office/espace client (M3, non
@@ -424,6 +462,37 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     public function setMfaActif(bool $mfaActif): self
     {
         $this->mfaActif = $mfaActif;
+
+        return $this;
+    }
+
+    public function getCashPinHash(): ?string
+    {
+        return $this->cashPinHash;
+    }
+
+    public function setCashPinHash(?string $cashPinHash): self
+    {
+        $this->cashPinHash = $cashPinHash;
+
+        return $this;
+    }
+
+    /** Exposé en lecture (jamais le haché) : l'écran dit « défini » ou « à définir ». */
+    #[Groups(['utilisateur:read'])]
+    public function isCashPinDefined(): bool
+    {
+        return $this->cashPinHash !== null;
+    }
+
+    public function getCashPinFailures(): int
+    {
+        return $this->cashPinFailures;
+    }
+
+    public function setCashPinFailures(int $cashPinFailures): self
+    {
+        $this->cashPinFailures = $cashPinFailures;
 
         return $this;
     }

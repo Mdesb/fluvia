@@ -139,6 +139,15 @@ class PointDeVente
     private bool $unBilletParUnite = false;
 
     /**
+     * Code agent exigé à l'ouverture (#346). Coché : ouvrir une session sur ce guichet demande le code
+     * personnel de l'agent connecté (`AgentPinChecker`), et la session porte `agentPinVerified`.
+     * Faux par défaut : les guichets existants s'ouvrent comme avant tant que personne ne l'active.
+     */
+    #[ORM\Column(name: 'require_agent_pin', options: ['default' => false])]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private bool $requireAgentPin = false;
+
+    /**
      * Régie de recettes pour le compte de laquelle ce guichet encaisse (RG-REGIE-02).
      *
      * ── POURQUOI CE LIEN EXISTE, ET CE QU'IL DÉBLOQUE ─────────────────────────────────────
@@ -275,6 +284,18 @@ class PointDeVente
     public function setUnBilletParUnite(bool $unBilletParUnite): self
     {
         $this->unBilletParUnite = $unBilletParUnite;
+
+        return $this;
+    }
+
+    public function isRequireAgentPin(): bool
+    {
+        return $this->requireAgentPin;
+    }
+
+    public function setRequireAgentPin(bool $requireAgentPin): self
+    {
+        $this->requireAgentPin = $requireAgentPin;
 
         return $this;
     }
