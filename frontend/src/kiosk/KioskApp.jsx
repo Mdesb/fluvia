@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Qr from '../components/Qr.jsx'
 import { printThermal } from '../components/thermalPrint.js'
 import { issuerLines, passesToPrint, printedDateTime, vatRows } from '../api/receiptPrint.js'
+import { DEFAULT_BRIDGE, isBridge, relayBridgePayment } from '../api/localBridge.js'
 import { deviceStore, kioskApi, newKey } from './kioskApi.js'
 import {
   COLLECT_RETURN_SECONDS,
@@ -246,6 +247,17 @@ function KioskScreen({ onUnpaired }) {
         await complete(current)
       } else if (res.status === 'waiting') {
         setPayment({ status: 'waiting', attempt: res.attempt?.id })
+        // Terminal piloté par le pont local du poste (#340) : c'est l'écran qui demande le débit au
+        // pont et relaie son issue signée. Le client de la caisse (`relayBridgePayment`) sert tel quel ;
+        // la scrutation voit ensuite l'issue arriver. Pont éteint : on le dit, « Annuler » reste offert.
+        if (isBridge(res.attempt)) {
+          relayBridgePayment({
+            api: { issuePont: (order, body) => kioskApi.bridgeOutcome(order, body.tentative, body) },
+            venteId: current.order,
+            tentative: res.attempt,
+            pont: config.bridge || DEFAULT_BRIDGE,
+          }).catch((err) => setPayment((p) => ({ ...p, bridgeError: err.message })))
+        }
         await poll(current, res.attempt?.id)
       } else {
         setPayment({ status: res.status })
@@ -454,6 +466,7 @@ function PayStep({ order, payment, busy, error, onCancel, onRetry, onAbandon }) 
           <h1 className="kiosk-title">Payez sur le terminal</h1>
           <p className="kiosk-lead">Insérez ou approchez votre carte bancaire du terminal, puis suivez ses instructions.</p>
           <div className="spinner" />
+          {payment?.bridgeError && <div className="kiosk-alert" role="alert">Le terminal de paiement ne répond pas : annulez, puis adressez-vous à l’accueil.</div>}
           {payment?.attempt && payment.status === 'waiting' && (
             <button type="button" className="kiosk-btn ghost" onClick={onCancel}>Annuler le paiement</button>
           )}

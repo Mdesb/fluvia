@@ -83,6 +83,11 @@ export const kioskApi = {
   open: (items, cardCode) => call('/orders', { method: 'POST', body: cardCode ? { items, cardCode } : { items } }),
   pay: (order, key) => call(`/orders/${order}/pay`, { method: 'POST', body: { key } }),
   payment: (order, attempt) => call(`/orders/${order}/payments/${attempt}`),
+  // L'issue signée du pont local (#340), relayée telle quelle ; le serveur vérifie la signature.
+  bridgeOutcome: (order, attempt, body) => call(`/orders/${order}/payments/${attempt}/bridge-outcome`, {
+    method: 'POST',
+    body: { resultat: body.resultat, signature: body.signature },
+  }),
   cancelPayment: (order, attempt) => call(`/orders/${order}/payments/${attempt}/cancel`, { method: 'POST', body: {} }),
   complete: (order) => call(`/orders/${order}/complete`, { method: 'POST', body: {} }),
   abandon: (order) => call(`/orders/${order}/abandon`, { method: 'POST', body: {} }),

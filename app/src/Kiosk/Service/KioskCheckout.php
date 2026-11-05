@@ -25,6 +25,9 @@ use App\Vente\Service\PaymentAttemptConflict;
 use App\Vente\Service\PaymentAttemptStore;
 use App\Vente\Service\SettlementCoordinator;
 use App\Vente\Service\ValiderVenteService;
+use App\Vente\Tpe\BridgeOutcomeAuthenticator;
+use App\Vente\Tpe\LocalBridgeTerminal;
+use App\Vente\Tpe\TerminalOutcomeSink;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -70,6 +73,8 @@ final class KioskCheckout
         private readonly DocumentTicket $document,
         private readonly BadgeEncoderInterface $badges,
         private readonly PanierCalculateur $calculator,
+        private readonly BridgeOutcomeAuthenticator $bridgeOutcomes,
+        private readonly TerminalOutcomeSink $outcomes,
     ) {
     }
 
@@ -86,6 +91,8 @@ final class KioskCheckout
             'delivery' => $kiosk->getDelivery()->value,
             'terminalReady' => $this->catalogue->terminalReady($kiosk),
             'ticketPerUnit' => $pdv?->isUnBilletParUnite() ?? false,
+            // Le pont local du terminal (#340), quand le point de vente en déclare l'adresse ; sinon l'écran prend le défaut.
+            'bridge' => \is_array($pdv?->getTpe()) && \is_string($pdv->getTpe()['pont'] ?? null) ? $pdv->getTpe()['pont'] : null,
             'offers' => $this->catalogue->offers($kiosk),
         ];
     }
@@ -211,6 +218,40 @@ final class KioskCheckout
         $attempt = $this->settlement->judged($attempt);
 
         return ['status' => self::statusOf($attempt['status']), 'attempt' => PaymentAttemptStore::summary($attempt)];
+    }
+
+    /**
+     * L'issue du terminal piloté par le PONT LOCAL de la borne (#340, connecteur `caisse_ap_pont`),
+     * relayée par l'écran de la borne comme la caisse la relaie (`POST /ventes/{id}/issue-pont`).
+     *
+     * Même contrat, mêmes services : l'issue n'est reçue que signée (Ed25519) par le pont de CE point
+     * de vente, pour CETTE tentative et CE montant (`BridgeOutcomeAuthenticator`), puis passe par le
+     * chemin unique de l'issue (`TerminalOutcomeSink`) — une issue relayée deux fois n'écrit qu'un
+     * règlement. La seule différence est la porte : la commande doit être celle de CETTE borne.
+     *
+     * @param array<string, mixed> $body { resultat, signature } tels que le pont les a rendus
+     *
+     * @return array<string, mixed>
+     */
+    public function relayBridgeOutcome(Kiosk $kiosk, string $saleId, string $attemptId, array $body): array
+    {
+        $order = $this->order($kiosk, $saleId);
+        $sale = $order->getSale();
+        $attempt = $this->settlement->attemptOnSale($sale, $attemptId)
+            ?? throw new NotFoundHttpException('Paiement introuvable.');
+        if ($attempt['connector'] !== LocalBridgeTerminal::CONNECTOR) {
+            throw new ConflictHttpException('Ce paiement n\'a pas été confié au pont du terminal.');
+        }
+        $result = $body['resultat'] ?? null;
+        $signature = $body['signature'] ?? null;
+        if (!\is_string($result) || !\is_string($signature) || \strlen($result) > 4096) {
+            throw new UnprocessableEntityHttpException('Corps attendu : { resultat, signature }, tels que le pont les a rendus.');
+        }
+        $pdv = $sale->getPointDeVente() ?? throw new NotFoundHttpException('Commande introuvable.');
+        $outcome = $this->bridgeOutcomes->verify($pdv, $result, $signature, PaymentAttemptStore::summary($attempt)['id'], $attempt['amount']);
+        $this->outcomes->record($attempt['id'], $outcome);
+
+        return $this->payment($kiosk, $saleId, $attemptId);
     }
 
     /** @return array<string, mixed> */

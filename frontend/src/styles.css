@@ -1697,7 +1697,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    BORNE AUTOMATIQUE DE VENTE (#341) — `src/kiosk/KioskApp.jsx`, servie sous `/borne`.
 
    Un écran tactile vu debout, à bout de bras, par quelqu'un qui n'a personne à qui demander : des
-   cibles de 72 px au moins (le double du minimum WCAG 2.5.8), un texte d'au moins 20 px, une
+   cibles de 72 px au moins (au-dela des 44 px du critere 2.5.5 « taille de cible, renforcee » des WCAG 2.2, recommandation W3C du 05/10/2023), un texte d'au moins 20 px, une
    décision par écran. Les couleurs sont les jetons du produit : la borne suit le thème et la marque
    blanche comme le reste.
    ───────────────────────────────────────────────────────────────────────────────────────────── */

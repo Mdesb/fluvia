@@ -71,6 +71,12 @@ final class KioskDeviceController
         return $this->respond(fn (): array => [Response::HTTP_OK, $this->checkout->payment($this->kiosk()->kiosk, $sale, $attempt)]);
     }
 
+    #[Route('/orders/{sale}/payments/{attempt}/bridge-outcome', methods: ['POST'])]
+    public function bridgeOutcome(string $sale, string $attempt): JsonResponse
+    {
+        return $this->respond(fn (): array => [Response::HTTP_OK, $this->checkout->relayBridgeOutcome($this->kiosk()->kiosk, $sale, $attempt, $this->body->corps())]);
+    }
+
     #[Route('/orders/{sale}/payments/{attempt}/cancel', methods: ['POST'])]
     public function cancelPayment(string $sale, string $attempt): JsonResponse
     {
