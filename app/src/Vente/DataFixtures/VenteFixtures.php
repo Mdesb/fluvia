@@ -62,7 +62,7 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
         // `encaisser` : le premier déplace de l'argent entre moyens — donc peut masquer un manquant —,
         // le second permet de vendre sans qu'aucun tiroir ne réponde de la transaction. Les fondre
         // dans `encaisser` les aurait donnés à tous les caissiers.
-        foreach (['lire', 'creer', 'encaisser', 'annuler', 'rembourser', 'forcer_prix', 'corriger_reglement', 'vente_directe', 'cloture_journaliere'] as $action) {
+        foreach (['lire', 'creer', 'encaisser', 'annuler', 'rembourser', 'forcer_prix', 'corriger_reglement', 'vente_directe', 'cloture_journaliere', 'fiscal_closing'] as $action) {
             $manager->persist($this->permissionNommee($manager, 'vente', $action));
         }
         foreach (['lire', 'ouvrir', 'cloturer', 'mouvement', 'gerer'] as $action) {

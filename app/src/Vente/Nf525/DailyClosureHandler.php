@@ -106,6 +106,26 @@ final class DailyClosureHandler
         return null;
     }
 
+    /**
+     * La première journée porteuse de ventes **non arrêtée**, strictement avant `$before` — ou `null`.
+     *
+     * C'est le refus « journée sautée » posé comme une question : la clôture mensuelle (#342) refuse de
+     * sceller un mois dont une journée de ventes n'a pas d'arrêté, sans quoi le mois additionnerait des
+     * arrêtés qui ne couvrent pas toutes ses ventes.
+     */
+    public function firstUnclosedSalesDay(PointDeVente $pdv, \DateTimeImmutable $before): ?\DateTimeImmutable
+    {
+        $jour = $before->setTime(0, 0);
+
+        return $this->premierJourNonClos($pdv, $this->derniereCloture($pdv, $jour)?->getBusinessDay(), $jour);
+    }
+
+    /** La date du jour sur ce point de vente, dans le fuseau de son établissement (#342). */
+    public function currentDay(PointDeVente $pdv): \DateTimeImmutable
+    {
+        return $this->aujourdhui($pdv);
+    }
+
     public function close(PointDeVente $pdv, \DateTimeImmutable $day, ?Utilisateur $author): DailyClosure
     {
         $jour = $day->setTime(0, 0);
@@ -180,7 +200,21 @@ final class DailyClosureHandler
      */
     private function totalDuJour(PointDeVente $pdv, \DateTimeImmutable $jour): array
     {
-        $bornes = $this->bornes($pdv, $jour);
+        return $this->sealedSalesBetween($pdv, $jour, $jour->modify('+1 day'));
+    }
+
+    /**
+     * Ventes scellées entre deux journées d'exploitation (#342) : nombre et total.
+     *
+     * La même requête que l'arrêté de journée, sur une plage : la clôture mensuelle s'en sert comme
+     * **témoin** (relire la table des ventes pour voir si elle dit encore ce que les journées ont
+     * scellé). Une seule requête pour les deux, sinon les deux divergeraient au premier changement.
+     *
+     * @return array{0: int, 1: string}
+     */
+    public function sealedSalesBetween(PointDeVente $pdv, \DateTimeImmutable $firstDay, \DateTimeImmutable $dayAfterLast): array
+    {
+        $bornes = [$this->bornes($pdv, $firstDay->setTime(0, 0))[0], $this->bornes($pdv, $dayAfterLast->setTime(0, 0))[0]];
         $ligne = $this->em->getRepository(Vente::class)->createQueryBuilder('v')
             ->select('COUNT(v.id) AS nb', 'COALESCE(SUM(v.total), 0) AS total')
             ->andWhere('v.pointDeVente = :pdv')
