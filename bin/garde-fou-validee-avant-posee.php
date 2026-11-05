@@ -67,6 +67,11 @@ if (!is_file($autoload)) {
     echo "  La lecture des attributs de ressource et de validation exige `vendor/`, et un arbre sans\n";
     echo "  dépendances déclarerait toutes les opérations saines.\n";
     echo "  Le contrôle tourne dans `./bin/garde-fous.sh` et en pre-commit.\n";
+    // Le lanceur compte les abstentions grace a ce marqueur (voir `bin/garde-fous.sh`). Hors
+    // du lanceur -- appel direct, hooks -- la variable est absente et rien n'est imprime.
+    if ($marqueur = getenv('GARDE_FOU_MARQUEUR_ABSTENTION')) {
+        echo $marqueur, PHP_EOL;
+    }
     exit(0);
 }
 
