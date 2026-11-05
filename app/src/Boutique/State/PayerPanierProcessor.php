@@ -10,16 +10,21 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Enum\StatutPanier;
+use App\Boutique\Paiement\OnlinePaymentContext;
+use App\Boutique\Paiement\OnlinePaymentSettlement;
 use App\Boutique\Paiement\SelecteurPaiementEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Service\ConfirmerCommandeHandler;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
 use App\Vente\Service\PanierCalculateur;
+use App\Vente\Enum\StatutVente;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -38,6 +43,8 @@ final class PayerPanierProcessor implements ProcessorInterface
         private readonly ConfirmerCommandeHandler $confirmerCommande,
         private readonly SelecteurPaiementEnLigne $selecteur,
         private readonly PanierCalculateur $calculateur,
+        private readonly OnlinePaymentSettlement $settlement,
+        #[Autowire(env: 'default::BOUTIQUE_BASE_URL')] private readonly ?string $boutiqueBaseUrl = null,
     ) {
     }
 
@@ -75,13 +82,25 @@ final class PayerPanierProcessor implements ProcessorInterface
             }
         }
 
+        // #339 — UNE INITIATION PRÉCÉDENTE A PEUT-ÊTRE ÉTÉ PAYÉE. L'acheteur revenu sur « payer » (autre
+        // onglet, bouton précédent) écraserait la référence d'une opération que le prestataire a peut-être
+        // encaissée : la notification ne retrouverait plus la commande. On demande donc d'abord l'issue de
+        // la précédente, par la voie ordinaire ; payée, la commande est réglée et on n'en ouvre pas d'autre.
+        $this->reglerUneInitiationPrecedentePayee($data);
+
         $this->confirmerCommande->reverifierDisponibilite($data);
+
         $vente = $this->confirmerCommande->creerOuRecupererVente($data);
 
         $profil = $this->resoudreProfil($data);
         $adaptateur = $this->selecteur->pour($profil);
         $montantCentimes = $this->calculateur->centimes($vente->getTotal());
-        $initiation = $adaptateur->initierPaiement($vente->getId(), $montantCentimes, '');
+        $initiation = $adaptateur->initierPaiement(
+            $vente->getId(),
+            $montantCentimes,
+            $this->urlRetour($data),
+            new OnlinePaymentContext($vente->getNumero(), $this->adresseAcheteur($data)),
+        );
 
         // Ce qu'on vient de confier au prestataire, mémorisé : le retour se confrontera à ces deux
         // valeurs, pas à ce que l'acheteur renverra (audit 06/09, constat 1).
@@ -105,6 +124,48 @@ final class PayerPanierProcessor implements ProcessorInterface
         }
 
         return new JsonResponse($reponse);
+    }
+
+    private function reglerUneInitiationPrecedentePayee(PanierEnLigne $panier): void
+    {
+        $suivi = $this->em->getRepository(SuiviCommandeEnLigne::class)->findOneBy(['panierOrigine' => $panier]);
+        $reference = $suivi?->getPaymentReference();
+        if (!$suivi instanceof SuiviCommandeEnLigne || $reference === null || $suivi->getVente()?->getStatut() !== StatutVente::EnCours) {
+            return;
+        }
+
+        try {
+            $issue = $this->settlement->settle($suivi, $reference, []);
+        } catch (HttpExceptionInterface) {
+            // Rien n'atteste la précédente (bouchon sans reçu, opération inconnue) : on en ouvre une neuve.
+            return;
+        }
+        if ($issue->vente !== null) {
+            throw new ConflictHttpException('Cette commande vient d\'être réglée : vos billets sont disponibles.');
+        }
+    }
+
+    /**
+     * L'adresse où le prestataire renvoie l'acheteur : la boutique de SA vitrine, page de retour. Pas de
+     * paramètre ici — PayFiP y ajoute `?idop=…` (guide §3.5.2.4), Stripe `?session_id=…`. Vide si
+     * BOUTIQUE_BASE_URL n'est pas renseignée : les bouchons n'en ont pas besoin, un vrai prestataire
+     * refusera clairement.
+     */
+    private function urlRetour(PanierEnLigne $panier): string
+    {
+        $base = rtrim(trim((string) $this->boutiqueBaseUrl), '/');
+        $vitrine = $panier->getVitrine();
+        if ($base === '' || $vitrine === null) {
+            return '';
+        }
+        $cle = $vitrine->getSlug() ?: (string) $vitrine->getId();
+
+        return $base . '/b/' . rawurlencode($cle) . '/retour-paiement';
+    }
+
+    private function adresseAcheteur(PanierEnLigne $panier): string
+    {
+        return (string) ($this->confirmerCommande->resoudreClient($panier)->getEmail() ?: $panier->getContactConnu());
     }
 
     private function resoudreProfil(PanierEnLigne $panier): ProfilExploitant

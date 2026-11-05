@@ -28,7 +28,7 @@ final class PayFipBoutiqueAdapter implements PaiementEnLigneInterface
         return TypeExploitant::RegieDirecte;
     }
 
-    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour): InitiationPaiementEnLigne
+    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour, ?OnlinePaymentContext $context = null): InitiationPaiementEnLigne
     {
         $resultat = $this->payFip->initierPaiement((string) $venteId, $montantCentimes);
 

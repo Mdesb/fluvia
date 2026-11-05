@@ -173,7 +173,10 @@ services:
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
     App\Compta\Port\ProjectionPassageInterface: '@App\Compta\Adapter\ProjectionPassageDoctrineAdapter'
-    # PayFiP (US-L4-03) : protocole exact non détaillé dans les sources (⚠ HYPOTHÈSE) — stub par défaut.
+    # PayFiP (US-L4-03) : port historique du bouchon, encore utilisé par `PayFipBoutiqueAdapter` (le
+    # bouchon de démonstration). Le raccordement réel (#339) passe par `App\Compta\PayFip\*` et
+    # `App\Boutique\Paiement\PayFipOnlinePaymentAdapter`, actif dès que PAYFIP_NUMCLI et
+    # PAYFIP_NOTIFICATION_URL sont renseignées (voir `PayFipConfiguration`).
     App\Compta\Port\PayFipInterface: '@App\Compta\Adapter\PayFipStubAdapter'
     # e-reporting (US-L4-08) : canal PDP non nommé dans les sources (⚠ HYPOTHÈSE) — stub par défaut.
     App\Compta\Port\PdpInterface: '@App\Compta\Adapter\PdpStubAdapter'
@@ -442,6 +445,17 @@ when@test:
         App\Tests\Boutique\Support\MailCollector:
             public: true
             tags: ['kernel.event_subscriber']
+        # Doublure du SERVICE PayFiP (#339) : notre client SOAP parle à un faux serveur qui répond comme
+        # le guide DGFiP le décrit. Elle ne sert que si un test configure PayFiP (PAYFIP_NUMCLI…) ; sinon
+        # l'adaptateur réel reste éteint et le bouchon de démonstration répond, comme avant.
+        App\Tests\Compta\Support\FakePayFipServer:
+            public: true
+        App\Compta\PayFip\PayFipSoapClient:
+            autowire: true
+            arguments:
+                $httpClient: !service
+                    class: Symfony\Component\HttpClient\MockHttpClient
+                    arguments: ['@App\Tests\Compta\Support\FakePayFipServer']
         # Collecteur `access.card_recharged` (CQ-1, tests d'atomicité recharge ⇄ vente, D7-bis) — même
         # patron que MailCollector ci-dessus.
         App\Tests\Acces\Support\CardRechargedEventCollector:
