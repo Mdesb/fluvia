@@ -697,6 +697,9 @@ export const api = {
   // L'attente du terminal (spec TPE lot 1) : la tentative scrutée, et « Annuler ».
   reglementTerminal: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/reglement-terminal`, { query: tentativeId ? { tentative: tentativeId } : undefined, timeoutMs: 10000 }),
+  // #340 — l'issue signée du pont local (`api/localBridge.js`), relayée telle quelle.
+  issuePont: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/issue-pont`, { method: 'POST', body: corps, timeoutMs: 20000 }),
   annulerReglement: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/annuler-reglement`, { method: 'POST', body: { tentative: tentativeId }, timeoutMs: 20000 }),
   annulerVente: (venteId, motif) =>
