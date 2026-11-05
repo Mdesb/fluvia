@@ -46,3 +46,10 @@ gauche de chaque facture PDF.
 Quand la vente a été encaissée à un guichet rattaché à une **régie de recettes**, la facture indique
 aussi la **régie émettrice** et son acte constitutif. Une facture saisie directement, sans passage
 en caisse, n'indique pas de régie.
+
+**Une facture émise garde l'identité du jour de son émission.** Si vous changez ensuite votre
+raison sociale, votre adresse, votre SIRET, votre numéro de TVA, votre logo ou le nom de votre
+régie, les nouvelles valeurs s'appliquent aux factures émises après le changement. Une facture
+déjà émise, réimprimée ou retéléchargée, montre toujours l'émetteur d'origine, dans le PDF comme
+dans la facture électronique. Seules font exception les factures émises avant la mise en place de
+cette conservation : leur identité d'origine n'a pas été gardée, et elles affichent l'identité actuelle.

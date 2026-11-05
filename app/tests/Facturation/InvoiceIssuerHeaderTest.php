@@ -12,6 +12,7 @@ use App\Dms\Dto\StoreDocumentRequest;
 use App\Dms\Dto\StoredDocument;
 use App\Dms\Dto\StoredDocumentVersion;
 use App\Facturation\Einvoicing\InvoiceHtmlRenderer;
+use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Enum\StatutFacture;
@@ -94,6 +95,89 @@ final class InvoiceIssuerHeaderTest extends TestCase
         self::assertStringNotContainsString('<img', $html);
         self::assertStringContainsString('SIRET : 20004049500017', $html);
         self::assertStringStartsWith('%PDF-', $this->pdf($html));
+    }
+
+    /**
+     * L'ÉMETTEUR FIGÉ (#345) : la régie et le profil changent APRÈS l'émission, la réimpression
+     * montre ceux d'origine. Témoin : la même facture SANS instantané (brouillon, ou émise avant
+     * l'instantané) montre les nouveaux — le rendu ne pose donc pas un texte constant.
+     */
+    public function testUneFactureEmiseGardeSaRegieEtSonEmetteurDOrigine(): void
+    {
+        $facture = $this->facture(avecLogo: false, avecRegie: true);
+        $facture->setEmetteurFige($this->instantane()->capture($facture));
+
+        $facture->getVenteOrigine()?->getPointDeVente()?->getRegie()?->setLibelle('Régie renommée')->setActeNomination('Arrêté n° 2027-001');
+        $facture->getProfilExploitant()?->setRaisonSociale('Nouvelle dénomination')->setSiret('99988877700011');
+
+        $html = $this->renderer()->render($facture);
+        self::assertStringContainsString('Régie de recettes émettrice : Régie piscine du Val', $html);
+        self::assertStringContainsString('Acte constitutif : Arrêté n° 2026-118', $html);
+        self::assertStringContainsString('Communauté d’Agglomération Test', $html);
+        self::assertStringContainsString('SIRET : 20004049500017', $html);
+        self::assertStringNotContainsString('Régie renommée', $html);
+        self::assertStringNotContainsString('Nouvelle dénomination', $html);
+
+        $temoin = $this->renderer()->render($facture->setEmetteurFige(null));
+        self::assertStringContainsString('Régie renommée', $temoin);
+        self::assertStringContainsString('Nouvelle dénomination', $temoin);
+    }
+
+    /** Le logo figé est relu dans la VERSION imprimée à l'émission, pas dans la version courante. */
+    public function testLeLogoFigeEstReluDansSaVersionDOrigine(): void
+    {
+        $store = new class implements DocumentStore {
+            /** @var list<string|null> */
+            public array $versions = [];
+
+            public function store(StoreDocumentRequest $request): StoredDocument
+            {
+                throw new \LogicException('Pas d’écriture dans ce test.');
+            }
+
+            public function currentVersion(Uuid $documentId): ?StoredDocumentVersion
+            {
+                return new StoredDocumentVersion(Uuid::fromString('0190f3a0-0000-7000-8000-000000000001'), 1, 'x', 1, 'image/jpeg');
+            }
+
+            public function readContent(Uuid $documentId, ?Uuid $versionId = null)
+            {
+                $this->versions[] = $versionId?->toRfc4122();
+                $flux = fopen('php://memory', 'r+b');
+                \assert(\is_resource($flux));
+                fwrite($flux, 'octets');
+                rewind($flux);
+
+                return $flux;
+            }
+        };
+
+        $facture = $this->facture(avecLogo: true, avecRegie: false);
+        $facture->setEmetteurFige((new InvoiceIssuerSnapshot($store))->capture($facture));
+        $twig = new Environment(new FilesystemLoader(\dirname(__DIR__, 2) . '/templates'));
+        (new InvoiceHtmlRenderer($twig, $store))->render($facture);
+
+        self::assertSame(['0190f3a0-0000-7000-8000-000000000001'], $store->versions, 'La version figée est nommée à la lecture.');
+    }
+
+    private function instantane(): InvoiceIssuerSnapshot
+    {
+        return new InvoiceIssuerSnapshot(new class implements DocumentStore {
+            public function store(StoreDocumentRequest $request): StoredDocument
+            {
+                throw new \LogicException('Pas d’écriture dans ce test.');
+            }
+
+            public function currentVersion(Uuid $documentId): ?StoredDocumentVersion
+            {
+                return null;
+            }
+
+            public function readContent(Uuid $documentId, ?Uuid $versionId = null)
+            {
+                throw new \LogicException('Pas de lecture dans ce test.');
+            }
+        });
     }
 
     private function pdf(string $html): string
