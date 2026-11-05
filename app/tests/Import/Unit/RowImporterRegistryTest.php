@@ -36,7 +36,7 @@ final class RowImporterRegistryTest extends TestCase
                 return ImportType::Customers;
             }
 
-            public function validate(array $rows, Etablissement $establishment): array
+            public function validate(array $rows, Etablissement $establishment, ?ImportBatch $batch = null): array
             {
                 return [];
             }
