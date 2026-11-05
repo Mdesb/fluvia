@@ -78,7 +78,7 @@ final class ValidateImportBatchProcessor implements ProcessorInterface
         foreach ($lot->globalErrors as $i => $message) {
             $errors[$i] = $message;
         }
-        foreach ($rowImporter->validate($lot->rows, $establishment) as $ligne => $message) {
+        foreach ($rowImporter->validate($lot->rows, $establishment, $data) as $ligne => $message) {
             $errors[$ligne] = $message;
         }
         ksort($errors);
