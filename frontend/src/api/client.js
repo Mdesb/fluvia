@@ -2040,6 +2040,12 @@ export const api = {
     request('/api/profil_exploitants', { method: 'POST', body: corps, ld: true }),
   majProfilExploitant: (id, corps) =>
     request(`/api/profil_exploitants/${id}`, { method: 'PATCH', body: corps }),
+  // Le logo imprime en tete de la facture PDF (#345) -- multipart, meme idiome que le logo de vitrine.
+  televerserLogoFacturation: (id, fichier) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    return request(`/api/profil_exploitants/${id}/logo`, { method: 'POST', formData: corps })
+  },
   periodesComptables: () =>
     request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
   exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
