@@ -50,9 +50,18 @@ final class AjoutLigneHandler
      *
      * @param array<string, mixed> $donnees
      */
-    public function ajouter(Vente $vente, array $donnees, bool $autoriseForcage): LigneVente
+    public function ajouter(Vente $vente, array $donnees, bool $autoriseForcage, Canal $canal = Canal::Guichet): LigneVente
     {
-        return $this->composerLigne($vente, $donnees, $autoriseForcage, false)[0];
+        return $this->composerLigne($vente, $donnees, $autoriseForcage, false, $canal)[0];
+    }
+
+    /**
+     * Ce produit exige-t-il un bénéficiaire (RG-M2-04) ? La borne n'en propose aucun : personne n'y
+     * identifie l'usager. La règle reste ICI, lue par la borne, et non recopiée.
+     */
+    public function requiresBeneficiary(Produit $produit): bool
+    {
+        return $this->estNominatif($produit);
     }
 
     /**
@@ -82,7 +91,7 @@ final class AjoutLigneHandler
      *
      * @return array{0: LigneVente, 1: string|null}
      */
-    private function composerLigne(Vente $vente, array $donnees, bool $autoriseForcage, bool $venteDejaEncaissee): array
+    private function composerLigne(Vente $vente, array $donnees, bool $autoriseForcage, bool $venteDejaEncaissee, Canal $canal = Canal::Guichet): array
     {
         if ($vente->estScellee()) {
             throw new ConflictHttpException('Vente validée : le panier est figé (NF525).');
@@ -92,7 +101,7 @@ final class AjoutLigneHandler
 
         // Publié, au guichet. Le site est déjà réglé par `produitDuSite()` (404, synchro comprise) ;
         // ce qui reste est l'état commercial, que la synchro hors ligne trace au lieu de refuser.
-        $invendable = $this->sellability->offerRefusal($produit);
+        $invendable = $this->sellability->offerRefusal($produit, $canal);
         if ($invendable !== null && !$venteDejaEncaissee) {
             throw new UnprocessableEntityHttpException($invendable);
         }
@@ -147,9 +156,11 @@ final class AjoutLigneHandler
             $ligne->setPrixForce(true);
             $ligne->setPrixUnitaire(number_format((float) ($donnees['prixUnitaire'] ?? 0), 2, '.', ''));
         } else {
-            $prix = $this->resolveurPrix->resoudre($produit, $typeTarif, $vente->getDate(), Canal::Guichet, $qf);
+            $prix = $this->resolveurPrix->resoudre($produit, $typeTarif, $vente->getDate(), $canal, $qf);
             if ($prix === null) {
-                throw new UnprocessableEntityHttpException('Produit non commercialisé au guichet pour ce tarif/saison (RG-M1-01/07).');
+                throw new UnprocessableEntityHttpException($canal === Canal::Guichet
+                    ? 'Produit non commercialisé au guichet pour ce tarif/saison (RG-M1-01/07).'
+                    : sprintf('Produit non commercialisé sur le canal « %s » pour ce tarif/saison (RG-M1-01/07).', $canal->value));
             }
             $ligne->setPrixUnitaire($prix);
             $ligne->setSaison($this->tarif->saison($produit, $typeTarif, $vente->getDate(), $qf));

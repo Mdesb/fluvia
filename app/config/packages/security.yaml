@@ -51,6 +51,16 @@ security:
             custom_authenticators:
                 - App\Acces\Security\TerminalAuthenticator
 
+        # L'APPAREIL d'une borne automatique de vente (#341). Un jeton d'appareil, pas un compte : il
+        # n'ouvre que `/api/kiosk/…`, et le pare-feu `api` ne le lit même pas — une borne dont on
+        # sortirait le navigateur n'atteindrait aucune donnée du back-office. Le motif finit par une
+        # barre : `/api/kiosks` (la gestion des bornes par le personnel) reste au pare-feu `api`.
+        kiosk:
+            pattern: ^/api/kiosk/
+            stateless: true
+            custom_authenticators:
+                - App\Kiosk\Security\KioskAuthenticator
+
         # Authentification d'une APPLICATION TIERCE sur l'API publique (T1, D101/D102, arbitrage
         # Maxime du 06/09). Même patron que « terminal » ci-dessus, et pour la même raison :
         # pare-feu dédié, placé AVANT « api ». Symfony évalue les pare-feux dans l'ordre et s'arrête
@@ -83,6 +93,10 @@ security:
 
     access_control:
         - { path: ^/health, roles: PUBLIC_ACCESS }
+        # Borne (#341) : l'appairage échange un code contre le jeton, il n'a donc pas de jeton à
+        # présenter ; tout le reste de `/api/kiosk/` exige un appareil appairé (`ROLE_KIOSK`).
+        - { path: ^/api/kiosk/pair$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/kiosk/, roles: ROLE_KIOSK }
         # L'API publique n'accepte QUE le rôle machine des partenaires : un JWT humain, même
         # valide, n'ouvre rien ici (le pare-feu `public_api` ne le résout même pas).
         - { path: ^/v1, roles: ROLE_PARTNER }
