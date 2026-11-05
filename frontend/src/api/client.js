@@ -633,6 +633,13 @@ export const api = {
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
+  // Bornes automatiques de vente (#341) — le réglage par le personnel. L'appareil, lui, a son propre
+  // client (`kiosk/kioskApi.js`) et son propre jeton.
+  kiosks: () => request('/api/kiosks'),
+  createKiosk: (corps) => request('/api/kiosks', { method: 'POST', body: corps, ld: true }),
+  updateKiosk: (id, corps) => request(`/api/kiosks/${id}`, { method: 'PATCH', body: corps }),
+  kioskPairingCode: (id) => request(`/api/kiosks/${id}/pairing-code`, { method: 'POST' }),
+  unpairKiosk: (id) => request(`/api/kiosks/${id}/unpair`, { method: 'POST' }),
   caisses: () => request('/api/caisses'),
   // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
   //
@@ -690,6 +697,9 @@ export const api = {
   // L'attente du terminal (spec TPE lot 1) : la tentative scrutée, et « Annuler ».
   reglementTerminal: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/reglement-terminal`, { query: tentativeId ? { tentative: tentativeId } : undefined, timeoutMs: 10000 }),
+  // #340 — l'issue signée du pont local (`api/localBridge.js`), relayée telle quelle.
+  issuePont: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/issue-pont`, { method: 'POST', body: corps, timeoutMs: 20000 }),
   annulerReglement: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/annuler-reglement`, { method: 'POST', body: { tentative: tentativeId }, timeoutMs: 20000 }),
   annulerVente: (venteId, motif) =>

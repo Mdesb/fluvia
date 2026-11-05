@@ -42,6 +42,13 @@ framework:
             interval: '1 minute'
             cache_pool: cache.public_api_rate_limit
             lock_factory: lock.public_api.factory
+        # L'appairage d'une borne (#341), route publique : par adresse. Le code expire en un quart
+        # d'heure ; vingt essais par quart d'heure suffisent à un agent qui se trompe de touche.
+        kiosk_pairing:
+            policy: sliding_window
+            limit: 20
+            interval: '15 minutes'
+            lock_factory: null
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true
@@ -59,5 +66,6 @@ when@test:
         rate_limiter:
             public_account_creation: { policy: sliding_window, limit: 100000, interval: '1 hour' }
             password_reset_request: { policy: sliding_window, limit: 100000, interval: '1 hour' }
+            kiosk_pairing: { policy: sliding_window, limit: 100000, interval: '15 minutes' }
         session:
             storage_factory_id: session.storage.factory.mock_file

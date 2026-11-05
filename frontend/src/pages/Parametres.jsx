@@ -24,6 +24,7 @@ import { aLeDroit } from '../api/droits.js'
 import { moduleAllowsSubtab } from '../components/moduleMenu.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
+import KioskSettings from '../components/KioskSettings.jsx'
 
 const SOUS = [
   ['entites', 'Établissement & entités'],
@@ -465,7 +466,33 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
         options: CONNECTEURS_TPE,
         versValeur: (r) => r.tpe?.connecteur || 'externe',
         aide: 'Externe : le caissier encaisse sur le terminal du guichet, puis indique le résultat '
-          + '(accepté, refusé, annulé) dans la caisse. Le terminal simulé ne sert qu’aux démonstrations.',
+          + '(accepté, refusé, annulé) dans la caisse. Relié (Caisse-AP) : le montant part tout seul au '
+          + 'terminal et le résultat revient sans ressaisie ; il faut le pont de caisse installé sur le poste. '
+          + 'Le terminal simulé ne sert qu’aux démonstrations.',
+      },
+      {
+        nom: 'tpeClePont',
+        libelle: 'Clé du pont de caisse (terminal relié)',
+        type: 'text',
+        exemple: 'Affichée par « fluvia-bridge init » sur le poste',
+        versValeur: (r) => r.tpe?.clePont || '',
+        aide: 'La clé publique du pont installé sur ce poste : Fluvia n’accepte que les résultats '
+          + 'signés par ce pont. Obligatoire pour un terminal relié.',
+      },
+      {
+        nom: 'tpePont',
+        libelle: 'Adresse du pont (facultatif)',
+        type: 'text',
+        exemple: 'http://127.0.0.1:8765',
+        versValeur: (r) => r.tpe?.pont || '',
+      },
+      {
+        nom: 'tpeTiroir',
+        libelle: 'Ouvrir le tiroir-caisse après un encaissement en espèces',
+        type: 'bool',
+        defaut: false,
+        versValeur: (r) => r.tpe?.tiroir === true,
+        aide: 'Le pont de caisse envoie l’ordre d’ouverture à l’imprimante ticket, à laquelle le tiroir est branché.',
       },
       {
         nom: 'tpeMarque',
@@ -829,6 +856,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
+          <KioskSettings etabActif={etabActif} droits={droits} />
           <MoyensPaiement etabActif={etabActif} params={params} majParams={majParams} />
           {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
               Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,

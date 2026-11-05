@@ -86,7 +86,8 @@ class PointDeVente
      * Le terminal de paiement (US-L2-07 ; spec TPE lot 1 §6) : `{ connecteur, …paramètres }`, nul = le
      * terminal externe (le caissier encaisse sur le terminal du commerce et déclare le résultat).
      * `connecteur` ∈ externe | simule (démonstration) | caisse_ap_pont | nepting | stripe (lots
-     * suivants) ; `marque` et `ref` décrivent le terminal. Avant ce lot : une liste `[{marque, ref}]`,
+     * suivants) ; `marque` et `ref` décrivent le terminal. `caisse_ap_pont` (#340) porte `clePont` (la clé
+     * PUBLIQUE du pont local, base64) et `pont` (son adresse sur le poste, défaut http://127.0.0.1:8765). Avant ce lot : une liste `[{marque, ref}]`,
      * ou le booléen de l'écran Paramètres, gardés sous `terminaux` / `ancien` par la migration.
      *
      * @var array<string, mixed>|null

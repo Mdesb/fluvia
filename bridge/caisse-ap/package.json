@@ -1,0 +1,14 @@
+{
+  "name": "fluvia-caisse-ap-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pont local du poste de caisse Fluvia : terminal de paiement Caisse-AP (IP) et tiroir-caisse ESC/POS.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": { "fluvia-bridge": "bin/fluvia-bridge.js" },
+  "scripts": {
+    "start": "node bin/fluvia-bridge.js start",
+    "test": "node --test"
+  },
+  "license": "UNLICENSED"
+}
