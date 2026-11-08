@@ -117,6 +117,15 @@ class SessionCaisse
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
     private ?Uuid $pdvActif = null;
 
+    /**
+     * Vrai si l'opérateur a saisi SON code agent, vérifié, à l'ouverture (#346). Faux : la session a
+     * été ouverte sur la seule connexion du compte (guichet qui n'exige pas le code). C'est ce qui
+     * permet de dire, une vente à la main, si l'agent au guichet était bien celui du compte.
+     */
+    #[ORM\Column(name: 'agent_pin_verified', options: ['default' => false])]
+    #[Groups(['session:read'])]
+    private bool $agentPinVerified = false;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -185,6 +194,18 @@ class SessionCaisse
     public function setOperateur(?Utilisateur $operateur): self
     {
         $this->operateur = $operateur;
+
+        return $this;
+    }
+
+    public function isAgentPinVerified(): bool
+    {
+        return $this->agentPinVerified;
+    }
+
+    public function setAgentPinVerified(bool $agentPinVerified): self
+    {
+        $this->agentPinVerified = $agentPinVerified;
 
         return $this;
     }
