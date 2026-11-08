@@ -259,6 +259,62 @@ cd /srv/fluvia/app && git pull --ff-only && ./infra/deploy-prod.sh
 Dumps quotidiens dans `/srv/fluvia/sauvegardes` (service `sauvegarde`, 14 jours). Ils sont dans le
 **même** conteneur que la base : la copie hors serveur est l'export du conteneur, côté Fabrice.
 
+⚠ **Les dumps ne contiennent pas les clés** (`infra/.env.prod`). Une base restaurée sans son
+trousseau NF525 a des chaînes que plus rien ne vérifie : voir la section suivante.
+
+## Trousseau NF525 — #361
+
+**Pourquoi.** Chaque maillon des trois chaînes scellées (vente, comptabilité, facturation) est signé
+par un HMAC, donc par une clé **secrète** : vérifier un maillon ancien exige la clé qui l'a signé. Or
+les données doivent être conservées six ans et leur intégrité prouvée dans le temps : BOFiP
+**BOI-TVA-DECLA-30-10-30**, version publiée le **25/03/2026** (consultée le 08/11/2026 sur
+bofip.impots.gouv.fr), §155 (« conservées pendant le délai de six ans »), §100 (« empreinte numérique
+à clé privée, chaînage »), §220 et §250 (intégrité des archives dans le temps). Perdre une clé, c'est
+perdre la preuve.
+
+**Ce qui existe.**
+
+| Variable (fichier d'environnement de l'installation) | Rôle |
+|---|---|
+| `NF525_SEAL_KEY`, `NF525_COMPTA_SEAL_KEY`, `NF525_FACTURATION_SEAL_KEY` | clé **active** de chaque chaîne : elle signe |
+| `NF525_SEAL_RETIRED_KEYS`, `NF525_COMPTA_SEAL_RETIRED_KEYS`, `NF525_FACTURATION_SEAL_RETIRED_KEYS` | clés **retirées**, séparées par des virgules : elles ne font que vérifier |
+
+- Chaque maillon porte `seal_key_id`, une empreinte **non réversible** de sa clé (jamais la clé). La
+  vérification choisit la clé par cet identifiant. Les maillons antérieurs au trousseau (`NULL`) sont
+  vérifiés avec la clé active, puis avec les clés retirées.
+- **Échec fermé** : si le dernier maillon d'une chaîne ne se vérifie avec aucune clé du trousseau,
+  l'application **refuse de sceller** (HTTP 409, message qui nomme la variable à restaurer) et journalise
+  une alerte critique (identifiants seulement).
+- Le déploiement **ne génère jamais** une clé NF525 quand des maillons existent : il mesure la base
+  (`infra/nf525-key-guard.sh`) et s'arrête. Après les migrations, `app:nf525:check-keys` (lecture
+  seule) vérifie le dernier maillon de chaque chaîne et fait échouer le déploiement s'il est bloqué.
+
+**Sauvegarder le trousseau HORS du serveur (à faire une fois, puis à chaque rotation).**
+
+1. Copier les six lignes `NF525_*SEAL*` du fichier d'environnement (`infra/.env.prod` en production,
+   `infra/.env.preprod` en préprod) dans le **coffre de mots de passe de l'exploitant** (une entrée par
+   installation, intitulée par exemple « Fluvia prod — trousseau NF525 »), ou dans un fichier chiffré
+   (`gpg --symmetric`) rangé avec les sauvegardes externes. Jamais dans le dépôt, jamais dans un ticket,
+   jamais dans un message.
+2. Noter, à côté, les **identifiants** affichés par
+   `docker compose -f infra/compose.prod.yaml --env-file infra/.env.prod exec -T php php bin/console app:nf525:check-keys`
+   (« clé active … ») : ils permettent de vérifier plus tard qu'on restaure la bonne clé, sans l'afficher.
+3. Conserver chaque clé au moins **six ans après le dernier maillon qu'elle a signé** (§155).
+
+**Restaurer (base restaurée, fichier d'environnement perdu ou recréé).** Remettre les six lignes depuis
+le coffre dans le fichier d'environnement, relancer le déploiement, et vérifier que
+`app:nf525:check-keys` affiche `0 bloquée(s)` et les mêmes identifiants que ceux notés.
+
+**Changer une clé (rotation volontaire).** Ne jamais remplacer la valeur seule. Dans le même geste :
+ajouter l'ancienne clé à la variable `*_RETIRED_KEYS` correspondante, poser la nouvelle clé active,
+mettre à jour la sauvegarde hors serveur, redéployer, puis vérifier `app:nf525:check-keys`. Une clé
+retirée ne se supprime pas avant la fin du délai de conservation.
+
+**Clé réellement perdue (aucune sauvegarde).** Aucune procédure automatique : la chaîne concernée ne
+peut plus être prolongée, et c'est voulu. La sortie (par exemple un maillon de « rupture constatée »
+scellé avec la nouvelle clé, option B de l'enquête #361) est une décision de Maxime, à ne pas
+improviser sur le serveur.
+
 ## Paiement en ligne (PayFiP, PSP CB) — #339
 
 Aucune valeur n'est dans le code ni dans le dépôt. Elles se posent dans **`app/.env.local`** (comme

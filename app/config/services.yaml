@@ -148,6 +148,36 @@ services:
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'
 
+    # --- #361 Trousseaux NF525 : une clé ACTIVE qui signe, des clés RETIRÉES qui vérifient seulement ---
+    # La clé active n'a aucune valeur par défaut (son absence empêche le démarrage). Les clés retirées
+    # sont facultatives (liste séparée par des virgules) ; leur sauvegarde hors serveur : infra/README.md.
+    # La classe elle-même n'est pas un service autowirable : chaque chaîne nomme SON trousseau.
+    App\Platform\Nf525\SealKeyring:
+        autowire: false
+        autoconfigure: false
+        abstract: true
+    app.nf525.keyring.sales:
+        class: App\Platform\Nf525\SealKeyring
+        arguments:
+            $variable: 'NF525_SEAL_KEY'
+            $activeKey: '%env(NF525_SEAL_KEY)%'
+            $retiredKeys: '%env(default::NF525_SEAL_RETIRED_KEYS)%'
+            $logger: '@logger'
+    app.nf525.keyring.accounting:
+        class: App\Platform\Nf525\SealKeyring
+        arguments:
+            $variable: 'NF525_COMPTA_SEAL_KEY'
+            $activeKey: '%env(NF525_COMPTA_SEAL_KEY)%'
+            $retiredKeys: '%env(default::NF525_COMPTA_SEAL_RETIRED_KEYS)%'
+            $logger: '@logger'
+    app.nf525.keyring.invoicing:
+        class: App\Platform\Nf525\SealKeyring
+        arguments:
+            $variable: 'NF525_FACTURATION_SEAL_KEY'
+            $activeKey: '%env(NF525_FACTURATION_SEAL_KEY)%'
+            $retiredKeys: '%env(default::NF525_FACTURATION_SEAL_RETIRED_KEYS)%'
+            $logger: '@logger'
+
     # --- L3 Contrôle d'accès : ports & adaptateurs (§2 du plan) ---
     # Pilote matériel enfichable (OSDP/API ITBOX/SmartAccess non cadrés, point ouvert n°1) : simulateur
     # logiciel en dev/test, ItboxAdapter/SmartAccessAdapter restent des squelettes (à cadrer IT Cotation).

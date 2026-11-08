@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Vente\Unit;
 
 use App\Caisse\Entity\PointDeVente;
+use App\Platform\Nf525\SealKeyring;
 use App\Vente\Enum\TypeOperationScellee;
 use App\Vente\Nf525\HashChainSignataire;
 use App\Vente\Nf525\OperationAScellerDto;
@@ -19,7 +20,7 @@ final class HashChainTest extends TestCase
 {
     public function testScellementChaineEtVerification(): void
     {
-        $signataire = new HashChainSignataire('cle-test');
+        $signataire = new HashChainSignataire(new SealKeyring('NF525_SEAL_KEY', 'cle-test'));
         $pdv = new PointDeVente();
 
         $op1 = $signataire->scelle($this->dto($pdv, 'a'), null);
@@ -40,7 +41,7 @@ final class HashChainTest extends TestCase
 
     public function testDetectionRupture(): void
     {
-        $signataire = new HashChainSignataire('cle-test');
+        $signataire = new HashChainSignataire(new SealKeyring('NF525_SEAL_KEY', 'cle-test'));
         $pdv = new PointDeVente();
 
         $op1 = $signataire->scelle($this->dto($pdv, 'a'), null);

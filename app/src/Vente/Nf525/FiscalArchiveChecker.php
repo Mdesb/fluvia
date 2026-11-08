@@ -107,7 +107,11 @@ final class FiscalArchiveChecker
                     ->setEmpreintePrecedente($r['empreinte_precedente'] === '' ? null : $r['empreinte_precedente'])
                     ->setPayloadCanonique($payload)
                     ->setEmpreinte($r['empreinte'])
-                    ->setSignature($r['signature']);
+                    ->setSignature($r['signature'])
+                    // #361 — identifiant de la clé du maillon ; absent des archives antérieures (et vide
+                    // pour les maillons d'avant le trousseau) : la vérification retombe alors sur le
+                    // chemin « sans identifiant ».
+                    ->setSealKeyId(isset($r['seal_key_id']) && $r['seal_key_id'] !== '' ? $r['seal_key_id'] : null);
             }
             if ($ops === []) {
                 continue;

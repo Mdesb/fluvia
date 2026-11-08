@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Vente\Nf525;
 
+use App\Platform\Nf525\SealKeyring;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Implémentation par défaut du signataire NF525 (US-L2-11). Chaînage type « blockchain léger » :
  *   empreinte(N) = sha256( canonicalize(payload) . '|' . empreinte(N-1) )
- *   signature(N) = HMAC-SHA256( empreinte(N) , clé de scellement )   [placeholder]
+ *   signature(N) = HMAC-SHA256( empreinte(N) , clé active du trousseau )   [placeholder]
+ *   sealKeyId(N) = identifiant non réversible de cette clé (#361)
  * canonicalize() sérialise de façon déterministe (tri récursif des clés) pour rendre l'empreinte
  * reproductible et vérifiable. La séquence est strictement croissante (précédente + 1).
  *
@@ -23,16 +25,26 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class HashChainSignataire implements SignataireOperation
 {
     public function __construct(
-        // Aucune valeur par defaut : la cle vient de l'environnement, et son absence doit empecher le
-        // demarrage plutot que produire des scellements signes avec une cle connue de tous. Un bouchon
-        // qu'aucun mecanisme n'oblige a retirer finit toujours par partir en production.
-        #[Autowire(env: 'NF525_SEAL_KEY')]
-        private readonly string $cleScellement,
+        // #361 — le trousseau de `NF525_SEAL_KEY` : clé active sans valeur par défaut (son absence
+        // empêche le démarrage), plus les clés retirées qui ne servent qu'à vérifier.
+        #[Autowire(service: 'app.nf525.keyring.sales')]
+        private readonly SealKeyring $keyring,
     ) {
     }
 
     public function scelle(OperationAScellerDto $op, ?OperationScellee $precedente): OperationScellee
     {
+        // #361 — ÉCHEC FERMÉ : on ne signe jamais par-dessus un dernier maillon que le trousseau ne
+        // vérifie plus (clé changée sans que l'ancienne soit gardée en clé retirée).
+        if ($precedente !== null) {
+            $this->keyring->assertCanExtend(
+                $precedente->getEmpreinte(),
+                $precedente->getSignature(),
+                $precedente->getSealKeyId(),
+                sprintf('chaîne de vente du point de vente %s, maillon n° %d', (string) $op->pointDeVente->getId(), $precedente->getNumeroSequence()),
+            );
+        }
+
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
 
@@ -47,7 +59,8 @@ final class HashChainSignataire implements SignataireOperation
 
         $empreinte = $this->calculerEmpreinte($op->payload, $empreintePrecedente);
         $operation->setEmpreinte($empreinte);
-        $operation->setSignature($this->signer($empreinte));
+        $operation->setSignature($this->keyring->sign($empreinte));
+        $operation->setSealKeyId($this->keyring->activeKeyId());
 
         return $operation;
     }
@@ -101,11 +114,16 @@ final class HashChainSignataire implements SignataireOperation
                     'type' => $operation->getTypeOperation()->value,
                     'probleme' => 'empreinte incohérente : la donnée a été altérée',
                 ];
-            } elseif (!hash_equals($this->signer($operation->getEmpreinte()), $operation->getSignature())) {
+            } elseif (null !== $probleme = $this->keyring->problem(
+                $this->keyring->check($operation->getEmpreinte(), $operation->getSignature(), $operation->getSealKeyId()),
+                $operation->getSealKeyId(),
+            )) {
+                // #361 — la clé est choisie par l'identifiant du maillon ; « clé inconnue du
+                // trousseau » est distinguée de « signature invalide ».
                 $anomalies[] = [
                     'sequence' => $seq,
                     'type' => $operation->getTypeOperation()->value,
-                    'probleme' => 'signature invalide',
+                    'probleme' => $probleme,
                 ];
             }
 
@@ -120,11 +138,6 @@ final class HashChainSignataire implements SignataireOperation
     private function calculerEmpreinte(array $payload, ?string $empreintePrecedente): string
     {
         return hash('sha256', $this->canonicalize($payload) . '|' . ($empreintePrecedente ?? ''));
-    }
-
-    private function signer(string $empreinte): string
-    {
-        return hash_hmac('sha256', $empreinte, $this->cleScellement);
     }
 
     /**

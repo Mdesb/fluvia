@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Vente\Nf525;
 
+use App\Platform\Nf525\SealCheck;
+use App\Platform\Nf525\SealKeyring;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -12,23 +14,28 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *
  * ⚠ Même réserve que `HashChainSignataire` : HMAC symétrique, à revoir si le référent conformité
  * exige une signature asymétrique. Le jour où ça change, c'est ici et là, pas ailleurs.
+ *
+ * #361 — passe par le trousseau de la chaîne de vente : la clé ACTIVE signe ; la vérification essaie
+ * la clé active puis les clés retirées. Une rotation ne rend donc pas invérifiable une archive déjà
+ * produite, à condition que l'ancienne clé soit gardée au trousseau (conservation six ans,
+ * BOI-TVA-DECLA-30-10-30 §155).
  */
 final class FiscalArchiveSigner
 {
     public function __construct(
-        // Aucune valeur par défaut : sans clé, l'application ne démarre pas (même règle que la chaîne).
-        #[Autowire(env: 'NF525_SEAL_KEY')]
-        private readonly string $key,
+        // Aucune valeur par défaut : sans clé active, l'application ne démarre pas (même règle que la chaîne).
+        #[Autowire(service: 'app.nf525.keyring.sales')]
+        private readonly SealKeyring $keyring,
     ) {
     }
 
     public function sign(string $sha256): string
     {
-        return hash_hmac('sha256', $sha256, $this->key);
+        return $this->keyring->signWithoutId($sha256);
     }
 
     public function verify(string $sha256, string $signature): bool
     {
-        return hash_equals($this->sign($sha256), $signature);
+        return $this->keyring->check($sha256, $signature, null) === SealCheck::Valid;
     }
 }

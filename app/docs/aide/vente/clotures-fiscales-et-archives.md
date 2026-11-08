@@ -71,6 +71,19 @@ contrôle en cause est nommé.
 
 Le bouton **Télécharger** remet le fichier ZIP, à conserver six ans et à présenter en cas de contrôle.
 
+## « Scellement refusé » ou « clé inconnue du trousseau »
+
+Chaque opération scellée (vente, écriture comptable, facture) est signée par une **clé de
+scellement** propre à votre installation, et garde la trace de la clé qui l'a signée. Si cette clé a
+été remplacée sans que l'ancienne soit conservée, Fluvia **refuse de sceller** de nouvelles opérations
+sur la chaîne concernée, avec le message « Scellement refusé (NF525…) » : signer par-dessus rendrait
+les opérations précédentes invérifiables. Une vérification affiche alors « clé inconnue du trousseau » :
+tant que la bonne clé n'est pas remise en place, ces opérations ne peuvent pas être vérifiées.
+
+Vous ne pouvez pas le corriger depuis l'écran : prévenez votre administrateur technique ou le
+support. La correction consiste à remettre en place l'ancienne clé depuis sa sauvegarde ; aucune
+opération n'est perdue ni modifiée.
+
 ## Qui peut faire quoi
 
 - Clore un mois ou une année, archiver et télécharger une archive : droit **vente.fiscal_closing**.

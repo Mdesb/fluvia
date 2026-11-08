@@ -98,8 +98,15 @@ log "Cles de chiffrement (generation au premier deploiement)"
 # Les deux dernieres sont des cles HMAC de signature, pas des cles sodium : elles n’ont pas la
 # contrainte des 32 octets decodes (n’importe quelle chaine signe), mais un base64 de 32 octets
 # en est une valide, donc la meme generation convient. Elles quittent ainsi app/.env versionne.
+#
+# ⚠ #361 — SAUF UNE CLE NF525 QUAND SA CHAINE EXISTE. `nf525_guard_key_generation` mesure les
+# maillons en base et ARRETE le deploiement plutot que de signer par-dessus une chaine existante.
+COMPOSE_PROJECT=billetterie-preprod
+# shellcheck source=infra/nf525-key-guard.sh
+. infra/nf525-key-guard.sh
 for cle in DMS_ENCRYPTION_KEY MFA_ENCRYPTION_KEY SEPA_IBAN_KEY OCR_API_KEY_ENCRYPTION_KEY SOCIAL_TOKEN_ENCRYPTION_KEY INTEGRATIONS_WEBHOOK_KEY NF525_SEAL_KEY NF525_COMPTA_SEAL_KEY NF525_FACTURATION_SEAL_KEY SUPPORT_HMAC_KEY SEPA_IBAN_HMAC_KEY PUBLIC_API_SUPPORT_REF_KEY PARTNER_WEBHOOK_KEY; do
     if ! grep -q "^${cle}=." infra/.env.preprod 2>/dev/null; then
+        nf525_guard_key_generation "$cle"
         echo "  + $cle (absente, generee)"
         printf '%s=%s\n' "$cle" "$(openssl rand -base64 32)" >> infra/.env.preprod
     fi
@@ -175,6 +182,15 @@ fi
 
 log "Migrations de base"
 "${COMPOSE[@]}" exec -T php php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+# #361 — LE TROUSSEAU VERIFIE-T-IL ENCORE LE DERNIER MAILLON DE CHAQUE CHAINE ? Lecture seule. Sinon
+# l'application refusera de sceller (echec ferme) : on veut l'apprendre ICI, pas a la premiere vente.
+#
+# ⚠ ON NE S'ARRETE PAS ICI : la suite (cache, droits de var/, FPM, frontal) doit tourner, sinon un
+# echec laisse une installation a moitie deployee (API a 500). Le verdict est rendu A LA FIN.
+log "Trousseau NF525 (dernier maillon de chaque chaine)"
+NF525_TROUSSEAU_KO=0
+"${COMPOSE[@]}" exec -T php php bin/console app:nf525:check-keys --no-interaction || NF525_TROUSSEAU_KO=1
 
 # LA BASE DE CONNAISSANCE GENERIQUE, POSEE A CHAQUE DEPLOIEMENT.
 #
@@ -536,6 +552,15 @@ if [ -n "${SUITE_TUEE:-}" ]; then
     echo "     Ce n'est pas une régression du code : c'est ce déploiement."
     echo "     Préviens la session concernée, puis : ./infra/reinstaller-dev.sh"
     echo
+fi
+
+# #361 — verdict du trousseau NF525, rendu apres un deploiement COMPLET.
+if [ "${NF525_TROUSSEAU_KO:-0}" != "0" ]; then
+    echo
+    echo "✗ Déploiement terminé, MAIS une chaîne NF525 ne peut plus être prolongée (voir « Trousseau NF525 »"
+    echo "  plus haut). L'application refuse d'y sceller tant que la clé n'est pas restaurée."
+    echo "  → infra/README.md, section « Trousseau NF525 »."
+    exit 1
 fi
 
 log "Déploiement terminé - $REPO_ROOT"

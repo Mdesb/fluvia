@@ -6,6 +6,8 @@ namespace App\Facturation\Nf525;
 
 use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
+use App\Platform\Nf525\SealCheck;
+use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -35,9 +37,10 @@ final class ScellementFactureHandler
         // Aucune valeur par defaut : la cle vient de l'environnement, et son absence doit empecher le
         // demarrage plutot que produire des factures scellees avec une cle que n'importe qui peut lire
         // dans le code. Troisieme occurrence du meme motif en trois jours - le garde-fou des secrets
-        // en dur existe desormais pour qu'il n'y en ait pas de quatrieme.
-        #[Autowire(env: 'NF525_FACTURATION_SEAL_KEY')]
-        private readonly string $cleScellement,
+        // en dur existe desormais pour qu'il n'y en ait pas de quatrieme. #361 : portee par un
+        // trousseau (cle active qui signe + cles retirees qui verifient seulement).
+        #[Autowire(service: 'app.nf525.keyring.invoicing')]
+        private readonly SealKeyring $keyring,
         private readonly InvoiceIssuerSnapshot $instantaneEmetteur,
     ) {
     }
@@ -46,6 +49,17 @@ final class ScellementFactureHandler
     public function sceller(Facture $facture): Facture
     {
         $precedente = $this->dernierMaillon($facture);
+
+        // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
+        if ($precedente !== null) {
+            $this->keyring->assertCanExtend(
+                $precedente->getEmpreinte(),
+                $precedente->getSignature(),
+                $precedente->getSealKeyId(),
+                sprintf('chaîne de facturation, document %s (maillon n° %d)', (string) $precedente->getNumero(), $precedente->getNumeroSequence()),
+            );
+        }
+
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
 
@@ -59,7 +73,8 @@ final class ScellementFactureHandler
         $facture->setNumeroSequence($sequence);
         $facture->setEmpreintePrecedente($empreintePrecedente);
         $facture->setEmpreinte($empreinte);
-        $facture->setSignature($this->signer($empreinte));
+        $facture->setSignature($this->keyring->sign($empreinte));
+        $facture->setSealKeyId($this->keyring->activeKeyId());
         $facture->setPayloadCanonique($payload);
 
         // L'ÉMETTEUR EST FIGÉ AU MÊME INSTANT QUE LE CONTENU (#345) : une réimpression montre
@@ -143,7 +158,11 @@ final class ScellementFactureHandler
                         ? 'empreinte incohérente : la donnée a été altérée'
                         : 'non vérifiable : ce document a été scellé avant que l\'instantané ne soit conservé, et sa reconstruction ne redonne pas l\'empreinte — un référentiel a pu changer depuis',
                 ];
-            } elseif (!hash_equals($this->signer($facture->getEmpreinte()), $facture->getSignature())) {
+            } elseif (SealCheck::UnknownKey === $verdict = $this->keyring->check($facture->getEmpreinte(), $facture->getSignature(), $facture->getSealKeyId())) {
+                // #361 — le maillon désigne la clé qui l'a signé, et le trousseau ne l'a pas : on le
+                // DIT, au lieu de laisser croire à une signature falsifiée.
+                $anomalies[] = ['sequence' => $sequence, 'probleme' => (string) $this->keyring->problem($verdict, $facture->getSealKeyId())];
+            } elseif ($verdict === SealCheck::InvalidSignature) {
                 // ⚠ ON N'ARRIVE ICI QUE SI LES DEUX CONTROLES PRECEDENTS SONT PASSES, ET CA CHANGE
                 // TOUT CE QU'ON PEUT DIRE.
                 //
@@ -218,11 +237,6 @@ final class ScellementFactureHandler
     private function calculerEmpreinte(array $payload, ?string $empreintePrecedente): string
     {
         return hash('sha256', $this->canonicalize($payload) . '|' . ($empreintePrecedente ?? ''));
-    }
-
-    private function signer(string $empreinte): string
-    {
-        return hash_hmac('sha256', $empreinte, $this->cleScellement);
     }
 
     /** @param array<string, mixed> $payload */

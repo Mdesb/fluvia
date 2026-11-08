@@ -69,6 +69,11 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       # Scellement des signatures electroniques (mandat SEPA + contrat d'abonnement, App\Signature).
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
       # Autorise le prestataire de paiement en ligne de DEMONSTRATION (bouchon qui signe ses propres
@@ -159,6 +164,11 @@ services:
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       # Signature du scellement Facturation.
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       # Scellement des signatures electroniques (blocs php/scheduler maintenus identiques).
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
       # Meme flag que le service php (blocs maintenus identiques). Voir le commentaire la-haut.
@@ -224,6 +234,11 @@ services:
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.preprod}
       PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: ${PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE:-0}
     depends_on:

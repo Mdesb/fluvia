@@ -136,6 +136,14 @@ class EcritureComptable
     private string $signature = '';
 
     /**
+     * #361 — identifiant NON RÉVERSIBLE de la clé qui a signé ce maillon (jamais la clé). La
+     * vérification choisit la clé du trousseau par lui. `null` : maillon antérieur au trousseau.
+     */
+    #[ORM\Column(length: 32, nullable: true)]
+    #[Groups(['ecriture:read', 'nf525:read'])]
+    private ?string $sealKeyId = null;
+
+    /**
      * L'INSTANTANE EXACT SUR LEQUEL L'EMPREINTE A ETE CALCULEE.
      *
      * Sans lui, la verification reconstruit le payload depuis les entites VIVANTES : un taux de TVA
@@ -319,6 +327,18 @@ class EcritureComptable
     public function setSignature(string $signature): self
     {
         $this->signature = $signature;
+
+        return $this;
+    }
+
+    public function getSealKeyId(): ?string
+    {
+        return $this->sealKeyId;
+    }
+
+    public function setSealKeyId(?string $sealKeyId): self
+    {
+        $this->sealKeyId = $sealKeyId;
 
         return $this;
     }

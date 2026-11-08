@@ -81,6 +81,14 @@ class OperationScellee
     #[Groups(['nf525:read'])]
     private string $signature = '';
 
+    /**
+     * #361 — identifiant NON RÉVERSIBLE de la clé qui a signé ce maillon (jamais la clé). La
+     * vérification choisit la clé du trousseau par lui. `null` : maillon antérieur au trousseau.
+     */
+    #[ORM\Column(length: 32, nullable: true)]
+    #[Groups(['nf525:read'])]
+    private ?string $sealKeyId = null;
+
     /** @var array<string, mixed> Données figées de l'opération, rejouables pour recontrôle. */
     #[ORM\Column]
     #[Groups(['nf525:read'])]
@@ -201,6 +209,18 @@ class OperationScellee
     public function setSignature(string $signature): self
     {
         $this->signature = $signature;
+
+        return $this;
+    }
+
+    public function getSealKeyId(): ?string
+    {
+        return $this->sealKeyId;
+    }
+
+    public function setSealKeyId(?string $sealKeyId): self
+    {
+        $this->sealKeyId = $sealKeyId;
 
         return $this;
     }
