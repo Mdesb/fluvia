@@ -10,9 +10,41 @@
         th, td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
         .totaux { margin-top: 12px; text-align: right; }
         .acquittee { color: #1a7a1a; font-weight: bold; }
+        table.entete { margin-top: 0; }
+        table.entete td { border-bottom: none; padding: 0; vertical-align: top; }
+        .emetteur p, .regie p { margin: 0 0 2px 0; }
+        .emetteur .nom { font-size: 14px; font-weight: bold; }
+        .logo { max-height: 70px; max-width: 200px; }
+        .regie { margin-top: 8px; }
     </style>
 </head>
 <body>
+    {# L'ÉMETTEUR (#345) : qui facture, lu dans le profil exploitant — la même source que le XML
+       Factur-X embarqué. Un champ vide n'imprime pas d'étiquette orpheline. #}
+    {% if emetteur %}
+    <table class="entete">
+        <tr>
+            {% if emetteur.logo %}<td style="width: 210px;"><img class="logo" src="{{ emetteur.logo }}" alt="Logo"></td>{% endif %}
+            <td class="emetteur">
+                {% if emetteur.raisonSociale %}<p class="nom">{{ emetteur.raisonSociale }}</p>{% endif %}
+                {% for ligne in emetteur.adresse %}<p>{{ ligne }}</p>{% endfor %}
+                {% if emetteur.francais %}
+                    {% if emetteur.siret %}<p>SIRET : {{ emetteur.siret }}</p>{% elseif emetteur.siren %}<p>SIREN : {{ emetteur.siren }}</p>{% endif %}
+                {% elseif emetteur.siren %}
+                    <p>Identifiant légal : {{ emetteur.siren }}</p>
+                {% endif %}
+                {% if emetteur.tva %}<p>N° TVA intracommunautaire : {{ emetteur.tva }}</p>{% endif %}
+            </td>
+        </tr>
+    </table>
+    {% endif %}
+    {% if regie %}
+    <div class="regie">
+        <p>Régie de recettes émettrice : {{ regie.libelle }}</p>
+        {% if regie.acte %}<p>Acte constitutif : {{ regie.acte }}</p>{% endif %}
+    </div>
+    {% endif %}
+
     <h1>Facture {{ numero }}</h1>
     {% if dateEmission %}<p>Émise le {{ dateEmission|date('d/m/Y') }}</p>{% endif %}
     {% if destinataire %}<p>Destinataire : {{ destinataire }}</p>{% endif %}

@@ -74,6 +74,10 @@ final class SalesModule implements ModuleManifest
             'vente.corriger_reglement',
             'vente.vente_directe',
             'vente.cloture_journaliere',
+            // #342/#343 — clore un mois ou une année scelle un cumul qui ne se retire pas ; archiver
+            // emporte le détail de toute une année. Un seul droit pour les deux : c'est le même
+            // geste de fin de période, confié au même profil, et jamais au caissier.
+            'vente.fiscal_closing',
         ];
     }
 

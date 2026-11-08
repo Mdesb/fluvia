@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\Nf525;
 
+use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -37,6 +38,7 @@ final class ScellementFactureHandler
         // en dur existe desormais pour qu'il n'y en ait pas de quatrieme.
         #[Autowire(env: 'NF525_FACTURATION_SEAL_KEY')]
         private readonly string $cleScellement,
+        private readonly InvoiceIssuerSnapshot $instantaneEmetteur,
     ) {
     }
 
@@ -59,6 +61,13 @@ final class ScellementFactureHandler
         $facture->setEmpreinte($empreinte);
         $facture->setSignature($this->signer($empreinte));
         $facture->setPayloadCanonique($payload);
+
+        // L'ÉMETTEUR EST FIGÉ AU MÊME INSTANT QUE LE CONTENU (#345) : une réimpression montre
+        // l'émetteur d'origine, même si le profil a changé depuis. Hors du payload canonique : le
+        // profil est un référentiel vivant, et l'empreinte n'a pas à dépendre de son évolution.
+        if ($facture->getEmetteurFige() === null) {
+            $facture->setEmetteurFige($this->instantaneEmetteur->capture($facture));
+        }
 
         return $facture;
     }
