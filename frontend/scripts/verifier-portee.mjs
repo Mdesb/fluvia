@@ -58,6 +58,10 @@ const FOURNIS = new Set([
   'Event', 'CustomEvent', 'EventSource', 'WebSocket', 'MessageChannel', 'BroadcastChannel',
   'IntersectionObserver', 'ResizeObserver', 'MutationObserver', 'DOMParser', 'XMLHttpRequest',
   'Node', 'Element', 'HTMLElement', 'HTMLCanvasElement', 'CanvasRenderingContext2D', 'SVGElement',
+  // Les constructeurs des champs de formulaire, pour `e.target instanceof HTMLInputElement` : la borne
+  // (#358, KioskApp.jsx) les teste pour laisser la saisie passer ses verrous clavier. Ce sont des
+  // globaux du navigateur, comme HTMLElement ci-dessus ; leur absence faisait accuser du code juste.
+  'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement',
   'self', 'top', 'parent', 'frames', 'origin', 'scrollTo', 'scrollBy', 'open', 'close', 'print',
   // service worker
   'clients', 'skipWaiting', 'registration',
