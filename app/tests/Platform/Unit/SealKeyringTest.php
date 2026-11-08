@@ -55,9 +55,22 @@ final class SealKeyringTest extends TestCase
         self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', (string) $withoutA->problem($check, SealKeyring::keyIdOf(self::KEY_A)));
     }
 
-    public function testLinkWithoutIdIsCheckedWithActiveThenRetiredKeys(): void
+    public function testKeyIdIsBoundToTheSignature(): void
     {
         $signedByA = (new SealKeyring('NF525_SEAL_KEY', self::KEY_A))->sign('empreinte-1');
+        $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_A, self::KEY_B);
+
+        self::assertSame(SealCheck::Valid, $keyring->check('empreinte-1', $signedByA, SealKeyring::keyIdOf(self::KEY_A)));
+        // Effacer l'identifiant ne rouvre pas le chemin « toutes les clés ».
+        self::assertSame(SealCheck::InvalidSignature, $keyring->check('empreinte-1', $signedByA, null));
+        // Le remplacer par un autre identifiant connu non plus.
+        self::assertSame(SealCheck::InvalidSignature, $keyring->check('empreinte-1', $signedByA, SealKeyring::keyIdOf(self::KEY_B)));
+    }
+
+    public function testLinkWithoutIdIsCheckedWithActiveThenRetiredKeys(): void
+    {
+        // Maillon antérieur au trousseau : signé sans identifiant.
+        $signedByA = (new SealKeyring('NF525_SEAL_KEY', self::KEY_A))->signWithoutId('empreinte-1');
 
         self::assertSame(SealCheck::Valid, (new SealKeyring('NF525_SEAL_KEY', self::KEY_A))->check('empreinte-1', $signedByA, null));
         self::assertSame(SealCheck::Valid, (new SealKeyring('NF525_SEAL_KEY', self::KEY_B, 'autre, ' . self::KEY_A))->check('empreinte-1', $signedByA, null));
@@ -68,7 +81,8 @@ final class SealKeyringTest extends TestCase
     {
         $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A);
 
-        self::assertSame(hash_hmac('sha256', 'x', self::KEY_B), $keyring->sign('x'));
+        self::assertSame(hash_hmac('sha256', 'x|' . SealKeyring::keyIdOf(self::KEY_B), self::KEY_B), $keyring->sign('x'));
+        self::assertSame(hash_hmac('sha256', 'x', self::KEY_B), $keyring->signWithoutId('x'));
         self::assertSame(SealKeyring::keyIdOf(self::KEY_B), $keyring->activeKeyId());
         self::assertSame([SealKeyring::keyIdOf(self::KEY_A)], $keyring->retiredKeyIds());
     }

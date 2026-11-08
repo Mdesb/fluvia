@@ -31,7 +31,7 @@ final class FiscalArchiveSigner
 
     public function sign(string $sha256): string
     {
-        return $this->keyring->sign($sha256);
+        return $this->keyring->signWithoutId($sha256);
     }
 
     public function verify(string $sha256, string $signature): bool

@@ -88,15 +88,31 @@ final class SealKeyring
         return array_keys($this->retired);
     }
 
-    /** Signe une empreinte avec la clé ACTIVE. Seule la clé active signe. */
+    /**
+     * Signe un MAILLON avec la clé ACTIVE. Seule la clé active signe.
+     *
+     * ⚠ L'IDENTIFIANT EST SIGNÉ AVEC L'EMPREINTE (`HMAC(empreinte|identifiant)`). Sans cela, qui peut
+     * écrire en base changerait `seal_key_id` sans être vu : l'effacer élargirait la vérification à
+     * toutes les clés (chemin des maillons anciens), le remplacer ferait passer une altération pour
+     * une clé manquante. Lié à la signature, tout changement de l'identifiant la rend invalide.
+     */
     public function sign(string $fingerprint): string
+    {
+        return hash_hmac('sha256', self::boundMessage($fingerprint, $this->activeKeyId), $this->activeKey);
+    }
+
+    /**
+     * Signe une donnée qui ne porte PAS d'identifiant de clé (l'archive fiscale) : vérifiée ensuite
+     * par `check(…, null)`, avec la clé active puis les clés retirées.
+     */
+    public function signWithoutId(string $fingerprint): string
     {
         return hash_hmac('sha256', $fingerprint, $this->activeKey);
     }
 
     /**
      * Vérifie une signature avec la clé désignée par `$keyId`. Sans identifiant (maillon antérieur au
-     * trousseau) : clé active, puis chaque clé retirée.
+     * trousseau, signé sans identifiant) : clé active, puis chaque clé retirée.
      */
     public function check(string $fingerprint, string $signature, ?string $keyId): SealCheck
     {
@@ -115,9 +131,14 @@ final class SealKeyring
             return SealCheck::UnknownKey;
         }
 
-        return hash_equals(hash_hmac('sha256', $fingerprint, $key), $signature)
+        return hash_equals(hash_hmac('sha256', self::boundMessage($fingerprint, $keyId), $key), $signature)
             ? SealCheck::Valid
             : SealCheck::InvalidSignature;
+    }
+
+    private static function boundMessage(string $fingerprint, string $keyId): string
+    {
+        return $fingerprint . '|' . $keyId;
     }
 
     /** Libellé d'anomalie pour un rapport de vérification (`null` si le maillon est valide). */
@@ -127,9 +148,10 @@ final class SealKeyring
             SealCheck::Valid => null,
             SealCheck::InvalidSignature => 'signature invalide',
             SealCheck::UnknownKey => sprintf(
-                'clé inconnue du trousseau : ce maillon a été signé par la clé d\'identifiant %s, que le '
-                . 'trousseau %s ne contient pas. Ce n\'est pas une preuve d\'altération : restaurez cette '
-                . 'clé en clé retirée (%s) pour le vérifier.',
+                'clé inconnue du trousseau : ce maillon désigne la clé d\'identifiant %s, que le '
+                . 'trousseau %s ne contient pas. Il ne peut donc pas être vérifié : soit cette clé manque '
+                . 'au trousseau (restaurez-la en clé retirée, %s), soit l\'identifiant a été modifié. '
+                . 'Tant qu\'il n\'est pas vérifié, ce maillon ne prouve rien.',
                 (string) $keyId,
                 $this->variable,
                 $this->retiredVariable(),

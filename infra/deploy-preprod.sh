@@ -185,8 +185,12 @@ log "Migrations de base"
 
 # #361 — LE TROUSSEAU VERIFIE-T-IL ENCORE LE DERNIER MAILLON DE CHAQUE CHAINE ? Lecture seule. Sinon
 # l'application refusera de sceller (echec ferme) : on veut l'apprendre ICI, pas a la premiere vente.
+#
+# ⚠ ON NE S'ARRETE PAS ICI : la suite (cache, droits de var/, FPM, frontal) doit tourner, sinon un
+# echec laisse une installation a moitie deployee (API a 500). Le verdict est rendu A LA FIN.
 log "Trousseau NF525 (dernier maillon de chaque chaine)"
-"${COMPOSE[@]}" exec -T php php bin/console app:nf525:check-keys --no-interaction
+NF525_TROUSSEAU_KO=0
+"${COMPOSE[@]}" exec -T php php bin/console app:nf525:check-keys --no-interaction || NF525_TROUSSEAU_KO=1
 
 # LA BASE DE CONNAISSANCE GENERIQUE, POSEE A CHAQUE DEPLOIEMENT.
 #
@@ -548,6 +552,15 @@ if [ -n "${SUITE_TUEE:-}" ]; then
     echo "     Ce n'est pas une régression du code : c'est ce déploiement."
     echo "     Préviens la session concernée, puis : ./infra/reinstaller-dev.sh"
     echo
+fi
+
+# #361 — verdict du trousseau NF525, rendu apres un deploiement COMPLET.
+if [ "${NF525_TROUSSEAU_KO:-0}" != "0" ]; then
+    echo
+    echo "✗ Déploiement terminé, MAIS une chaîne NF525 ne peut plus être prolongée (voir « Trousseau NF525 »"
+    echo "  plus haut). L'application refuse d'y sceller tant que la clé n'est pas restaurée."
+    echo "  → infra/README.md, section « Trousseau NF525 »."
+    exit 1
 fi
 
 log "Déploiement terminé - $REPO_ROOT"

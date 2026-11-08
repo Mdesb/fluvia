@@ -190,7 +190,8 @@ final class FiscalArchiveBuilder
             );
 
             $fichiers['sealed_operations.csv'] = $this->ecrire($dossier, 'sealed_operations.csv',
-                ['point_de_vente_id', 'numero_sequence', 'type_operation', 'cible_type', 'cible_id', 'empreinte', 'empreinte_precedente', 'signature', 'horodatage', 'payload_canonique'],
+                // #361 — `seal_key_id` en DERNIÈRE colonne : une archive antérieure (sans elle) reste lisible.
+                ['point_de_vente_id', 'numero_sequence', 'type_operation', 'cible_type', 'cible_id', 'empreinte', 'empreinte_precedente', 'signature', 'horodatage', 'payload_canonique', 'seal_key_id'],
                 function () use ($etab, $year, $debut, $fin): \Generator {
                     foreach ($this->pointsDeVente($etab) as $pdv) {
                         [$premier, $dernier] = $this->segment($pdv, $year, $debut, $fin);
@@ -198,7 +199,7 @@ final class FiscalArchiveBuilder
                             continue;
                         }
                         $rows = $this->db->executeQuery(
-                            'SELECT point_de_vente_id, numero_sequence, type_operation, cible_type, cible_id, empreinte, empreinte_precedente, signature, horodatage, payload_canonique
+                            'SELECT point_de_vente_id, numero_sequence, type_operation, cible_type, cible_id, empreinte, empreinte_precedente, signature, horodatage, payload_canonique, seal_key_id
                                FROM nf525_operation_scellee
                               WHERE point_de_vente_id = :p AND numero_sequence BETWEEN :s1 AND :s2 ORDER BY numero_sequence',
                             ['p' => $pdv->getId()->toBinary(), 's1' => $premier, 's2' => $dernier],
@@ -206,7 +207,7 @@ final class FiscalArchiveBuilder
                         )->iterateAssociative();
                         foreach ($rows as $r) {
                             yield [$this->uuid($r['point_de_vente_id']), $r['numero_sequence'], $r['type_operation'], $r['cible_type'],
-                                $this->uuid($r['cible_id']), $r['empreinte'], $r['empreinte_precedente'], $r['signature'], $r['horodatage'], $r['payload_canonique']];
+                                $this->uuid($r['cible_id']), $r['empreinte'], $r['empreinte_precedente'], $r['signature'], $r['horodatage'], $r['payload_canonique'], $r['seal_key_id']];
                         }
                     }
                 },
@@ -525,7 +526,9 @@ final class FiscalArchiveBuilder
             '- sealed_operations.csv : le segment de la chaine d\'inalterabilite de chaque point de vente, du premier',
             '  maillon de l\'annee jusqu\'au scellement de la cloture annuelle inclus.',
             '  empreinte(N) = SHA-256( JSON canonique du payload (cles triees) + "|" + empreinte(N-1) ).',
-            '  signature(N) = HMAC-SHA256( empreinte(N), cle de scellement de l\'editeur ).',
+            '  signature(N) = HMAC-SHA256( empreinte(N) + "|" + seal_key_id(N), cle de scellement de l\'editeur ) ;',
+            '  seal_key_id(N) identifie (sans la reveler) la cle qui a signe le maillon. Vide pour les maillons',
+            '  anterieurs au trousseau, signes alors sur la seule empreinte : HMAC-SHA256( empreinte(N), cle ).',
             '- daily_closures.csv : les arretes de journee (total du jour, cumul perpetuel).',
             '- period_closures.csv : les clotures mensuelles et annuelle (total de la periode, cumul de l\'exercice,',
             '  cumul perpetuel ; recomputed_total = total relu dans les ventes au moment de la cloture, temoin).',

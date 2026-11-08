@@ -77,8 +77,8 @@ Chaque opération scellée (vente, écriture comptable, facture) est signée par
 scellement** propre à votre installation, et garde la trace de la clé qui l'a signée. Si cette clé a
 été remplacée sans que l'ancienne soit conservée, Fluvia **refuse de sceller** de nouvelles opérations
 sur la chaîne concernée, avec le message « Scellement refusé (NF525…) » : signer par-dessus rendrait
-les opérations précédentes invérifiables. Une vérification affiche alors « clé inconnue du trousseau »,
-ce qui n'est **pas** une preuve d'altération.
+les opérations précédentes invérifiables. Une vérification affiche alors « clé inconnue du trousseau » :
+tant que la bonne clé n'est pas remise en place, ces opérations ne peuvent pas être vérifiées.
 
 Vous ne pouvez pas le corriger depuis l'écran : prévenez votre administrateur technique ou le
 support. La correction consiste à remettre en place l'ancienne clé depuis sa sauvegarde ; aucune

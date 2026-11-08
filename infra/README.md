@@ -310,6 +310,11 @@ ajouter l'ancienne clé à la variable `*_RETIRED_KEYS` correspondante, poser la
 mettre à jour la sauvegarde hors serveur, redéployer, puis vérifier `app:nf525:check-keys`. Une clé
 retirée ne se supprime pas avant la fin du délai de conservation.
 
+**Clé réellement perdue (aucune sauvegarde).** Aucune procédure automatique : la chaîne concernée ne
+peut plus être prolongée, et c'est voulu. La sortie (par exemple un maillon de « rupture constatée »
+scellé avec la nouvelle clé, option B de l'enquête #361) est une décision de Maxime, à ne pas
+improviser sur le serveur.
+
 ## Paiement en ligne (PayFiP, PSP CB) — #339
 
 Aucune valeur n'est dans le code ni dans le dépôt. Elles se posent dans **`app/.env.local`** (comme

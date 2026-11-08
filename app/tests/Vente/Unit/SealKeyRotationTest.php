@@ -67,6 +67,16 @@ final class SealKeyRotationTest extends TestCase
         $withoutA->scelle($this->dto('c'), $op2);
     }
 
+    public function testErasingTheKeyIdOfARecentLinkIsDetected(): void
+    {
+        [$op1, $op2] = $this->chainSignedByA();
+        $op2->setSealKeyId(null);
+
+        $rapport = $this->signataire(self::KEY_B, self::KEY_A)->verifieChaine([$op1, $op2]);
+        self::assertFalse($rapport->intacte);
+        self::assertSame('signature invalide', $rapport->anomalies[0]['probleme']);
+    }
+
     public function testSameKeyWitnessStillExtends(): void
     {
         [$op1, $op2] = $this->chainSignedByA();
@@ -79,9 +89,10 @@ final class SealKeyRotationTest extends TestCase
     public function testLegacyLinkWithoutIdIsVerifiedWithTheActiveKey(): void
     {
         [$op1, $op2] = $this->chainSignedByA();
-        // Maillons antérieurs au trousseau : aucun identifiant en base.
-        $op1->setSealKeyId(null);
-        $op2->setSealKeyId(null);
+        // Maillons antérieurs au trousseau : aucun identifiant en base, signature sans identifiant.
+        foreach ([$op1, $op2] as $op) {
+            $op->setSealKeyId(null)->setSignature(hash_hmac('sha256', $op->getEmpreinte(), self::KEY_A));
+        }
 
         self::assertTrue($this->signataire(self::KEY_A)->verifieChaine([$op1, $op2])->intacte, 'compatibilité : clé active');
         $op3 = $this->signataire(self::KEY_A)->scelle($this->dto('c'), $op2);
