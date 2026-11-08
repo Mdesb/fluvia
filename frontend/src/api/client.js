@@ -469,6 +469,18 @@ export const api = {
   controlerBillet: (identifiantSupport) =>
     request('/api/acces/controle-billet', { method: 'POST', body: { identifiantSupport } }),
 
+  // HORS CONNEXION (#338). La liste locale du contrôle manuel : des EMPREINTES salées, jamais un code
+  // de billet en clair ; `query` porte `page` et, à partir de la deuxième, le `sel` de la première.
+  listeControleHorsLigne: (query) =>
+    request('/api/acces/controle-billet/liste-locale', { query }),
+  // La remontée des contrôles faits pendant la coupure. Pas de `ld: true` : `input: false`.
+  remonterControlesHorsLigne: (corps) =>
+    request('/api/acces/controle-billet/lot', { method: 'POST', body: corps }),
+  // La remontée des ventes faites pendant la coupure (rejeu, anti-doublon, scellement à l'arrivée).
+  // Pas de `ld: true` : l'opération est `input: false`, elle lit le corps elle-même.
+  synchroOperations: (corps) =>
+    request('/api/synchro/operations', { method: 'POST', body: corps, timeoutMs: 60000 }),
+
   // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
   // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
   // le vide, et l'enregistrement reussissait.
