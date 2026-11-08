@@ -140,6 +140,23 @@ export default function IdentiteVendeur({ peutModifier }) {
     }
   }
 
+  async function televerserLogo(ev) {
+    const fichier = ev.target.files?.[0]
+    ev.target.value = ''
+    if (!fichier || !profil?.id) return
+    setEnCours(true)
+    setErreur(null)
+    setInfo('')
+    try {
+      setProfil(await api.televerserLogoFacturation(profil.id, fichier))
+      setInfo('Logo enregistré : il figure désormais en tête des factures PDF.')
+    } catch (err) {
+      setErreur(err?.message || 'Le logo n’a pas été enregistré.')
+    } finally {
+      setEnCours(false)
+    }
+  }
+
   if (chargement) return <div className="card">Chargement de l’identité de facturation…</div>
 
   if (erreur && !valeurs) {
@@ -221,6 +238,27 @@ export default function IdentiteVendeur({ peutModifier }) {
           <small className="hint"> Vous pouvez consulter ces informations, pas les modifier.</small>
         ) : null}
       </form>
+
+      {/* LE LOGO DE L'EN-TÊTE DE FACTURE (#345). Hors du formulaire : il part seul, en multipart,
+          et n'a de sens qu'une fois le profil enregistré (il lui faut un identifiant). */}
+      {profil?.id ? (
+        <div className="field">
+          <h4>Logo en tête de facture</h4>
+          <p className="hint">
+            {profil.logoDefined
+              ? 'Un logo est enregistré : il figure en tête de chaque facture PDF.'
+              : 'Aucun logo : la facture PDF porte la raison sociale, l’adresse et le SIRET sans image.'}
+            {' '}Image JPEG (.jpg), 1 Mo au maximum.
+          </p>
+          <input
+            type="file"
+            accept="image/jpeg"
+            aria-label="Logo en tête de facture"
+            disabled={!peutModifier || enCours}
+            onChange={televerserLogo}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -406,6 +406,22 @@ class Facture
     #[Groups(['nf525:read'])]
     private ?array $payloadCanonique = null;
 
+    /**
+     * L'ÉMETTEUR TEL QU'IL ÉTAIT À L'ÉMISSION (#345) : raison sociale, SIREN/SIRET, TVA, adresse,
+     * logo (document + version DMS) et régie. Posé une seule fois par
+     * `ScellementFactureHandler::sceller()`, lu par l'en-tête PDF et par le XML Factur-X.
+     *
+     * ⚠ Absent de la liste blanche de `FactureInalterableListener` : toute réécriture après
+     * l'émission est refusée en 409, comme le reste du contenu.
+     *
+     * ⚠ `null` = brouillon, ou facture émise avant l'instantané : l'émetteur d'origine n'est plus
+     * reconstituable, et les lecteurs retombent sur le profil vivant.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(name: 'emetteur_fige', type: 'json', nullable: true)]
+    private ?array $emetteurFige = null;
+
     /** @var Collection<int, LigneFacture> */
     #[ORM\OneToMany(targetEntity: LigneFacture::class, mappedBy: 'facture', cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[Groups(['facture:read'])]
@@ -994,6 +1010,20 @@ class Facture
     public function setPayloadCanonique(?array $payloadCanonique): self
     {
         $this->payloadCanonique = $payloadCanonique;
+
+        return $this;
+    }
+
+    /** @return array<string, mixed>|null null = brouillon, ou émise avant l'instantané de l'émetteur */
+    public function getEmetteurFige(): ?array
+    {
+        return $this->emetteurFige;
+    }
+
+    /** @param array<string, mixed>|null $emetteurFige */
+    public function setEmetteurFige(?array $emetteurFige): self
+    {
+        $this->emetteurFige = $emetteurFige;
 
         return $this;
     }
