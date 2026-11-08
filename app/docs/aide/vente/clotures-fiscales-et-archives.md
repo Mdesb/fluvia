@@ -21,6 +21,8 @@ Tout se trouve dans **Comptabilité / Régie › Clôtures fiscales & archives**
 
 1. Choisissez le **point de vente** et le **mois** (par défaut, le mois précédent).
 2. Cliquez sur **Clore le mois**.
+3. Une fenêtre rappelle le mois, le point de vente et le caractère **définitif** de la clôture.
+   Relisez-les, puis cliquez sur **Clore le mois définitivement**. **Annuler** (ou Échap) ne clôt rien.
 
 Le mois additionne les clôtures journalières de ses journées. Il est refusé, avec un message qui dit
 quoi faire, dans quatre cas :
@@ -37,7 +39,8 @@ support, c'est le signe qu'une vente a été touchée hors de l'application.
 
 ## Clore l'année
 
-Même geste avec **Clore l'année** (par défaut, l'année précédente). L'année additionne ses mois : elle
+Même geste avec **Clore l'année** (par défaut, l'année précédente), confirmé de la même façon par
+**Clore l'année définitivement**. L'année additionne ses mois : elle
 est refusée tant qu'un mois porteur de ventes n'est pas clos, et tant que l'année n'est pas terminée.
 
 ## Archiver l'exercice (en début d'année)
