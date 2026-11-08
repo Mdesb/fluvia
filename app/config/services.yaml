@@ -38,6 +38,8 @@ services:
             # instance par filtre decore. Enregistre ici, il serait etiquete comme filtre et le
             # localisateur d'API Platform reclamerait un service que personne ne peut construire.
             - '../src/Platform/Filter/UuidAwareSearchFilter.php'
+            # Terminal simulé (#337) : construit à la main avec son transport, jamais injecté.
+            - '../src/Acces/Hardware/Simulated/'
 
     # LE CALENDRIER SCOLAIRE OFFICIEL, derriere un port.
     #
@@ -150,6 +152,10 @@ services:
     # Pilote matériel enfichable (OSDP/API ITBOX/SmartAccess non cadrés, point ouvert n°1) : simulateur
     # logiciel en dev/test, ItboxAdapter/SmartAccessAdapter restent des squelettes (à cadrer IT Cotation).
     App\Acces\Port\PiloteAcces: '@App\Acces\Adapter\SimulateurAccesAdapter'
+    # Poste d'encodage du comptoir (#337) : même patron, simulateur tant que le modèle d'encodeur
+    # n'est pas connu (information à obtenir d'IT Cotation). Le terminal simulé et ses contrats
+    # (App\Acces\Hardware\Simulated) ne sont pas des services : ils se construisent à la main.
+    App\Acces\Port\CredentialEncoder: '@App\Acces\Adapter\SimulatedCredentialEncoder'
     # Projection locale d'un droit vendu M1/M2 (point ouvert n°9) — stub L3, consommateur d'événements
     # réel à l'intégration L4. Public : accessible depuis les tests (App\Acces\State\AppairageProcessor
     # l'utilise aussi lorsqu'un appairage référence un support M2 non encore projeté).

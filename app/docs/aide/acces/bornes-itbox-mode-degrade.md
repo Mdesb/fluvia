@@ -30,8 +30,28 @@ concentrateur. Avec ce jeton, elle peut :
   d'horloge de plus de 5 minutes, et marque en conflit un passage fait avec un support bloqué entre
   temps.
 
+La liste locale indique aussi, pour un **titre de groupe**, combien de personnes un passage fait
+entrer : une borne coupée du réseau accorde donc le bon nombre de passages.
+
 L'onglet **Terminaux** affiche, pour chaque borne enrôlée, l'heure de son dernier appel et s'il a
 réussi.
+
+## Une base commune pour tous les matériels
+
+Le jour où un pilote de borne est branché, il s'appuie sur une base déjà écrite et testée dans
+Fluvia :
+
+- **reconnaissance des badges RFID existants** : un même badge est reconnu, que le lecteur rende son
+  numéro en hexadécimal, en hexadécimal inversé ou en décimal. Les badges déjà distribués par le site
+  n'ont pas à être réencodés ;
+- **décision de passage** : la même règle que le contrôle en ligne (révocation, zones, horaires,
+  anti-retour, crédit, jauge, titre de groupe) ;
+- **décision hors connexion** sur la liste locale, et remontée en lot au retour du réseau ;
+- **encodage au comptoir** : lire le badge posé sur l'encodeur et, si le poste le sait, y écrire
+  l'autorisation avant de l'appairer.
+
+Cette base est éprouvée avec une borne et un encodeur **simulés**, jamais encore avec un matériel
+réel.
 
 ## Ce qui n'est pas encore livré
 
@@ -40,6 +60,9 @@ réussi.
   physique : la commande d'ouverture passe par un simulateur.
 - **Le basculement automatique d'une borne en mode dégradé** dépend du logiciel embarqué dans la
   borne, pas de Fluvia.
+- **Le poste d'encodage du comptoir** : le modèle d'encodeur n'est pas encore connu. En attendant, un
+  badge s'appaire depuis l'onglet **Badges** en saisissant son numéro (ou en le lisant avec un
+  lecteur USB qui le tape dans le champ).
 
 ## En attendant, sur un site
 

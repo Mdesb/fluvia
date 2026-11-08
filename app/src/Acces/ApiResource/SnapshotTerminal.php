@@ -68,6 +68,7 @@ final class SnapshotTerminal
                 'portesEligibles' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Identifiants des équipements/portes autorisés pour ce droit.'],
                 'sousReseauId' => ['type' => 'string', 'nullable' => true],
                 'versionMaj' => ['type' => 'integer', 'description' => 'Version de mise à jour du support (curseur du delta).'],
+                'headcount' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Personnes qu\'un passage de ce titre fait entrer (titre de groupe) : nombre de rotations à accorder.'],
             ],
         ],
     ])]

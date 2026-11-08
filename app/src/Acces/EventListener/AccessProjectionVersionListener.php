@@ -68,6 +68,7 @@ final class AccessProjectionVersionListener
     private const RIGHT_FIELDS = [
         'sourceType', 'billetSupportRef', 'fenetreDebut', 'fenetreFin', 'creditRestant',
         'margeAvanceDefaut', 'margeRetardDefaut', 'sousReseau', 'statutProjection', 'etablissement',
+        'headcount',
     ];
 
     private const SUPPORT_FIELDS = ['identifiant', 'type', 'statut', 'etablissement'];

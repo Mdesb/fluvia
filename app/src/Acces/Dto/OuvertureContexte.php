@@ -16,6 +16,8 @@ final class OuvertureContexte
         public readonly bool $manuelle = false,
         public readonly ?Utilisateur $agent = null,
         public readonly ?string $motif = null,
+        /** Personnes à laisser passer (rotations d'un tripode) : 1, sauf titre de groupe (#337). */
+        public readonly int $headcount = 1,
     ) {
     }
 }

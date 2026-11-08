@@ -38,12 +38,12 @@ final class SimulateurAccesAdapter implements PiloteAcces
             PassageReporting::RealTime,
         );
     }
-    /** @var list<array{equipement: string, manuelle: bool}> Journal des ouvertures, pour les tests. */
+    /** @var list<array{equipement: string, manuelle: bool, headcount: int}> Journal des ouvertures, pour les tests. */
     private array $ouvertures = [];
 
     public function ouvrir(Equipement $equipement, OuvertureContexte $contexte): ResultatCommande
     {
-        $this->ouvertures[] = ['equipement' => (string) $equipement->getId(), 'manuelle' => $contexte->manuelle];
+        $this->ouvertures[] = ['equipement' => (string) $equipement->getId(), 'manuelle' => $contexte->manuelle, 'headcount' => $contexte->headcount];
 
         return ResultatCommande::ok('Ouverture simulée de ' . $equipement->getLibelle());
     }
@@ -63,7 +63,7 @@ final class SimulateurAccesAdapter implements PiloteAcces
         return ResultatCommande::ok(sprintf('Liste de révocation v%d poussée à %s (simulée).', $liste->getVersion(), $controleur->getLibelle()));
     }
 
-    /** @return list<array{equipement: string, manuelle: bool}> */
+    /** @return list<array{equipement: string, manuelle: bool, headcount: int}> */
     public function ouvertures(): array
     {
         return $this->ouvertures;

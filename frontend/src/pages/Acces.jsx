@@ -544,6 +544,7 @@ function AppairerModal({ open, onClose, droitsLibres, billetsVendus, produitsPar
   const [droit, setDroit] = useState('')
   const [billet, setBillet] = useState('')
   const [mode, setMode] = useState('caisse')
+  const [personnes, setPersonnes] = useState('1')
   const [erreur, setErreur] = useState(null)
   const [enCours, setEnCours] = useState(false)
 
@@ -567,6 +568,14 @@ function AppairerModal({ open, onClose, droitsLibres, billetsVendus, produitsPar
       return
     }
     const corps = { identifiantSupport: num, typeSupport: type, mode }
+    // Titre de groupe (#337) : envoyé seulement au-delà d'une personne, pour qu'un réappairage
+    // ordinaire ne touche jamais au nombre déjà enregistré sur le droit.
+    const nb = Number.parseInt(personnes, 10)
+    if (!Number.isInteger(nb) || nb < 1 || nb > 200) {
+      setErreur('Le nombre de personnes par passage va de 1 à 200.')
+      return
+    }
+    if (nb > 1) corps.headcount = nb
     if (source === 'vente') {
       if (!billet) {
         setErreur('Choisissez le billet ou la carte vendus à rattacher.')
@@ -664,6 +673,24 @@ function AppairerModal({ open, onClose, droitsLibres, billetsVendus, produitsPar
             </p>
           </div>
         )}
+
+        <div className="field">
+          <label htmlFor="ap-personnes">Personnes par passage</label>
+          <input
+            id="ap-personnes"
+            className="input"
+            type="number"
+            min="1"
+            max="200"
+            value={personnes}
+            onChange={(e) => setPersonnes(e.target.value)}
+          />
+          <p className="hint">
+            1 pour un badge individuel. Pour un club ou une école, le nombre de personnes qu’un seul
+            passage du badge fait entrer : la porte les laisse passer, la fréquentation et la jauge
+            les comptent toutes, et une carte à entrées en décompte une par personne.
+          </p>
+        </div>
 
         <div className="field">
           <label htmlFor="ap-mode">Où se fait l’appairage</label>

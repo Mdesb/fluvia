@@ -113,6 +113,9 @@ final class TerminalPassageProcessor implements ProcessorInterface
         return new JsonResponse([
             'resultat' => $passage->getResultat()->value,
             'codeMotif' => $passage->getCodeMotif()?->value,
+            // Titre de groupe (#337) : rotations à accorder. 0 sur un refus, pour qu'aucune borne ne
+            // puisse lire « 1 » sur un passage refusé et ouvrir quand même.
+            'headcount' => $passage->getResultat() === \App\Acces\Enum\ResultatPassage::Valide ? ($passage->getDroit()?->getHeadcount() ?? 1) : 0,
             'horodatageServeur' => (new \DateTimeImmutable())->format(DATE_ATOM),
             'message' => [
                 'codeMessage' => $codeMessage->value,
