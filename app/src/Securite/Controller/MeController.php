@@ -71,6 +71,9 @@ final class MeController
             // La langue préférée de la personne, `null` pour suivre celle de l'établissement : le
             // frontal en tire la langue d'affichage (`applyContextLanguage`). Champ additif.
             'locale' => $utilisateur->getLocale(),
+            // Code agent de caisse (#346) : défini ou non, jamais sa valeur. L'écran d'ouverture de
+            // caisse s'en sert pour proposer de le définir avant qu'un guichet ne l'exige. Additif.
+            'cashPinDefined' => $utilisateur->isCashPinDefined(),
             'etablissementActif' => $etablissementActif !== null ? (string) $etablissementActif : null,
             'droits' => $this->calculateur->codesEffectifs($utilisateur, $etablissementActif),
             // ⚠ « SUIS-JE CHEZ MOI OU CHEZ UN CLIENT ? » — la question que se pose un employé de
