@@ -115,10 +115,19 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 chmod 600 "$ENV_FILE"
 
+# ⚠ #361 — UNE CLE NF525 NE SE GENERE PAS PAR-DESSUS UNE CHAINE EXISTANTE. Un .env.prod perdu ou
+# recree, une base restauree sans lui : la cle neuve signerait par-dessus des maillons qu'elle ne peut
+# pas verifier. `nf525_guard_key_generation` mesure les maillons et ARRETE le deploiement (sans effet
+# sur les autres cles).
+COMPOSE_PROJECT=fluvia-prod
+# shellcheck source=infra/nf525-key-guard.sh
+. infra/nf525-key-guard.sh
+
 poser() { # $1 = nom, $2 = valeur ; n'écrit que si la clé est absente ou vide
     if grep -q "^$1=." "$ENV_FILE"; then
         return 0
     fi
+    nf525_guard_key_generation "$1"
     local tmp
     tmp="$(mktemp)"
     grep -v "^$1=" "$ENV_FILE" > "$tmp" || true
@@ -166,6 +175,11 @@ fi
 
 log "Migrations de base"
 "${COMPOSE[@]}" exec -T php php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+# #361 — même contrôle que la préprod, en lecture seule : le trousseau vérifie-t-il encore le dernier
+# maillon de chaque chaîne ? Sinon l'application refusera de sceller ; on l'apprend ICI.
+log "Trousseau NF525 (dernier maillon de chaque chaîne)"
+"${COMPOSE[@]}" exec -T php php bin/console app:nf525:check-keys --no-interaction
 
 # Mêmes semis que la préprod, idempotents et qui ne réécrivent jamais une ligne existante (raisons
 # dans deploy-preprod.sh) : sans eux, l'aide et le site partent vides en annonçant un succès.

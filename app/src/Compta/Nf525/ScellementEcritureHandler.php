@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Compta\Nf525;
 
 use App\Compta\Entity\EcritureComptable;
+use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -25,9 +26,10 @@ final class ScellementEcritureHandler
         // Clé HMAC de scellement NF525 injectée depuis l'environnement, SANS valeur par défaut : son
         // absence empêche le démarrage (échec fermé). Une clé publique/codée en dur casserait
         // l'inaltérabilité légale NF525 (on pourrait altérer une écriture puis re-signer). Chaîne
-        // dédiée Compta, distincte de `NF525_SEAL_KEY` (Vente).
-        #[Autowire(env: 'NF525_COMPTA_SEAL_KEY')]
-        private readonly string $cleScellement,
+        // dédiée Compta, distincte de `NF525_SEAL_KEY` (Vente). #361 : portée par un trousseau (clé
+        // active qui signe + clés retirées qui vérifient seulement).
+        #[Autowire(service: 'app.nf525.keyring.accounting')]
+        private readonly SealKeyring $keyring,
     ) {
     }
 
@@ -35,6 +37,17 @@ final class ScellementEcritureHandler
     public function sceller(EcritureComptable $ecriture): EcritureComptable
     {
         $precedente = $this->dernierMaillon($ecriture);
+
+        // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
+        if ($precedente !== null) {
+            $this->keyring->assertCanExtend(
+                $precedente->getEmpreinte(),
+                $precedente->getSignature(),
+                $precedente->getSealKeyId(),
+                sprintf('chaîne comptable du journal %s, maillon n° %d', (string) $ecriture->getJournal()?->getCode(), $precedente->getNumeroSequence()),
+            );
+        }
+
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
 
@@ -44,7 +57,8 @@ final class ScellementEcritureHandler
         $ecriture->setNumeroSequence($sequence);
         $ecriture->setEmpreintePrecedente($empreintePrecedente);
         $ecriture->setEmpreinte($empreinte);
-        $ecriture->setSignature($this->signer($empreinte));
+        $ecriture->setSignature($this->keyring->sign($empreinte));
+        $ecriture->setSealKeyId($this->keyring->activeKeyId());
 
         // ⚠ L'INSTANTANÉ EST CONSERVÉ, PLUS RECONSTRUIT — même raison que côté factures : le payload
         // lit `$ligne->getTauxTva()?->getTaux()`, donc un taux corrigé faisait dériver l'empreinte
@@ -120,8 +134,12 @@ final class ScellementEcritureHandler
                         ? 'empreinte incohérente : la donnée a été altérée'
                         : 'non vérifiable : ce document a été scellé avant que l\'instantané ne soit conservé, et sa reconstruction ne redonne pas l\'empreinte — un référentiel a pu changer depuis',
                 ];
-            } elseif (!hash_equals($this->signer($e->getEmpreinte()), $e->getSignature())) {
-                $anomalies[] = ['sequence' => $seq, 'probleme' => 'signature invalide'];
+            } elseif (null !== $probleme = $this->keyring->problem(
+                $this->keyring->check($e->getEmpreinte(), $e->getSignature(), $e->getSealKeyId()),
+                $e->getSealKeyId(),
+            )) {
+                // #361 — clé choisie par l'identifiant du maillon.
+                $anomalies[] = ['sequence' => $seq, 'probleme' => $probleme];
             }
 
             $empreintePrecedente = $e->getEmpreinte();
@@ -162,11 +180,6 @@ final class ScellementEcritureHandler
     private function calculerEmpreinte(array $payload, ?string $empreintePrecedente): string
     {
         return hash('sha256', $this->canonicalize($payload) . '|' . ($empreintePrecedente ?? ''));
-    }
-
-    private function signer(string $empreinte): string
-    {
-        return hash_hmac('sha256', $empreinte, $this->cleScellement);
     }
 
     /** @param array<string, mixed> $payload */

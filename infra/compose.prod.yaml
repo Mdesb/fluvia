@@ -63,6 +63,11 @@ services:
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
       # ── LES DEUX BOUCHONS SONT FERMES EN DUR ───────────────────────────────────────────────
       #
@@ -121,6 +126,11 @@ services:
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
       PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: "0"
       TPE_SIMULE_AUTORISE: "0"
@@ -174,6 +184,11 @@ services:
       NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.prod}
       NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.prod}
       NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.prod}
+      # #361 Trousseau NF525 : clés RETIRÉES, qui vérifient seulement (facultatives, liste séparée
+      # par des virgules). Sauvegarde hors serveur : infra/README.md, « Trousseau NF525 ».
+      NF525_SEAL_RETIRED_KEYS: ${NF525_SEAL_RETIRED_KEYS:-}
+      NF525_COMPTA_SEAL_RETIRED_KEYS: ${NF525_COMPTA_SEAL_RETIRED_KEYS:-}
+      NF525_FACTURATION_SEAL_RETIRED_KEYS: ${NF525_FACTURATION_SEAL_RETIRED_KEYS:-}
       SIGNATURE_SEAL_KEY: ${SIGNATURE_SEAL_KEY:?SIGNATURE_SEAL_KEY manquante dans .env.prod}
       PAIEMENT_EN_LIGNE_BOUCHON_AUTORISE: "0"
       TPE_SIMULE_AUTORISE: "0"
