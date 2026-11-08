@@ -631,6 +631,17 @@ export const api = {
     request('/api/factures/depuis-vente', { method: 'POST', body: { vente: venteId } }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
+  // #342/#343 — clôtures mensuelle et annuelle (par point de vente), archive fiscale annuelle.
+  cloturesPeriode: () => request('/api/period_closures', { query: { itemsPerPage: 100 } }),
+  cloturerMois: (pdvId, mois) =>
+    request(`/api/point_de_ventes/${pdvId}/monthly-closure`, { method: 'POST', body: { month: mois } }),
+  cloturerAnnee: (pdvId, annee) =>
+    request(`/api/point_de_ventes/${pdvId}/annual-closure`, { method: 'POST', body: { year: Number(annee) } }),
+  archivesFiscales: () => request('/api/fiscal_archives', { query: { itemsPerPage: 50 } }),
+  creerArchiveFiscale: (annee) =>
+    request('/api/fiscal_archives', { method: 'POST', body: { year: Number(annee) } }),
+  telechargerArchiveFiscale: (id) => request(`/api/fiscal_archives/${id}/download`),
+  verifierArchiveFiscale: (id) => request(`/api/fiscal_archives/${id}/verify`, { method: 'POST', body: {} }),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),

@@ -14,7 +14,9 @@ use App\Caisse\Validator\TerminalSettings;
 use App\Compta\Entity\RegieRecettes;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Nf525\Entity\DailyClosure;
+use App\Vente\Nf525\Entity\PeriodClosure;
 use App\Vente\State\CloseDayProcessor;
+use App\Vente\State\ClosePeriodProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -53,6 +55,30 @@ use Symfony\Component\Validator\Constraints as Assert;
             normalizationContext: ['groups' => ['daily_closure:read']],
             security: "is_granted('PERM', 'vente.cloture_journaliere')",
             processor: CloseDayProcessor::class,
+        ),
+        // #342 — clôtures mensuelle et annuelle, cumulatives (BOI-TVA-DECLA-30-10-30 § 170). Posées sur
+        // le point de vente pour la même raison que l'arrêté de journée : la chaîne est par point de vente.
+        new Post(
+            uriTemplate: '/point_de_ventes/{id}/monthly-closure',
+            description: 'Cloture le mois (#342). Corps : { month?: AAAA-MM }, par defaut le mois precedent. '
+                . 'Exige que chaque journee de ventes du mois soit arretee.',
+            read: true,
+            input: false,
+            output: PeriodClosure::class,
+            normalizationContext: ['groups' => ['period_closure:read']],
+            security: "is_granted('PERM', 'vente.fiscal_closing')",
+            processor: ClosePeriodProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/point_de_ventes/{id}/annual-closure',
+            description: 'Cloture l annee civile (#342). Corps : { year?: AAAA }, par defaut l annee precedente. '
+                . 'Exige que chaque mois arrete de l annee soit cloture.',
+            read: true,
+            input: false,
+            output: PeriodClosure::class,
+            normalizationContext: ['groups' => ['period_closure:read']],
+            security: "is_granted('PERM', 'vente.fiscal_closing')",
+            processor: ClosePeriodProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['pdv:read']],
