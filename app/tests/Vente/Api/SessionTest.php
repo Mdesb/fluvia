@@ -79,13 +79,25 @@ final class SessionTest extends VenteApiTestCase
         $session = $this->ouvrirSession($client, $entete);
         $this->cloturer($client, $entete, $session['id']);
 
+        // Le code régisseur est le code agent PERSONNEL du régisseur (#346) : l'admin définit le sien.
+        $client->request('POST', '/api/utilisateurs/' . $this->idAdmin() . '/cash-pin', $entete + [
+            'json' => ['motDePasse' => \App\DataFixtures\SocleFixtures::ADMIN_MDP, 'pin' => '2026'],
+        ]);
+        self::assertResponseIsSuccessful();
+
         // Sans code : refusée.
         $client->request('POST', '/api/sessions-caisse/' . $session['id'] . '/rouvrir', $entete + ['json' => []]);
         self::assertResponseStatusCodeSame(422);
 
-        // Avec code : acceptée.
+        // Avec un code quelconque non vide : refusée (jusqu'au 05/11/2026, elle passait).
         $client->request('POST', '/api/sessions-caisse/' . $session['id'] . '/rouvrir', $entete + [
             'json' => ['codeRegisseur' => 'CODE-REGIE-2026'],
+        ]);
+        self::assertResponseStatusCodeSame(422);
+
+        // Avec le code du régisseur : acceptée.
+        $client->request('POST', '/api/sessions-caisse/' . $session['id'] . '/rouvrir', $entete + [
+            'json' => ['codeRegisseur' => '2026'],
         ]);
         self::assertResponseIsSuccessful();
     }

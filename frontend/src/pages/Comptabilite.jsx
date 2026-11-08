@@ -9,6 +9,7 @@ import MarquerImpayeeRegie from '../components/MarquerImpayeeRegie.jsx'
 import BordereauxPayFip from '../components/BordereauxPayFip.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
+import FiscalClosures from '../components/FiscalClosures.jsx'
 
 // Comptabilité / Régie (M6) : clôture, écritures, saisie manuelle, lettrage, régie.
 //
@@ -75,6 +76,7 @@ export default function Comptabilite({ etabActif, droits }) {
       <Tabs
         onglets={[
           ['cloture', 'Clôture'],
+          ['fiscal', 'Clôtures fiscales & archives'],
           ['ecritures', 'Écritures'],
           ['saisie', 'Saisie manuelle'],
           ['lettrage', 'Lettrage'],
@@ -95,6 +97,17 @@ export default function Comptabilite({ etabActif, droits }) {
             votre comptable. C’est le seul onglet du module qui répond à une échéance.
           </p>
           <ClotureComptable etabActif={etabActif} droits={droits} />
+        </>
+      )}
+
+      {sousOnglet === 'fiscal' && (
+        <>
+          <p className="cpt-intro">
+            <b>Ce que la loi anti-fraude TVA demande à la caisse.</b> Clore chaque mois puis chaque
+            année (les totaux se cumulent et se scellent), puis archiver l’année écoulée — ventes et
+            fréquentation — dans un fichier signé, séparé des données actives.
+          </p>
+          <FiscalClosures etabActif={etabActif} droits={droits} />
         </>
       )}
 

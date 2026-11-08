@@ -3,6 +3,7 @@ import { aLeDroit } from '../api/droits.js'
 import { api, membres } from '../api/client.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { offlineSales } from '../api/offline.js'
 
 // Gestion de la session de caisse (M2) : ouverture (point de vente, caisse, fond, régisseur)
 // et clôture Z (comptages, écart de régie, versement, fond reporté).
@@ -28,6 +29,15 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
   const [caisseId, setCaisseId] = useState('')
   const [fond, setFond] = useState('50.00')
   const [ouverture, setOuverture] = useState(false)
+  // Code agent personnel (#346) : saisi à l'ouverture quand le point de vente l'exige, et défini ici
+  // même (mot de passe du compte requis) — un caissier n'a pas accès aux Paramètres.
+  const [agentPin, setAgentPin] = useState('')
+  const [pinDefini, setPinDefini] = useState(me?.cashPinDefined === true)
+  const [definition, setDefinition] = useState(false)
+  const [nouveauPin, setNouveauPin] = useState('')
+  const [motDePasse, setMotDePasse] = useState('')
+  const [msgPin, setMsgPin] = useState(null)
+  useEffect(() => { setPinDefini(me?.cashPinDefined === true) }, [me?.cashPinDefined])
 
   // Clôture
   const [comptages, setComptages] = useState([{ moyen: 'especes', compte: '' }])
@@ -35,6 +45,24 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
   const [fondReporte, setFondReporte] = useState('')
   const [cloture, setCloture] = useState(false)
   const [recapZ, setRecapZ] = useState(null)
+  // ⚠ UN Z PRIS AVANT LA REMONTÉE DES VENTES HORS CONNEXION LES PERD (#338). Le serveur refuse
+  // d'ancrer une vente dans une session close : celles qui attendent sur CE poste ne pourraient plus
+  // entrer dans aucune journée. Le serveur ne peut pas le savoir — elles ne sont que sur le poste —,
+  // c'est donc l'écran qui retient le geste, et il dit pourquoi.
+  const [horsLigneEnAttente, setHorsLigneEnAttente] = useState(0)
+  useEffect(() => {
+    let annule = false
+    if (!session?.id) return undefined
+    offlineSales.pending(etabActif)
+      // Seules les ventes EN ATTENTE retiennent le Z. Une vente en quarantaine ne passera pas sans un
+      // responsable : bloquer la journée pour elle bloquerait le site entier ; elle reste affichée
+      // à la caisse, avec sa raison.
+      .then((v) => !annule && setHorsLigneEnAttente(v.filter((x) => x.session === session.id && x.etat === 'en_attente').length))
+      .catch(() => {})
+    return () => {
+      annule = true
+    }
+  }, [etabActif, session?.id])
 
   useEffect(() => {
     let annule = false
@@ -96,7 +124,10 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
         caisse: caisseId,
         fondDeCaisse: Number(fond || 0).toFixed(2),
         // Pas de code régisseur à l'ouverture : l'opérateur connecté est le régisseur par défaut.
+        // Le code AGENT, lui, part dès qu'il est saisi : le serveur le vérifie toujours (#346).
+        ...(agentPin.trim() ? { agentPin: agentPin.trim() } : {}),
       })
+      setAgentPin('')
       await onRefresh()
       // En modale : une fois la session ouverte, on rend la main à l'écran Caisse.
       if (modale) onClose?.()
@@ -104,6 +135,23 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
       setErreur(err.message || "Échec de l'ouverture de session.")
     } finally {
       setOuverture(false)
+    }
+  }
+
+  // Bouton et non formulaire : ces champs vivent DANS le formulaire d'ouverture, et un formulaire
+  // imbriqué n'existe pas en HTML.
+  async function definirPin() {
+    setErreur(null)
+    setMsgPin(null)
+    try {
+      await api.definirCodeAgent(me.id, motDePasse, nouveauPin.trim())
+      setPinDefini(true)
+      setDefinition(false)
+      setNouveauPin('')
+      setMotDePasse('')
+      setMsgPin('Code agent enregistré. Il vous sera demandé à l’ouverture sur les guichets qui l’exigent.')
+    } catch (err) {
+      setErreur(err.message || 'Le code agent n’a pas été enregistré.')
     }
   }
 
@@ -145,6 +193,7 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
   }
 
   const libMoyen = (code) => moyens.find((m) => m.code === code)?.libelle || code
+  const exigePin = pdvs.find((p) => p.id === pdvId)?.requireAgentPin === true
 
   // --- Champs partagés (identiques en modale et en page) ---
   const champsOuverture = (
@@ -184,13 +233,49 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
         <input id="fond" className="input" type="number" step="0.01" min="0"
           value={fond} onChange={(e) => setFond(e.target.value)} required />
       </div>
+      {exigePin && (
+        <div className="field">
+          <label htmlFor="agent-pin">Votre code agent</label>
+          <input id="agent-pin" className="input" type="password" inputMode="numeric"
+            autoComplete="off" maxLength={8} value={agentPin}
+            onChange={(e) => setAgentPin(e.target.value.replace(/[^0-9]/g, ''))} />
+        </div>
+      )}
       <div className="hint" style={{ marginBottom: 14 }}>
-        Régisseur : <b>{me?.nom || me?.email}</b>. Aucun code n'est requis à l'ouverture.
+        Régisseur : <b>{me?.nom || me?.email}</b>.{' '}
+        {exigePin
+          ? 'Ce point de vente exige votre code agent personnel à l’ouverture.'
+          : 'Ce point de vente n’exige pas de code agent à l’ouverture.'}
+        {' '}
+        {pinDefini ? 'Votre code agent est défini.' : 'Vous n’avez pas encore de code agent.'}{' '}
+        <button type="button" className="btn ghost sm" onClick={() => { setDefinition((d) => !d); setMsgPin(null) }}>
+          {pinDefini ? 'Changer mon code agent' : 'Définir mon code agent'}
+        </button>
       </div>
+      {msgPin && <div className="banner banner-ok">{msgPin}</div>}
+      {definition && (
+        <div className="card-b" style={{ marginBottom: 'var(--esp-bloc)' }}>
+          <div className="field">
+            <label htmlFor="pin-neuf">Nouveau code agent (4 à 8 chiffres)</label>
+            <input id="pin-neuf" className="input" type="password" inputMode="numeric"
+              autoComplete="off" maxLength={8} value={nouveauPin}
+              onChange={(e) => setNouveauPin(e.target.value.replace(/[^0-9]/g, ''))} />
+          </div>
+          <div className="field">
+            <label htmlFor="pin-mdp">Mot de passe de votre compte</label>
+            <input id="pin-mdp" className="input" type="password" autoComplete="current-password"
+              value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} />
+          </div>
+          <button type="button" className="btn" onClick={definirPin}
+            disabled={nouveauPin.length < 4 || !motDePasse}>
+            Enregistrer mon code agent
+          </button>
+        </div>
+      )}
       <button
         className="btn primary lg"
         type="submit"
-        disabled={ouverture || !pdvId || !caisseId || !peutOuvrir}
+        disabled={ouverture || !pdvId || !caisseId || !peutOuvrir || (exigePin && agentPin.length < 4)}
         title={peutOuvrir
           ? undefined
           : 'Ce compte n’a pas le droit d’ouvrir une caisse (caisse.ouvrir). Ce n’est pas une panne : demandez-le à un administrateur.'}
@@ -245,14 +330,23 @@ export default function SessionCaisse({ me, etabActif, session, droits = [], onR
       <button
         className="btn primary lg"
         type="submit"
-        disabled={cloture || !peutCloturer}
-        title={peutCloturer
-          ? undefined
-          : 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'}
+        disabled={cloture || !peutCloturer || horsLigneEnAttente > 0}
+        title={!peutCloturer
+          ? 'Ce compte n’a pas le droit de clôturer une caisse (caisse.cloturer). Ce n’est pas une panne : demandez-le à un administrateur.'
+          : horsLigneEnAttente > 0
+            ? 'Des ventes faites hors connexion attendent d’être remontées : remontez-les depuis la caisse avant le Z.'
+            : undefined}
         style={{ marginTop: 14 }}
       >
         {cloture ? 'Clôture…' : 'Clôturer la journée (Z)'}
       </button>
+      {horsLigneEnAttente > 0 && (
+        <div className="banner banner-warn" role="status">
+          {horsLigneEnAttente} vente(s) faite(s) hors connexion sur ce poste ne sont pas encore
+          remontées. Remontez-les depuis la caisse avant de clôturer : après le Z, elles ne pourraient
+          plus entrer dans cette journée.
+        </div>
+      )}
       <div className="hint">
         Le « Z » est le comptage de fin de journée (terme de caisse NF525). Sans comptage saisi, chaque
         moyen est réputé conforme. La clôture scelle la session (NF525) : elle est irréversible.

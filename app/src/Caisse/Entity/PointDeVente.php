@@ -14,7 +14,9 @@ use App\Caisse\Validator\TerminalSettings;
 use App\Compta\Entity\RegieRecettes;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Nf525\Entity\DailyClosure;
+use App\Vente\Nf525\Entity\PeriodClosure;
 use App\Vente\State\CloseDayProcessor;
+use App\Vente\State\ClosePeriodProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -54,6 +56,30 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('PERM', 'vente.cloture_journaliere')",
             processor: CloseDayProcessor::class,
         ),
+        // #342 — clôtures mensuelle et annuelle, cumulatives (BOI-TVA-DECLA-30-10-30 § 170). Posées sur
+        // le point de vente pour la même raison que l'arrêté de journée : la chaîne est par point de vente.
+        new Post(
+            uriTemplate: '/point_de_ventes/{id}/monthly-closure',
+            description: 'Cloture le mois (#342). Corps : { month?: AAAA-MM }, par defaut le mois precedent. '
+                . 'Exige que chaque journee de ventes du mois soit arretee.',
+            read: true,
+            input: false,
+            output: PeriodClosure::class,
+            normalizationContext: ['groups' => ['period_closure:read']],
+            security: "is_granted('PERM', 'vente.fiscal_closing')",
+            processor: ClosePeriodProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/point_de_ventes/{id}/annual-closure',
+            description: 'Cloture l annee civile (#342). Corps : { year?: AAAA }, par defaut l annee precedente. '
+                . 'Exige que chaque mois arrete de l annee soit cloture.',
+            read: true,
+            input: false,
+            output: PeriodClosure::class,
+            normalizationContext: ['groups' => ['period_closure:read']],
+            security: "is_granted('PERM', 'vente.fiscal_closing')",
+            processor: ClosePeriodProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['pdv:read']],
     denormalizationContext: ['groups' => ['pdv:write']],
@@ -86,7 +112,8 @@ class PointDeVente
      * Le terminal de paiement (US-L2-07 ; spec TPE lot 1 §6) : `{ connecteur, …paramètres }`, nul = le
      * terminal externe (le caissier encaisse sur le terminal du commerce et déclare le résultat).
      * `connecteur` ∈ externe | simule (démonstration) | caisse_ap_pont | nepting | stripe (lots
-     * suivants) ; `marque` et `ref` décrivent le terminal. Avant ce lot : une liste `[{marque, ref}]`,
+     * suivants) ; `marque` et `ref` décrivent le terminal. `caisse_ap_pont` (#340) porte `clePont` (la clé
+     * PUBLIQUE du pont local, base64) et `pont` (son adresse sur le poste, défaut http://127.0.0.1:8765). Avant ce lot : une liste `[{marque, ref}]`,
      * ou le booléen de l'écran Paramètres, gardés sous `terminaux` / `ancien` par la migration.
      *
      * @var array<string, mixed>|null
@@ -137,6 +164,15 @@ class PointDeVente
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['pdv:read', 'pdv:write'])]
     private bool $unBilletParUnite = false;
+
+    /**
+     * Code agent exigé à l'ouverture (#346). Coché : ouvrir une session sur ce guichet demande le code
+     * personnel de l'agent connecté (`AgentPinChecker`), et la session porte `agentPinVerified`.
+     * Faux par défaut : les guichets existants s'ouvrent comme avant tant que personne ne l'active.
+     */
+    #[ORM\Column(name: 'require_agent_pin', options: ['default' => false])]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private bool $requireAgentPin = false;
 
     /**
      * Régie de recettes pour le compte de laquelle ce guichet encaisse (RG-REGIE-02).
@@ -275,6 +311,18 @@ class PointDeVente
     public function setUnBilletParUnite(bool $unBilletParUnite): self
     {
         $this->unBilletParUnite = $unBilletParUnite;
+
+        return $this;
+    }
+
+    public function isRequireAgentPin(): bool
+    {
+        return $this->requireAgentPin;
+    }
+
+    public function setRequireAgentPin(bool $requireAgentPin): self
+    {
+        $this->requireAgentPin = $requireAgentPin;
 
         return $this;
     }

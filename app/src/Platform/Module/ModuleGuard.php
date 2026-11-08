@@ -35,7 +35,9 @@ final class ModuleGuard
      * Personnel à la relecture de la PR 2, même jour). Tout module sans capacité doit y figurer : il ne
      * peut pas être éteint, donc il n'est pas masqué. `ModuleGuardCoverageTest` le vérifie.
      */
-    public const CORE_MODULES = ['dms', 'group', 'membership', 'personnel', 'piscine', 'sport', 'vente', 'website'];
+    // `kiosk` (#341) : la borne automatique de vente vend par le module de vente, sans capacité propre ;
+    // en faire une option à activer est une décision commerciale laissée à Maxime (PR #341).
+    public const CORE_MODULES = ['dms', 'group', 'kiosk', 'membership', 'personnel', 'piscine', 'sport', 'vente', 'website'];
 
     /**
      * Les capacités du cœur qui n'ont pas de manifeste (spec du recentrage, « Cœur » : Compta, Stock,

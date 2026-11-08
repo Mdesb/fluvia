@@ -57,6 +57,8 @@ api_platform:
             # #[ApiFilter] sont DECLARES ET MUETS : `?group=`, `?type=`, `?status=` sortiraient la
             # collection entiere. Le dossier existe dans le meme commit que cette ligne.
             - '%kernel.project_dir%/src/Group/Entity'
+            # Borne automatique de vente (#341). Le dossier existe dans le MEME commit que cette ligne.
+            - '%kernel.project_dir%/src/Kiosk/Entity'
             # Module « connecteurs » (06/09). Le dossier existe dans le MEME commit que cette ligne :
             # posee avant, elle fait echouer la construction du conteneur ; posee apres, le module
             # reste invisible de l'API sans que rien ne le signale.
@@ -95,6 +97,9 @@ api_platform:
             - '%kernel.project_dir%/src/Acces/ApiResource'
             - '%kernel.project_dir%/src/Compta/Entity'
             - '%kernel.project_dir%/src/Crm/Entity'
+            # Épuration, conservation et export des données personnelles (#344). Le dossier existe
+            # dans le MÊME commit que cette ligne (C9 : la liste est fail-hard).
+            - '%kernel.project_dir%/src/Crm/ApiResource'
             - '%kernel.project_dir%/src/Piscine/Entity'
             - '%kernel.project_dir%/src/Piscine/ApiResource'
             # Le bloc abonnement a quitté Sport le 10/09 (lot 1). Sport ne garde que SOS,

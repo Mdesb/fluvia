@@ -20,6 +20,8 @@ use App\Vente\Entity\CardRejection;
 use App\Vente\Nf525\Entity\OperationScellee;
 use App\Vente\Entity\Vente;
 use App\Vente\Nf525\Entity\DailyClosure;
+use App\Vente\Nf525\Entity\FiscalArchive;
+use App\Vente\Nf525\Entity\PeriodClosure;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -53,6 +55,10 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         // d'affaires jour par jour.
         CardRejection::class => '{root}.etablissement',
         DailyClosure::class => '{root}.etablissement',
+        // #342/#343 — ajoutées dans le commit qui les crée, pas trois jours après : les clôtures de
+        // période sont le chiffre d'affaires mensuel d'un établissement, l'archive en est l'année.
+        PeriodClosure::class => '{root}.etablissement',
+        FiscalArchive::class => '{root}.etablissement',
 
         // ⚠ AJOUTEE LE 31/08 : LE TROISIEME OUBLI DE CETTE MEME LISTE, ET LE PLUS GRAVE.
         //

@@ -469,6 +469,18 @@ export const api = {
   controlerBillet: (identifiantSupport) =>
     request('/api/acces/controle-billet', { method: 'POST', body: { identifiantSupport } }),
 
+  // HORS CONNEXION (#338). La liste locale du contrôle manuel : des EMPREINTES salées, jamais un code
+  // de billet en clair ; `query` porte `page` et, à partir de la deuxième, le `sel` de la première.
+  listeControleHorsLigne: (query) =>
+    request('/api/acces/controle-billet/liste-locale', { query }),
+  // La remontée des contrôles faits pendant la coupure. Pas de `ld: true` : `input: false`.
+  remonterControlesHorsLigne: (corps) =>
+    request('/api/acces/controle-billet/lot', { method: 'POST', body: corps }),
+  // La remontée des ventes faites pendant la coupure (rejeu, anti-doublon, scellement à l'arrivée).
+  // Pas de `ld: true` : l'opération est `input: false`, elle lit le corps elle-même.
+  synchroOperations: (corps) =>
+    request('/api/synchro/operations', { method: 'POST', body: corps, timeoutMs: 60000 }),
+
   // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
   // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
   // le vide, et l'enregistrement reussissait.
@@ -631,8 +643,26 @@ export const api = {
     request('/api/factures/depuis-vente', { method: 'POST', body: { vente: venteId } }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
+  // #342/#343 — clôtures mensuelle et annuelle (par point de vente), archive fiscale annuelle.
+  cloturesPeriode: () => request('/api/period_closures', { query: { itemsPerPage: 100 } }),
+  cloturerMois: (pdvId, mois) =>
+    request(`/api/point_de_ventes/${pdvId}/monthly-closure`, { method: 'POST', body: { month: mois } }),
+  cloturerAnnee: (pdvId, annee) =>
+    request(`/api/point_de_ventes/${pdvId}/annual-closure`, { method: 'POST', body: { year: Number(annee) } }),
+  archivesFiscales: () => request('/api/fiscal_archives', { query: { itemsPerPage: 50 } }),
+  creerArchiveFiscale: (annee) =>
+    request('/api/fiscal_archives', { method: 'POST', body: { year: Number(annee) } }),
+  telechargerArchiveFiscale: (id) => request(`/api/fiscal_archives/${id}/download`),
+  verifierArchiveFiscale: (id) => request(`/api/fiscal_archives/${id}/verify`, { method: 'POST', body: {} }),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
+  // Bornes automatiques de vente (#341) — le réglage par le personnel. L'appareil, lui, a son propre
+  // client (`kiosk/kioskApi.js`) et son propre jeton.
+  kiosks: () => request('/api/kiosks'),
+  createKiosk: (corps) => request('/api/kiosks', { method: 'POST', body: corps, ld: true }),
+  updateKiosk: (id, corps) => request(`/api/kiosks/${id}`, { method: 'PATCH', body: corps }),
+  kioskPairingCode: (id) => request(`/api/kiosks/${id}/pairing-code`, { method: 'POST' }),
+  unpairKiosk: (id) => request(`/api/kiosks/${id}/unpair`, { method: 'POST' }),
   caisses: () => request('/api/caisses'),
   // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
   //
@@ -690,6 +720,9 @@ export const api = {
   // L'attente du terminal (spec TPE lot 1) : la tentative scrutée, et « Annuler ».
   reglementTerminal: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/reglement-terminal`, { query: tentativeId ? { tentative: tentativeId } : undefined, timeoutMs: 10000 }),
+  // #340 — l'issue signée du pont local (`api/localBridge.js`), relayée telle quelle.
+  issuePont: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/issue-pont`, { method: 'POST', body: corps, timeoutMs: 20000 }),
   annulerReglement: (venteId, tentativeId) =>
     request(`/api/ventes/${venteId}/annuler-reglement`, { method: 'POST', body: { tentative: tentativeId }, timeoutMs: 20000 }),
   annulerVente: (venteId, motif) =>
@@ -791,6 +824,13 @@ export const api = {
   creerDemandeRgpd: (corps) =>
     request('/api/demande_rgpds', { method: 'POST', body: corps, ld: true }),
   traiterDemandeRgpd: (id) => request('/api/demandes-rgpd/' + id + '/traiter', { method: 'POST' }),
+  // Épuration, durée de conservation et export (#344). Toujours sur la collectivité de
+  // l'établissement actif : le serveur la déduit de l'en-tête, aucune de ces routes ne la reçoit.
+  apercuEpuration: (criteres) => request('/api/rgpd/purge/preview', { method: 'POST', body: criteres }),
+  epurer: (corps) => request('/api/rgpd/purge', { method: 'POST', body: corps }),
+  regleConservation: () => request('/api/rgpd/retention-rule'),
+  fixerConservation: (mois) => request('/api/rgpd/retention-rule', { method: 'POST', body: { months: mois } }),
+  exportDonneesPersonnelles: (clientId) => request('/api/clients/' + clientId + '/personal-data-export'),
 
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
@@ -1494,6 +1534,13 @@ export const api = {
   mfaReinitialiser: (id) =>
     request(`/api/utilisateurs/${id}/mfa/reinitialiser`, { method: 'POST', body: {} }),
 
+  // Code agent de caisse (#346) : le titulaire le definit avec le mot de passe de son compte ; un
+  // administrateur l'efface (oubli, ou blocage apres cinq erreurs). Le serveur ne rend jamais le code.
+  definirCodeAgent: (id, motDePasse, pin) =>
+    request(`/api/utilisateurs/${id}/cash-pin`, { method: 'POST', body: { motDePasse, pin } }),
+  effacerCodeAgent: (id) =>
+    request(`/api/utilisateurs/${id}/cash-pin/reset`, { method: 'POST', body: {} }),
+
   // ⚠ LE SECOND FACTEUR A LA CONNEXION S'AUTHENTIFIE AVEC LE JETON PRE-AUTH, PAS AVEC CELUI DU
   // STOCKAGE — qui n'existe pas encore a ce stade. D'ou `auth: false` et l'en-tete pose a la main :
   // sans cela, `request` ecraserait l'`Authorization` par le jeton courant, absent, et le serveur
@@ -2040,6 +2087,12 @@ export const api = {
     request('/api/profil_exploitants', { method: 'POST', body: corps, ld: true }),
   majProfilExploitant: (id, corps) =>
     request(`/api/profil_exploitants/${id}`, { method: 'PATCH', body: corps }),
+  // Le logo imprime en tete de la facture PDF (#345) -- multipart, meme idiome que le logo de vitrine.
+  televerserLogoFacturation: (id, fichier) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    return request(`/api/profil_exploitants/${id}/logo`, { method: 'POST', formData: corps })
+  },
   periodesComptables: () =>
     request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
   exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),

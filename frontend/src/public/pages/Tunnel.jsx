@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { boutique, clientTokenStore, panierStore } from '../api/boutiqueClient.js'
+import { boutique, clientTokenStore, panierStore, paiementEnCoursStore } from '../api/boutiqueClient.js'
 import { libelleProduit, libelleCreneau, iriId, eurosCentimes, euros } from '../lib/format.js'
 import { Etapes, Erreur, Chargement } from '../components/Etats.jsx'
 import Markdown from '../components/Markdown.jsx'
@@ -471,6 +471,26 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) 
     }
   }
 
+  // #339 — UN VRAI PRESTATAIRE NE REND PAS DE REÇUS : l'acheteur part payer chez lui (PayFiP, banque)
+  // et revient sur `/b/<vitrine>/retour-paiement`. On note avant de partir ce qu'il faudra vérifier au
+  // retour. La page de paiement refuse souvent d'être affichée dans un cadre : depuis une boutique
+  // intégrée en iframe, on emmène la fenêtre entière quand le navigateur le permet.
+  const prestataireReel = !!resultat && !resultat.simulation && !!resultat.urlRedirection
+  function partirPayer() {
+    paiementEnCoursStore.set({
+      panierId: panier?.id,
+      panierToken: panierStore.getToken(),
+      reference: resultat.referenceTransaction,
+      moyen: resultat.moyen,
+    })
+    setPhase('traitement')
+    try {
+      window.top.location.assign(resultat.urlRedirection)
+    } catch {
+      window.location.assign(resultat.urlRedirection)
+    }
+  }
+
   if (phase === 'init') return <Chargement texte="Préparation du paiement…" />
 
   if (phase === 'echec' && !resultat) {
@@ -504,11 +524,20 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) 
           <strong>{eurosCentimes(resultat?.montantCentimes)}</strong>
         </div>
 
-        <div className="demo-note" style={{ marginTop: 14 }}>
-          ⓘ Environnement de démonstration — le prestataire de paiement est simulé.
-        </div>
+        {prestataireReel ? (
+          <p className="hint" style={{ marginTop: 14 }}>
+            {resultat?.moyen === 'payfip'
+              ? 'Vous allez être dirigé vers PayFiP, le service de paiement sécurisé de la Direction générale des Finances publiques.'
+              : 'Vous allez être dirigé vers la page de paiement sécurisée de notre prestataire bancaire.'}{' '}
+            Revenez ensuite sur cette page : vos billets s'afficheront dès la confirmation.
+          </p>
+        ) : (
+          <div className="demo-note" style={{ marginTop: 14 }}>
+            ⓘ Environnement de démonstration — le prestataire de paiement est simulé.
+          </div>
+        )}
 
-        {resultat?.urlRedirection && (
+        {!prestataireReel && resultat?.urlRedirection && (
           <p className="hint" style={{ wordBreak: 'break-all' }}>
             Redirection prestataire : <span className="mono">{resultat.urlRedirection}</span>
           </p>
@@ -522,7 +551,13 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) 
         <Erreur message={erreur} />
 
         {phase === 'traitement' ? (
-          <Chargement texte="Traitement du paiement…" />
+          <Chargement texte={prestataireReel ? 'Redirection vers la page de paiement…' : 'Traitement du paiement…'} />
+        ) : prestataireReel ? (
+          <div className="bq-etape-actions" style={{ marginTop: 16 }}>
+            <button type="button" className="btn primary lg" onClick={partirPayer}>
+              Payer {eurosCentimes(resultat?.montantCentimes)}
+            </button>
+          </div>
         ) : (
           <div className="bq-etape-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn primary lg" onClick={() => retour('accepte')}>
@@ -539,7 +574,7 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme, onRetour }) 
 }
 
 /* ----------------------------- Étape 3 : confirmation ----------------------------- */
-function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
+export function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
   const [billets, setBillets] = useState(null)
   const [chargement, setChargement] = useState(!!infoBillets?.panierId)
   const conflit = resultat?.retour?.statut === 'conflit_inventaire'

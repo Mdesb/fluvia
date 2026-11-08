@@ -24,6 +24,9 @@ import { Suspense, lazy } from 'react'
 const App = lazy(() => import('./App.jsx'))
 const PublicApp = lazy(() => import('./public/PublicApp.jsx'))
 const EditeurApp = lazy(() => import('./editeur/EditeurApp.jsx'))
+// La BORNE automatique de vente (#341) : un quatrième public, l'usager seul devant un écran
+// verrouillé. Sa branche ne contient ni le back-office ni son client d'API — rien à quoi sortir.
+const KioskApp = lazy(() => import('./kiosk/KioskApp.jsx'))
 
 function brancheDe(chemin) {
   // `/b/<nom-de-la-boutique>` — l'adresse qu'on donne a un client.
@@ -34,6 +37,7 @@ function brancheDe(chemin) {
   if (chemin === '/b' || chemin.startsWith('/b/')) return 'vitrine'
   if (chemin === '/vitrine' || chemin.startsWith('/vitrine/')) return 'vitrine'
   if (chemin === '/editeur' || chemin.startsWith('/editeur/')) return 'editeur'
+  if (chemin === '/borne' || chemin.startsWith('/borne/')) return 'borne'
   return 'staff'
 }
 
@@ -45,6 +49,7 @@ export default function Root() {
     <Suspense fallback={<div className="center" style={{ minHeight: '100vh' }}><div className="spinner" /></div>}>
       {branche === 'vitrine' && <PublicApp />}
       {branche === 'editeur' && <EditeurApp />}
+      {branche === 'borne' && <KioskApp />}
       {branche === 'staff' && <App />}
     </Suspense>
   )

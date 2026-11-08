@@ -24,6 +24,7 @@ import { aLeDroit } from '../api/droits.js'
 import { moduleAllowsSubtab } from '../components/moduleMenu.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
+import KioskSettings from '../components/KioskSettings.jsx'
 
 const SOUS = [
   ['entites', 'Établissement & entités'],
@@ -453,6 +454,13 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
         aide: 'Coché : vendre 3 entrées imprime 3 billets séparés, chacun avec son propre QR code. '
           + 'Décoché : un seul billet « 3 × Entrée », avec le QR du premier.',
       },
+      {
+        nom: 'requireAgentPin',
+        libelle: 'Code agent exigé à l’ouverture',
+        type: 'bool',
+        aide: 'Coché : chaque agent saisit son code personnel pour ouvrir la caisse, et la session '
+          + 'le mentionne. L’agent définit son code depuis l’écran d’ouverture de caisse.',
+      },
       // LE TERMINAL DE PAIEMENT EST UN RÉGLAGE, PLUS UNE CASE (spec TPE lot 1 §6).
       //
       // Le serveur attend `{ connecteur, marque?, ref? }` ; la case « un terminal est rattaché »
@@ -465,7 +473,33 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
         options: CONNECTEURS_TPE,
         versValeur: (r) => r.tpe?.connecteur || 'externe',
         aide: 'Externe : le caissier encaisse sur le terminal du guichet, puis indique le résultat '
-          + '(accepté, refusé, annulé) dans la caisse. Le terminal simulé ne sert qu’aux démonstrations.',
+          + '(accepté, refusé, annulé) dans la caisse. Relié (Caisse-AP) : le montant part tout seul au '
+          + 'terminal et le résultat revient sans ressaisie ; il faut le pont de caisse installé sur le poste. '
+          + 'Le terminal simulé ne sert qu’aux démonstrations.',
+      },
+      {
+        nom: 'tpeClePont',
+        libelle: 'Clé du pont de caisse (terminal relié)',
+        type: 'text',
+        exemple: 'Affichée par « fluvia-bridge init » sur le poste',
+        versValeur: (r) => r.tpe?.clePont || '',
+        aide: 'La clé publique du pont installé sur ce poste : Fluvia n’accepte que les résultats '
+          + 'signés par ce pont. Obligatoire pour un terminal relié.',
+      },
+      {
+        nom: 'tpePont',
+        libelle: 'Adresse du pont (facultatif)',
+        type: 'text',
+        exemple: 'http://127.0.0.1:8765',
+        versValeur: (r) => r.tpe?.pont || '',
+      },
+      {
+        nom: 'tpeTiroir',
+        libelle: 'Ouvrir le tiroir-caisse après un encaissement en espèces',
+        type: 'bool',
+        defaut: false,
+        versValeur: (r) => r.tpe?.tiroir === true,
+        aide: 'Le pont de caisse envoie l’ordre d’ouverture à l’imprimante ticket, à laquelle le tiroir est branché.',
       },
       {
         nom: 'tpeMarque',
@@ -829,6 +863,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
+          <KioskSettings etabActif={etabActif} droits={droits} />
           <MoyensPaiement etabActif={etabActif} params={params} majParams={majParams} />
           {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
               Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,
@@ -1765,6 +1800,18 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
                             title="Efface la double authentification de ce compte : il pourra se reconnecter avec son seul mot de passe, puis la réactiver."
                           >
                             Réinitialiser le MFA
+                          </button>
+                        )}
+                        {/* Code agent de caisse (#346) : oublié, ou bloqué après cinq erreurs. Effacé,
+                            l'agent en redéfinit un depuis l'écran d'ouverture de caisse. */}
+                        {u.cashPinDefined && aLeDroit(droits, 'securite.gerer') && (
+                          <button
+                            className="btn ghost sm"
+                            disabled={busy === u.id + 'effacer le code agent'}
+                            onClick={() => action(api.effacerCodeAgent, u.id, 'effacer le code agent')}
+                            title="Efface le code agent de caisse de ce compte (oublié ou bloqué) : l’agent en redéfinira un à l’ouverture de caisse."
+                          >
+                            Effacer le code agent
                           </button>
                         )}
                       </div>
