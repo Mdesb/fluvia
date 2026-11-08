@@ -24,10 +24,15 @@ use Doctrine\Migrations\AbstractMigration;
  *   rôle : seul l'administrateur la détient par le joker `vente.*`, la déléguer est une décision
  *   explicite.
  *
+ * ⚠ RENOMMÉE À L'INTÉGRATION (08/11/2026, UTC) : elle s'appelait Version20261105130000, le même nom que
+ *   la migration du logo de facture (#357), fusionnée avant elle. Doctrine identifie une migration par
+ *   son nom de classe : sur une base où le logo est déjà joué, celle-ci aurait été tenue pour jouée et
+ *   ses trois tables n'auraient jamais été créées.
+ *
  * Aucune reprise : les tables naissent vides. Une clôture est un geste daté et signé ; en fabriquer
  * pour le passé écrirait des faits qui n'ont pas eu lieu.
  */
-final class Version20261105130000 extends AbstractMigration
+final class Version20261108160000 extends AbstractMigration
 {
     private const PERMISSIONS = ['fiscal_closing'];
 
