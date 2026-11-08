@@ -656,6 +656,13 @@ export const api = {
   verifierArchiveFiscale: (id) => request(`/api/fiscal_archives/${id}/verify`, { method: 'POST', body: {} }),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
+  // Bornes automatiques de vente (#341) — le réglage par le personnel. L'appareil, lui, a son propre
+  // client (`kiosk/kioskApi.js`) et son propre jeton.
+  kiosks: () => request('/api/kiosks'),
+  createKiosk: (corps) => request('/api/kiosks', { method: 'POST', body: corps, ld: true }),
+  updateKiosk: (id, corps) => request(`/api/kiosks/${id}`, { method: 'PATCH', body: corps }),
+  kioskPairingCode: (id) => request(`/api/kiosks/${id}/pairing-code`, { method: 'POST' }),
+  unpairKiosk: (id) => request(`/api/kiosks/${id}/unpair`, { method: 'POST' }),
   caisses: () => request('/api/caisses'),
   // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
   //

@@ -1696,6 +1696,67 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   .cree-recap > div { grid-template-columns: 1fr; gap: 0; }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+   BORNE AUTOMATIQUE DE VENTE (#341) — `src/kiosk/KioskApp.jsx`, servie sous `/borne`.
+
+   Un écran tactile vu debout, à bout de bras, par quelqu'un qui n'a personne à qui demander : des
+   cibles de 72 px au moins (au-dela des 44 px du critere 2.5.5 « taille de cible, renforcee » des WCAG 2.2, recommandation W3C du 05/10/2023), un texte d'au moins 20 px, une
+   décision par écran. Les couleurs sont les jetons du produit : la borne suit le thème et la marque
+   blanche comme le reste.
+   ───────────────────────────────────────────────────────────────────────────────────────────── */
+.kiosk { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-size: 20px; overflow: auto; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.kiosk-center { align-items: center; justify-content: center; text-align: center; }
+.kiosk-head { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-section); padding: var(--esp-bloc) var(--esp-section); background: var(--panel); border-bottom: 1px solid var(--line); }
+.kiosk-brand { font-weight: 800; font-size: 22px; }
+.kiosk-steps { display: flex; gap: var(--esp-section); margin: 0; padding: 0; list-style: none; color: var(--ink-faint); font-weight: 600; }
+.kiosk-steps li.on { color: var(--accent); }
+.kiosk-steps li.done { color: var(--good); }
+.kiosk-step-n { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; border: 2px solid currentColor; }
+.kiosk-body { flex: 1; display: flex; flex-direction: column; gap: var(--esp-section); padding: var(--esp-section); }
+.kiosk-title { font-size: 40px; margin: 0; letter-spacing: -.02em; }
+.kiosk-h2 { font-size: 28px; margin: 0; }
+.kiosk-lead { font-size: 22px; color: var(--ink-soft); margin: 0; max-width: 720px; }
+.kiosk-home { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--esp-section); margin-top: var(--esp-section); }
+.kiosk-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--esp-bloc); width: 320px; min-height: 240px; border-radius: 24px; border: 2px solid var(--accent); background: var(--panel); color: var(--ink); font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow); }
+.kiosk-choice:disabled { opacity: .5; }
+.kiosk-choice-icon { font-size: 64px; }
+.kiosk-offers { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--esp-bloc); }
+.kiosk-offer { display: flex; flex-direction: column; gap: var(--esp-normal); padding: var(--esp-section); border-radius: 18px; border: 2px solid var(--line); background: var(--panel); }
+.kiosk-offer.on { border-color: var(--accent); background: var(--accent-soft); }
+.kiosk-offer-name { font-size: 24px; font-weight: 700; }
+.kiosk-offer-tariff { color: var(--ink-soft); }
+.kiosk-offer-price { font-size: 30px; font-weight: 800; }
+.kiosk-qty { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-bloc); }
+.kiosk-qty-btn { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); background: var(--panel); color: var(--accent); font-size: 40px; font-weight: 700; cursor: pointer; }
+.kiosk-qty-btn:disabled { opacity: .35; }
+.kiosk-qty-n { font-size: 34px; font-weight: 800; min-width: 48px; text-align: center; }
+.kiosk-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--esp-bloc); margin-top: auto; }
+.kiosk-btn { min-height: 72px; padding: 0 var(--esp-section); border-radius: 16px; border: 2px solid var(--accent); background: var(--panel); color: var(--accent); font-size: 22px; font-weight: 700; cursor: pointer; }
+.kiosk-btn.primary { background: var(--accent); color: var(--sur-accent); }
+.kiosk-btn.big { min-height: 88px; font-size: 28px; min-width: 320px; }
+.kiosk-btn.danger { border-color: var(--crit); color: var(--crit); }
+.kiosk-btn:disabled { opacity: .45; cursor: default; }
+.kiosk-input { min-height: 72px; padding: 0 var(--esp-bloc); border-radius: 14px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font-size: 28px; letter-spacing: .08em; text-align: center; user-select: text; -webkit-user-select: text; }
+.kiosk-card-reader { display: flex; flex-direction: column; gap: var(--esp-bloc); align-items: center; }
+.kiosk-ok { color: var(--good); font-weight: 700; }
+.kiosk-alert { padding: var(--esp-bloc) var(--esp-section); border-radius: 14px; background: var(--crit-bg); color: var(--crit); font-weight: 600; }
+.kiosk-warn { padding: var(--esp-bloc) var(--esp-section); border-radius: 14px; background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.kiosk-ref { font-size: 26px; font-weight: 800; }
+.kiosk-amount { font-size: 56px; font-weight: 800; }
+.kiosk-done { width: 120px; height: 120px; border-radius: 50%; background: var(--good-bg); color: var(--good); font-size: 72px; display: flex; align-items: center; justify-content: center; }
+.kiosk-pairing { align-items: center; justify-content: center; gap: var(--esp-section); padding: var(--esp-section); text-align: center; }
+.kiosk-pair-form { display: flex; flex-direction: column; gap: var(--esp-bloc); width: min(480px, 100%); }
+/* Le coin du personnel : invisible, assez grand pour un pouce, au-dessus de tout. */
+.kiosk-staff-corner { position: fixed; top: 0; left: 0; width: 72px; height: 72px; z-index: 30; }
+.kiosk-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(5, 9, 20, .6); }
+.kiosk-panel { display: flex; flex-direction: column; gap: var(--esp-bloc); width: min(420px, 92vw); padding: var(--esp-section); border-radius: 20px; background: var(--panel); text-align: center; }
+.kiosk-code { font-size: 36px; letter-spacing: .3em; min-height: 44px; }
+.kiosk-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--esp-normal); }
+.kiosk-key { min-height: 72px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-size: 28px; font-weight: 700; cursor: pointer; }
+.kiosk-maintenance { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: flex; align-items: center; justify-content: center; gap: var(--esp-bloc); padding: var(--esp-bloc); background: var(--warn-bg); color: var(--warn); font-weight: 700; }
+/* Le papier existe hors écran : `printThermal` le recopie seul sur le rouleau. */
+.kiosk-paper { position: absolute; left: -10000px; top: 0; width: 80mm; }
+
 /* Reprise des soldes de cartes (#348) : le total annoncé, à côté du choix du type. */
 .import-total { width: 200px; }
 

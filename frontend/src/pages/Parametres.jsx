@@ -24,6 +24,7 @@ import { aLeDroit } from '../api/droits.js'
 import { moduleAllowsSubtab } from '../components/moduleMenu.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
+import KioskSettings from '../components/KioskSettings.jsx'
 
 const SOUS = [
   ['entites', 'Établissement & entités'],
@@ -862,6 +863,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
+          <KioskSettings etabActif={etabActif} droits={droits} />
           <MoyensPaiement etabActif={etabActif} params={params} majParams={majParams} />
           {/* ⚠ VENU DE NULLE PART, ET C'EST LA DIFFERENCE AVEC LES CORRESPONDANCES COMPTABLES.
               Celles-ci ont ete DEPLACEES depuis l'ecran Comptabilite ; une regie de recettes,

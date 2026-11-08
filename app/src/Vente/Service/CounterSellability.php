@@ -54,8 +54,11 @@ final readonly class CounterSellability
             : $produit->getEtablissements()->isEmpty();
     }
 
-    /** Le motif du refus si ce produit n'est pas en vente au guichet ; `null` sinon. */
-    public function offerRefusal(Produit $produit): ?string
+    /**
+     * Le motif du refus si ce produit n'est pas en vente sur ce canal (le guichet par défaut, la borne
+     * pour `App\Kiosk`) ; `null` sinon.
+     */
+    public function offerRefusal(Produit $produit, Canal $canal = Canal::Guichet): ?string
     {
         // `match` sans `default` : un statut ajouté demain devra dire ici s'il se vend.
         $motifStatut = match ($produit->getStatut()) {
@@ -67,8 +70,10 @@ final readonly class CounterSellability
             return $motifStatut;
         }
 
-        if (!$produit->aCanal(Canal::Guichet)) {
-            return 'Ce produit n\'est pas vendu au guichet. Ajoutez le canal « guichet » dans sa fiche pour le vendre en caisse.';
+        if (!$produit->aCanal($canal)) {
+            return $canal === Canal::Guichet
+                ? 'Ce produit n\'est pas vendu au guichet. Ajoutez le canal « guichet » dans sa fiche pour le vendre en caisse.'
+                : sprintf('Ce produit n\'est pas proposé sur le canal « %s ». Ajoutez ce canal dans sa fiche pour le vendre.', $canal->value);
         }
 
         return null;
