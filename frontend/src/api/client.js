@@ -1494,6 +1494,13 @@ export const api = {
   mfaReinitialiser: (id) =>
     request(`/api/utilisateurs/${id}/mfa/reinitialiser`, { method: 'POST', body: {} }),
 
+  // Code agent de caisse (#346) : le titulaire le definit avec le mot de passe de son compte ; un
+  // administrateur l'efface (oubli, ou blocage apres cinq erreurs). Le serveur ne rend jamais le code.
+  definirCodeAgent: (id, motDePasse, pin) =>
+    request(`/api/utilisateurs/${id}/cash-pin`, { method: 'POST', body: { motDePasse, pin } }),
+  effacerCodeAgent: (id) =>
+    request(`/api/utilisateurs/${id}/cash-pin/reset`, { method: 'POST', body: {} }),
+
   // ⚠ LE SECOND FACTEUR A LA CONNEXION S'AUTHENTIFIE AVEC LE JETON PRE-AUTH, PAS AVEC CELUI DU
   // STOCKAGE — qui n'existe pas encore a ce stade. D'ou `auth: false` et l'en-tete pose a la main :
   // sans cela, `request` ecraserait l'`Authorization` par le jeton courant, absent, et le serveur
