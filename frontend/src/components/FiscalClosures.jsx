@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { idDe } from '../api/iri.js'
+import { CANCELLED, closePeriod } from '../api/periodClosing.js'
+import { confirmer } from './Confirmation.jsx'
 import { dateFr, euroCentimes } from './Liste.jsx'
 
 // CLÔTURES MENSUELLE ET ANNUELLE, ARCHIVE FISCALE (#342, #343).
@@ -81,7 +83,8 @@ export default function FiscalClosures({ etabActif, droits = [] }) {
     setErreur(null)
     setSucces(null)
     try {
-      await geste()
+      // Un non à la modale de confirmation (#362) : rien n'a été envoyé, rien à annoncer.
+      if ((await geste()) === CANCELLED) return
       setSucces(message)
       charger()
     } catch (e) {
@@ -114,6 +117,16 @@ export default function FiscalClosures({ etabActif, droits = [] }) {
     } catch (e) {
       setErreur(e.message || 'Le téléchargement a échoué.')
     }
+  }
+
+  // #362 : une clôture est définitive, le bouton ne part donc qu'après la modale commune.
+  function clore(kind) {
+    const period = kind === 'annual' ? annee : mois
+    const pointOfSaleLabel = points.find((p) => String(p.id) === String(pdv))?.libelle || ''
+    return agir(
+      () => closePeriod({ kind, period, pointOfSaleId: pdv, pointOfSaleLabel }, { confirm: confirmer, api }),
+      kind === 'annual' ? `Année ${period} close et scellée.` : `Mois ${period} clos et scellé.`,
+    )
   }
 
   const libellePdv = (reference) => {
@@ -152,7 +165,7 @@ export default function FiscalClosures({ etabActif, droits = [] }) {
                   type="button"
                   className="btn primary"
                   disabled={busy || !pdv || !mois}
-                  onClick={() => agir(() => api.cloturerMois(pdv, mois), `Mois ${mois} clos et scellé.`)}
+                  onClick={() => clore('monthly')}
                 >
                   Clore le mois
                 </button>
@@ -163,7 +176,7 @@ export default function FiscalClosures({ etabActif, droits = [] }) {
                   type="button"
                   className="btn"
                   disabled={busy || !pdv || !annee}
-                  onClick={() => agir(() => api.cloturerAnnee(pdv, annee), `Année ${annee} close et scellée.`)}
+                  onClick={() => clore('annual')}
                 >
                   Clore l’année
                 </button>
