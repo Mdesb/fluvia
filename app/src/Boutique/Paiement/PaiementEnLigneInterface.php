@@ -16,7 +16,7 @@ interface PaiementEnLigneInterface
     /** Discriminant d'enregistrement — lu uniquement par le Sélecteur. */
     public function cle(): \App\Compta\Enum\TypeExploitant;
 
-    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour): InitiationPaiementEnLigne;
+    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour, ?OnlinePaymentContext $context = null): InitiationPaiementEnLigne;
 
     /**
      * Le résultat VÉRIFIÉ d'un retour de paiement — ou `null` quand rien ne l'atteste.
@@ -26,6 +26,10 @@ interface PaiementEnLigneInterface
      * `{"statut":"accepte"}` confirmait la commande. Le contrat dit désormais ce qu'un adaptateur DOIT
      * faire : vérifier — une signature du prestataire, ou un appel serveur à serveur sur la référence —
      * et rendre `null` s'il ne peut pas. Le processeur refuse alors (422), il ne devine jamais.
+     *
+     * `StatutTPE::Timeout` veut dire « le prestataire ne connaît pas encore l'issue » (PayFiP : code P5 ;
+     * Stripe : session encore ouverte). Ce n'est PAS un échec : l'acheteur a peut-être payé, lui proposer
+     * de recommencer l'exposerait à payer deux fois (#339). Le processeur le rend « en_attente ».
      *
      * `$montantAttenduCentimes` est le montant mémorisé à l'initiation : un adaptateur qui signe le
      * montant le vérifie ici ; le processeur le revérifie de toute façon sur le résultat rendu.

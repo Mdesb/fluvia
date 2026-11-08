@@ -12,6 +12,7 @@ import Panier from './pages/Panier.jsx'
 import Tunnel from './pages/Tunnel.jsx'
 import MonCompte from './pages/MonCompte.jsx'
 import VerificationEmail from './pages/VerificationEmail.jsx'
+import PaymentReturn from './pages/PaymentReturn.jsx'
 import { HoteConfirmation } from '../components/Confirmation.jsx'
 
 // Racine de la ZONE PUBLIQUE (front client final), totalement indépendante de l'app staff :
@@ -78,6 +79,20 @@ export default function PublicApp() {
     params.delete('jeton')
     const reste = params.toString()
     window.history.replaceState({}, '', window.location.pathname + (reste ? '?' + reste : ''))
+  }, [])
+
+  // #339 — RETOUR DU PRESTATAIRE DE PAIEMENT. PayFiP et Stripe renvoient l'acheteur sur
+  // `/b/<vitrine>/retour-paiement`, complété de `?idop=…` ou `?session_id=…`. Même règle que le jeton
+  // ci-dessus : on lit, on route, et on nettoie la barre d'adresse (la référence n'a rien à faire dans
+  // l'historique). Le chemin redevient celui de la vitrine.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const chemin = window.location.pathname || ''
+    if (!/\/retour-paiement\/?$/.test(chemin)) return
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get('idop') || params.get('idOp') || params.get('session_id') || null
+    setRoute({ vue: 'retour-paiement', reference, annule: params.get('annule') === '1' })
+    window.history.replaceState({}, '', chemin.replace(/\/retour-paiement\/?$/, '') || '/')
   }, [])
 
   const onNaviguer = useCallback((r) => {
@@ -378,6 +393,14 @@ export default function PublicApp() {
         <PageLegale
           etablissementId={catalogue?.etablissement}
           slug={route.slug}
+          onNaviguer={onNaviguer}
+        />
+      ) : route.vue === 'retour-paiement' ? (
+        <PaymentReturn
+          reference={route.reference}
+          annule={route.annule}
+          connecte={connecte}
+          onCommandeConfirmee={commandeConfirmee}
           onNaviguer={onNaviguer}
         />
       ) : route.vue === 'verification-email' ? (
