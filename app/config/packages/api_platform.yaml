@@ -95,6 +95,9 @@ api_platform:
             - '%kernel.project_dir%/src/Acces/ApiResource'
             - '%kernel.project_dir%/src/Compta/Entity'
             - '%kernel.project_dir%/src/Crm/Entity'
+            # Épuration, conservation et export des données personnelles (#344). Le dossier existe
+            # dans le MÊME commit que cette ligne (C9 : la liste est fail-hard).
+            - '%kernel.project_dir%/src/Crm/ApiResource'
             - '%kernel.project_dir%/src/Piscine/Entity'
             - '%kernel.project_dir%/src/Piscine/ApiResource'
             # Le bloc abonnement a quitté Sport le 10/09 (lot 1). Sport ne garde que SOS,

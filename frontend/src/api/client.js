@@ -802,6 +802,13 @@ export const api = {
   creerDemandeRgpd: (corps) =>
     request('/api/demande_rgpds', { method: 'POST', body: corps, ld: true }),
   traiterDemandeRgpd: (id) => request('/api/demandes-rgpd/' + id + '/traiter', { method: 'POST' }),
+  // Épuration, durée de conservation et export (#344). Toujours sur la collectivité de
+  // l'établissement actif : le serveur la déduit de l'en-tête, aucune de ces routes ne la reçoit.
+  apercuEpuration: (criteres) => request('/api/rgpd/purge/preview', { method: 'POST', body: criteres }),
+  epurer: (corps) => request('/api/rgpd/purge', { method: 'POST', body: corps }),
+  regleConservation: () => request('/api/rgpd/retention-rule'),
+  fixerConservation: (mois) => request('/api/rgpd/retention-rule', { method: 'POST', body: { months: mois } }),
+  exportDonneesPersonnelles: (clientId) => request('/api/clients/' + clientId + '/personal-data-export'),
 
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.

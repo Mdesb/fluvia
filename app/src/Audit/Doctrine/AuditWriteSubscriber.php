@@ -174,6 +174,27 @@ final class AuditWriteSubscriber
         \App\Sepa\Entity\ConfigCreancierSepa::class => ['creancierIbanToken'],
     ];
 
+    /**
+     * ⚠ L'ANONYMISATION D'UNE FICHE RECOPIAIT SON IDENTITÉ DANS LE JOURNAL D'AUDIT (#344).
+     *
+     * Une anonymisation est une modification de `Client` : l'instantané « avant » de son entrée
+     * d'audit contenait donc le nom, le courriel, le téléphone, la date de naissance que l'on venait
+     * d'effacer — dans une table append-only. Chaque demande d'effacement traitée depuis l'origine
+     * déplaçait l'identité au lieu de l'effacer.
+     *
+     * Pour la modification qui ANONYMISE (statut final `anonymise`), ces champs sont exclus de
+     * l'instantané : l'entrée garde qui, quand, et le passage au statut `anonymise`, sans l'identité.
+     *
+     * Ce que cette exclusion ne fait PAS : effacer l'identité des entrées ANTÉRIEURES (création,
+     * modifications passées). Voir la PR #344, décision à valider.
+     *
+     * @var list<string>
+     */
+    private const CHAMPS_IDENTITE_CLIENT = [
+        'civilite', 'nom', 'prenom', 'raisonSociale', 'siret', 'email', 'telephone', 'adresse',
+        'dateNaissance', 'champManuel', 'externalRef',
+    ];
+
     public function __construct(
         private readonly Security $security,
         private readonly InstantaneEntiteBuilder $instantane,
@@ -221,6 +242,9 @@ final class AuditWriteSubscriber
         }
 
         $champsExclus = self::CHAMPS_SENSIBLES[$entity::class] ?? [];
+        if ($entity instanceof \App\Crm\Entity\Client && $entity->getStatut() === \App\Crm\Enum\StatutClient::Anonymise) {
+            $champsExclus = [...$champsExclus, ...self::CHAMPS_IDENTITE_CLIENT];
+        }
 
         $entree = new EntreeAudit();
         $entree->setAction($action);
