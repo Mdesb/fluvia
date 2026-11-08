@@ -29,11 +29,14 @@ interface RowImporterInterface
     public function type(): ImportType;
 
     /**
+     * `$batch` porte ce qui accompagne le fichier sans être dedans — le total annoncé d'une reprise
+     * de crédits (#348). Il n'est pas encore persisté à ce stade.
+     *
      * @param list<ParsedImportRow> $rows
      *
      * @return array<int,string> ligne => message
      */
-    public function validate(array $rows, Etablissement $establishment): array;
+    public function validate(array $rows, Etablissement $establishment, ?ImportBatch $batch = null): array;
 
     /**
      * @param list<ParsedImportRow> $rows

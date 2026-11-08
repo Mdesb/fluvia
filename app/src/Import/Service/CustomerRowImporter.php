@@ -45,7 +45,7 @@ final class CustomerRowImporter implements RowImporterInterface
         return ImportType::Customers;
     }
 
-    public function validate(array $rows, Etablissement $establishment): array
+    public function validate(array $rows, Etablissement $establishment, ?ImportBatch $batch = null): array
     {
         $occurrences = [];
         foreach ($rows as $row) {
