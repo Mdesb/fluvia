@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Crm\Enum\PrivacyRequestOrigin;
 use App\Crm\Enum\StatutDemandeRgpd;
 use App\Crm\Enum\TypeDemandeRgpd;
 use App\Crm\State\TraiterDemandeRgpdProcessor;
@@ -46,7 +47,9 @@ use Symfony\Component\Uid\Uuid;
     normalizationContext: ['groups' => ['rgpd:read']],
     denormalizationContext: ['groups' => ['rgpd:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact'])]
+// `origin` (#344) : l'écran des demandes ne liste que celles des PERSONNES (`origin=request`) ;
+// les traces d'épuration et de conservation échue restent consultables à part.
+#[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact', 'origin' => 'exact'])]
 // ⚠ LE DELAI LEGAL D'UN MOIS N'ETAIT INTERROGEABLE PAR PERSONNE.
 //
 // Aucun filtre ne portait sur `dateDemande` : ni compteur, ni tache, ni ecran ne pouvait demander
@@ -88,6 +91,15 @@ class DemandeRGPD
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['rgpd:read'])]
     private \DateTimeImmutable $dateDemande;
+
+    /**
+     * Qui est à l'origine de la demande (#344) : la personne, une épuration, ou la conservation
+     * échue. Hors `rgpd:write` : une demande saisie depuis l'API est TOUJOURS celle d'une personne ;
+     * seul `EffacementRgpdHandler::anonymiseWithoutRequest()` pose les deux autres valeurs.
+     */
+    #[ORM\Column(length: 16, enumType: PrivacyRequestOrigin::class, options: ['default' => 'request'])]
+    #[Groups(['rgpd:read'])]
+    private PrivacyRequestOrigin $origin = PrivacyRequestOrigin::Request;
 
     /**
      * Quand le depassement du delai legal a ete SIGNALE — jamais quand il a eu lieu.
@@ -187,6 +199,18 @@ class DemandeRGPD
     public function setTraitePar(?Utilisateur $traitePar): self
     {
         $this->traitePar = $traitePar;
+
+        return $this;
+    }
+
+    public function getOrigin(): PrivacyRequestOrigin
+    {
+        return $this->origin;
+    }
+
+    public function setOrigin(PrivacyRequestOrigin $origin): self
+    {
+        $this->origin = $origin;
 
         return $this;
     }

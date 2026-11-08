@@ -6,6 +6,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { allerA, useEtatUrl } from '../api/url.js'
 import { idDe } from '../api/iri'
+import PersonalDataPurge from '../components/PersonalDataPurge.jsx'
 
 // LE DROIT À L'EFFACEMENT — une obligation légale qui n'avait aucun chemin.
 //
@@ -65,6 +66,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   const [choixClient, setChoixClient] = useState(false)
   const [creation, setCreation] = useState(null)
   const [traitement, setTraitement] = useState(null)
+  const [choixExport, setChoixExport] = useState(false)
 
   const [params, majParams] = useEtatUrl('rgpd', DEFAUTS)
   const peutGerer = aLeDroit(droits, 'crm.rgpd_gerer')
@@ -74,14 +76,17 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
     setChargement(true)
     setErreur(null)
     try {
-      const requete = {}
+      // `origin: 'request'` (#344) : la file ne montre que les demandes des PERSONNES. Une épuration
+      // laisse une demande réalisée par fiche anonymisée ; sans ce filtre, mille traces d'épuration
+      // passeraient ici pour mille personnes qui ont écrit.
+      const requete = { origin: 'request' }
       if (params.statut) requete.statut = params.statut
       if (params.client) requete.client = params.client
       // Deux lectures quand un filtre est actif, une seule sinon : la seconde n'existe que pour
       // rendre les compteurs vrais, et il serait absurde de la payer quand la page EST la file.
       const [reponse, entiere] = await Promise.all([
         api.demandesRgpd(requete),
-        params.statut ? api.demandesRgpd(params.client ? { client: params.client } : {}) : null,
+        params.statut ? api.demandesRgpd(params.client ? { origin: 'request', client: params.client } : { origin: 'request' }) : null,
       ])
       const liste = membres(reponse)
       setDemandes(liste)
@@ -187,6 +192,15 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             >
               ＋ Enregistrer une demande
             </button>
+            {peutGerer && (
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => { setSucces(null); setErreur(null); setChoixExport(true) }}
+              >
+                Exporter les données d’une personne
+              </button>
+            )}
             <button title="Actualiser" className="btn ghost" type="button" onClick={recharger} disabled={chargement}>↻</button>
           </div>
         )}
@@ -354,6 +368,34 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
         onClose={() => setChoixClient(false)}
         onSelect={(c) => { setChoixClient(false); setCreation(c) }}
       />
+
+      {/* Export (droit d'accès, art. 15, et portabilité, art. 20 du RGPD) : un fichier JSON, lisible
+          par une machine. La personne est choisie dans le fichier, pas saisie. */}
+      <ClientPicker
+        open={choixExport}
+        titre="Exporter les données de quelle personne ?"
+        avecCreation={false}
+        onClose={() => setChoixExport(false)}
+        onSelect={async (c) => {
+          setChoixExport(false)
+          try {
+            const doc = await api.exportDonneesPersonnelles(c.id)
+            const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }))
+            const a = document.createElement('a')
+            a.href = url
+            a.download = 'donnees-personnelles-' + c.id + '.json'
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+            setSucces('Export téléchargé. Remettez-le à la personne par un canal sûr : il contient toutes ses données.')
+          } catch (e) {
+            setErreur(e.message)
+          }
+        }}
+      />
+
+      {peutGerer && <PersonalDataPurge droits={droits} etabActif={etabActif} />}
 
       <NouvelleDemandeModal
         client={creation}

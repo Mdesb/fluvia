@@ -28,6 +28,7 @@ import { attemptPhase, createPoller } from '../api/terminalWait.js'
 import { declareOutcome, forgetIntent, intentFor, pendingIntent, pendingIntents, settle } from '../api/paymentIntent.js'
 import { screenAfterValidation, validateCart } from '../api/validateCart.js'
 import { saleErrorMessage } from '../api/counterWording.js'
+import { connectivity, saveCatalogue } from '../api/offline.js'
 import {
   libelleProduit,
   prixIndicatif,
@@ -174,8 +175,18 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         setProduits(membres(pc).filter(estAuGuichet))
         setMoyens(membres(mc).filter((m) => m.actif !== false))
         setPdvs(membres(dc))
+        // Le catalogue de la vente hors connexion (#338) : gardé à chaque chargement réussi, daté.
+        // Un échec d'écriture ne doit pas gêner la caisse en ligne : il se lira à l'écran hors ligne
+        // (« aucun catalogue gardé »), pas ici.
+        saveCatalogue(etabActif, membres(pc), membres(mc).filter((m) => m.actif !== false)).catch(() => {})
       })
-      .catch((e) => !annule && (setErreur(e.message), setProduits(null)))
+      .catch((e) => {
+        connectivity().reportFailure(e)
+        if (!annule) {
+          setErreur(e.message)
+          setProduits(null)
+        }
+      })
       .finally(() => !annule && setChargement(false))
     return () => {
       annule = true

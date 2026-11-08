@@ -28,4 +28,12 @@ interface SignataireOperation
      * @param iterable<OperationScellee> $operations
      */
     public function verifieChaine(iterable $operations): RapportVerification;
+
+    /**
+     * Vérifie un segment de chaîne commençant au rang `$premiereSequence`, accroché à `$empreinteAvant`
+     * (#342 — le segment qu'emporte une archive fiscale annuelle).
+     *
+     * @param iterable<OperationScellee> $operations
+     */
+    public function verifieSegment(iterable $operations, ?string $empreinteAvant, int $premiereSequence): RapportVerification;
 }

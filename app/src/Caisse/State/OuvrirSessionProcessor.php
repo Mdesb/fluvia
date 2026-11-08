@@ -13,6 +13,8 @@ use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
 use App\Caisse\Enum\EtatCaisse;
 use App\Caisse\Enum\EtatSession;
+use App\Caisse\Service\AgentPinChecker;
+use App\Audit\Service\JournalAudit;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\GenerateurNumero;
 use Doctrine\ORM\EntityManagerInterface;
@@ -26,7 +28,8 @@ use Symfony\Component\Uid\Uuid;
  * régisseur (code validé). Refuse une seconde session active sur le même point de vente (unicité).
  * Une caisse sécurisée (post-Z) exige le code régisseur pour être rouverte (CA-2). Corps attendu :
  *   { "pointDeVente": iri|uuid, "caisse": iri|uuid, "fondDeCaisse": "50.00",
- *     "regisseur": iri|uuid, "codeRegisseur": "…" }
+ *     "regisseur": iri|uuid, "agentPin": "1234" }
+ * `agentPin` (#346) : code personnel de l'opérateur, exigé si le point de vente l'impose.
  *
  * @implements ProcessorInterface<mixed, SessionCaisse>
  */
@@ -39,6 +42,8 @@ final class OuvrirSessionProcessor implements ProcessorInterface
         private readonly Security $security,
         private readonly EstablishmentScopeAsserter $scope,
         private readonly EstablishmentReachability $reachability,
+        private readonly AgentPinChecker $pins,
+        private readonly JournalAudit $journal,
     ) {
     }
 
@@ -57,6 +62,10 @@ final class OuvrirSessionProcessor implements ProcessorInterface
         // l'opérateur qui ouvre. Une caisse fermée est en état « securisee », c'est normal — l'ouverture
         // reste une opération courante. Le code régisseur n'est exigé que pour une RÉOUVERTURE forcée
         // d'une caisse bloquée, via l'endpoint dédié `/sessions-caisse/{id}/rouvrir`.
+        //
+        // Elle demande en revanche le CODE AGENT PERSONNEL de l'opérateur (#346) quand le point de vente
+        // l'exige (`requireAgentPin`), ou dès qu'un code est saisi — un code faux n'est jamais accepté
+        // en silence. Vérifié plus bas, après le cloisonnement et avant toute écriture.
         $regisseur = isset($corps['regisseur'])
             ? $this->resoudre(Utilisateur::class, $corps['regisseur'], 'regisseur')
             : $operateur;
@@ -95,6 +104,19 @@ final class OuvrirSessionProcessor implements ProcessorInterface
             throw new ConflictHttpException('Une session est déjà active sur ce point de vente (RG-M2-01).');
         }
 
+        // Code agent (#346) : AVANT toute écriture, car un refus persiste son compteur d'échecs.
+        $pin = $corps['agentPin'] ?? null;
+        $pinSaisi = \is_string($pin) && trim($pin) !== '';
+        if ($pdv->isRequireAgentPin() || $pinSaisi) {
+            $this->pins->assertValid(
+                $operateur,
+                $pin,
+                'cash_session.open',
+                $pdv->getEtablissement()?->getId(),
+                'Ce point de vente exige votre code agent pour ouvrir la caisse.',
+            );
+        }
+
         $caisse->setEtat(EtatCaisse::Ouverte);
 
         $session = (new SessionCaisse())
@@ -105,9 +127,20 @@ final class OuvrirSessionProcessor implements ProcessorInterface
             ->setOperateur($operateur)
             ->setFondDeCaisse($fond)
             ->setEtat(EtatSession::Ouverte)
-            ->setEtablissement($pdv->getEtablissement());
+            ->setEtablissement($pdv->getEtablissement())
+            ->setAgentPinVerified($pdv->isRequireAgentPin() || $pinSaisi);
 
         $this->em->persist($session);
+
+        // Opérations tracées par agent (#346) : qui a ouvert, pour quel régisseur, code vérifié ou non.
+        // Les ventes portent la session, donc son opérateur ; les mouvements et avoirs, leur auteur.
+        $entree = $this->journal->enregistrer('cash_session.opened', SessionCaisse::class, (string) $session->getId(), $pdv->getEtablissement()?->getId());
+        $entree->setValeurApres([
+            'operateur' => (string) $operateur->getId(),
+            'regisseur' => (string) $regisseur->getId(),
+            'agentPinVerified' => $session->isAgentPinVerified(),
+        ]);
+
         $this->em->flush();
 
         return $session;

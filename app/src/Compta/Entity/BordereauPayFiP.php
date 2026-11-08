@@ -17,10 +17,14 @@ use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * Transaction PayFiP (US-L4-03, RG-PAYFIP-03, CA-6). ⚠ HYPOTHÈSE — protocole exact non détaillé.
+ * Transaction PayFiP (US-L4-03, RG-PAYFIP-03, CA-6). Une ligne par opération initiée (IdOp dans
+ * `referenceTransaction`) ; protocole : guide DGFiP Régie Web service V18.0, mis en œuvre par
+ * `App\Compta\PayFip\PayFipSoapClient` (#339).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'compta_bordereau_payfip')]
+// Le retour et la notification PayFiP retrouvent l'opération par son IdOp (#339).
+#[ORM\Index(name: 'idx_bordereau_payfip_reference', columns: ['reference_transaction'])]
 #[ApiResource(
     shortName: 'BordereauPayFiP',
     operations: [
@@ -84,6 +88,44 @@ class BordereauPayFiP
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['payfip:read'])]
     private \DateTimeImmutable $dateHeure;
+
+    // ── CE QUI PERMET LE RAPPROCHEMENT (#339) ─────────────────────────────────────────────────────
+    //
+    // PayFiP adresse chaque jour au régisseur un fichier de remise : références (REFDET) et montants
+    // bruts encaissés (guide Régie Web service V18.0, §4.3). Pour qu'il le pointe contre nos ventes,
+    // il faut garder, pour chaque opération : la référence de dette envoyée, le montant initié, et ce
+    // que PayFiP a répondu (résultat, numéro d'autorisation, date). `null` = pas (encore) connu, ou
+    // bordereau antérieur au raccordement réel.
+
+    /** REFDET envoyé à PayFiP — le numéro de commande tel que le régisseur le lit dans sa remise. */
+    #[ORM\Column(length: 30, nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?string $debtReference = null;
+
+    /** MONTANT initié, en centimes. */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?int $amountCents = null;
+
+    /** SAISIE de l'appel : T (test), X (activation) ou W (réel). Un paiement de test n'est jamais un encaissement. */
+    #[ORM\Column(length: 1, nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?string $entryMode = null;
+
+    /** RESULTRANS rendu par PayFiP : P, V (payé), A (abandon), R, Z (refus). */
+    #[ORM\Column(length: 1, nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?string $transactionResult = null;
+
+    /** NUMAUTO : numéro d'autorisation CB, ou d'opération de prélèvement. */
+    #[ORM\Column(length: 16, nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?string $authorizationNumber = null;
+
+    /** DATTRANS + HEURTRANS, heure de Paris. */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['payfip:read'])]
+    private ?\DateTimeImmutable $transactedAt = null;
 
     public function __construct()
     {
@@ -160,5 +202,55 @@ class BordereauPayFiP
     public function getDateHeure(): \DateTimeImmutable
     {
         return $this->dateHeure;
+    }
+
+    public function getDebtReference(): ?string
+    {
+        return $this->debtReference;
+    }
+
+    public function getAmountCents(): ?int
+    {
+        return $this->amountCents;
+    }
+
+    public function getEntryMode(): ?string
+    {
+        return $this->entryMode;
+    }
+
+    public function getTransactionResult(): ?string
+    {
+        return $this->transactionResult;
+    }
+
+    public function getAuthorizationNumber(): ?string
+    {
+        return $this->authorizationNumber;
+    }
+
+    public function getTransactedAt(): ?\DateTimeImmutable
+    {
+        return $this->transactedAt;
+    }
+
+    /** Ce qui a été confié à PayFiP à l'initiation. */
+    public function recordInitiation(string $debtReference, int $amountCents, string $entryMode): self
+    {
+        $this->debtReference = $debtReference;
+        $this->amountCents = $amountCents;
+        $this->entryMode = $entryMode;
+
+        return $this;
+    }
+
+    /** Ce que PayFiP a répondu, une fois la réponse confrontée à l'initiation. */
+    public function recordResult(string $transactionResult, ?string $authorizationNumber, ?\DateTimeImmutable $transactedAt): self
+    {
+        $this->transactionResult = $transactionResult;
+        $this->authorizationNumber = $authorizationNumber === '' ? null : $authorizationNumber;
+        $this->transactedAt = $transactedAt;
+
+        return $this;
     }
 }

@@ -453,6 +453,13 @@ function descripteurPointsDeVente(api, etabActif, moyens = [], regies = []) {
         aide: 'Coché : vendre 3 entrées imprime 3 billets séparés, chacun avec son propre QR code. '
           + 'Décoché : un seul billet « 3 × Entrée », avec le QR du premier.',
       },
+      {
+        nom: 'requireAgentPin',
+        libelle: 'Code agent exigé à l’ouverture',
+        type: 'bool',
+        aide: 'Coché : chaque agent saisit son code personnel pour ouvrir la caisse, et la session '
+          + 'le mentionne. L’agent définit son code depuis l’écran d’ouverture de caisse.',
+      },
       // LE TERMINAL DE PAIEMENT EST UN RÉGLAGE, PLUS UNE CASE (spec TPE lot 1 §6).
       //
       // Le serveur attend `{ connecteur, marque?, ref? }` ; la case « un terminal est rattaché »
@@ -1791,6 +1798,18 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envo
                             title="Efface la double authentification de ce compte : il pourra se reconnecter avec son seul mot de passe, puis la réactiver."
                           >
                             Réinitialiser le MFA
+                          </button>
+                        )}
+                        {/* Code agent de caisse (#346) : oublié, ou bloqué après cinq erreurs. Effacé,
+                            l'agent en redéfinit un depuis l'écran d'ouverture de caisse. */}
+                        {u.cashPinDefined && aLeDroit(droits, 'securite.gerer') && (
+                          <button
+                            className="btn ghost sm"
+                            disabled={busy === u.id + 'effacer le code agent'}
+                            onClick={() => action(api.effacerCodeAgent, u.id, 'effacer le code agent')}
+                            title="Efface le code agent de caisse de ce compte (oublié ou bloqué) : l’agent en redéfinira un à l’ouverture de caisse."
+                          >
+                            Effacer le code agent
                           </button>
                         )}
                       </div>

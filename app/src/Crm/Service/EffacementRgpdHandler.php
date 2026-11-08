@@ -6,8 +6,10 @@ namespace App\Crm\Service;
 
 use App\Crm\Entity\Client;
 use App\Crm\Entity\DemandeRGPD;
+use App\Crm\Enum\PrivacyRequestOrigin;
 use App\Crm\Enum\StatutClient;
 use App\Crm\Enum\StatutDemandeRgpd;
+use App\Crm\Enum\TypeDemandeRgpd;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -17,6 +19,11 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * nominatifs de `Client` **uniquement** (aucune cascade : les autres entités M4 ne portent pas de PII,
  * décision structurante §1). Aucun impact sur M2 : `Vente.client`/`LigneVente.beneficiaire` restent
  * des UUID logiques sans FK dure — l'intégrité NF525 n'est jamais rompue par une anonymisation M4.
+ *
+ * C'est le SEUL endroit qui anonymise. La demande d'une personne (`traiter`), l'épuration sélective
+ * et la purge à échéance (`anonymiseWithoutRequest`) y passent toutes : jusqu'au #344, la tâche de
+ * conservation recopiait l'anonymisation à la main (#207), et deux copies d'un effacement finissent
+ * toujours par effacer des champs différents.
  */
 final class EffacementRgpdHandler
 {
@@ -39,7 +46,7 @@ final class EffacementRgpdHandler
             throw new ConflictHttpException('Demande RGPD sans client associé.');
         }
 
-        $this->anonymiser($client);
+        $this->anonymiser($client, 'rgpd:anonymisation');
 
         $demande->setStatut(StatutDemandeRgpd::Realisee);
         $demande->setDateTraitement(new \DateTimeImmutable());
@@ -48,8 +55,36 @@ final class EffacementRgpdHandler
         return $client;
     }
 
+    /**
+     * Anonymise une fiche que personne n'a demandé à effacer — épuration ou conservation échue — et
+     * en laisse la preuve : une demande réalisée, datée, d'origine `purge` ou `retention`, signée de
+     * l'administrateur (`null` pour la tâche planifiée, qui n'a pas d'auteur humain).
+     *
+     * Persiste la demande ; le `flush` reste à l'appelant (une épuration flushe par lot).
+     */
+    public function anonymiseWithoutRequest(Client $client, PrivacyRequestOrigin $origin, ?Utilisateur $administrateur): DemandeRGPD
+    {
+        if ($origin === PrivacyRequestOrigin::Request) {
+            throw new \LogicException('Une demande de la personne se traite par traiter(), pas ici.');
+        }
+        if ($client->getStatut() === StatutClient::Anonymise) {
+            throw new ConflictHttpException('Fiche déjà anonymisée.');
+        }
+
+        $demande = new DemandeRGPD(TypeDemandeRgpd::Anonymisation);
+        $demande->setClient($client);
+        $demande->setOrigin($origin);
+        $this->anonymiser($client, $origin === PrivacyRequestOrigin::Purge ? 'rgpd:epuration' : 'rgpd:conservation-echue');
+        $demande->setStatut(StatutDemandeRgpd::Realisee);
+        $demande->setDateTraitement(new \DateTimeImmutable());
+        $demande->setTraitePar($administrateur);
+        $this->em->persist($demande);
+
+        return $demande;
+    }
+
     /** Purge les champs nominatifs, conserve statut/agrégats pour l'historique comptable/statistique. */
-    private function anonymiser(Client $client): void
+    private function anonymiser(Client $client, string $trace): void
     {
         $client->setCivilite(null);
         $client->setNom(null);
@@ -61,8 +96,11 @@ final class EffacementRgpdHandler
         $client->setAdresse(null);
         $client->setDateNaissance(null);
         $client->setChampManuel(null);
+        // La référence dans l'ancien logiciel relie la fiche anonyme à une identité restée dans un
+        // export de reprise : la garder, c'est garder la clé de ré-identification.
+        $client->setExternalRef(null);
         $client->setStatut(StatutClient::Anonymise);
         $client->setDateMaj(new \DateTimeImmutable());
-        $client->setMajPar('rgpd:anonymisation');
+        $client->setMajPar($trace);
     }
 }

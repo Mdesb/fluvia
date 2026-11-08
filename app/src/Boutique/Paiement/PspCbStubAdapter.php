@@ -29,7 +29,7 @@ final class PspCbStubAdapter implements PaiementEnLigneInterface
         return TypeExploitant::GroupePrive;
     }
 
-    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour): InitiationPaiementEnLigne
+    public function initierPaiement(Uuid $venteId, int $montantCentimes, string $urlRetour, ?OnlinePaymentContext $context = null): InitiationPaiementEnLigne
     {
         $reference = 'PSPCB-' . substr(hash('sha256', $venteId->toRfc4122() . $montantCentimes), 0, 16);
 
