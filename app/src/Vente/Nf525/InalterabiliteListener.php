@@ -12,6 +12,9 @@ use App\Vente\Entity\SettlementCorrection;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
 use App\Vente\Nf525\Entity\DailyClosure;
+use App\Vente\Nf525\Entity\FiscalArchive;
+use App\Vente\Nf525\Entity\FiscalArchiveFile;
+use App\Vente\Nf525\Entity\PeriodClosure;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
@@ -107,6 +110,12 @@ final class InalterabiliteListener
             // rien : c'est le cumul perpétuel qu'elle porte qui rend une suppression détectable, et un
             // cumul qu'on peut réécrire ne détecte plus que ce qu'on veut bien lui laisser voir.
             || $entity instanceof DailyClosure
+            // #342 — les clôtures mensuelle et annuelle portent le cumul d'exercice et le perpétuel, pour
+            // la même raison que l'arrêté de journée ; l'archive fiscale et son fichier se conservent six
+            // ans tels qu'ils ont été signés.
+            || $entity instanceof PeriodClosure
+            || $entity instanceof FiscalArchive
+            || $entity instanceof FiscalArchiveFile
             // D45 — **oubli de mon propre lot, relevé en écrivant celui-ci.** La correction de
             // ventilation est scellée dans la chaîne au même titre qu'un avoir, et elle n'était
             // protégée par rien : elle est restée modifiable et supprimable pendant une journée.
