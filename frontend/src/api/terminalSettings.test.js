@@ -33,3 +33,12 @@ test('un réglage d’avant ce lot (liste ou booléen) n’est pas recopié comm
 test('le premier connecteur proposé est l’externe (présélectionné à la création)', () => {
   assert.equal(CONNECTEURS_TPE[0].valeur, 'externe')
 })
+
+test('le pont de caisse (#340) : clé, adresse et tiroir se replient dans le réglage ; vidés, ils partent', () => {
+  const { tpe } = avecTerminal({ tpe: 'caisse_ap_pont', tpeClePont: ' QUJD ', tpePont: 'http://127.0.0.1:8765', tpeTiroir: true })
+  assert.deepEqual(tpe, { connecteur: 'caisse_ap_pont', clePont: 'QUJD', pont: 'http://127.0.0.1:8765', tiroir: true })
+  const existant = { connecteur: 'caisse_ap_pont', clePont: 'QUJD', pont: 'http://127.0.0.1:9000', tiroir: true }
+  assert.deepEqual(avecTerminal({ tpe: 'caisse_ap_pont', tpeClePont: 'QUJD', tpePont: '', tpeTiroir: false }, existant).tpe, { connecteur: 'caisse_ap_pont', clePont: 'QUJD' })
+  assert.deepEqual(avecTerminal({ tpe: 'caisse_ap_pont' }, existant).tpe, existant, 'absents du formulaire : gardés')
+  assert.ok(CONNECTEURS_TPE.some((c) => c.valeur === 'caisse_ap_pont'))
+})

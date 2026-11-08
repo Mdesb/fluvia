@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { attemptPhase, createPoller, isExternal } from '../api/terminalWait.js'
+import { DEFAULT_BRIDGE, isBridge, relayBridgePayment } from '../api/localBridge.js'
 
 // « EN ATTENTE DU TERMINAL… » — la carte est partie au terminal, le serveur a rendu la main (spec
 // TPE lot 1 §4, §5). Deux formes :
 //
-// - un terminal RELIÉ (simulé aujourd'hui, pont Caisse-AP demain) : l'écran scrute la tentative toutes
+// - un terminal RELIÉ (simulé, ou piloté par le pont Caisse-AP du poste, #340) : l'écran scrute la tentative toutes
 //   les 1,5 s et passe à l'issue tout seul ; « Annuler » prie le terminal d'abandonner ;
 // - le terminal EXTERNE, relié à rien : « Encaissez XX,XX € sur le terminal, puis indiquez le
 //   résultat » — Accepté (référence du ticket CB obligatoire), Refusé, Annulé. La scrutation tourne
@@ -14,10 +15,13 @@ import { attemptPhase, createPoller, isExternal } from '../api/terminalWait.js'
 //
 // L'écran ne bloque pas : rien n'attend une réponse longue, chaque lecture rend la main. Une coupure
 // réseau n'est jamais une issue : l'attente continue, et elle le dit.
-export default function TerminalWait({ venteId, tentative, libelleMoyen, busy, onIssue, onAnnuler, onDeclarer }) {
+export default function TerminalWait({ venteId, tentative, libelleMoyen, busy, onIssue, onAnnuler, onDeclarer, pont = DEFAULT_BRIDGE }) {
   const [courante, setCourante] = useState(tentative)
   const [coupure, setCoupure] = useState(null)
   const [reference, setReference] = useState('')
+  // Le pont de caisse (#340) : la demande au terminal part d'ici ; son échec se dit et se retente.
+  const [pontErreur, setPontErreur] = useState(null)
+  const [essaiPont, setEssaiPont] = useState(0)
   // La dernière fonction du parent, sans relancer la scrutation à chaque rendu de la caisse.
   const issue = useRef(onIssue)
   useEffect(() => { issue.current = onIssue })
@@ -41,6 +45,17 @@ export default function TerminalWait({ venteId, tentative, libelleMoyen, busy, o
       document.removeEventListener('visibilitychange', auRetour)
     }
   }, [venteId, tentative.id])
+
+  // Le relais vit hors de l'écran (`relayBridgePayment`) : démonter l'attente ne l'arrête pas, et une
+  // acceptation tardive est encore relayée. Ici, on le lance et on écoute son échec.
+  useEffect(() => {
+    if (!isBridge(tentative)) return undefined
+    let vivant = true
+    setPontErreur(null)
+    relayBridgePayment({ api, venteId, tentative, pont })
+      .catch((e) => { if (vivant) setPontErreur(e?.message || 'Le pont de caisse n’a pas répondu.') })
+    return () => { vivant = false }
+  }, [venteId, tentative, pont, essaiPont])
 
   const montant = euros(courante?.montant ?? tentative.montant)
 
@@ -88,6 +103,17 @@ export default function TerminalWait({ venteId, tentative, libelleMoyen, busy, o
       <div className="hint terminal-note">
         Le client suit les instructions du terminal (code, sans contact). L’écran se met à jour seul.
       </div>
+      {isBridge(tentative) && (
+        <div className="hint terminal-note">
+          Le montant est parti au terminal. Pour abandonner, appuyez sur la touche rouge du terminal.
+        </div>
+      )}
+      {pontErreur && (
+        <div className="banner banner-warn terminal-note" role="alert">
+          <span>{pontErreur}</span>{' '}
+          <button type="button" className="btn" disabled={busy} onClick={() => setEssaiPont((n) => n + 1)}>Réessayer</button>
+        </div>
+      )}
       <button type="button" className="btn" disabled={busy} onClick={onAnnuler}>Annuler</button>
       {coupure && <div className="hint terminal-note">{coupure} — l’attente continue, rien n’est perdu.</div>}
     </div>
