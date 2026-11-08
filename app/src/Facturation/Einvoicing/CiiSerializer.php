@@ -292,8 +292,20 @@ final class CiiSerializer
         $accord = $dom->createElementNS(self::NS_RAM, 'ram:ApplicableHeaderTradeAgreement');
 
         $profil = $facture->getProfilExploitant();
+
+        // ⚠ L'ÉMETTEUR FIGÉ À L'ÉMISSION PRIME SUR LE PROFIL VIVANT (#345), exactement comme dans
+        // l'en-tête PDF : sinon une réimpression porterait deux émetteurs, l'ancien et le nouveau,
+        // dans le même fichier. Le profil vivant ne vaut que pour un brouillon ou une facture émise
+        // avant l'instantané.
+        $fige = InvoiceIssuerSnapshot::fromInvoice($facture);
+        $raisonSociale = $fige !== null ? ($fige['raisonSociale'] ?? null) : $profil?->getRaisonSociale();
+        $sirenVendeur = $fige !== null ? ($fige['siren'] ?? null) : $profil?->getSiren();
+        $adresseVendeur = $fige !== null ? (array) ($fige['adresse'] ?? []) : (array) $profil?->getAdresse();
+        $adresseElectronique = $fige !== null ? ($fige['adresseElectronique'] ?? null) : $profil?->getElectronicAddress();
+        $tvaVendeur = $fige !== null ? ($fige['tva'] ?? null) : $profil?->getTvaIntracommunautaire();
+
         $vendeur = $dom->createElementNS(self::NS_RAM, 'ram:SellerTradeParty');
-        $vendeur->appendChild($this->texte($dom, 'ram:Name', (string) $profil?->getRaisonSociale()));
+        $vendeur->appendChild($this->texte($dom, 'ram:Name', (string) $raisonSociale));
 
         // ⚠ BT-30 — LE `schemeID` N'EST PAS DECORATIF : SANS LUI, LE SIREN EST LU VIDE.
         //
@@ -305,7 +317,7 @@ final class CiiSerializer
         // Mesure du 02/09 : le validateur Factur-X reclamait un SIREN que nous posions deja. Un
         // identifiant sans son referentiel n'identifie rien — c'est un nombre.
         $legal = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedLegalOrganization');
-        $identifiant = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getSiren());
+        $identifiant = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $sirenVendeur);
 
         // ⚠ ON NE DECLARE UN REGISTRE QUE QUAND ON LE CONNAIT.
         //
@@ -330,7 +342,9 @@ final class CiiSerializer
         // le registre n'etait plus declare du tout. Le repli sur le profil reste, pour le cas
         // ou la facture n'aurait pas encore son etablissement.
         $emetteur = $facture->getEtablissement() ?? $profil?->getEtablissement();
-        $pays = strtoupper((string) ($emetteur?->getPays() ?? ''));
+        $pays = $fige !== null
+            ? strtoupper((string) ($fige['pays'] ?? ''))
+            : strtoupper((string) ($emetteur?->getPays() ?? ''));
         if (isset(self::REGISTRES_CONNUS[$pays])) {
             $identifiant->setAttribute('schemeID', self::REGISTRES_CONNUS[$pays]);
         }
@@ -338,14 +352,14 @@ final class CiiSerializer
         $legal->appendChild($identifiant);
         $vendeur->appendChild($legal);
 
-        $vendeur->appendChild($this->adresse($dom, (array) $profil?->getAdresse()));
+        $vendeur->appendChild($this->adresse($dom, $adresseVendeur));
 
         // ⚠ BT-34 — ENTRE L'ADRESSE POSTALE ET L'ENREGISTREMENT DE TVA. CII est une sequence :
         // l'ecrire ailleurs produit un fichier que le schema refuse, avant meme le schematron.
-        $this->adresseElectronique($dom, $vendeur, $profil?->getElectronicAddress());
+        $this->adresseElectronique($dom, $vendeur, \is_string($adresseElectronique) ? $adresseElectronique : null);
 
         $tva = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedTaxRegistration');
-        $idTva = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getTvaIntracommunautaire());
+        $idTva = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $tvaVendeur);
         $idTva->setAttribute('schemeID', 'VA');
         $tva->appendChild($idTva);
         $vendeur->appendChild($tva);

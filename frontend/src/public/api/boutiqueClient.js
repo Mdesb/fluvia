@@ -81,6 +81,27 @@ export const clientTokenStore = {
   clear: () => stockage.remove(CLIENT_TOKEN_KEY),
 }
 
+/**
+ * LE PAIEMENT PARTI CHEZ LE PRESTATAIRE (#339). Avec PayFiP ou Stripe, l'acheteur QUITTE la boutique
+ * pour payer, puis revient sur `/b/<vitrine>/retour-paiement`. Au retour, la page doit savoir quel
+ * panier et quelle transaction vérifier — Stripe ne rend même rien quand on annule. On le note donc
+ * juste avant de partir, et on l'efface une fois l'issue connue.
+ */
+const PAIEMENT_EN_COURS_KEY = 'boutique.paiementEnCours'
+
+export const paiementEnCoursStore = {
+  get: () => {
+    try {
+      const v = JSON.parse(stockage.get(PAIEMENT_EN_COURS_KEY) || 'null')
+      return v && typeof v === 'object' ? v : null
+    } catch {
+      return null
+    }
+  },
+  set: (v) => stockage.set(PAIEMENT_EN_COURS_KEY, JSON.stringify(v)),
+  clear: () => stockage.remove(PAIEMENT_EN_COURS_KEY),
+}
+
 export const vitrineStore = {
   get: () => stockage.get(VITRINE_KEY),
   set: (id) => stockage.set(VITRINE_KEY, id),
@@ -229,8 +250,8 @@ export const boutique = {
     request(`/api/boutique/paniers/${id}/consentement`, { method: 'POST', body: corps }),
   payer: (id) =>
     request(`/api/boutique/paniers/${id}/payer`, { method: 'POST', body: {}, timeoutMs: 30000 }),
-  retourPaiement: (id, corps) =>
-    request(`/api/boutique/paniers/${id}/retour-paiement`, { method: 'POST', body: corps, timeoutMs: 30000 }),
+  retourPaiement: (id, corps, panierToken) =>
+    request(`/api/boutique/paniers/${id}/retour-paiement`, { method: 'POST', body: corps, timeoutMs: 30000, panierToken }),
 
   // --- Création de compte (rattache le panier en cours sans perte de contenu) ---
   creerCompte: (corps) =>

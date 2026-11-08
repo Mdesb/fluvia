@@ -23,12 +23,22 @@ import Modal from '../components/Modal.jsx'
  * rouvrir le détail d'un rejet — rien à recharger.
  */
 
-// Seul `customers` a un RowImporter côté serveur (I1). Les autres types (products, tariffs,
-// subscribers, card_credits, staff) sont des incréments futurs : les proposer ici enverrait droit
+// Un type n'est proposé ici que s'il a un RowImporter côté serveur : `customers` (I1),
+// `subscribers` et `card_credits` (#348). Les autres (products, tariffs, staff) enverraient droit
 // vers un 422. On n'offre que ce qui existe.
 const TYPES = [
   ['customers', 'Clients'],
+  ['subscribers', 'Abonnements en cours'],
+  ['card_credits', 'Soldes de cartes'],
 ]
+
+// Les colonnes attendues, dites AVANT le dépôt : un fichier refusé pour une colonne manquante coûte un
+// aller-retour avec l'ancien logiciel.
+const COLONNES = {
+  customers: 'externalRef ; type (physique ou morale) ; nom ; prenom ; email ; telephone ; dateNaissance…',
+  subscribers: 'externalRef ; supportIdentifiant (numéro de carte) ; produit (code du produit Fluvia) ; dateFin ; dateDebut (facultatif) ; typeSupport (RFID ou QR, facultatif)',
+  card_credits: 'externalRef ; supportIdentifiant (numéro de carte) ; produit (code d’une carte à entrées) ; creditRestant ; dateFin (facultatif) ; typeSupport (facultatif)',
+}
 
 function libelleType(v) {
   return TYPES.find(([c]) => c === v)?.[1] || v || '—'
@@ -83,6 +93,9 @@ export default function Imports({ etabActif, droits = [] }) {
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
   const [type, setType] = useState('customers')
+  // Total d'entrées restantes ANNONCÉ par l'ancien exploitant (soldes de cartes) : le serveur refuse le
+  // lot au moindre écart avec la somme du fichier. On ne devine pas une dette.
+  const [totalAnnonce, setTotalAnnonce] = useState('')
   const [detail, setDetail] = useState(null)
 
   const champFichier = useRef(null)
@@ -118,6 +131,7 @@ export default function Imports({ etabActif, droits = [] }) {
         content,
         fileName: fichier.name,
         mimeType: fichier.type || 'text/csv',
+        ...(type === 'card_credits' ? { expectedTotal: totalAnnonce.trim() || null } : {}),
       })
       const nbErreurs = lot.errors ? Object.keys(lot.errors).length : 0
       if (lot.status === 'validated') {
@@ -203,6 +217,19 @@ export default function Imports({ etabActif, droits = [] }) {
             >
               {TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
+            {type === 'card_credits' && (
+              <input
+                className="input sm import-total"
+                type="number"
+                min="0"
+                step="1"
+                value={totalAnnonce}
+                onChange={(e) => setTotalAnnonce(e.target.value)}
+                placeholder="Total d’entrées annoncé"
+                aria-label="Total d’entrées restantes annoncé par l’ancien logiciel"
+                disabled={busy}
+              />
+            )}
             <input
               ref={champFichier}
               type="file"
@@ -219,7 +246,7 @@ export default function Imports({ etabActif, droits = [] }) {
             <button
               className="btn primary"
               type="button"
-              disabled={busy}
+              disabled={busy || (type === 'card_credits' && totalAnnonce.trim() === '')}
               onClick={() => champFichier.current?.click()}
             >
               + Valider un fichier CSV
@@ -227,6 +254,14 @@ export default function Imports({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
+
+      {peutCreer && (
+        <p className="hint">
+          Colonnes attendues ({libelleType(type)}) : {COLONNES[type]}.
+          {type !== 'customers' && ' Le produit doit ouvrir au moins une zone d’accès de cet établissement, sinon la carte serait refusée au tourniquet.'}
+          {type === 'card_credits' && ' Saisissez le total d’entrées restantes annoncé par l’ancien logiciel : au moindre écart, le fichier est refusé.'}
+        </p>
+      )}
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
@@ -242,7 +277,7 @@ export default function Imports({ etabActif, droits = [] }) {
           <div className="empty">
             {lots === null
               ? 'Les imports n’ont pas pu être lus : ce tableau est vide parce que la lecture a échoué, pas parce qu’aucun import n’a été fait.'
-              : 'Aucun import. Déposez un CSV de clients pour lancer une reprise : il est d’abord validé, puis appliqué en un second geste.'}
+              : 'Aucun import. Déposez un CSV (clients, abonnements en cours ou soldes de cartes) pour lancer une reprise : il est d’abord validé, puis appliqué en un second geste.'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
