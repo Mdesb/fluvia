@@ -26,6 +26,11 @@ use Symfony\Component\Uid\Uuid;
  * « SANS IDENTIFIANT » = NULL et '' fusionnés en UN seul intervalle (même convention que `KeyRun` et
  * `SealKeyring::check` ; `SealKeyOrder` refuse deux intervalles pour le même identifiant).
  *
+ * SÉQUENCE ≤ 0 : en compta et en facturation, `numero_sequence > 0` exclut les brouillons (séquence 0), donc un
+ * maillon forgé à la séquence 0 ou négative y est INVISIBLE au refus de sceller, par construction ; seule la
+ * vérification de chaîne le voit. En vente, tout est lu : un maillon à la séquence 0 fait lever `KeyRun`
+ * (`\InvalidArgumentException`), que `SealKeyring::assertCanExtendInOrderFrom` convertit en refus (409).
+ *
  * LIMITE ASSUMÉE (D-3 du plan) : seuls les identifiants du trousseau sont cherchés. Un identifiant inconnu
  * au milieu d'une chaîne n'est pas vu ici ; la vérification (« clé inconnue ») et `app:nf525:check-keys`
  * (qui lit tous les identifiants) le voient.

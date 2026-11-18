@@ -103,13 +103,15 @@ final class SealKeyOrder
             }
         }
         if ($lastRun->keyId === null) {
+            // La clé nommée est la non NULL qui finit le plus tard : la même que celle du parcours.
+            $latest = null;
             foreach ($runs as $run) {
-                if ($run->keyId !== null) {
-                    return ['reason' => self::BLOCK_LAST_LINK_REGRESSED, 'keyId' => null, 'otherKeyId' => $run->keyId];
+                if ($run->keyId !== null && ($latest === null || $run->last > $latest->last)) {
+                    $latest = $run;
                 }
             }
 
-            return null;
+            return $latest === null ? null : ['reason' => self::BLOCK_LAST_LINK_REGRESSED, 'keyId' => null, 'otherKeyId' => $latest->keyId];
         }
         $other = self::latestEndingAfter($runs, $lastRun->keyId, $lastRun->first);
         if ($other !== null) {

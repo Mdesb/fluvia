@@ -8,6 +8,7 @@ use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
 use App\Platform\Nf525\SealCheck;
 use App\Platform\Nf525\SealKeyOrderTracker;
+use App\Platform\Nf525\SealKeyRunQuery;
 use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -60,6 +61,18 @@ final class ScellementFactureHandler
                 sprintf('chaîne de facturation, document %s (maillon n° %d)', (string) $precedente->getNumero(), $precedente->getNumeroSequence()),
             );
         }
+
+        // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS (voir `ScellementEcritureHandler::sceller`). Intervalles lus sur
+        // la même connexion que `dernierMaillon`. ⚠ Les brouillons (séquence 0) sont exclus de la requête :
+        // une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+        $this->keyring->assertCanExtendInOrderFrom(
+            fn (): array => SealKeyRunQuery::forInvoicing(
+                $this->em->getConnection(),
+                $this->keyring,
+                (string) $facture->getProfilExploitant()?->getId(),
+            ),
+            'chaîne de facturation de l\'exploitant ' . (string) $facture->getProfilExploitant()?->getId(),
+        );
 
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;

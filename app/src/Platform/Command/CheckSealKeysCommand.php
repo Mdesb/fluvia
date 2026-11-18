@@ -114,6 +114,6 @@ final class CheckSealKeysCommand extends Command
     /** Ce qu'on affiche de la clé d'un maillon : son identifiant, ou l'absence d'identifiant. */
     private function provenance(?string $id): string
     {
-        return $id === null ? 'sans identifiant, antérieur au trousseau' : $id;
+        return $id === null ? 'sans identifiant, antérieur au trousseau' : SealKeyring::safeId($id);
     }
 }

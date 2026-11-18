@@ -6,7 +6,10 @@ namespace App\Vente\Nf525;
 
 use App\Caisse\Entity\PointDeVente;
 use App\Vente\Nf525\Entity\OperationScellee;
+use App\Platform\Nf525\SealKeyring;
+use App\Platform\Nf525\SealKeyRunQuery;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Orchestre le scellement d'une opération dans la même transaction que sa validation (§2 du plan).
@@ -19,6 +22,10 @@ final class ScellementHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SignataireOperation $signataire,
+        // #369 — le trousseau de la chaîne de vente (le même que celui du signataire) : le refus de sceller
+        // lit l'ordre des clés ici, car `HashChainSignataire` n'a pas d'accès à la base.
+        #[Autowire(service: 'app.nf525.keyring.sales')]
+        private readonly SealKeyring $keyring,
     ) {
     }
 
@@ -28,6 +35,27 @@ final class ScellementHandler
     public function sceller(OperationAScellerDto $op): OperationScellee
     {
         $precedente = $this->dernierMaillon($op->pointDeVente);
+
+        // La signature du dernier maillon se juge AVANT l'ordre des clés (même ordre que compta et facturation) ;
+        // le signataire la rejuge ensuite, sans effet de bord.
+        if ($precedente !== null) {
+            $this->keyring->assertCanExtend(
+                $precedente->getEmpreinte(),
+                $precedente->getSignature(),
+                $precedente->getSealKeyId(),
+                sprintf('chaîne de vente du point de vente %s, maillon n° %d', (string) $op->pointDeVente->getId(), $precedente->getNumeroSequence()),
+            );
+        }
+
+        // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS : une chaîne qui a quitté la clé active, ou dont le dernier
+        // maillon est en régression, ne se prolonge pas. Les intervalles sont lus sur la même connexion (donc la
+        // même transaction que l'appelant) que `dernierMaillon`, sans verrou de plus : comme lui, la lecture est
+        // protégée à l'écriture par l'unicité (point de vente, séquence). Tout maillon lu, séquence 0 comprise.
+        $this->keyring->assertCanExtendInOrderFrom(
+            fn (): array => SealKeyRunQuery::forSales($this->em->getConnection(), $this->keyring, (string) $op->pointDeVente->getId()),
+            sprintf('chaîne de vente du point de vente %s', (string) $op->pointDeVente->getId()),
+        );
+
         $operation = $this->signataire->scelle($op, $precedente);
         $this->em->persist($operation);
 

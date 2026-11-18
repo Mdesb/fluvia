@@ -7,8 +7,11 @@ namespace App\Tests\Facturation;
 use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Nf525\ScellementFactureHandler;
+use App\Platform\Nf525\SealingRefusedException;
+use App\Platform\Nf525\SealKeyOrder;
 use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\AbstractLogger;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -91,6 +94,171 @@ final class SealKeyOrderTest extends FacturationApiTestCase
             static fn (string $p): bool => str_contains($p, 'non strictement croissants'),
         ));
         $this->em()->clear();
+    }
+
+    /**
+     * #369 / G-5 + G-7 — LE REFUS DE SCELLER, sur la chaîne PERSISTÉE : les documents réels sont réécrits en SQL
+     * (identifiant de clé et signature valides, comme après une vraie rotation), puis `sceller` est appelé.
+     * Refusé = 409, rien de scellé, une seule alerte critical sans clé ; accepté = aucune alerte.
+     */
+    public function testSealingIsRefusedOrAllowedAccordingToTheKeyOrder(): void
+    {
+        [$chain, $keyA] = $this->realChain(4);
+        $keys = ['A' => $keyA, 'B' => self::KEY_B, 'C' => self::KEY_C];
+        $ids = array_map(static fn (Facture $f) => $f->getId(), $chain);
+        $prints = array_map(static fn (Facture $f): string => $f->getEmpreinte(), $chain);
+        $draftId = $this->draftId();
+        $lastSequence = $chain[3]->getNumeroSequence();
+
+        $cases = [
+            // [suite, clé active, clés retirées, attendu]. Témoins négatifs.
+            ['A,A,B,B', 'A', ['B'], SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT],
+            ['A,B,B,B', 'A', ['B'], SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT],
+            ['A,B,B,A', 'C', ['A', 'B'], SealKeyOrder::BLOCK_LAST_LINK_REGRESSED],
+            ['A,A,A,NULL', 'B', ['A'], SealKeyOrder::BLOCK_LAST_LINK_REGRESSED],
+            ['A,A,B,NULL', 'C', ['A', 'B'], SealKeyOrder::BLOCK_LAST_LINK_REGRESSED],
+            // Témoins positifs (G-7 : chaînes légitimes, aucune alerte).
+            ['NULL,NULL,A,A', 'A', [], null],
+            ['NULL,NULL,NULL,NULL', 'A', [], null],
+            ['A,A,A,A', 'A', [], null],
+            ['A,A,B,B', 'B', ['A'], null],
+            ['A,A,B,B', 'C', ['A', 'B'], null],
+            ['NULL,NULL,A,A', 'B', ['A'], null],
+        ];
+        foreach ($cases as [$suite, $active, $retired, $expected]) {
+            foreach (explode(',', $suite) as $i => $name) {
+                $this->persistKey($ids[$i], $prints[$i], $name === 'NULL' ? null : $name, $keys, $keyA);
+            }
+            $this->em()->clear();
+
+            [$handler, $logger] = $this->handlerFor($active, $retired, $keys);
+            $draft = $this->facture($draftId);
+            $label = sprintf('%s, active %s', $suite, $active);
+
+            if ($expected === null) {
+                $handler->sceller($draft);
+                self::assertSame($lastSequence + 1, $draft->getNumeroSequence(), $label);
+                self::assertSame(SealKeyring::keyIdOf($keys[$active]), $draft->getSealKeyId(), $label);
+                self::assertSame([], $logger->records, $label . ' : aucune alerte sur une chaîne légitime');
+                continue;
+            }
+            try {
+                $handler->sceller($draft);
+                self::fail($label . ' : le scellement aurait dû être refusé.');
+            } catch (SealingRefusedException $e) {
+                self::assertSame(409, $e->getStatusCode(), $label);
+                self::assertSame($expected === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT, str_contains($e->getMessage(), 'NEUVE'), $label . ' : « clé NEUVE » seulement quand la chaîne a quitté la clé active');
+                foreach ($keys as $key) {
+                    self::assertStringNotContainsString($key, $e->getMessage() . json_encode($logger->records, \JSON_THROW_ON_ERROR), $label);
+                }
+            }
+            self::assertSame(0, $draft->getNumeroSequence(), $label . ' : rien n\'est scellé');
+            self::assertCount(1, $logger->records, $label);
+            self::assertSame('critical', $logger->records[0][0], $label);
+            self::assertSame($expected, $logger->records[0][2]['cause'], $label);
+        }
+    }
+
+    /** G-7 : la rotation de bout en bout (A, puis B avec A retirée), et le retour à A refusé. */
+    public function testRotationEndToEndThenBackToTheOldKeyIsRefused(): void
+    {
+        [$chain, $keyA] = $this->realChain(4);
+        $keys = ['A' => $keyA, 'B' => self::KEY_B];
+        $ids = array_map(static fn (Facture $f) => $f->getId(), $chain);
+        $prints = array_map(static fn (Facture $f): string => $f->getEmpreinte(), $chain);
+        $draftId = $this->draftId();
+        $this->em()->clear();
+
+        // A actif, chaîne de A : se prolonge. Rotation vers B (A retirée) : se prolonge.
+        [$a] = $this->handlerFor('A', [], $keys);
+        $a->sceller($this->facture($draftId));
+        $this->em()->clear();
+        [$b] = $this->handlerFor('B', ['A'], $keys);
+        $draft = $this->facture($draftId);
+        $b->sceller($draft);
+        self::assertSame(SealKeyring::keyIdOf(self::KEY_B), $draft->getSealKeyId());
+
+        // La chaîne porte maintenant des documents de B (réécriture des deux derniers) : B poursuit, A est refusée.
+        foreach ([2, 3] as $i) {
+            $this->persistKey($ids[$i], $prints[$i], 'B', $keys, $keyA);
+        }
+        $this->em()->clear();
+        $b->sceller($this->facture($draftId));
+        $this->em()->clear();
+        [$backToA, $logger] = $this->handlerFor('A', ['B'], $keys);
+        $refused = $this->facture($draftId);
+        try {
+            $backToA->sceller($refused);
+            self::fail('Le retour à la clé A aurait dû être refusé.');
+        } catch (SealingRefusedException $e) {
+            self::assertSame(409, $e->getStatusCode());
+        }
+        self::assertSame(0, $refused->getNumeroSequence());
+        self::assertCount(1, $logger->records);
+        $this->em()->clear();
+    }
+
+    /** Un identifiant de chaîne nul (document sans exploitant) est un refus (409), jamais une exception brute. */
+    public function testADocumentWithoutProfilIsRefusedNotAnException(): void
+    {
+        [, $keyA] = $this->realChain(1);
+        [$handler] = $this->handlerFor('A', [], ['A' => $keyA]);
+        $orphan = new Facture();
+        try {
+            $handler->sceller($orphan);
+            self::fail('Un document sans exploitant ne peut pas être scellé.');
+        } catch (SealingRefusedException $e) {
+            self::assertSame(409, $e->getStatusCode());
+        }
+        self::assertSame(0, $orphan->getNumeroSequence());
+        $this->em()->clear();
+    }
+
+    private function draftId(): string
+    {
+        [$client, $entete] = $this->adminSurA();
+        $brouillon = $client->request('POST', '/api/factures', $entete + ['json' => $this->corpsFactureDirecte(999.0)])->toArray();
+
+        return (string) $brouillon['id'];
+    }
+
+    private function facture(string $id): Facture
+    {
+        $facture = $this->em()->getRepository(Facture::class)->find(Uuid::fromString($id));
+        self::assertNotNull($facture);
+
+        return $facture;
+    }
+
+    private function persistKey(mixed $id, string $fingerprint, ?string $name, array $keys, string $keyA): void
+    {
+        $ring = new SealKeyring(self::VARIABLE, $name === null ? $keyA : $keys[$name]);
+        $this->em()->getConnection()->executeStatement(
+            'UPDATE facturation_facture SET seal_key_id = ?, signature = ? WHERE id = ?',
+            [$name === null ? null : $ring->activeKeyId(), $name === null ? $ring->signWithoutId($fingerprint) : $ring->sign($fingerprint), Uuid::fromString((string) $id)->toBinary()],
+        );
+    }
+
+    /**
+     * @param list<string>          $retired
+     * @param array<string, string> $keys
+     *
+     * @return array{0: ScellementFactureHandler, 1: AbstractLogger&object{records: list<array{string, string, array<mixed>}>}}
+     */
+    private function handlerFor(string $active, array $retired, array $keys): array
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{string, string, array<mixed>}> */
+            public array $records = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->records[] = [(string) $level, (string) $message, $context];
+            }
+        };
+        $ring = new SealKeyring(self::VARIABLE, $keys[$active], implode(',', array_map(static fn (string $n): string => $keys[$n], $retired)), $logger);
+
+        return [$this->verifier($ring), $logger];
     }
 
     /**

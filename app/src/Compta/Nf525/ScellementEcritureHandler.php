@@ -6,6 +6,7 @@ namespace App\Compta\Nf525;
 
 use App\Compta\Entity\EcritureComptable;
 use App\Platform\Nf525\SealKeyOrderTracker;
+use App\Platform\Nf525\SealKeyRunQuery;
 use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -48,6 +49,21 @@ final class ScellementEcritureHandler
                 sprintf('chaîne comptable du journal %s, maillon n° %d', (string) $ecriture->getJournal()?->getCode(), $precedente->getNumeroSequence()),
             );
         }
+
+        // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS : une chaîne qui a quitté la clé active, ou dont le dernier
+        // maillon est en régression, ne se prolonge pas. Les intervalles sont lus sur la MÊME connexion (donc
+        // la même transaction) que `dernierMaillon`, sans verrou de plus : comme lui, la lecture est protégée
+        // à l'écriture par l'unicité (profil, journal, séquence). ⚠ Les brouillons (séquence 0) sont exclus de
+        // la requête : une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+        $this->keyring->assertCanExtendInOrderFrom(
+            fn (): array => SealKeyRunQuery::forAccounting(
+                $this->em->getConnection(),
+                $this->keyring,
+                (string) $ecriture->getProfilExploitant()?->getId(),
+                (string) $ecriture->getJournal()?->getId(),
+            ),
+            sprintf('chaîne comptable du journal %s', (string) $ecriture->getJournal()?->getCode()),
+        );
 
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
