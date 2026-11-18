@@ -19,9 +19,11 @@ use App\Platform\Enum\NotificationSeverity;
  *   n'agit sur un refus isolé. Il n'entre pas.
  *
  * ⚠ CE N'EST PAS UNE LISTE À FAIRE GROSSIR. Vingt-huit événements sont réellement émis par ce
- * dépôt ; SEPT entrent ici — le sixième posé le 03/09, sur arbitrage de Maxime, pour un délai
+ * dépôt ; HUIT entrent ici — le sixième posé le 03/09, sur arbitrage de Maxime, pour un délai
  * légal qu'aucun geste ne ferait remarquer ; le septième le 07/10, sur arbitrage de Maxime (D121),
- * pour une jauge de sécurité dépassée. Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
+ * pour une jauge de sécurité dépassée ; le huitième
+ * (`nf525.chain_blocked`) pose la cloche d'une alerte de scellement NF525, hors bus (voir `viaBus`).
+ * Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
  * problème personne ne le voit — c'est exactement ce qui arrive à un bandeau permanent qui répète
  * « tout va bien ».
  *
@@ -69,6 +71,13 @@ final class NotificationRule
          * ou une facture contestee ne se presentent pas par trois.
          */
         public readonly ?string $anchorKey = null,
+        /**
+         * Faux : la règle n'est PAS alimentée par le bus d'événements, donc `admittedEvents()` ne la rend pas
+         * et `NotifyOnDomainEvent` ne s'abonne pas à un événement que personne n'émet. Le bus persiste dans la
+         * transaction de l'émetteur, qui s'annule — faux pour une alerte écrite sur une seconde connexion
+         * (`Nf525AlertNotifier`).
+         */
+        public readonly bool $viaBus = true,
     ) {
     }
 
@@ -180,6 +189,20 @@ final class NotificationRule
                 .'fréquentation sur place et retenez les entrées le temps qu’elle redescende.',
                 'space_label',
             ),
+            // Plan nf525-alerte-scellement, D-D : posée par `Nf525AlertNotifier` sur la seconde connexion, à
+            // l'ouverture de l'alerte (jamais par le bus : voir `viaBus`). Le geste : informer le site.
+            new self(
+                'nf525.chain_blocked',
+                NotificationSeverity::Critical,
+                'securite',
+                'gerer',
+                'alertes-nf525',
+                'alerte',
+                'Chaîne fiscale bloquée',
+                'La caisse ou la facturation est bloquée. L’éditeur est prévenu ; vous n’avez rien à réparer vous-même. Ouvrez l’alerte pour suivre sa résolution.',
+                'chain_label',
+                false,
+            ),
         ];
 
         // ── `expense_report.submitted` A ÉTÉ RETIRÉ, ET CE N'EST PAS UN OUBLI ───────────────────
@@ -219,6 +242,6 @@ final class NotificationRule
     /** @return list<string> les noms d'événements admis — sert à l'abonnement du bus */
     public static function admittedEvents(): array
     {
-        return array_keys(self::table());
+        return array_keys(array_filter(self::table(), static fn (self $rule): bool => $rule->viaBus));
     }
 }
