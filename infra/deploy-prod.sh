@@ -213,6 +213,17 @@ log "Marqueur de version pour PHP"
 log "Redémarrage de PHP-FPM (opcache)"
 "${COMPOSE[@]}" restart php
 
+# #371 — NGINX RÉSOUT `php` UNE SEULE FOIS, À SON DÉMARRAGE.
+#
+# `fastcgi_pass php:9000` (docker/nginx/default.conf) garde l'adresse lue au lancement de web. Quand
+# `up -d` recrée php (nouvelle IP), web frappe l'ancienne : connect() failed (111), toute l'API en 502
+# (08/11 en prod, rétabli à la main par `docker restart fluvia-prod-web-1`). On le redémarre donc
+# APRÈS php, à chaque déploiement, qu'il y ait eu recréation ou non.
+# `front` est dans le même cas vis-à-vis de `web` (`proxy_pass http://web:80`) : il suit.
+log "Redémarrage de web puis front (nouvelle résolution de l'amont)"
+"${COMPOSE[@]}" restart web
+"${COMPOSE[@]}" restart front
+
 # ── LES ERREURS PHP NE SONT PAS MONTREES AU VISITEUR ────────────────────────────────────────────
 #
 # Voir docker/php/conf.d/zz-production.ini. Un montage oublié ou un fichier renommé rallume
@@ -298,13 +309,18 @@ if [ "$CHARGE" = "$COMMIT_DEPLOYE" ] && [ "$SERVI" = "$COMMIT_DEPLOYE" ]; then
     echo "      chargé par PHP          : $CHARGE"
 fi
 
+PHP_EN_ECHEC=0
 if [ "$CHARGE" != "$COMMIT_DEPLOYE" ]; then
     echo
+    PHP_EN_ECHEC=1
     echo "✗ PHP ne sert pas le code qu'on vient de déployer."
     echo "    déployé ici          : $COMMIT_DEPLOYE"
     echo "    chargé par PHP       : ${CHARGE:-<rien ou illisible>}"
     echo
-    echo "      docker compose -p fluvia-prod restart php"
+    echo "  Si l'API rend 502 (rien ou illisible ci-dessus), c'est nginx qui frappe une ancienne"
+    echo "  adresse de php (#371) : redémarrer php PUIS web et front."
+    echo
+    echo "      docker compose -p fluvia-prod restart php web front"
     echo
 fi
 
@@ -322,13 +338,17 @@ if [ "$SERVI" != "$COMMIT_DEPLOYE" ]; then
     exit 1
 fi
 
-printf '{"commit":"%s","branche":"%s","construit":"%s","boucle":"%s","sujet":"%s"}\n' \
-    "$COMMIT_DEPLOYE" \
-    "$(git rev-parse --abbrev-ref HEAD)" \
-    "$(date -Is)" \
-    "$URL_PUBLIQUE" \
-    "$(git log -1 --format=%s | tr -d '"' | cut -c1-120)" \
-    > "$WEB_ROOT/version.json"
+# #371 — PHP en échec : pas de champ « boucle », et le déploiement échouera EN FIN de script, après
+# les avertissements et le verdict NF525 (#361), pour qu'un échec n'en masque pas un autre.
+if [ "$PHP_EN_ECHEC" -eq 0 ]; then
+    printf '{"commit":"%s","branche":"%s","construit":"%s","boucle":"%s","sujet":"%s"}\n' \
+        "$COMMIT_DEPLOYE" \
+        "$(git rev-parse --abbrev-ref HEAD)" \
+        "$(date -Is)" \
+        "$URL_PUBLIQUE" \
+        "$(git log -1 --format=%s | tr -d '"' | cut -c1-120)" \
+        > "$WEB_ROOT/version.json"
+fi
 
 # ── LE COURRIEL PART-IL VRAIMENT ? ──────────────────────────────────────────────────────────────
 #
@@ -375,6 +395,13 @@ if [ "${NF525_TROUSSEAU_KO:-0}" != "0" ]; then
     echo "✗ Déploiement terminé, MAIS une chaîne NF525 ne peut plus être prolongée (voir « Trousseau NF525 »"
     echo "  plus haut). L'application refuse d'y sceller tant que la clé n'est pas restaurée."
     echo "  → infra/README.md, section « Trousseau NF525 »."
+    exit 1
+fi
+
+# #371 — verdict de la boucle PHP, rendu lui aussi en dernier.
+if [ "$PHP_EN_ECHEC" -ne 0 ]; then
+    echo
+    echo "✗ Déploiement terminé, MAIS PHP ne sert pas le code déployé (voir « PHP ne sert pas » plus haut)."
     exit 1
 fi
 
