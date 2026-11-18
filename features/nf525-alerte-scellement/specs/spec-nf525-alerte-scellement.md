@@ -27,7 +27,7 @@ Aucun courriel ne sort de la plateforme (E-8). La seule notification réelle pas
 
 - **G-1 — Alerte persistée, une par chaîne.** Un scellement refusé (vente, compta, facturation) ouvre une alerte NF525. Si une alerte est déjà **ouverte** pour la même chaîne, il la met à jour au lieu d'en créer une autre. Une alerte porte :
   - la chaîne : type, point de vente ou profil exploitant, journal le cas échéant ;
-  - la cause : signature invalide, clé inconnue, régression de clé, ordre illisible ;
+  - la cause : signature invalide, clé inconnue, régression de clé, ordre illisible, chaîne rompue (vérification) ;
   - le premier et le dernier refus, et le nombre de refus ;
   - le détail technique : identifiants de clé nettoyés (`safeId`), numéro de maillon, **jamais une clé** ;
   - l'état : ouverte ou résolue.
@@ -42,7 +42,7 @@ Aucun courriel ne sort de la plateforme (E-8). La seule notification réelle pas
   Le texte est simple : la caisse ou la facturation est bloquée, l'éditeur est prévenu. Il mène à l'écran de l'alerte. Les refus suivants ne sonnent plus.
 - **G-5 — Écran des alertes, côté établissement.** Un administrateur voit, en lecture seule, les alertes NF525 des chaînes de son établissement : ouvertes et résolues, cause en clair, dates, nombre de refus. Il ne voit **ni** le détail technique **ni** les alertes d'un autre établissement (cloisonnement serveur).
 - **G-6 — Écran des alertes, côté éditeur.** L'éditeur voit toutes les alertes de tous les établissements, avec le détail technique, et peut poser une note sur une alerte. C'est son seul geste d'écriture.
-- **G-7 — Résolution automatique.** Le premier scellement **réussi** sur une chaîne dont l'alerte est ouverte la passe à « résolue », avec la date. Si la chaîne refuse de nouveau ensuite, une **nouvelle** alerte s'ouvre et la cloche sonne de nouveau.
+- **G-7 — Résolution automatique.** Une alerte ouverte par un **refus de scellement** passe à « résolue » (avec la date) au premier scellement **réussi** sur sa chaîne. Une alerte ouverte par une **vérification** rompue ne se ferme qu'à la prochaine vérification qui retrouve la chaîne **intacte** — un scellement réussi ne regarde que la fin de la chaîne et ne prouve rien sur un maillon forgé au milieu. *(Amendé au CP-2, 18/11/2026, décision de Maxime.)* Si la chaîne refuse de nouveau ensuite, une **nouvelle** alerte s'ouvre et la cloche sonne de nouveau.
 - **G-8 — Message générique à la caisse.** Le 409 d'un scellement refusé ne contient plus aucun détail technique : ni nom de variable, ni identifiant de clé ou de point de vente, ni procédure. Il dit que la chaîne fiscale est bloquée, que l'administrateur et l'éditeur sont prévenus, et donne la **référence de l'alerte**. Il en va de même pour la raison inscrite dans la quarantaine des ventes hors connexion.
 
 ## Hors périmètre
@@ -86,5 +86,5 @@ Chaque critère correspond à un test automatisé : PHPUnit, et `node --test` po
 - **G-4** : à l'ouverture, une notification par administrateur de chaque établissement concerné. Au deuxième refus, aucune nouvelle notification. Un non-administrateur ne reçoit rien. Un profil à deux établissements → les administrateurs des deux.
 - **G-5** : l'administrateur A ne voit pas l'alerte de l'établissement B. Il ne reçoit pas le détail technique (champ absent de la réponse). Il ne peut pas écrire.
 - **G-6** : l'éditeur voit tout et pose une note. Un administrateur qui tente de poser une note reçoit un refus.
-- **G-7** : refus → alerte ouverte ; scellement réussi → alerte résolue ; nouveau refus → nouvelle alerte, et la cloche sonne de nouveau.
+- **G-7** : refus → alerte ouverte ; scellement réussi → alerte résolue ; nouveau refus → nouvelle alerte, et la cloche sonne de nouveau. Vérification rompue → alerte ouverte ; scellement réussi → alerte **toujours ouverte** ; vérification intacte → alerte résolue.
 - **G-8** : le corps du 409 et la raison de quarantaine contiennent la référence de l'alerte. Ils ne contiennent ni `NF525_`, ni identifiant de clé, ni UUID de point de vente.
