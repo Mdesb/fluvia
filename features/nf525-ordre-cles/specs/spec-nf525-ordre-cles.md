@@ -16,7 +16,7 @@ Ce sont des chaînes fiscales : selon le BOFiP (BOI-TVA-DECLA-30-10-30, cité da
 
 ## Arbitrages de Maxime (18/11/2026)
 
-1. **L'ancienneté se lit dans la chaîne elle-même** : une clé qu'une chaîne a quittée n'y revient plus jamais. Il n'y a ni rang configuré, ni ordre imposé à la liste `*_RETIRED_KEYS`, ni migration.
+1. **L'ancienneté se lit dans la chaîne elle-même** : une clé qu'une chaîne a quittée n'y revient plus jamais. Il n'y a ni rang configuré, ni ordre imposé à la liste `*_RETIRED_KEYS`, ni reprise de données.
 2. **Échec fermé** : une chaîne où une clé est revenue en arrière est rompue, et l'application **refuse de sceller** le maillon suivant, comme elle le fait déjà pour une clé inconnue.
 3. **Pas de retour à une ancienne clé, même volontaire.** La seule sortie est une rotation vers une clé **neuve**.
 4. **La signature du ZIP d'archive est hors périmètre.** Elle fera l'objet d'une Issue séparée.
@@ -47,7 +47,7 @@ On appelle **régression de clé** le fait, le long d'une chaîne lue par numér
 - **La signature du ZIP d'archive fiscale.** Elle n'a pas d'identifiant de clé et reste acceptée avec n'importe quelle clé retirée. Une **Issue séparée** est à ouvrir.
 - **Un rang configuré ou une date de retrait des clés.** On ne détecte donc pas un maillon signé par une clé retirée que **cette chaîne n'a jamais utilisée**. Limite assumée de l'arbitrage 1.
 - **Une dérogation pour revenir à une ancienne clé** (arbitrage 3).
-- **Toute migration ou reprise des maillons existants**, dont les `NULL` d'avant #368.
+- **Toute reprise des maillons existants**, dont les `NULL` d'avant #368. *(Amendé au CP-2, 18/11/2026, décision de Maxime : une migration **d'index seulement** est admise — trois index sur la clé des maillons, aucune donnée modifiée — pour que le refus de sceller (G-5) ne relise pas la chaîne.)*
 - **La liaison d'un segment d'archive avec la clé du maillon qui le précède.** G-4 ne juge qu'à l'intérieur du segment, et la base vivante reste jugée en entier par G-1 à G-3 et G-6.
 - **L'alerte persistée quand un scellement est refusé.** C'est #370, le lot suivant.
 
