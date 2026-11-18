@@ -15,8 +15,8 @@
 
 <!-- Coche au fur et à mesure. Ne modifie jamais une étape déjà « fait » : crée une nouvelle étape. -->
 
-- [ ] Étape 1 — vocabulaire chaîne et cause (G-1)
-- [ ] Étape 2 — refus porteur de cause, détail, message générique (G-8, G-1)
+- [x] Étape 1 — vocabulaire chaîne et cause (G-1)
+- [x] Étape 2 — refus porteur de cause, détail, message générique (G-8, G-1)
 - [ ] Étape 3 — table, entité, index unique, migration (G-1)
 - [ ] Étape 4 — écriture sur la seconde connexion (G-1, G-2)
 - [ ] Étape 5 — cloche à l'ouverture (G-4)
@@ -35,6 +35,7 @@
 ## Journal de Session
 
 <!-- Décisions prises en cours de route, écarts constatés, changements d'avis. Append-only. -->
+- 18/11/2026 — Étapes 1-2 faites. Suite ciblée 544 -> 554 tests verts (+10 : SealChainRefTest 5, SealingRefusedExceptionTest 5) ; `tests/Vente` entier 291 verts. Écarts : (a) le constructeur de `SealingRefusedException` devient `(SealRefusalCause, string $technicalDetail, ?string $reference = null)` ; ajout de `cause()` et `reference()` ; (b) causes `key_regression` pour les deux branches d'ordre (clé active quittée, dernier maillon en régression) ; (c) les chemins de `test-stack.sh run` sont relatifs à `app/` (`tests/...`). Garde-fous : 3 en échec pour PHP 8.3 de l'hôte (manifeste vs catalogue, filtres déclarés, appels du frontal dans le vide).
 
 ## Journal de Rétropropagation
 

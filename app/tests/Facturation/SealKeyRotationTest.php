@@ -54,7 +54,7 @@ final class SealKeyRotationTest extends FacturationApiTestCase
             $withoutKeyring->sceller($draft);
             self::fail('Sceller par-dessus une chaîne invérifiable aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
-            self::assertStringContainsString('NF525_FACTURATION_SEAL_RETIRED_KEYS', $e->getMessage());
+            self::assertStringContainsString('NF525_FACTURATION_SEAL_RETIRED_KEYS', $e->technicalDetail());
         }
         self::assertSame('', $draft->getEmpreinte(), 'rien n\'a été scellé');
 

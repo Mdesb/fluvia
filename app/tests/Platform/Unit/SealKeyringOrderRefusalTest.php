@@ -7,6 +7,7 @@ namespace App\Tests\Platform\Unit;
 use App\Platform\Nf525\KeyRun;
 use App\Platform\Nf525\SealCheck;
 use App\Platform\Nf525\SealingRefusedException;
+use App\Platform\Nf525\SealRefusalCause;
 use App\Platform\Nf525\SealKeyring;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -66,22 +67,23 @@ final class SealKeyringOrderRefusalTest extends TestCase
 
         // La chaîne a déjà quitté C : C, puis B.
         $e = self::refusal(static fn () => $keyring->assertCanExtendInOrder([new KeyRun($idC, 1, 1), new KeyRun($idB, 2, 2)], 'chaîne témoin'));
-        self::assertStringContainsString('a déjà quitté la clé de scellement active', $e->getMessage());
-        self::assertStringContainsString('clé NEUVE', $e->getMessage());
-        self::assertStringContainsString($idC, $e->getMessage(), 'l\'identifiant de la clé active, pas la clé');
+        self::assertSame(SealRefusalCause::KeyRegression, $e->cause());
+        self::assertStringContainsString('a déjà quitté la clé de scellement active', $e->technicalDetail());
+        self::assertStringContainsString('clé NEUVE', $e->technicalDetail());
+        self::assertStringContainsString($idC, $e->technicalDetail(), 'l\'identifiant de la clé active, pas la clé');
         self::assertSame(SealKeyring::keyIdOf(self::KEY_C), $logger->records[0][2]['cle_active']);
         self::assertSame('active_key_left', $logger->records[0][2]['cause']);
-        self::assertNoSecret($e->getMessage());
+        self::assertNoSecret($e->technicalDetail());
         self::assertNoSecret(json_encode($logger->records, \JSON_THROW_ON_ERROR));
 
         // Dernier maillon en régression (A,B,A) : pas de « clé NEUVE », on renvoie à la vérification.
         $logger->records = [];
         $e = self::refusal(static fn () => $keyring->assertCanExtendInOrder([new KeyRun($idA, 1, 3), new KeyRun($idB, 2, 2)], 'chaîne témoin'));
-        self::assertStringNotContainsString('NEUVE', $e->getMessage());
-        self::assertStringContainsString('verifier-chaine', $e->getMessage());
-        self::assertStringContainsString('alerte', $e->getMessage());
+        self::assertStringNotContainsString('NEUVE', $e->technicalDetail());
+        self::assertStringContainsString('verifier-chaine', $e->technicalDetail());
+        self::assertStringContainsString('alerte', $e->technicalDetail());
         self::assertSame('last_link_regressed', $logger->records[0][2]['cause']);
-        self::assertNoSecret($e->getMessage());
+        self::assertNoSecret($e->technicalDetail());
         self::assertNoSecret(json_encode($logger->records, \JSON_THROW_ON_ERROR));
     }
 
@@ -97,12 +99,12 @@ final class SealKeyringOrderRefusalTest extends TestCase
             [new KeyRun($idA, 1, 2), new KeyRun($idB, 3, 4), new KeyRun(null, 5, 5)],
             'chaîne témoin',
         ));
-        self::assertStringContainsString('maillon sans identifiant après la clé ' . $idB, $e->getMessage());
-        self::assertStringNotContainsString($idA, $e->getMessage());
-        self::assertStringNotContainsString('NEUVE', $e->getMessage());
+        self::assertStringContainsString('maillon sans identifiant après la clé ' . $idB, $e->technicalDetail());
+        self::assertStringNotContainsString($idA, $e->technicalDetail());
+        self::assertStringNotContainsString('NEUVE', $e->technicalDetail());
         self::assertSame($idB, $logger->records[0][2]['cle_autre']);
         self::assertNull($logger->records[0][2]['cle_du_maillon']);
-        self::assertNoSecret($e->getMessage());
+        self::assertNoSecret($e->technicalDetail());
         self::assertNoSecret(json_encode($logger->records, \JSON_THROW_ON_ERROR));
     }
 
@@ -114,9 +116,9 @@ final class SealKeyringOrderRefusalTest extends TestCase
 
         // Dernier maillon NULL après un identifiant hostile.
         $e = self::refusal(static fn () => $keyring->assertCanExtendInOrder([new KeyRun($evil, 1, 2), new KeyRun(null, 3, 3)], 'chaîne témoin'));
-        self::assertStringNotContainsString('<script>', $e->getMessage());
-        self::assertStringNotContainsString("\n", $e->getMessage());
-        self::assertStringContainsString('identifiant non conforme', $e->getMessage());
+        self::assertStringNotContainsString('<script>', $e->technicalDetail());
+        self::assertStringNotContainsString("\n", $e->technicalDetail());
+        self::assertStringContainsString('identifiant non conforme', $e->technicalDetail());
         $journal = json_encode($logger->records, \JSON_THROW_ON_ERROR);
         self::assertStringNotContainsString('<script>', $journal);
         self::assertStringNotContainsString('\\n', $journal);
@@ -134,8 +136,8 @@ final class SealKeyringOrderRefusalTest extends TestCase
         self::assertStringContainsString('identifiant non conforme (longueur ' . strlen($evil), (string) $problem);
 
         $e = self::refusal(static fn () => $keyring->assertCanExtend('empreinte', 'signature', $evil, 'chaîne témoin'));
-        self::assertStringNotContainsString('<script>', $e->getMessage());
-        self::assertStringNotContainsString("\n", $e->getMessage());
+        self::assertStringNotContainsString('<script>', $e->technicalDetail());
+        self::assertStringNotContainsString("\n", $e->technicalDetail());
         $journal = json_encode($logger->records, \JSON_THROW_ON_ERROR);
         self::assertStringNotContainsString('<script>', $journal);
         self::assertStringNotContainsString('\\n', $journal);
@@ -157,11 +159,12 @@ final class SealKeyringOrderRefusalTest extends TestCase
         ] as $loader) {
             $logger->records = [];
             $e = self::refusal(static fn () => $keyring->assertCanExtendInOrderFrom($loader, 'chaîne témoin'));
-            self::assertStringContainsString('n\'a pas pu être établi', $e->getMessage());
+            self::assertSame(SealRefusalCause::UnreadableOrder, $e->cause());
+            self::assertStringContainsString('n\'a pas pu être établi', $e->technicalDetail());
             self::assertCount(1, $logger->records);
             self::assertSame('critical', $logger->records[0][0]);
             self::assertSame('unreadable_order', $logger->records[0][2]['cause']);
-            self::assertNoSecret($e->getMessage() . json_encode($logger->records, \JSON_THROW_ON_ERROR));
+            self::assertNoSecret($e->technicalDetail() . json_encode($logger->records, \JSON_THROW_ON_ERROR));
         }
 
         // Des intervalles mal formés (deux pour le même identifiant) : même refus.
