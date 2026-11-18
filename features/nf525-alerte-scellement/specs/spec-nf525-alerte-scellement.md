@@ -1,6 +1,6 @@
 # Spec — nf525-alerte-scellement
 
-**Statut :** en revue <!-- brouillon → en revue → validée (CP-1) -->
+**Statut :** validée (CP-1, Maxime, 18/11/2026) <!-- brouillon → en revue → validée (CP-1) -->
 **Auteur :** Claude Code (session cloud), arbitrages de Maxime du 18/11/2026
 **Date :** 2026-11-18
 **Issue :** #370 (suite de #368, revue sensible points 7 et 8 ; s'appuie sur #369, PR #373)

@@ -1,13 +1,13 @@
 # Suivi d'implémentation — nf525-alerte-scellement
 
-**État :** spec <!-- discovery → spec → plan → build → review → done -->
+**État :** plan <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/nf525-alerte-scellement (partie de feature/nf525-ordre-cles, #369)
 **Spec :** features/nf525-alerte-scellement/specs/spec-nf525-alerte-scellement.md
 **Plan :** features/nf525-alerte-scellement/plans/plan-nf525-alerte-scellement.md
 
 ## Checkpoints
 
-- [ ] **CP-1** — spec validée par l'humain (date + qui)
+- [x] **CP-1** — spec validée par Maxime le 18/11/2026
 - [ ] **CP-2** — plan validé par l'humain (date + qui)
 - [ ] **CP-3** — revue avant merge (date + qui)
 
