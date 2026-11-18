@@ -478,6 +478,11 @@ when@test:
         # terminal le reçoit. Le terminal externe a ses propres tests (`ExternalTerminalTest`).
         app.tpe.connecteur_par_defaut: simule
     services:
+        # Le Recorder n'a pas encore de consommateur (étape 7 : les handlers) ; public pour que le test de
+        # câblage (`SealAlertRecorderTest`) lise ce que le conteneur fournit au Store.
+        App\Platform\Nf525\Alert\SealAlertRecorder:
+            autowire: true
+            public: true
         App\Tests\Boutique\Support\MailCollector:
             public: true
             tags: ['kernel.event_subscriber']

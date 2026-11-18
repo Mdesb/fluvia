@@ -20,7 +20,7 @@
 - [x] Étape 3 — table, entité, index unique, migration (G-1)
 - [x] Étape 4 — écriture sur la seconde connexion (G-1, G-2)
 - [x] Étape 5 — cloche à l'ouverture (G-4)
-- [ ] Étape 6 — service d'enregistrement (G-1, G-2, G-4, G-7, G-8)
+- [x] Étape 6 — service d'enregistrement (G-1, G-2, G-4, G-7, G-8)
 - [ ] Étape 7 — branchement des trois handlers (G-1, G-2, G-7, G-8)
 - [ ] Étape 8 — quarantaine hors ligne (G-8, G-3)
 - [ ] Étape 9 — vérification rompue / intacte (G-3, G-7)
@@ -49,3 +49,5 @@
 <!-- Rempli par /verifier-specs : date, écart trouvé, décision prise, fichier spec modifié. -->
 - 18/11/2026 — Aiguillage SDD complet. Chercheur : refs/faits-chercheur.md. Arbitrages de Maxime : alerte dédiée par chaîne + cloche à l'ouverture ; admin (securite.gerer) + éditeur ; tous les établissements du profil ; résolution automatique au premier scellement réussi + note éditeur ; vérification rompue = même alerte ; message 409 générique. Spec en attente de CP-1.
 - 18/11/2026 — Plan (16 étapes) : seconde connexion DBAL pour que l'alerte survive au rollback. Q-1 tranchée par Maxime : une alerte ouverte par une vérification ne se ferme qu'à une vérification intacte (spec G-7 amendée). Défauts retenus sans objection, à confirmer en CP-2 : Q-2 cause `chain_broken` ; Q-3 texte de cloche proposé par l'architecte ; Q-4 l'administrateur ne voit pas la note de l'éditeur ; Q-5 une archive en défaut ouvre l'alerte de la chaîne vivante (fermée à la prochaine vérification intacte). Fiches : l'agent `documentaliste` du plugin n'est pas chargé en session cloud ; un agent généraliste applique ses règles (doc officielle seulement, docs/references/ seulement).
+- 18/11/2026 — Étape 6 faite. `SealChainEstablishments` (pdv -> son établissement, profil -> principal + rattachés, tables/colonnes lues dans les métadonnées ORM) et `SealAlertRecorder` (`recordRefusal`, `recordVerification`, `resolveOnSeal`, meilleur effort : tout `\Throwable` -> `critical`/`warning` avec classe + code + clé de chaîne seulement, jamais le message). `SealAlertRecorderTest` 12 tests verts ; `tests/Platform` 328 verts. Écarts : (a) l'autowiring suffit pour le listener (`Nf525AlertNotifier`, seule implémentation), prouvé par le test ; mais le Recorder n'a pas encore de consommateur (étape 7) donc `services.yaml` le déclare `public` sous `when@test` (avec `autowire: true`, le bloc `when@test` n'héritant pas de `_defaults`) : à retirer à l'étape 7 si un autre test l'atteint ; (b) `resolveOnSeal` journalise en `warning`, les autres en `critical`. Garde-fous : 3 en échec attendus (PHP 8.3 hôte).
+- 18/11/2026 — Étape 6, revue adversariale : `logFailure` enveloppé dans un try/catch silencieux (panne du journal), tests TypeError (listener, fabrique) et logger qui lève. À l'étape 7 : prouver que les trois handlers reçoivent le vrai `SealAlertRecorder` du conteneur (hors `when@test`) et retirer le `public` de test de `services.yaml` s'il devient inutile.
