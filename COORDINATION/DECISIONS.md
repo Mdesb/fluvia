@@ -4015,3 +4015,25 @@ passe à `skipped`, motif `module_disabled`, et **ne repart pas d'elle-même** q
 daté (« aquagym samedi ») republié des jours plus tard sur le fil public d'un client serait faux, et un doublon paru
 ne se rattrape pas. La republier est un geste humain : un nouveau message. À l'inverse, une relance de paiement
 laissée en attente pendant l'extinction part au premier passage après le rallumage.
+
+## D134 — NF525 : une clé de scellement quittée par une chaîne n'y revient jamais (#369)
+
+**Décidé par Maxime le 18/11/2026, en découverte (spec `features/nf525-ordre-cles/`), CP-1 et CP-2 le même jour.**
+
+**Le problème.** Depuis le trousseau de #368, une clé retirée reste valable sans limite pour vérifier : fuitée, elle
+permet à qui écrit en base de forger des maillons postérieurs à son retrait.
+
+**Ce qui est décidé.**
+- **L'ancienneté se lit dans la chaîne** : une clé que la chaîne a quittée n'y revient plus, et un maillon sans
+  identifiant ne suit jamais un maillon identifié. Ni rang configuré, ni ordre imposé à `*_RETIRED_KEYS`.
+- **Échec fermé** : la vérification déclare la chaîne rompue, l'application refuse de sceller (409, alerte
+  critique), la remontée hors ligne est refusée, `app:nf525:check-keys` fait échouer le déploiement.
+- **Aucun retour à une ancienne clé, même volontaire** : la seule sortie est une rotation vers une clé NEUVE
+  (procédure : `infra/README.md`, « Trousseau NF525 »).
+- **Trois index** sur la clé des maillons (migration d'index seulement, aucune donnée modifiée), pour que le refus
+  de sceller ne relise pas la chaîne à chaque vente.
+
+**Contreparties acceptées.** Une clé retirée que la chaîne n'a jamais utilisée n'est pas détectée par la règle
+(seulement par `check-keys` et la vérification si elle apparaît). Une chaîne réellement en régression bloque la
+caisse de son point de vente jusqu'à correction. La signature du ZIP d'archive, qui accepte encore toute clé
+retirée, est **hors périmètre** (Issue à part).
