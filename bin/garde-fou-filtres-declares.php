@@ -54,6 +54,11 @@ if (!is_file($autochargeur)) {
     echo "Filtres declares : IGNORE — dependances PHP absentes (app/vendor). ",
         "Ce controle exige un `composer install` ; il ne dit donc RIEN ici, ni bien ni mal.", PHP_EOL;
 
+    // Le lanceur compte les abstentions grace a ce marqueur (voir `bin/garde-fous.sh`). Hors
+    // du lanceur -- appel direct, hooks -- la variable est absente et rien n'est imprime.
+    if ($marqueur = getenv('GARDE_FOU_MARQUEUR_ABSTENTION')) {
+        echo $marqueur, PHP_EOL;
+    }
     exit(0);
 }
 

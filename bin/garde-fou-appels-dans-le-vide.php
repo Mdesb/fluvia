@@ -71,6 +71,11 @@ if (!is_file($app . '/vendor/autoload.php')) {
     echo "Appels dans le vide : non exécuté — pas de dépendances installées dans cet arbre.\n";
     echo "  `debug:router` ne peut pas démarrer sans `vendor/`, et une table vide déclarerait tous\n";
     echo "  les appels orphelins. Le contrôle tourne dans `./bin/garde-fous.sh` et en pre-commit.\n";
+    // Le lanceur compte les abstentions grace a ce marqueur (voir `bin/garde-fous.sh`). Hors
+    // du lanceur -- appel direct, hooks -- la variable est absente et rien n'est imprime.
+    if ($marqueur = getenv('GARDE_FOU_MARQUEUR_ABSTENTION')) {
+        echo $marqueur, PHP_EOL;
+    }
     exit(0);
 }
 
