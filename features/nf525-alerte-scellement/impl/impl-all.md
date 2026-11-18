@@ -1,6 +1,6 @@
 # Suivi d'implémentation — nf525-alerte-scellement
 
-**État :** plan <!-- discovery → spec → plan → build → review → done -->
+**État :** build <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/nf525-alerte-scellement (partie de feature/nf525-ordre-cles, #369)
 **Spec :** features/nf525-alerte-scellement/specs/spec-nf525-alerte-scellement.md
 **Plan :** features/nf525-alerte-scellement/plans/plan-nf525-alerte-scellement.md
@@ -8,15 +8,29 @@
 ## Checkpoints
 
 - [x] **CP-1** — spec validée par Maxime le 18/11/2026
-- [ ] **CP-2** — plan validé par l'humain (date + qui)
+- [x] **CP-2** — plan validé par Maxime le 18/11/2026 (« Reprend »), avec les défauts Q-2 à Q-5
 - [ ] **CP-3** — revue avant merge (date + qui)
 
 ## Étapes (reprises du plan)
 
 <!-- Coche au fur et à mesure. Ne modifie jamais une étape déjà « fait » : crée une nouvelle étape. -->
 
-- [ ] Étape 1 — <objectif> (couvre G-…)
-- [ ] Étape 2 — <objectif> (couvre G-…)
+- [ ] Étape 1 — vocabulaire chaîne et cause (G-1)
+- [ ] Étape 2 — refus porteur de cause, détail, message générique (G-8, G-1)
+- [ ] Étape 3 — table, entité, index unique, migration (G-1)
+- [ ] Étape 4 — écriture sur la seconde connexion (G-1, G-2)
+- [ ] Étape 5 — cloche à l'ouverture (G-4)
+- [ ] Étape 6 — service d'enregistrement (G-1, G-2, G-4, G-7, G-8)
+- [ ] Étape 7 — branchement des trois handlers (G-1, G-2, G-7, G-8)
+- [ ] Étape 8 — quarantaine hors ligne (G-8, G-3)
+- [ ] Étape 9 — vérification rompue / intacte (G-3, G-7)
+- [ ] Étape 10 — API établissement (G-5)
+- [ ] Étape 11 — API éditeur et note (G-6)
+- [ ] Étape 12 — frontal : client et fonctions pures (G-5, G-6)
+- [ ] Étape 13 — frontal : écran administrateur (G-5, G-4)
+- [ ] Étape 14 — frontal : écran éditeur (G-6)
+- [ ] Étape 15 — caisse épinglée (G-8)
+- [ ] Étape 16 — documentation, décision, clôture
 
 ## Journal de Session
 

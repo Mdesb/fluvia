@@ -1,6 +1,6 @@
 # Plan — nf525-alerte-scellement
 
-**Statut :** en attente de CP-2 (porte automatique : CI verte + résumé d'une page) — révisé le 18/11/2026 : G-7 amendé (spec), fiches `dbal`, `mariadb`, `api-platform` lues
+**Statut :** CP-2 validé par Maxime le 18/11/2026, défauts Q-2 à Q-5 retenus — révisé le 18/11/2026 : G-7 amendé (spec), fiches `dbal`, `mariadb`, `api-platform` lues
 **Spec :** `features/nf525-alerte-scellement/specs/spec-nf525-alerte-scellement.md` (CP-1 validé par Maxime, 18/11/2026)
 **Faits :** `features/nf525-alerte-scellement/refs/faits-chercheur.md`
 **Issue :** #370 — branche `feature/nf525-alerte-scellement`, empilée sur `feature/nf525-ordre-cles` (#369, PR #373 non fusionnée). Dès que #373 est fusionnée : `git fetch origin && git merge origin/main`.
