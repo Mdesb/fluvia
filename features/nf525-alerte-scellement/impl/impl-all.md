@@ -17,7 +17,7 @@
 
 - [x] Étape 1 — vocabulaire chaîne et cause (G-1)
 - [x] Étape 2 — refus porteur de cause, détail, message générique (G-8, G-1)
-- [ ] Étape 3 — table, entité, index unique, migration (G-1)
+- [x] Étape 3 — table, entité, index unique, migration (G-1)
 - [ ] Étape 4 — écriture sur la seconde connexion (G-1, G-2)
 - [ ] Étape 5 — cloche à l'ouverture (G-4)
 - [ ] Étape 6 — service d'enregistrement (G-1, G-2, G-4, G-7, G-8)
@@ -36,6 +36,8 @@
 
 <!-- Décisions prises en cours de route, écarts constatés, changements d'avis. Append-only. -->
 - 18/11/2026 — Étapes 1-2 faites. Suite ciblée 544 -> 554 tests verts (+10 : SealChainRefTest 5, SealingRefusedExceptionTest 5) ; `tests/Vente` entier 291 verts. Écarts : (a) le constructeur de `SealingRefusedException` devient `(SealRefusalCause, string $technicalDetail, ?string $reference = null)` ; ajout de `cause()` et `reference()` ; (b) causes `key_regression` pour les deux branches d'ordre (clé active quittée, dernier maillon en régression) ; (c) les chemins de `test-stack.sh run` sont relatifs à `app/` (`tests/...`). Garde-fous : 3 en échec pour PHP 8.3 de l'hôte (manifeste vs catalogue, filtres déclarés, appels du frontal dans le vide).
+- 18/11/2026 — Étape 3 faite. `Nf525Alert` + `Nf525AlertSchemaListener` + enums `SealAlertStatus`/`SealAlertOrigin` (Platform/Nf525) + `Version20261118130000` (noms d'index/FK repris du `--dump-sql` de Doctrine). `Nf525AlertSchemaTest` 11 tests verts ; `tests/Platform` 278 verts. Dérive : migrations rejouées sur base vierge, aucune ligne nf525 dans `schema:update --dump-sql` ; `down` vérifié. `verifier-derive-schema.sh` plante ici en mémoire (128M, il ne monte pas `zz-memory.ini`) : mesure refaite à la main avec le même montage. Garde-fous : 3 en échec attendus (PHP 8.3 hôte).
+- 18/11/2026 — Étape 3, revue architecte-donnees : FK `establishment_id` volontairement RESTRICT (documentée dans migration et entité, épinglée par un test : suppression d'un établissement lié à une alerte résolue refusée) ; `unique: true` retiré de l'id (aucune dérive). Mesure de dérive faite à la main : `verifier-derive-schema.sh` est plafonné à 128 Mo ici (il ne monte pas `zz-memory.ini`) ; mêmes commandes rejouées avec le montage, aucune ligne nf525 dans le diff.
 
 ## Journal de Rétropropagation
 
