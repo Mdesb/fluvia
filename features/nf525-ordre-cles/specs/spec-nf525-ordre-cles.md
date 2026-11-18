@@ -1,6 +1,6 @@
 # Spec — nf525-ordre-cles
 
-**Statut :** en revue <!-- brouillon → en revue → validée (CP-1) -->
+**Statut :** validée (CP-1, Maxime, 18/11/2026) <!-- brouillon → en revue → validée (CP-1) -->
 **Auteur :** Claude Code (session cloud), arbitrages de Maxime du 18/11/2026
 **Date :** 2026-11-18
 **Issue :** #369 (suite de #361 et de la PR #368)

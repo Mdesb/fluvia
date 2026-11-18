@@ -1,13 +1,13 @@
 # Suivi d'implémentation — nf525-ordre-cles
 
-**État :** spec <!-- discovery → spec → plan → build → review → done -->
+**État :** plan <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/nf525-ordre-cles (poussée sur claude/happy-dirac-a6y05h, seule branche autorisée en session cloud)
 **Spec :** features/nf525-ordre-cles/specs/spec-nf525-ordre-cles.md
 **Plan :** features/nf525-ordre-cles/plans/plan-nf525-ordre-cles.md
 
 ## Checkpoints
 
-- [ ] **CP-1** — spec validée par l'humain (date + qui)
+- [x] **CP-1** — spec validée par Maxime le 18/11/2026
 - [ ] **CP-2** — plan validé par l'humain (date + qui)
 - [ ] **CP-3** — revue avant merge (date + qui)
 
