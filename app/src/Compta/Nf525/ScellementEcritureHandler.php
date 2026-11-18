@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Compta\Nf525;
 
 use App\Compta\Entity\EcritureComptable;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
+use App\Platform\Nf525\SealingRefusedException;
 use App\Platform\Nf525\SealKeyOrderTracker;
 use App\Platform\Nf525\SealKeyRunQuery;
 use App\Platform\Nf525\SealKeyring;
@@ -32,56 +35,68 @@ final class ScellementEcritureHandler
         // active qui signe + clés retirées qui vérifient seulement).
         #[Autowire(service: 'app.nf525.keyring.accounting')]
         private readonly SealKeyring $keyring,
+        // #370 — l'alerte NF525 ; null : aucun accès à la table d'alerte.
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
     /** Scelle l'écriture (calcule et affecte séquence/empreinte/signature). Ne flush pas. */
     public function sceller(EcritureComptable $ecriture): EcritureComptable
     {
-        $precedente = $this->dernierMaillon($ecriture);
-
-        // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
-        if ($precedente !== null) {
-            $this->keyring->assertCanExtend(
-                $precedente->getEmpreinte(),
-                $precedente->getSignature(),
-                $precedente->getSealKeyId(),
-                sprintf('chaîne comptable du journal %s, maillon n° %d', (string) $ecriture->getJournal()?->getCode(), $precedente->getNumeroSequence()),
-            );
-        }
-
-        // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS : une chaîne qui a quitté la clé active, ou dont le dernier
-        // maillon est en régression, ne se prolonge pas. Les intervalles sont lus sur la MÊME connexion (donc
-        // la même transaction) que `dernierMaillon`, sans verrou de plus : comme lui, la lecture est protégée
-        // à l'écriture par l'unicité (profil, journal, séquence). ⚠ Les brouillons (séquence 0) sont exclus de
-        // la requête : une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
         // Garde de programmation : une écriture sans profil ou sans journal identifiés est un bug de l'appelant,
-        // pas une alerte fiscale (elle ne doit pas être maquillée en `unreadable_order`).
-        $profileId = $ecriture->getProfilExploitant()?->getId();
-        $journalId = $ecriture->getJournal()?->getId();
-        if ($profileId === null || $journalId === null) {
+        // pas une alerte fiscale (elle ne doit pas être maquillée en `unreadable_order`). Placée avant le `try`
+        // (et avant la lecture de la chaîne) : la référence de chaîne de l'alerte en a besoin.
+        $profile = $ecriture->getProfilExploitant();
+        $journal = $ecriture->getJournal();
+        if ($profile?->getId() === null || $journal?->getId() === null) {
             throw new \LogicException('Scellement d\'une écriture sans profil exploitant ou sans journal identifié : erreur de programmation.');
         }
-        $this->keyring->assertCanExtendInOrderFrom(
-            fn (): array => SealKeyRunQuery::forAccounting(
-                $this->em->getConnection(),
-                $this->keyring,
-                (string) $profileId,
-                (string) $journalId,
-            ),
-            sprintf('chaîne comptable du journal %s', (string) $ecriture->getJournal()?->getCode()),
-        );
+        $chain = SealChainRef::forAccounting($profile, $journal);
 
-        $empreintePrecedente = $precedente?->getEmpreinte();
-        $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
+        try {
+            $precedente = $this->dernierMaillon($ecriture);
 
-        $payload = $this->payloadCanonique($ecriture);
-        $empreinte = $this->calculerEmpreinte($payload, $empreintePrecedente);
+            // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
+            if ($precedente !== null) {
+                $this->keyring->assertCanExtend(
+                    $precedente->getEmpreinte(),
+                    $precedente->getSignature(),
+                    $precedente->getSealKeyId(),
+                    sprintf('chaîne comptable du journal %s, maillon n° %d', (string) $journal->getCode(), $precedente->getNumeroSequence()),
+                );
+            }
+
+            // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS : une chaîne qui a quitté la clé active, ou dont le dernier
+            // maillon est en régression, ne se prolonge pas. Les intervalles sont lus sur la MÊME connexion (donc
+            // la même transaction) que `dernierMaillon`, sans verrou de plus : comme lui, la lecture est protégée
+            // à l'écriture par l'unicité (profil, journal, séquence). ⚠ Les brouillons (séquence 0) sont exclus de
+            // la requête : une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+            $this->keyring->assertCanExtendInOrderFrom(
+                fn (): array => SealKeyRunQuery::forAccounting(
+                    $this->em->getConnection(),
+                    $this->keyring,
+                    (string) $profile->getId(),
+                    (string) $journal->getId(),
+                ),
+                sprintf('chaîne comptable du journal %s', (string) $journal->getCode()),
+            );
+
+            $empreintePrecedente = $precedente?->getEmpreinte();
+            $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
+
+            $payload = $this->payloadCanonique($ecriture);
+            $empreinte = $this->calculerEmpreinte($payload, $empreintePrecedente);
+
+            $signature = $this->keyring->sign($empreinte);
+        } catch (SealingRefusedException $e) {
+            throw $this->alerts?->recordRefusal($chain, $e) ?? $e;
+        }
+        $this->alerts?->resolveOnSeal($chain);
 
         $ecriture->setNumeroSequence($sequence);
         $ecriture->setEmpreintePrecedente($empreintePrecedente);
         $ecriture->setEmpreinte($empreinte);
-        $ecriture->setSignature($this->keyring->sign($empreinte));
+        $ecriture->setSignature($signature);
         $ecriture->setSealKeyId($this->keyring->activeKeyId());
 
         // ⚠ L'INSTANTANÉ EST CONSERVÉ, PLUS RECONSTRUIT — même raison que côté factures : le payload
