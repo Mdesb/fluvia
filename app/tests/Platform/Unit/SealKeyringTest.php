@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Platform\Unit;
 
+use App\Platform\Nf525\KeyRegression;
+use App\Platform\Nf525\KeyRun;
 use App\Platform\Nf525\SealCheck;
 use App\Platform\Nf525\SealingRefusedException;
 use App\Platform\Nf525\SealKeyring;
@@ -126,5 +128,138 @@ final class SealKeyringTest extends TestCase
         (new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A, $logger))
             ->assertCanExtend('empreinte-1', $signedByA, SealKeyring::keyIdOf(self::KEY_A), 'chaîne témoin');
         self::assertCount(1, $logger->records);
+    }
+
+    private static function spyLogger(): AbstractLogger
+    {
+        return new class extends AbstractLogger {
+            /** @var list<array{string, string, array<mixed>}> */
+            public array $records = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->records[] = [(string) $level, (string) $message, $context];
+            }
+        };
+    }
+
+    public function testRegressionProblemNamesSequenceAndIdentifiersOnly(): void
+    {
+        $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A);
+        $idA = SealKeyring::keyIdOf(self::KEY_A);
+        $idB = SealKeyring::keyIdOf(self::KEY_B);
+
+        $returned = $keyring->regressionProblem(new KeyRegression(KeyRegression::RETURNED_KEY, 4, $idA, $idB));
+        $nullAfter = $keyring->regressionProblem(new KeyRegression(KeyRegression::NULL_AFTER_KEY, 7, null, $idB));
+
+        self::assertStringContainsString('régression de clé', $returned);
+        self::assertStringContainsString('n° 4', $returned);
+        self::assertStringContainsString($idA, $returned);
+        self::assertStringContainsString($idB, $returned);
+        self::assertStringContainsString('régression de clé', $nullAfter);
+        self::assertStringContainsString('n° 7', $nullAfter);
+        self::assertStringContainsString($idB, $nullAfter);
+        foreach ([$returned, $nullAfter] as $text) {
+            self::assertStringNotContainsString('signature invalide', $text);
+            self::assertStringNotContainsString('clé inconnue', $text);
+            self::assertStringNotContainsString(self::KEY_A, $text);
+            self::assertStringNotContainsString(self::KEY_B, $text);
+        }
+    }
+
+    public function testExtendingInOrderIsRefusedWhenTheChainLeftTheActiveKey(): void
+    {
+        $logger = self::spyLogger();
+        $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_A, self::KEY_B, $logger);
+        $idA = SealKeyring::keyIdOf(self::KEY_A);
+        $idB = SealKeyring::keyIdOf(self::KEY_B);
+
+        try {
+            $keyring->assertCanExtendInOrder([new KeyRun($idA, 1, 1), new KeyRun($idB, 2, 2)], 'chaîne témoin');
+            self::fail('Le scellement aurait dû être refusé.');
+        } catch (SealingRefusedException $e) {
+            self::assertSame(409, $e->getStatusCode());
+            self::assertStringContainsString('Scellement refusé', $e->getMessage());
+            self::assertStringContainsString('clé NEUVE', $e->getMessage());
+            self::assertStringContainsString('NF525_SEAL_KEY', $e->getMessage());
+            self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', $e->getMessage());
+            self::assertStringNotContainsString(self::KEY_A, $e->getMessage());
+            self::assertStringNotContainsString(self::KEY_B, $e->getMessage());
+        }
+
+        self::assertCount(1, $logger->records);
+        self::assertSame('critical', $logger->records[0][0]);
+        $journal = json_encode($logger->records, \JSON_THROW_ON_ERROR);
+        self::assertStringNotContainsString(self::KEY_A, $journal);
+        self::assertStringNotContainsString(self::KEY_B, $journal);
+        self::assertStringContainsString($idA, $journal);
+        self::assertStringContainsString($idB, $journal);
+    }
+
+    public function testExtendingInOrderIsRefusedWhenTheLastLinkIsForged(): void
+    {
+        $logger = self::spyLogger();
+        $keyring = new SealKeyring('NF525_SEAL_KEY', 'cle-de-test-C-rotation', self::KEY_A . ',' . self::KEY_B, $logger);
+        $runs = [
+            new KeyRun(SealKeyring::keyIdOf(self::KEY_A), 1, 3),
+            new KeyRun(SealKeyring::keyIdOf(self::KEY_B), 2, 2),
+        ];
+
+        try {
+            $keyring->assertCanExtendInOrder($runs, 'chaîne témoin');
+            self::fail('Le scellement aurait dû être refusé.');
+        } catch (SealingRefusedException $e) {
+            self::assertStringContainsString('dernier maillon est lui-même en régression', $e->getMessage());
+        }
+
+        self::assertCount(1, $logger->records);
+        self::assertSame('critical', $logger->records[0][0]);
+        self::assertStringNotContainsString(self::KEY_A, json_encode($logger->records, \JSON_THROW_ON_ERROR));
+    }
+
+    public function testExtendingInOrderPassesOnLegitimateChains(): void
+    {
+        $logger = self::spyLogger();
+        $idA = SealKeyring::keyIdOf(self::KEY_A);
+        $idB = SealKeyring::keyIdOf(self::KEY_B);
+        $chain = [new KeyRun($idA, 1, 1), new KeyRun($idB, 2, 2)];
+
+        // Témoins positifs : la même chaîne A,B se prolonge avec B, ou avec une clé neuve C.
+        (new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A, $logger))->assertCanExtendInOrder($chain, 'chaîne témoin');
+        (new SealKeyring('NF525_SEAL_KEY', 'cle-de-test-C-rotation', self::KEY_A . ',' . self::KEY_B, $logger))->assertCanExtendInOrder($chain, 'chaîne témoin');
+        // Chaîne vide, chaîne legacy NULL puis A.
+        $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_A, null, $logger);
+        $keyring->assertCanExtendInOrder([], 'chaîne témoin');
+        $keyring->assertCanExtendInOrder([new KeyRun(null, 1, 3), new KeyRun($idA, 4, 6)], 'chaîne témoin');
+
+        self::assertSame([], $logger->records);
+    }
+
+    public function testHostileIdentifiersFromTheDatabaseAreNeverEchoed(): void
+    {
+        $evil = "x\n<script>alert(1)</script>";
+        $logger = self::spyLogger();
+        $keyring = new SealKeyring('NF525_SEAL_KEY', 'cle-de-test-C-rotation', self::KEY_B, $logger);
+        $idB = SealKeyring::keyIdOf(self::KEY_B);
+
+        $problem = $keyring->regressionProblem(new KeyRegression(KeyRegression::RETURNED_KEY, 4, $evil, $evil));
+        $problemNull = $keyring->regressionProblem(new KeyRegression(KeyRegression::NULL_AFTER_KEY, 4, null, $evil));
+        self::assertStringNotContainsString('<script>', $problem);
+        self::assertStringNotContainsString("\n", $problem);
+        self::assertStringNotContainsString('<script>', $problemNull);
+        self::assertStringContainsString('identifiant non conforme (longueur ' . strlen($evil) . ', sha256 tronqué ' . substr(hash('sha256', $evil), 0, 8) . ')', $problem);
+
+        // Forge en fin de chaîne : l'identifiant hostile est celui du dernier maillon.
+        try {
+            $keyring->assertCanExtendInOrder([new KeyRun($evil, 1, 3), new KeyRun($idB, 2, 2)], 'chaîne témoin');
+            self::fail('Le scellement aurait dû être refusé.');
+        } catch (SealingRefusedException $e) {
+            self::assertStringNotContainsString('<script>', $e->getMessage());
+            self::assertStringNotContainsString("\n", $e->getMessage());
+            self::assertStringContainsString($idB, $e->getMessage());
+        }
+        self::assertStringNotContainsString('<script>', json_encode($logger->records, \JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('\\n', json_encode($logger->records, \JSON_THROW_ON_ERROR));
+        self::assertStringContainsString($idB, json_encode($logger->records, \JSON_THROW_ON_ERROR));
     }
 }

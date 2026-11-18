@@ -26,6 +26,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'nf525_operation_scellee')]
 #[ORM\UniqueConstraint(name: 'uniq_op_pdv_sequence', columns: ['point_de_vente_id', 'numero_sequence'])]
+#[ORM\Index(name: 'idx_op_pdv_key_seq', columns: ['point_de_vente_id', 'seal_key_id', 'numero_sequence'])]
 #[ApiResource(
     shortName: 'OperationScellee',
     operations: [

@@ -32,6 +32,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'compta_ecriture_comptable')]
 #[ORM\UniqueConstraint(name: 'uniq_ecriture_profil_journal_sequence', columns: ['profil_exploitant_id', 'journal_id', 'numero_sequence'])]
+#[ORM\Index(name: 'idx_ecriture_chain_key_seq', columns: ['profil_exploitant_id', 'journal_id', 'seal_key_id', 'numero_sequence'])]
 #[ApiResource(
     shortName: 'EcritureComptable',
     operations: [

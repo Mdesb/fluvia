@@ -28,7 +28,10 @@ use Psr\Log\NullLogger;
  *  3. un maillon ANCIEN, sans identifiant, est vérifié avec la clé active, puis avec les clés
  *     retirées (compatibilité : on ne sait pas laquelle l'a signé) ;
  *  4. ÉCHEC FERMÉ (`assertCanExtend`) : on ne signe jamais par-dessus une chaîne dont le dernier
- *     maillon ne se vérifie plus. Une rotation sans trousseau est refusée au premier scellement.
+ *     maillon ne se vérifie plus. Une rotation sans trousseau est refusée au premier scellement ;
+ *  5. ORDRE DES CLÉS (#369, `assertCanExtendInOrder`, `regressionProblem`) : une clé qu'une chaîne a
+ *     quittée n'y revient jamais, une clé retirée restant sinon valable sans limite. Rotation = clé
+ *     NEUVE. La règle elle-même vit dans `SealKeyOrder` / `SealKeyOrderTracker`.
  *
  * Les clés retirées viennent de `NF525_*_RETIRED_KEYS` (liste séparée par des virgules ou des
  * espaces). Leur sauvegarde hors du serveur est décrite dans `infra/README.md`.
@@ -152,7 +155,7 @@ final class SealKeyring
                 . 'trousseau %s ne contient pas. Il ne peut donc pas être vérifié : soit cette clé manque '
                 . 'au trousseau (restaurez-la en clé retirée, %s), soit l\'identifiant a été modifié. '
                 . 'Tant qu\'il n\'est pas vérifié, ce maillon ne prouve rien.',
-                (string) $keyId,
+                self::safeId($keyId),
                 $this->variable,
                 $this->retiredVariable(),
             ),
@@ -173,7 +176,7 @@ final class SealKeyring
         }
 
         $cause = $check === SealCheck::UnknownKey
-            ? sprintf('il a été signé par la clé d\'identifiant %s, absente du trousseau', (string) $lastKeyId)
+            ? sprintf('il a été signé par la clé d\'identifiant %s, absente du trousseau', self::safeId($lastKeyId))
             : 'sa signature ne se vérifie avec aucune clé du trousseau';
 
         // L'ALERTE. Niveau critique : c'est une chaîne fiscale qui ne peut plus être prolongée.
@@ -182,7 +185,7 @@ final class SealKeyring
             'variable' => $this->variable,
             'chaine' => $chainLabel,
             'cause' => $check->value,
-            'cle_du_maillon' => $lastKeyId,
+            'cle_du_maillon' => self::safeId($lastKeyId),
             'cle_active' => $this->activeKeyId,
             'cles_retirees' => $this->retiredKeyIds(),
         ]);
@@ -196,6 +199,144 @@ final class SealKeyring
             $cause,
             $this->variable,
             $this->retiredVariable(),
+        ));
+    }
+
+    /**
+     * Les identifiants des maillons viennent de la base, donc d'un attaquant possible : on n'affiche tel
+     * quel qu'un identifiant au format produit par `keyIdOf` (16 hexadécimaux) ; tout autre est décrit
+     * (longueur, empreinte tronquée), jamais recopié dans un message, une anomalie ou un journal.
+     */
+    public static function safeId(?string $keyId): string
+    {
+        if ($keyId === null) {
+            return 'sans identifiant';
+        }
+        if (preg_match('/^[0-9a-f]{16}$/D', $keyId) === 1) {
+            return $keyId;
+        }
+
+        return sprintf('identifiant non conforme (longueur %d, sha256 tronqué %s)', strlen($keyId), substr(hash('sha256', $keyId), 0, 8));
+    }
+
+    /** Libellé d'anomalie d'une régression de clé (#369) : identifiants seulement, jamais les clés. */
+    public function regressionProblem(KeyRegression $regression): string
+    {
+        if ($regression->kind === KeyRegression::NULL_AFTER_KEY) {
+            return sprintf(
+                'régression de clé : le maillon n° %d ne porte aucun identifiant de clé, alors qu\'un maillon '
+                . 'précédent de la chaîne était signé par la clé d\'identifiant %s. Une chaîne ne revient jamais '
+                . 'à l\'absence d\'identifiant : maillon forgé ou rotation incorrecte.',
+                $regression->sequence,
+                self::safeId($regression->previousKeyId),
+            );
+        }
+
+        return sprintf(
+            'régression de clé : le maillon n° %d porte la clé d\'identifiant %s, que cette chaîne avait déjà '
+            . 'quittée (%s). Une clé quittée ne revient jamais dans une chaîne : maillon forgé ou rotation '
+            . 'incorrecte.',
+            $regression->sequence,
+            self::safeId($regression->keyId),
+            $regression->previousKeyId === null
+                ? 'elle était passée à des maillons sans identifiant'
+                : sprintf('elle était passée à la clé d\'identifiant %s', self::safeId($regression->previousKeyId)),
+        );
+    }
+
+    /**
+     * ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS (#369) : refuse de prolonger une chaîne qui a déjà quitté la clé
+     * active, ou dont le dernier maillon est lui-même en régression. À appeler APRÈS `assertCanExtend`
+     * (qui juge la signature du dernier maillon) ; les `KeyRun` viennent d'une requête d'index, pas d'une
+     * relecture de la chaîne.
+     *
+     * @param list<KeyRun> $runs
+     *
+     * @throws SealingRefusedException
+     */
+    public function assertCanExtendInOrder(array $runs, string $chainLabel): void
+    {
+        try {
+            $block = SealKeyOrder::extensionBlock($runs, $this->activeKeyId);
+        } catch (\InvalidArgumentException) {
+            $this->refuseUnreadableOrder($chainLabel);
+        }
+        if ($block === null) {
+            return;
+        }
+
+        // L'ALERTE : identifiants seulement, jamais les clés.
+        $this->logger->critical('NF525 : scellement refusé, la chaîne a quitté la clé de scellement ou son dernier maillon est en régression de clé.', [
+            'variable' => $this->variable,
+            'chaine' => $chainLabel,
+            'cause' => $block['reason'],
+            'cle_du_maillon' => $block['keyId'] === null ? null : self::safeId($block['keyId']),
+            'cle_autre' => $block['otherKeyId'] === null ? null : self::safeId($block['otherKeyId']),
+            'cle_active' => $this->activeKeyId,
+            'cles_retirees' => $this->retiredKeyIds(),
+        ]);
+
+        if ($block['reason'] === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT) {
+            throw new SealingRefusedException(sprintf(
+                'Scellement refusé (NF525, %s) : la chaîne a déjà quitté la clé de scellement active (identifiant %s, '
+                . 'variable %s) ; sceller avec elle ferait revenir la chaîne en arrière. Ne remettez pas une ancienne '
+                . 'clé : passez à une clé NEUVE (nouvelle valeur de %s, l\'ancienne active ajoutée à %s). '
+                . 'Procédure : infra/README.md, « Trousseau NF525 ».',
+                $chainLabel,
+                $this->activeKeyId,
+                $this->variable,
+                $this->variable,
+                $this->retiredVariable(),
+            ));
+        }
+
+        // Dernier maillon en régression : changer de clé n'y change rien, c'est la chaîne qu'il faut examiner.
+        throw new SealingRefusedException(sprintf(
+            'Scellement refusé (NF525, %s) : le dernier maillon est lui-même en régression de clé (%s). Vérifiez la '
+            . 'chaîne (…/verifier-chaine) et consultez l\'alerte critique du journal : un maillon a été forgé ou une '
+            . 'rotation a été faite à l\'envers. Procédure : infra/README.md, « Trousseau NF525 ».',
+            $chainLabel,
+            $block['keyId'] === null
+                ? sprintf('maillon sans identifiant après la clé %s', self::safeId($block['otherKeyId']))
+                : sprintf('clé %s réapparue après la clé %s', self::safeId($block['keyId']), self::safeId($block['otherKeyId'])),
+        ));
+    }
+
+    /**
+     * Comme `assertCanExtendInOrder`, mais LIT les intervalles lui-même (`$loadRuns`) : toute entrée
+     * inexploitable (séquence forgée à 0, identifiant de chaîne nul ou illisible, intervalles incohérents)
+     * devient un refus de sceller (409 + alerte), jamais une erreur 500 qui laisserait l'état ambigu.
+     *
+     * @param \Closure(): list<KeyRun> $loadRuns
+     *
+     * @throws SealingRefusedException
+     */
+    public function assertCanExtendInOrderFrom(\Closure $loadRuns, string $chainLabel): void
+    {
+        try {
+            $runs = $loadRuns();
+        } catch (\InvalidArgumentException) {
+            $this->refuseUnreadableOrder($chainLabel);
+        }
+        $this->assertCanExtendInOrder($runs, $chainLabel);
+    }
+
+    /** L'ordre des clés n'a pas pu être établi : échec fermé. Ni message ni valeur d'entrée recopiés. */
+    private function refuseUnreadableOrder(string $chainLabel): never
+    {
+        $this->logger->critical('NF525 : scellement refusé, l\'ordre des clés de la chaîne n\'a pas pu être établi (données de chaîne inexploitables).', [
+            'variable' => $this->variable,
+            'chaine' => $chainLabel,
+            'cause' => 'unreadable_order',
+            'cle_active' => $this->activeKeyId,
+            'cles_retirees' => $this->retiredKeyIds(),
+        ]);
+
+        throw new SealingRefusedException(sprintf(
+            'Scellement refusé (NF525, %s) : l\'ordre des clés de la chaîne n\'a pas pu être établi (maillon de séquence '
+            . 'impossible ou chaîne illisible). Signer par-dessus pourrait aggraver la chaîne : vérifiez-la '
+            . '(…/verifier-chaine) et consultez l\'alerte critique du journal. Procédure : infra/README.md, « Trousseau NF525 ».',
+            $chainLabel,
         ));
     }
 

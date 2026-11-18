@@ -287,7 +287,39 @@ perdre la preuve.
   une alerte critique (identifiants seulement).
 - Le déploiement **ne génère jamais** une clé NF525 quand des maillons existent : il mesure la base
   (`infra/nf525-key-guard.sh`) et s'arrête. Après les migrations, `app:nf525:check-keys` (lecture
-  seule) vérifie le dernier maillon de chaque chaîne et fait échouer le déploiement s'il est bloqué.
+  seule) vérifie le dernier maillon de chaque chaîne **et l'ordre des clés sur toute sa longueur** (voir
+  ci-dessous), et fait échouer le déploiement (`NF525_TROUSSEAU_KO`, sortie en code 1 après un déploiement
+  complet) si une chaîne est bloquée.
+
+**La règle d'ordre (#369) : une clé quittée ne revient jamais.** Dans une chaîne, les maillons sans
+identifiant (antérieurs au trousseau) viennent d'abord, puis chaque clé occupe un tronçon continu : `NULL,A,B`
+est légitime, `A,B,A` ne l'est pas. Corollaire : **la rotation va toujours vers une clé NEUVE**, jamais vers
+une clé déjà utilisée. Remettre `A` comme clé active après `B` est une violation, même si `A` est encore au
+trousseau et que tout « se vérifie ». L'ancienne clé active passe dans `*_RETIRED_KEYS`, la nouvelle est une
+valeur jamais vue.
+
+**Ce que fait l'application si la règle est violée.**
+
+- *Vérification de chaîne* (`…/verifier-chaine`, archive fiscale) : le maillon fautif est signalé
+  « régression de clé » à sa séquence, la chaîne n'est pas intacte.
+- *Scellement* : l'application **refuse de sceller** (HTTP 409, alerte critique au journal, identifiants
+  seulement) quand la chaîne a déjà quitté la clé active (`A,B` avec `A` active), quand son dernier maillon
+  est en régression, ou quand l'ordre ne peut pas être établi. Rien n'est écrit.
+- *Remontée hors ligne* : une opération de caisse dont l'ancrage tomberait sur une chaîne en régression est
+  refusée (409 « Chaîne serveur rompue »), comme pour toute chaîne rompue.
+- *Déploiement* : `app:nf525:check-keys` échoue, le déploiement se termine en erreur.
+- ⚠ Un maillon **forgé à la séquence 0** dans la chaîne de vente (la seule où la séquence 0 est lue) rend
+  l'ordre illisible : **la caisse du point de vente est bloquée** (409) jusqu'à correction de la donnée.
+  En comptabilité et en facturation, séquence ≤ 0 est exclue du refus (brouillons) ; seule la vérification la voit.
+
+**Limites assumées.**
+
+- Le *refus de sceller* ne cherche que les identifiants du trousseau (un identifiant inconnu au milieu d'une
+  chaîne lui échappe, il se vérifie à la lecture) ; `app:nf525:check-keys`, lui, lit **tous** les identifiants.
+- L'*archive fiscale* applique la règle à l'intérieur de chaque chaîne telle qu'elle y figure. Un segment
+  entier re-signé avec une clé retirée et un identifiant uniforme (`B,B,B…`) n'est pas vu par la règle : rien
+  ne dit que ce segment n'a pas été refait. La **signature du ZIP d'archive** est hors périmètre de ce lot
+  (Issue à part).
 
 **Sauvegarder le trousseau HORS du serveur (à faire une fois, puis à chaque rotation).**
 
@@ -305,10 +337,50 @@ perdre la preuve.
 le coffre dans le fichier d'environnement, relancer le déploiement, et vérifier que
 `app:nf525:check-keys` affiche `0 bloquée(s)` et les mêmes identifiants que ceux notés.
 
-**Changer une clé (rotation volontaire).** Ne jamais remplacer la valeur seule. Dans le même geste :
-ajouter l'ancienne clé à la variable `*_RETIRED_KEYS` correspondante, poser la nouvelle clé active,
-mettre à jour la sauvegarde hors serveur, redéployer, puis vérifier `app:nf525:check-keys`. Une clé
-retirée ne se supprime pas avant la fin du délai de conservation.
+**Changer une clé (rotation volontaire).** Ne jamais remplacer la valeur seule, et **jamais vers une clé
+déjà utilisée**. Trois conteneurs portent les six variables : `php` (API : ventes, factures, écritures),
+`scheduler` (profil `ordonnanceur`) et `worker`. Le `scheduler` **scelle** : dans la liste blanche d'
+`infra/ordonnanceur.sh`, `vente:cloture:journee` (clôtures), `sepa:echeances:facturer` et
+`subscription:facturer-le-mois` (factures émises, donc scellées) en sont ; `compta:pca:reprise-mensuelle`
+(écritures scellées) est au catalogue mais **n'est pas** dans la liste blanche aujourd'hui. Le `worker` ne
+scelle pas aujourd'hui (aucun de ses handlers ne touche une chaîne), mais il reçoit les mêmes variables : on
+le traite avec les autres. ⚠ `docker compose up -d` **sans** `--profile ordonnanceur` ne recrée pas le
+`scheduler` : il continuerait avec l'ANCIEN trousseau et scellerait `A` après que `php` a scellé `B`,
+soit `A,B,A`.
+
+1. **Arrêter** `scheduler` et `worker` (`docker compose … --profile ordonnanceur stop scheduler worker`).
+2. Dans le fichier d'environnement : ajouter la clé active actuelle à `*_RETIRED_KEYS`, poser la
+   **nouvelle** clé (une valeur jamais vue) dans `*_SEAL_KEY`.
+3. **Mettre à jour la sauvegarde hors serveur** (voir plus haut) avant de redémarrer.
+4. Recréer **`php`, `worker` et `scheduler` ensemble**, avec le profil :
+   `docker compose -f infra/compose.<prod|preprod>.yaml --env-file infra/.env.<prod|preprod> --profile ordonnanceur up -d --force-recreate php worker scheduler`
+   ⚠ **Les scripts de déploiement ne remplacent pas cette commande** : `deploy-prod.sh` et
+   `deploy-preprod.sh` ne passent pas `--profile ordonnanceur`, donc ne recréent pas le `scheduler`
+   arrêté. **Ne jamais** faire `docker compose start`, `restart` ni `docker start` sur le `scheduler` ou le
+   `worker` après le changement de clé tant qu'ils n'ont pas été recréés par la commande ci-dessus : ils
+   repartiraient avec l'ANCIEN trousseau et scelleraient `A` après `B` (`A,B,A`).
+5. Vérifier : `app:nf525:check-keys` (voir ci-dessous) doit afficher `0 bloquée(s)` pour les trois chaînes et
+   la nouvelle clé active.
+
+Une clé retirée ne se supprime pas avant la fin du délai de conservation.
+
+**Mesurer sans rien modifier (avant une fusion, ou à tout moment).** `app:nf525:check-keys` est en lecture
+seule (aucun écrit, aucune alerte persistée, aucune clé affichée : seulement des identifiants non
+réversibles). Coût proportionnel au nombre de maillons : mesuré sur 50 000 maillons de vente (10 chaînes,
+base de test), le `GROUP BY` est un parcours d'index couvrant de 62 ms ; la requête du dernier maillon, 99 ms.
+Pas de mesure sur une base de production réelle :
+
+```
+# préproduction
+docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod exec -T php php bin/console app:nf525:check-keys --no-interaction; echo "code de sortie : $?"
+# production
+docker compose -f infra/compose.prod.yaml --env-file infra/.env.prod exec -T php php bin/console app:nf525:check-keys --no-interaction; echo "code de sortie : $?"
+```
+
+Code 0 et trois lignes `✓` : rien ne bloque. Code 1 : une ligne `✗` par chaîne nomme la variable, la chaîne
+(point de vente ; exploitant/journal ; exploitant) et les deux identifiants de clés qui s'entrelacent. Avant
+de déployer la règle d'ordre, ce passage dit si une chaîne réelle est déjà en régression (elle bloquerait la
+remontée hors ligne et le scellement dès le déploiement).
 
 **Clé réellement perdue (aucune sauvegarde).** Aucune procédure automatique : la chaîne concernée ne
 peut plus être prolongée, et c'est voulu. La sortie (par exemple un maillon de « rupture constatée »
