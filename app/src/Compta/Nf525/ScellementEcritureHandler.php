@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Compta\Nf525;
 
 use App\Compta\Entity\EcritureComptable;
+use App\Platform\Nf525\SealKeyOrderTracker;
 use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -101,6 +102,7 @@ final class ScellementEcritureHandler
         $anomalies = [];
         $attendue = 1;
         $empreintePrecedente = null;
+        $ordreCles = new SealKeyOrderTracker();
 
         foreach ($liste as $e) {
             $seq = $e->getNumeroSequence();
@@ -140,6 +142,18 @@ final class ScellementEcritureHandler
             )) {
                 // #361 — clé choisie par l'identifiant du maillon.
                 $anomalies[] = ['sequence' => $seq, 'probleme' => $probleme];
+            }
+
+            // #369 — ORDRE DES CLÉS : une clé que la chaîne a quittée n'y revient jamais. Séquences non
+            // croissantes (doublon forgé) : le tracker lève, on le DIT comme anomalie (jamais une 500).
+            try {
+                $regression = $ordreCles->feed($seq, $e->getSealKeyId());
+            } catch (\InvalidArgumentException) {
+                $regression = null;
+                $anomalies[] = ['sequence' => $seq, 'probleme' => 'ordre des clés non vérifiable : numéros de séquence non strictement croissants'];
+            }
+            if ($regression !== null) {
+                $anomalies[] = ['sequence' => $seq, 'probleme' => $this->keyring->regressionProblem($regression)];
             }
 
             $empreintePrecedente = $e->getEmpreinte();

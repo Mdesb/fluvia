@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Vente\Nf525;
 
+use App\Platform\Nf525\SealKeyOrderTracker;
 use App\Platform\Nf525\SealKeyring;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -86,6 +87,7 @@ final class HashChainSignataire implements SignataireOperation
         $anomalies = [];
         $attendue = $premiereSequence;
         $empreintePrecedente = $empreinteAvant;
+        $ordreCles = new SealKeyOrderTracker();
 
         foreach ($liste as $operation) {
             $seq = $operation->getNumeroSequence();
@@ -124,6 +126,27 @@ final class HashChainSignataire implements SignataireOperation
                     'sequence' => $seq,
                     'type' => $operation->getTypeOperation()->value,
                     'probleme' => $probleme,
+                ];
+            }
+
+            // #369 — ORDRE DES CLÉS : une clé que la chaîne a quittée n'y revient jamais. Le maillon est
+            // alimenté qu'il soit par ailleurs en anomalie ou non. Séquences non croissantes (doublon
+            // forgé) : le tracker lève, on le DIT comme anomalie — jamais une 500, jamais un silence.
+            try {
+                $regression = $ordreCles->feed($seq, $operation->getSealKeyId());
+            } catch (\InvalidArgumentException) {
+                $regression = null;
+                $anomalies[] = [
+                    'sequence' => $seq,
+                    'type' => $operation->getTypeOperation()->value,
+                    'probleme' => 'ordre des clés non vérifiable : numéros de séquence non strictement croissants',
+                ];
+            }
+            if ($regression !== null) {
+                $anomalies[] = [
+                    'sequence' => $seq,
+                    'type' => $operation->getTypeOperation()->value,
+                    'probleme' => $this->keyring->regressionProblem($regression),
                 ];
             }
 

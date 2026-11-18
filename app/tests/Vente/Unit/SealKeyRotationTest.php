@@ -26,6 +26,7 @@ final class SealKeyRotationTest extends TestCase
 {
     private const KEY_A = 'cle-de-test-A-vente';
     private const KEY_B = 'cle-de-test-B-vente';
+    private const KEY_C = 'cle-de-test-C-vente';
 
     public function testEachLinkCarriesTheIdOfItsKeyNeverTheKey(): void
     {
@@ -112,6 +113,129 @@ final class SealKeyRotationTest extends TestCase
 
         self::assertTrue((new FiscalArchiveSigner(new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A)))->verify($sha, $signature));
         self::assertFalse((new FiscalArchiveSigner(new SealKeyring('NF525_SEAL_KEY', self::KEY_B)))->verify($sha, $signature));
+    }
+
+    // ---- #369 : ORDRE DES CLÉS (G-1) — témoin négatif ET témoin positif de chaque cas ----
+
+    /**
+     * @return iterable<string, array{0: list<string|null>, 1: list<int>}> suite des clés ('A','B','C', null), séquences en régression
+     */
+    public static function orderCases(): iterable
+    {
+        // Témoins négatifs.
+        yield 'A,A,B,A : clé quittée qui revient' => [['A', 'A', 'B', 'A'], [4]];
+        yield 'A,A,B,NULL : maillon sans identifiant après une clé' => [['A', 'A', 'B', null], [4]];
+        yield 'A,B,A,B : deux régressions' => [['A', 'B', 'A', 'B'], [3, 4]];
+        // Témoins positifs (G-7 : chaînes légitimes).
+        yield 'A,A,B,B : rotation légitime' => [['A', 'A', 'B', 'B'], []];
+        yield 'NULL,NULL,A : chaîne héritée puis première clé' => [[null, null, 'A'], []];
+        yield 'A,B,C : trois rotations' => [['A', 'B', 'C'], []];
+        yield 'NULL,NULL : héritée seule' => [[null, null], []];
+        yield 'A,A : une seule clé' => [['A', 'A'], []];
+    }
+
+    /**
+     * @param list<string|null> $keys
+     * @param list<int>         $expectedRegressions
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orderCases')]
+    public function testKeyOrderRegressionIsReportedAtTheRightSequence(array $keys, array $expectedRegressions): void
+    {
+        $chain = $this->chainSignedBy($keys);
+        // Le trousseau du vérificateur contient toutes les clés : seule la RÉGRESSION peut être en cause.
+        $rapport = $this->signataire(self::KEY_C, self::KEY_A . ',' . self::KEY_B)->verifieChaine($chain);
+
+        $found = [];
+        foreach ($rapport->anomalies as $anomaly) {
+            self::assertStringContainsString('régression de clé', $anomaly['probleme'], 'seule la régression est en cause : ' . $anomaly['probleme']);
+            self::assertStringNotContainsString('signature invalide', $anomaly['probleme']);
+            self::assertStringNotContainsString('clé inconnue', $anomaly['probleme']);
+            self::assertSame(TypeOperationScellee::Vente->value, $anomaly['type']);
+            $found[] = $anomaly['sequence'];
+        }
+        self::assertSame($expectedRegressions, $found);
+        self::assertSame($expectedRegressions === [], $rapport->intacte);
+        self::assertSame(\count($keys), $rapport->nbOperations);
+    }
+
+    public function testRegressionMessageNamesIdsNeverTheKeys(): void
+    {
+        $rapport = $this->signataire(self::KEY_C, self::KEY_A . ',' . self::KEY_B)->verifieChaine($this->chainSignedBy(['A', 'B', 'A']));
+
+        $message = $rapport->anomalies[0]['probleme'];
+        self::assertStringContainsString(SealKeyring::keyIdOf(self::KEY_A), $message);
+        self::assertStringContainsString(SealKeyring::keyIdOf(self::KEY_B), $message);
+        foreach ([self::KEY_A, self::KEY_B, self::KEY_C] as $key) {
+            self::assertStringNotContainsString($key, $message);
+        }
+    }
+
+    public function testRegressionIsReportedEvenWhenTheLinkHasAnotherAnomaly(): void
+    {
+        $chain = $this->chainSignedBy(['A', 'B', 'A']);
+        $chain[2]->setSignature('alteree'); // le maillon forgé porte aussi une signature invalide
+
+        $rapport = $this->signataire(self::KEY_C, self::KEY_A . ',' . self::KEY_B)->verifieChaine($chain);
+
+        $problems = array_column($rapport->anomalies, 'probleme');
+        self::assertContains('signature invalide', $problems);
+        self::assertCount(1, array_filter($problems, static fn (string $p): bool => str_contains($p, 'régression de clé')));
+    }
+
+    public function testNonIncreasingSequencesBecomeAnAnomalyNotAnException(): void
+    {
+        $chain = $this->chainSignedBy(['A', 'A', 'A']);
+        $chain[2]->setNumeroSequence(2); // doublon forgé : deux maillons au rang 2
+
+        $rapport = $this->signataire(self::KEY_A)->verifieChaine($chain);
+
+        self::assertFalse($rapport->intacte, 'échec fermé');
+        self::assertNotEmpty(array_filter(
+            array_column($rapport->anomalies, 'probleme'),
+            static fn (string $p): bool => str_contains($p, 'non strictement croissants'),
+        ));
+    }
+
+    public function testSegmentVerificationAppliesTheRuleInsideTheSegment(): void
+    {
+        $chain = $this->chainSignedBy(['A', 'A', 'B', 'A']);
+        $segment = \array_slice($chain, 1); // le segment d'une archive commence au rang 2
+        $verifier = $this->signataire(self::KEY_C, self::KEY_A . ',' . self::KEY_B);
+
+        $rapport = $verifier->verifieSegment($segment, $chain[0]->getEmpreinte(), 2);
+        self::assertFalse($rapport->intacte);
+        self::assertSame([4], array_column($rapport->anomalies, 'sequence'));
+
+        // Témoin positif : le même segment sans la forge.
+        $sain = $this->chainSignedBy(['A', 'A', 'B', 'B']);
+        self::assertTrue($verifier->verifieSegment(\array_slice($sain, 1), $sain[0]->getEmpreinte(), 2)->intacte);
+    }
+
+    /**
+     * Chaîne correctement chaînée dont chaque maillon est signé par la clé indiquée ; `null` = maillon
+     * sans identifiant (signé comme avant le trousseau, par la clé A). Les forgeries de l'ordre sont
+     * donc VALIDES partout ailleurs : seule la règle d'ordre peut les voir. (Le signataire de chaque
+     * maillon connaît toutes les clés : la forge est celle d'un attaquant qui les détient.)
+     *
+     * @param list<string|null> $keys
+     *
+     * @return list<\App\Vente\Nf525\Entity\OperationScellee>
+     */
+    private function chainSignedBy(array $keys): array
+    {
+        $map = ['A' => self::KEY_A, 'B' => self::KEY_B, 'C' => self::KEY_C];
+        $chain = [];
+        $previous = null;
+        foreach ($keys as $i => $name) {
+            $op = $this->signataire($map[$name ?? 'A'], implode(',', $map))->scelle($this->dto('m' . $i), $previous);
+            if ($name === null) {
+                $op->setSealKeyId(null)->setSignature(hash_hmac('sha256', $op->getEmpreinte(), self::KEY_A));
+            }
+            $chain[] = $op;
+            $previous = $op;
+        }
+
+        return $chain;
     }
 
     /** @return array{0: \App\Vente\Nf525\Entity\OperationScellee, 1: \App\Vente\Nf525\Entity\OperationScellee} */

@@ -23,7 +23,9 @@ interface SignataireOperation
 
     /**
      * Recalcule chaque maillon d'une chaîne (ordonnée par numeroSequence) et détecte les ruptures :
-     * trou de séquence, empreinte incohérente, signature invalide → alerte de contrôle (CA-15).
+     * trou de séquence, empreinte incohérente, signature invalide, régression de clé (#369 : une clé
+     * que la chaîne a quittée y revient, ou un maillon sans identifiant suit un maillon signé) →
+     * alerte de contrôle (CA-15).
      *
      * @param iterable<OperationScellee> $operations
      */

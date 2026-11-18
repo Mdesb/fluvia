@@ -138,6 +138,99 @@ final class FiscalArchiveTest extends VenteApiTestCase
         );
     }
 
+    /**
+     * #369 / G-4 — la règle d'ordre des clés s'applique DANS chaque segment d'une archive. Le CSV est
+     * refait (manifeste et signature du ZIP refaits avec la clé) : le dernier maillon perd son identifiant
+     * de clé et est re-signé SANS identifiant par la clé active — il se vérifie, chaîné et signé, et seule
+     * la régression « maillon sans identifiant après une clé » peut le trahir. Témoin positif dans la même
+     * mécanique : c'est le PREMIER maillon qui perd son identifiant (chaîne héritée puis clé : légitime).
+     */
+    public function testUneRegressionDeCleDansLeSegmentRendLaChaineNonConforme(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $archive = $this->archiver($client, $entete, $this->anneeCloturee($client, $entete));
+        $fichiers = $this->dezipper($this->telecharger($client, $entete, $archive['id']));
+
+        // Témoin positif : premier maillon sans identifiant (NULL, puis la clé) = légitime.
+        $this->remplacerSealedOperations($archive['id'], $fichiers, static fn (int $i, int $n): bool => $i === 0);
+        $rapport = $this->verifier($client, $entete, $archive['id']);
+        self::assertResponseStatusCodeSame(200);
+        self::assertTrue($rapport['intact'], 'NULL puis clé : légitime');
+        self::assertSame(['chaine' => true], $this->etats($rapport, ['chaine']));
+
+        // Témoin négatif : dernier maillon sans identifiant (la clé, puis NULL) = régression.
+        $this->remplacerSealedOperations($archive['id'], $fichiers, static fn (int $i, int $n): bool => $i === $n - 1);
+        $rapport = $this->verifier($client, $entete, $archive['id']);
+        self::assertResponseStatusCodeSame(409);
+        self::assertFalse($rapport['intact']);
+        self::assertSame(
+            ['empreinte' => true, 'signature' => true, 'fichiers' => true, 'chaine' => false, 'totaux' => true],
+            $this->etats($rapport, ['empreinte', 'signature', 'fichiers', 'chaine', 'totaux']),
+        );
+        $chaine = array_values(array_filter($rapport['checks'], static fn (array $c): bool => $c['check'] === 'chaine'))[0];
+        self::assertStringContainsString('régression de clé', json_encode($chaine, \JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Refait l'archive avec `sealed_operations.csv` dont les maillons choisis perdent leur identifiant de
+     * clé et sont re-signés par la clé active sans identifiant ; manifeste, ZIP, empreinte et signature
+     * sont refaits comme le ferait quelqu'un qui détient la clé.
+     *
+     * @param array<string, string>     $fichiers
+     * @param callable(int, int): bool  $aEffacer (rang du maillon dans le CSV, nombre de maillons)
+     */
+    private function remplacerSealedOperations(string $archiveId, array $fichiers, callable $aEffacer): void
+    {
+        $cle = $_SERVER['NF525_SEAL_KEY'] ?? $_ENV['NF525_SEAL_KEY'] ?? getenv('NF525_SEAL_KEY');
+        self::assertIsString($cle);
+
+        $lignes = [];
+        $f = fopen('php://temp', 'r+b');
+        fwrite($f, $fichiers['sealed_operations.csv']);
+        rewind($f);
+        while (($l = fgetcsv($f, null, ';', '"', '')) !== false) {
+            $lignes[] = $l;
+        }
+        fclose($f);
+        $entetes = array_shift($lignes);
+        $iSig = array_search('signature', $entetes, true);
+        $iEmp = array_search('empreinte', $entetes, true);
+        $iCle = array_search('seal_key_id', $entetes, true);
+        $iSeq = array_search('numero_sequence', $entetes, true);
+        usort($lignes, static fn (array $a, array $b): int => (int) $a[$iSeq] <=> (int) $b[$iSeq]);
+        $n = \count($lignes);
+        foreach ($lignes as $i => $l) {
+            if ($aEffacer($i, $n)) {
+                $lignes[$i][$iCle] = '';
+                $lignes[$i][$iSig] = hash_hmac('sha256', $l[$iEmp], $cle);
+            }
+        }
+
+        $sortie = fopen('php://temp', 'r+b');
+        foreach ([$entetes, ...$lignes] as $l) {
+            fputcsv($sortie, $l, ';', '"', '');
+        }
+        rewind($sortie);
+        $csv = (string) stream_get_contents($sortie);
+        fclose($sortie);
+
+        $fichiers['sealed_operations.csv'] = $csv;
+        $manifeste = json_decode($fichiers['manifest.json'], true);
+        foreach ($manifeste['fichiers'] as $i => $m) {
+            if ($m['nom'] === 'sealed_operations.csv') {
+                $manifeste['fichiers'][$i]['sha256'] = hash('sha256', $csv);
+            }
+        }
+        $fichiers['manifest.json'] = (string) json_encode($manifeste);
+
+        $zip = $this->zipper($fichiers);
+        $sha = hash('sha256', $zip);
+        /** @var FiscalArchiveSigner $signer */
+        $signer = static::getContainer()->get(FiscalArchiveSigner::class);
+        $this->remplacer($archiveId, $zip, $sha, $signer->sign($sha));
+    }
+
     /** Une année non close au niveau annuel, ou l'année en cours, ne s'archive pas. */
     public function testOnNArchivePasUneAnneeNonClotureeNiLAnneeEnCours(): void
     {

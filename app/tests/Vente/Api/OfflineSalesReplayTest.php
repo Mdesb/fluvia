@@ -108,6 +108,66 @@ final class OfflineSalesReplayTest extends VenteApiTestCase
     }
 
     /**
+     * #369 / G-1 — UNE CHAÎNE EN RÉGRESSION DE CLÉ REFUSE L'ANCRAGE (409), comme toute chaîne rompue.
+     *
+     * Le dernier maillon perd son identifiant de clé et est re-signé SANS identifiant par la clé active : il
+     * est chaîné et signé correctement, seule la règle d'ordre (« clé, puis aucun identifiant ») le trahit.
+     * Témoin positif : le même lot, une fois le maillon rétabli, est ancré.
+     */
+    public function testUneChaineEnRegressionDeCleRefuseLAncrage(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+        $cle = $_SERVER['NF525_SEAL_KEY'] ?? $_ENV['NF525_SEAL_KEY'] ?? getenv('NF525_SEAL_KEY');
+        self::assertIsString($cle);
+
+        $ancre = ['session' => '/api/session_caisses/' . $session['id'], 'operations' => [$this->operation(1, null), $this->operation(2, null)]];
+        $client->request('POST', '/api/synchro/operations', $entete + ['json' => $ancre]);
+        self::assertResponseIsSuccessful();
+
+        $connexion = $this->em()->getConnection();
+        /** @var array{id: string, empreinte: string, signature: string, seal_key_id: string} $dernier */
+        $dernier = $connexion->fetchAssociative('SELECT id, empreinte, signature, seal_key_id FROM nf525_operation_scellee ORDER BY numero_sequence DESC LIMIT 1');
+        self::assertNotFalse($dernier);
+        self::assertNotSame('', (string) $dernier['seal_key_id'], 'témoin : le maillon porte l\'identifiant de sa clé');
+
+        // La forge : sans identifiant, signé par la clé active.
+        $connexion->executeStatement(
+            'UPDATE nf525_operation_scellee SET seal_key_id = NULL, signature = ? WHERE id = ?',
+            [hash_hmac('sha256', $dernier['empreinte'], $cle), $dernier['id']],
+        );
+        $this->em()->clear();
+
+        $lot = ['session' => '/api/session_caisses/' . $session['id'], 'operations' => [$this->operation(3, null)]];
+        $client->request('POST', '/api/synchro/operations', $entete + ['json' => $lot]);
+        self::assertResponseStatusCodeSame(409);
+        self::assertStringContainsString('Chaîne serveur rompue', $client->getResponse()->toArray(false)['detail'] ?? '');
+        self::assertSame(
+            0,
+            (int) $connexion->fetchOne('SELECT COUNT(*) FROM vente_vente WHERE cle_idempotence = ?', [Uuid::fromString($lot['operations'][0]['cleIdempotence'])->toBinary()]),
+            'rien n\'est ancré sur une chaîne en régression',
+        );
+
+        // Témoin positif : le maillon rétabli, le même lot est ancré.
+        $connexion->executeStatement(
+            'UPDATE nf525_operation_scellee SET seal_key_id = ?, signature = ? WHERE id = ?',
+            [$dernier['seal_key_id'], $dernier['signature'], $dernier['id']],
+        );
+        $this->em()->clear();
+        $reponse = $client->request('POST', '/api/synchro/operations', $entete + ['json' => $lot])->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $reponse['inseres']);
+    }
+
+    private function em(): EntityManagerInterface
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        return $em;
+    }
+
+    /**
      * UNE HEURE DU POSTE HORS DE LA SESSION N'EST PAS CRUE — MAIS LA VENTE N'EST PAS PERDUE.
      *
      * Antidater une vente d'avant l'ouverture de la caisse la ferait tomber dans une autre journée

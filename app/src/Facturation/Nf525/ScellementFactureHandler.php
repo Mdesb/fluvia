@@ -7,6 +7,7 @@ namespace App\Facturation\Nf525;
 use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
 use App\Platform\Nf525\SealCheck;
+use App\Platform\Nf525\SealKeyOrderTracker;
 use App\Platform\Nf525\SealKeyring;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -118,6 +119,7 @@ final class ScellementFactureHandler
         $anomalies = [];
         $attendue = 1;
         $empreintePrecedente = null;
+        $ordreCles = new SealKeyOrderTracker();
 
         foreach ($liste as $facture) {
             $sequence = $facture->getNumeroSequence();
@@ -191,6 +193,19 @@ final class ScellementFactureHandler
                         . 'Comparez `NF525_FACTURATION_SEAL_KEY` à celle en vigueur au '
                         . 'scellement avant de conclure.',
                 ];
+            }
+
+            // #369 — ORDRE DES CLÉS : une clé que la chaîne a quittée n'y revient jamais. Hors de la chaîne
+            // `elseif` des clés ci-dessus. Séquences non croissantes (doublon forgé) : le tracker lève, on
+            // le DIT comme anomalie (jamais une 500).
+            try {
+                $regression = $ordreCles->feed($sequence, $facture->getSealKeyId());
+            } catch (\InvalidArgumentException) {
+                $regression = null;
+                $anomalies[] = ['sequence' => $sequence, 'probleme' => 'ordre des clés non vérifiable : numéros de séquence non strictement croissants'];
+            }
+            if ($regression !== null) {
+                $anomalies[] = ['sequence' => $sequence, 'probleme' => $this->keyring->regressionProblem($regression)];
             }
 
             $empreintePrecedente = $facture->getEmpreinte();
