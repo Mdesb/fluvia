@@ -198,17 +198,22 @@ final class SealKeyOrderTest extends FacturationApiTestCase
         $this->em()->clear();
     }
 
-    /** Un identifiant de chaîne nul (document sans exploitant) est un refus (409), jamais une exception brute. */
-    public function testADocumentWithoutProfilIsRefusedNotAnException(): void
+    /**
+     * Un document sans exploitant est une ERREUR DE PROGRAMMATION (LogicException), pas une alerte fiscale :
+     * elle n'est pas maquillée en refus `unreadable_order` (409), et ne journalise rien.
+     */
+    public function testADocumentWithoutProfilIsAProgrammingErrorNotAFiscalAlert(): void
     {
         [, $keyA] = $this->realChain(1);
-        [$handler] = $this->handlerFor('A', [], ['A' => $keyA]);
+        [$handler, $logger] = $this->handlerFor('A', [], ['A' => $keyA]);
         $orphan = new Facture();
         try {
             $handler->sceller($orphan);
             self::fail('Un document sans exploitant ne peut pas être scellé.');
-        } catch (SealingRefusedException $e) {
-            self::assertSame(409, $e->getStatusCode());
+        } catch (SealingRefusedException) {
+            self::fail('Une erreur de programmation ne doit pas être maquillée en refus fiscal.');
+        } catch (\LogicException) {
+            self::assertCount(0, $logger->records, 'aucune alerte fiscale pour un bug d\'appelant');
         }
         self::assertSame(0, $orphan->getNumeroSequence());
         $this->em()->clear();

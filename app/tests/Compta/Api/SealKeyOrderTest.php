@@ -216,17 +216,30 @@ final class SealKeyOrderTest extends ComptaApiTestCase
         $this->em()->clear();
     }
 
-    /** Un identifiant de chaîne nul (écriture sans exploitant ni journal) est un refus (409), jamais une exception brute. */
-    public function testAChainWithoutProfilOrJournalIsRefusedNotAnException(): void
+    /**
+     * Une écriture sans exploitant ni journal est une ERREUR DE PROGRAMMATION (LogicException), pas une alerte
+     * fiscale : elle n'est pas maquillée en refus `unreadable_order` (409), et ne journalise rien.
+     */
+    public function testAChainWithoutProfilOrJournalIsAProgrammingErrorNotAFiscalAlert(): void
     {
         [$chain, $keyA] = $this->realChain(2);
-        $handler = new ScellementEcritureHandler($this->em(), new SealKeyring(self::VARIABLE, $keyA));
+        $logger = new class extends AbstractLogger {
+            public int $count = 0;
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                ++$this->count;
+            }
+        };
+        $handler = new ScellementEcritureHandler($this->em(), new SealKeyring(self::VARIABLE, $keyA, null, $logger));
         $orphan = new EcritureComptable();
         try {
             $handler->sceller($orphan);
             self::fail('Une écriture sans exploitant ni journal ne peut pas être scellée.');
-        } catch (SealingRefusedException $e) {
-            self::assertSame(409, $e->getStatusCode());
+        } catch (SealingRefusedException) {
+            self::fail('Une erreur de programmation ne doit pas être maquillée en refus fiscal.');
+        } catch (\LogicException) {
+            self::assertSame(0, $logger->count, 'aucune alerte fiscale pour un bug d\'appelant');
         }
         self::assertSame(0, $orphan->getNumeroSequence());
         self::assertNotEmpty($chain);

@@ -55,12 +55,19 @@ final class ScellementEcritureHandler
         // la même transaction) que `dernierMaillon`, sans verrou de plus : comme lui, la lecture est protégée
         // à l'écriture par l'unicité (profil, journal, séquence). ⚠ Les brouillons (séquence 0) sont exclus de
         // la requête : une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+        // Garde de programmation : une écriture sans profil ou sans journal identifiés est un bug de l'appelant,
+        // pas une alerte fiscale (elle ne doit pas être maquillée en `unreadable_order`).
+        $profileId = $ecriture->getProfilExploitant()?->getId();
+        $journalId = $ecriture->getJournal()?->getId();
+        if ($profileId === null || $journalId === null) {
+            throw new \LogicException('Scellement d\'une écriture sans profil exploitant ou sans journal identifié : erreur de programmation.');
+        }
         $this->keyring->assertCanExtendInOrderFrom(
             fn (): array => SealKeyRunQuery::forAccounting(
                 $this->em->getConnection(),
                 $this->keyring,
-                (string) $ecriture->getProfilExploitant()?->getId(),
-                (string) $ecriture->getJournal()?->getId(),
+                (string) $profileId,
+                (string) $journalId,
             ),
             sprintf('chaîne comptable du journal %s', (string) $ecriture->getJournal()?->getCode()),
         );

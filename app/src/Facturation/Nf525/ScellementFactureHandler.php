@@ -65,13 +65,19 @@ final class ScellementFactureHandler
         // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS (voir `ScellementEcritureHandler::sceller`). Intervalles lus sur
         // la même connexion que `dernierMaillon`. ⚠ Les brouillons (séquence 0) sont exclus de la requête :
         // une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+        // Garde de programmation : une facture sans profil identifié est un bug de l'appelant, pas une alerte
+        // fiscale (elle ne doit pas être maquillée en `unreadable_order`).
+        $profileId = $facture->getProfilExploitant()?->getId();
+        if ($profileId === null) {
+            throw new \LogicException('Scellement d\'une facture sans profil exploitant identifié : erreur de programmation.');
+        }
         $this->keyring->assertCanExtendInOrderFrom(
             fn (): array => SealKeyRunQuery::forInvoicing(
                 $this->em->getConnection(),
                 $this->keyring,
-                (string) $facture->getProfilExploitant()?->getId(),
+                (string) $profileId,
             ),
-            'chaîne de facturation de l\'exploitant ' . (string) $facture->getProfilExploitant()?->getId(),
+            'chaîne de facturation de l\'exploitant ' . (string) $profileId,
         );
 
         $empreintePrecedente = $precedente?->getEmpreinte();
