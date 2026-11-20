@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, membres } from '../../api/client.js'
+import { useEtatUrl } from '../../api/url.js'
+import Tabs from '../../components/Tabs.jsx'
 import {
   NOTE_MAX,
   dateResolution,
@@ -21,55 +23,103 @@ import {
 // `technicalDetail` et `note` sont du texte libre. Ce sont des nœuds React (échappés), jamais du
 // HTML injecté : ce serait une XSS stockée d'un client vers la session de l'éditeur. Le test
 // `AlertesNf525.test.js` le prouve (source + rendu d'une alerte piégée).
-export default function AlertesNf525({ onRefus }) {
-  const [alertes, setAlertes] = useState(null)
-  const [erreur, setErreur] = useState(null)
-  const [filtre, setFiltre] = useState('open')
+const DEFAUTS_URL = { filtre: 'open' }
+const FILTRES = [['open', 'Ouvertes'], ['resolved', 'Résolues'], ['all', 'Toutes']]
 
-  const charger = useCallback(() => {
+export default function AlertesNf525({ onRefus }) {
+  const [params, majParams] = useEtatUrl('alertes-nf525', DEFAUTS_URL)
+  // `null` = PAS LU · `[]` = LU ET VIDE.
+  const [alertes, setAlertes] = useState(null)
+  const [total, setTotal] = useState(0)
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+
+  // `silencieux` : recharge sans démonter la liste (après une note : le message de succès reste).
+  const charger = useCallback((silencieux = false) => {
     setErreur(null)
+    if (silencieux !== true) setChargement(true)
     api
       .editorNf525Alertes()
-      .then((r) => setAlertes(membres(r)))
+      .then((r) => {
+        const liste = membres(r)
+        setAlertes(liste)
+        setTotal(r?.totalItems ?? r?.['hydra:totalItems'] ?? liste.length)
+      })
       .catch((e) => {
         // Un 404 veut dire « cette session n'est pas celle de l'éditeur » : la coquille le dit mieux.
         if (e instanceof ApiError && e.status === 404) onRefus?.()
+        setAlertes(null)
         setErreur(e.message || 'Les alertes n’ont pas pu être chargées.')
       })
+      .finally(() => setChargement(false))
   }, [onRefus])
 
-  useEffect(charger, [charger])
-
-  if (alertes === null && !erreur) return <div className="empty">Chargement…</div>
+  useEffect(() => { charger() }, [charger])
 
   return (
     <div className="card">
-      <div className="card-h">Alertes de scellement NF525</div>
+      <div className="card-h">
+        <span>Alertes de scellement NF525</span>
+        <div className="r">
+          <button className="btn ghost sm" type="button" onClick={() => charger()}>Actualiser</button>
+        </div>
+      </div>
       <div className="card-b">
-        {erreur && <div className="banner banner-error">{erreur}</div>}
-        <ListeAlertes alertes={alertes ?? []} filtre={filtre} onFiltre={setFiltre} onEnregistre={charger} />
+        {chargement ? (
+          <div className="center"><div className="spinner" /></div>
+        ) : erreur ? (
+          // En cas d'échec, jamais la liste ni un « tout va bien » : on ne sait pas.
+          <EtatErreur message={erreur} onReessayer={() => charger()} />
+        ) : (
+          <ListeAlertes
+            alertes={alertes ?? []}
+            total={total}
+            filtre={params.filtre}
+            onFiltre={(v) => majParams({ filtre: v })}
+            onEnregistre={() => charger(true)}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// La lecture a échoué : seulement l'erreur et « Réessayer ».
+export function EtatErreur({ message, onReessayer }) {
+  return (
+    <div className="banner banner-error" role="alert">
+      {message} <b>N’en concluez pas qu’aucune chaîne n’est bloquée</b>&nbsp;: la liste n’a pas été obtenue.
+      <div>
+        <button type="button" className="btn ghost sm" onClick={onReessayer}>Réessayer</button>
       </div>
     </div>
   )
 }
 
 // Présentation pure (testable sans réseau) : la liste, le filtre et les cartes.
-export function ListeAlertes({ alertes, filtre, onFiltre, onEnregistre }) {
+export function ListeAlertes({ alertes, total = 0, filtre, onFiltre, onEnregistre }) {
   const visibles = trierAlertes(filtrerAlertes(alertes, filtre))
+  const partielle = total > alertes.length
   return (
     <>
-      <div className="seg" role="group" aria-label="Filtrer les alertes">
-        {[['open', 'Ouvertes'], ['resolved', 'Résolues']].map(([v, l]) => (
-          <button key={v} type="button" className={filtre === v ? 'on' : ''} aria-pressed={filtre === v} onClick={() => onFiltre?.(v)}>
-            {l}
-          </button>
-        ))}
-      </div>
+      <Tabs onglets={FILTRES} actif={filtre} onChange={(v) => onFiltre?.(v)} />
+
+      {partielle && (
+        <div className="banner banner-warn">
+          Liste partielle : {alertes.length} alertes affichées sur {total}. Les plus anciennes ne sont pas lues.
+        </div>
+      )}
 
       {visibles.length === 0 && (
         <div className="empty">
-          <p>{filtre === 'resolved' ? 'Aucune alerte résolue.' : 'Aucune alerte ouverte.'}</p>
-          <p className="hint">C’est l’état normal : une alerte n’existe que si une chaîne fiscale a refusé de se prolonger.</p>
+          <p>
+            {partielle
+              ? 'Aucune alerte de ce type dans la partie lue de la liste : n’en concluez pas qu’il n’y en a pas.'
+              : filtre === 'resolved' ? 'Aucune alerte résolue.' : filtre === 'all' ? 'Aucune alerte.' : 'Aucune alerte ouverte.'}
+          </p>
+          {!partielle && filtre === 'open' && (
+            <p className="hint">C’est l’état normal : une alerte n’existe que si une chaîne fiscale a refusé de se prolonger.</p>
+          )}
         </div>
       )}
 
@@ -102,7 +152,7 @@ export function CarteAlerte({ alerte: a, onEnregistre }) {
         {noms.length === 0 ? <span className="hint">aucun</span> : noms.map((n, i) => <span key={i} className="chip">{n}</span>)}
       </div>
       <div className="hint">Détail technique (jamais montré à l’exploitant) :</div>
-      <pre className="hint" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.technicalDetail}</pre>
+      <pre className="texte-brut">{a.technicalDetail}</pre>
       <NoteAlerte alerte={a} onEnregistre={onEnregistre} />
     </div>
   )
@@ -140,14 +190,15 @@ function NoteAlerte({ alerte: a, onEnregistre }) {
         rows={3}
         value={note}
         onChange={(e) => { setNote(e.target.value); setFait(false) }}
+        aria-invalid={!valide}
         aria-describedby={`note-cpt-${a.id}`}
       />
-      <div id={`note-cpt-${a.id}`} className="hint" style={valide ? undefined : { color: 'var(--crit)', fontWeight: 600 }}>
-        {longueur} / {NOTE_MAX} caractères
+      <div id={`note-cpt-${a.id}`} className={valide ? 'hint' : 'hint is-over'} aria-live="polite">
+        {longueur} / {NOTE_MAX} caractères{valide ? '' : ` : dépasse la limite de ${NOTE_MAX} caractères`}
         {a.noteAt && a.noteBy && ` — dernière note : ${a.noteBy}, ${formaterDate(a.noteAt)}`}
       </div>
       {erreur && <div className="banner banner-error">{erreur}</div>}
-      {fait && <div className="hint" role="status">Note enregistrée.</div>}
+      <div className="hint" role="status">{fait ? 'Note enregistrée.' : ''}</div>
       <div>
         <button type="button" className="btn ghost sm" disabled={enCours || !valide} onClick={enregistrer}>
           {enCours ? 'Enregistrement…' : 'Enregistrer la note'}

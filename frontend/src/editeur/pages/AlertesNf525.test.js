@@ -29,29 +29,55 @@ test('le source n’insère jamais de HTML', () => {
   assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/)
 })
 
+// Compile une fois le composant (JSX) et react-dom/server dans un module CommonJS temporaire.
+let compile
+function charger() {
+  compile ??= (async () => {
+    const sortie = join(mkdtempSync(join(tmpdir(), 'nf525-')), 'rendu.cjs')
+    await build({
+      stdin: {
+        contents: `
+          import React from 'react'
+          import { renderToStaticMarkup } from 'react-dom/server'
+          import { CarteAlerte, EtatErreur, ListeAlertes } from './AlertesNf525.jsx'
+          export const rendre = (a) => renderToStaticMarkup(React.createElement(CarteAlerte, { alerte: a }))
+          export const rendreErreur = (m) => renderToStaticMarkup(React.createElement(EtatErreur, { message: m }))
+          export const rendreListe = (p) => renderToStaticMarkup(React.createElement(ListeAlertes, p))`,
+        resolveDir: ici,
+        loader: 'js',
+      },
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      outfile: sortie,
+      jsx: 'automatic',
+      loader: { '.js': 'jsx' },
+      define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{}' },
+      logLevel: 'silent',
+    })
+    return createRequire(import.meta.url)(sortie)
+  })()
+  return compile
+}
+
+test('une lecture en échec n’affiche que l’erreur et « Réessayer », jamais « Aucune alerte »', async () => {
+  const { rendreErreur } = await charger()
+  const html = rendreErreur('Serveur indisponible')
+  assert.match(html, /Serveur indisponible/)
+  assert.match(html, /Réessayer/)
+  assert.doesNotMatch(html, /Aucune alerte/)
+})
+
+test('liste partielle et filtre vide : pas de « tout va bien »', async () => {
+  const { rendreListe } = await charger()
+  const html = rendreListe({ alertes: [], total: 600, filtre: 'open' })
+  assert.match(html, /Liste partielle/)
+  assert.match(html, /n’en concluez pas/)
+})
+
 test('une alerte piégée est rendue échappée, sans balise brute', async () => {
   const piege = '<img src=x onerror=alert(1)>'
-  const sortie = join(mkdtempSync(join(tmpdir(), 'nf525-')), 'rendu.cjs')
-  await build({
-    stdin: {
-      contents: `
-        import React from 'react'
-        import { renderToStaticMarkup } from 'react-dom/server'
-        import { CarteAlerte } from './AlertesNf525.jsx'
-        export const rendre = (a) => renderToStaticMarkup(React.createElement(CarteAlerte, { alerte: a }))`,
-      resolveDir: ici,
-      loader: 'js',
-    },
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    outfile: sortie,
-    jsx: 'automatic',
-    loader: { '.js': 'jsx' },
-    define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{}' },
-    logLevel: 'silent',
-  })
-  const { rendre } = createRequire(import.meta.url)(sortie)
+  const { rendre } = await charger()
   const html = rendre({
     id: 'a1', reference: 'NF525-ABCD1234', chainType: 'sale', chainLabel: piege, cause: 'invalid_signature',
     causeLabel: 'Signature invalide', status: 'open', firstEventAt: '2026-11-01T10:00:00+00:00',

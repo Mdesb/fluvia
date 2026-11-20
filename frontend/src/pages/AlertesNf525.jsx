@@ -75,6 +75,7 @@ export default function AlertesNf525({ etabActif }) {
   }, [alertes, visee, params.filtre, majParams])
 
   const affichees = trierAlertes(filtrerAlertes(alertes, params.filtre))
+  const partielle = total > (alertes?.length ?? 0)
   const ouvertes = (alertes ?? []).filter((a) => a?.status === 'open').length
 
   return (
@@ -100,40 +101,44 @@ export default function AlertesNf525({ etabActif }) {
       <div className="card">
         <div className="card-h">
           <span>Alertes de scellement</span>
-          {ouvertes > 0 && <span className="badge crit" style={{ marginLeft: 8 }}>{ouvertes} ouverte(s)</span>}
-          <button className="btn ghost sm" type="button" style={{ marginLeft: 'auto' }} onClick={recharger}>
-            Actualiser
-          </button>
+          <div className="r">
+            {ouvertes > 0 && <span className="badge crit">{ouvertes === 1 ? '1 ouverte' : `${ouvertes} ouvertes`}</span>}
+            <button className="btn ghost sm" type="button" onClick={recharger}>
+              Actualiser
+            </button>
+          </div>
         </div>
 
-        {erreur && <div className="banner banner-error">{erreur}</div>}
-
         {chargement ? (
-          <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+          <div className="center"><div className="spinner" /></div>
         ) : nonBranche ? (
           <div className="empty">
             Ce suivi n’est pas encore disponible sur ce serveur. Il n’y a rien à faire de votre côté.
           </div>
         ) : alertes === null ? (
           <div className="banner banner-error">
-            Les alertes n’ont pas pu être lues. <b>N’en concluez pas qu’aucune chaîne n’est bloquée</b>&nbsp;:
-            cette liste n’a pas été obtenue.
-          </div>
-        ) : affichees.length === 0 ? (
-          <div className="empty">
-            {params.filtre === 'resolved'
-              ? 'Aucune alerte résolue.'
-              : params.filtre === 'open'
-                ? 'Aucune alerte ouverte : toutes vos chaînes fiscales acceptent les ventes.'
-                : 'Aucune alerte de scellement.'}
+            {erreur ? `${erreur} ` : 'Les alertes n’ont pas pu être lues. '}
+            <b>N’en concluez pas qu’aucune chaîne n’est bloquée</b>&nbsp;: cette liste n’a pas été obtenue.
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            {total > (alertes?.length ?? 0) && (
+          <>
+            {partielle && (
               <div className="banner banner-warn">
                 Liste partielle : {alertes.length} alertes affichées sur {total}.
               </div>
             )}
+            {affichees.length === 0 ? (
+              <div className="empty">
+                {partielle
+                  ? 'Aucune alerte de ce type dans la partie lue de la liste : n’en concluez pas qu’il n’y en a pas.'
+                  : params.filtre === 'resolved'
+                    ? 'Aucune alerte résolue.'
+                    : params.filtre === 'open'
+                      ? 'Aucune alerte ouverte : toutes vos chaînes fiscales acceptent les ventes.'
+                      : 'Aucune alerte de scellement.'}
+              </div>
+            ) : (
+          <div className="table-scroll">
             <table className="tbl">
               <thead>
                 <tr>
@@ -154,7 +159,7 @@ export default function AlertesNf525({ etabActif }) {
                     <tr
                       key={a.id ?? a.reference}
                       aria-current={surlignee ? 'true' : undefined}
-                      style={surlignee ? { background: 'var(--accent-soft)' } : undefined}
+                      className={surlignee ? 'row-visee' : undefined}
                     >
                       <td><span className="nm mono">{a.reference || '—'}</span></td>
                       <td>{a.chainLabel || '—'}</td>
@@ -174,6 +179,8 @@ export default function AlertesNf525({ etabActif }) {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
       </div>
     </div>
