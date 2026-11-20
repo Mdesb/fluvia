@@ -7,6 +7,8 @@ namespace App\Vente\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Caisse\Entity\PointDeVente;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\CalculateurDroits;
 use App\Vente\Nf525\ScellementHandler;
@@ -35,6 +37,8 @@ final class VerifierChaineProcessor implements ProcessorInterface
         private readonly SignataireOperation $signataire,
         private readonly Security $security,
         private readonly CalculateurDroits $calculateur,
+        // #370 — l'alerte NF525 ; null : aucune alerte (constructions manuelles).
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
@@ -59,6 +63,13 @@ final class VerifierChaineProcessor implements ProcessorInterface
         $this->assertPdvDansLePerimetre($pdv);
 
         $rapport = $this->signataire->verifieChaine($this->scellement->chaine($pdv));
+        // Vérification vivante (D-I), APRÈS le contrôle de périmètre : l'identité de la chaîne vient du point de
+        // vente résolu par le serveur. Rompue, elle ouvre ou met à jour l'alerte ; intacte, elle ferme celle d'origine « verification ».
+        $this->alerts?->recordVerification(
+            SealChainRef::forSales($pdv),
+            $rapport->intacte,
+            $rapport->intacte ? null : implode(' ; ', array_map(static fn (array $a): string => sprintf('n°%d : %s', $a['sequence'], $a['probleme']), \array_slice($rapport->anomalies, 0, 5))),
+        );
 
         return new JsonResponse(
             ['pointDeVente' => (string) $pdv->getId()] + $rapport->toArray(),
