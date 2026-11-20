@@ -30,7 +30,7 @@ use Symfony\Component\Uid\Uuid;
  */
 final class Nf525AlertViewProvider implements ProviderInterface
 {
-    private const CAUSE_LABELS = [
+    public const CAUSE_LABELS = [
         'invalid_signature' => 'Signature de scellement invalide',
         'unknown_key' => 'Clé de scellement inconnue',
         'key_regression' => 'Retour en arrière de la clé de scellement',

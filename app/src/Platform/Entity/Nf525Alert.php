@@ -252,6 +252,19 @@ class Nf525Alert
         return $this->noteBy;
     }
 
+    /**
+     * Pose, remplace ou efface la note de l'éditeur (G-6). Null efface les trois champs ; ni le statut ni
+     * les compteurs ne sont touchés.
+     */
+    public function annotate(?string $note, ?\DateTimeImmutable $at, ?string $by): self
+    {
+        $this->note = $note;
+        $this->noteAt = null === $note ? null : $at;
+        $this->noteBy = null === $note ? null : $by;
+
+        return $this;
+    }
+
     public function getResolvedAt(): ?\DateTimeImmutable
     {
         return $this->resolvedAt;
