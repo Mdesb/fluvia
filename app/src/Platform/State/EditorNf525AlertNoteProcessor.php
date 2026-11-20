@@ -8,12 +8,15 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Audit\Service\JournalAudit;
 use App\Platform\ApiResource\EditorNf525Alert;
+use App\Platform\Entity\Nf525Alert;
 use App\Securite\Entity\Utilisateur;
 use App\Subscription\Security\EditorOnly;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * La note de l'éditeur sur une alerte NF525 : le seul geste d'écriture de l'API (G-6).
@@ -31,10 +34,10 @@ final class EditorNf525AlertNoteProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EditorOnly $editorOnly,
-        private readonly EditorNf525AlertProvider $provider,
         private readonly LecteurCorps $lecteur,
         private readonly JournalAudit $journal,
         private readonly Security $security,
+        private readonly EditorNf525AlertProvider $provider,
     ) {
     }
 
@@ -42,21 +45,26 @@ final class EditorNf525AlertNoteProcessor implements ProcessorInterface
     {
         $this->editorOnly->assertEditor('editor.nf525_alerts');
 
-        $alert = $this->provider->find((string) ($uriVariables['id'] ?? ''));
+        $id = (string) ($uriVariables['id'] ?? '');
+        $alert = Uuid::isValid($id) ? $this->em->getRepository(Nf525Alert::class)->find(Uuid::fromString($id)) : null;
+        if (!$alert instanceof Nf525Alert) {
+            throw new NotFoundHttpException();
+        }
 
         $body = $this->lecteur->corps();
         $raw = $body['note'] ?? null;
         if (!\is_string($raw)) {
             throw new UnprocessableEntityHttpException('Le corps doit contenir « note » (texte ; vide pour l\'effacer).');
         }
-        $note = trim($raw);
+        // Espaces Unicode compris (insécables, etc.) : une note faite de blancs efface.
+        $note = (string) preg_replace('/^[\s\p{Z}\p{Cf}]+|[\s\p{Z}\p{Cf}]+$/u', '', $raw);
         if (mb_strlen($note) > self::MAX_LENGTH) {
             throw new UnprocessableEntityHttpException(sprintf('La note ne peut pas dépasser %d caractères.', self::MAX_LENGTH));
         }
 
         $now = new \DateTimeImmutable();
         $user = $this->security->getUser();
-        $author = $user instanceof Utilisateur ? $user->getEmail() : null;
+        $author = $user instanceof Utilisateur ? $user->getId()->toRfc4122() : null; // RGPD : l'identifiant, pas l'e-mail
         $had = null !== $alert->getNote();
 
         $alert->annotate('' === $note ? null : $note, $now, $author);
@@ -71,6 +79,6 @@ final class EditorNf525AlertNoteProcessor implements ProcessorInterface
 
         $this->em->flush();
 
-        return EditorNf525AlertProvider::view($alert);
+        return $this->provider->present($alert);
     }
 }

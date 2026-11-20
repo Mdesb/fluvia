@@ -10,6 +10,7 @@ use ApiPlatform\State\ProviderInterface;
 use App\Platform\ApiResource\EditorNf525Alert;
 use App\Platform\Entity\Nf525Alert;
 use App\Platform\Nf525\SealAlertStatus;
+use App\Securite\Entity\Utilisateur;
 use App\Subscription\Security\EditorOnly;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -20,9 +21,16 @@ use Symfony\Component\Uid\Uuid;
  * contrôle de tenant (`EditorOnly`), pas un périmètre d'établissement.
  *
  * @cloisonnement-verifie: l'alerte n'appartient à aucun établissement client : `EditorOnly::assertEditor('editor.nf525_alerts')`, première ligne, ne laisse passer que le tenant éditeur et le droit ; l'éditeur voit toutes les alertes, c'est le sens de la ressource.
+ *
+ * **La liste est bornée à 500 alertes** (ouvertes d'abord, puis les plus récentes) : une chaîne qui refuse
+ * en boucle ne tient qu'une alerte ouverte, mais l'historique des résolues grossit sans fin. Les
+ * établissements liés sont chargés en une requête (pas de requête par alerte). `noteBy` est un identifiant
+ * d'utilisateur (RGPD : aucun e-mail conservé) ; la fiche rend son nom, ou « utilisateur supprimé ».
  */
 final class EditorNf525AlertProvider implements ProviderInterface
 {
+    public const LIST_LIMIT = 500;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EditorOnly $editorOnly,
@@ -33,13 +41,11 @@ final class EditorNf525AlertProvider implements ProviderInterface
     {
         $this->editorOnly->assertEditor('editor.nf525_alerts');
 
-        $qb = $this->em->getRepository(Nf525Alert::class)->createQueryBuilder('a');
-
         if (!$operation instanceof CollectionOperationInterface) {
-            $alert = $this->find((string) ($uriVariables['id'] ?? ''));
-
-            return self::view($alert);
+            return $this->present($this->find((string) ($uriVariables['id'] ?? '')));
         }
+
+        $qb = $this->em->getRepository(Nf525Alert::class)->createQueryBuilder('a');
 
         $status = $context['filters']['status'] ?? null;
         if (\is_string($status) && '' !== $status) {
@@ -53,13 +59,45 @@ final class EditorNf525AlertProvider implements ProviderInterface
         $qb->addSelect('CASE WHEN a.status = :open THEN 0 ELSE 1 END AS HIDDEN openRank')
             ->setParameter('open', SealAlertStatus::Open)
             ->addOrderBy('openRank', 'ASC')
-            ->addOrderBy('a.lastEventAt', 'DESC');
+            ->addOrderBy('a.lastEventAt', 'DESC')
+            ->setMaxResults(self::LIST_LIMIT);
 
-        return array_map(self::view(...), $qb->getQuery()->getResult());
+        /** @var list<Nf525Alert> $alerts */
+        $alerts = $qb->getQuery()->getResult();
+        if ([] === $alerts) {
+            return [];
+        }
+
+        // Les établissements des alertes retenues d'un coup : les entités déjà hydratées reçoivent leur
+        // collection, l'ordre de `$alerts` est conservé et la borne porte sur les alertes, pas sur les jointures.
+        $this->em->getRepository(Nf525Alert::class)->createQueryBuilder('a')
+            ->leftJoin('a.establishments', 'est')->addSelect('est')
+            ->andWhere('a IN (:alerts)')->setParameter('alerts', $alerts)
+            ->getQuery()->getResult();
+
+        return $this->presentAll($alerts);
     }
 
-    public function find(string $id): Nf525Alert
+    public function present(Nf525Alert $alert): EditorNf525Alert
     {
+        return $this->presentAll([$alert])[0];
+    }
+
+    /**
+     * @param list<Nf525Alert> $alerts
+     *
+     * @return list<EditorNf525Alert>
+     */
+    private function presentAll(array $alerts): array
+    {
+        $labels = $this->userLabels(array_map(static fn (Nf525Alert $a): ?string => $a->getNoteBy(), $alerts));
+
+        return array_map(static fn (Nf525Alert $a): EditorNf525Alert => self::view($a, $labels), $alerts);
+    }
+
+    private function find(string $id): Nf525Alert
+    {
+        $this->editorOnly->assertEditor('editor.nf525_alerts');
         if (!Uuid::isValid($id)) {
             throw new NotFoundHttpException();
         }
@@ -71,7 +109,32 @@ final class EditorNf525AlertProvider implements ProviderInterface
         return $alert;
     }
 
-    public static function view(Nf525Alert $alert): EditorNf525Alert
+    /**
+     * @param list<?string> $ids
+     *
+     * @return array<string, string> identifiant -> nom affiché
+     */
+    private function userLabels(array $ids): array
+    {
+        $uuids = [];
+        foreach (array_unique(array_filter($ids)) as $id) {
+            if (Uuid::isValid($id)) {
+                $uuids[] = Uuid::fromString($id);
+            }
+        }
+        if ([] === $uuids) {
+            return [];
+        }
+        $labels = [];
+        foreach ($this->em->getRepository(Utilisateur::class)->findBy(['id' => $uuids]) as $user) {
+            $labels[$user->getId()->toRfc4122()] = $user->getNom();
+        }
+
+        return $labels;
+    }
+
+    /** @param array<string, string> $labels */
+    private static function view(Nf525Alert $alert, array $labels): EditorNf525Alert
     {
         $view = new EditorNf525Alert();
         $view->id = $alert->getId()->toRfc4122();
@@ -96,7 +159,8 @@ final class EditorNf525AlertProvider implements ProviderInterface
         $view->establishmentNames = $names;
         $view->note = $alert->getNote();
         $view->noteAt = $alert->getNoteAt()?->format(\DATE_ATOM);
-        $view->noteBy = $alert->getNoteBy();
+        $noteBy = $alert->getNoteBy();
+        $view->noteBy = null === $noteBy ? null : ($labels[strtolower($noteBy)] ?? 'utilisateur supprimé');
 
         return $view;
     }

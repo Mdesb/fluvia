@@ -90,7 +90,16 @@ final class EditorNf525AlertTest extends SocleApiTestCase
 
         $read = $client->request('GET', '/api/editor/nf525-alerts/'.$id, $this->editor($client))->toArray();
         self::assertSame('Clé réimportée, à surveiller.', $read['note']);
-        self::assertSame(SocleFixtures::ADMIN_EMAIL, $read['noteBy']);
+        $adminId = $this->adminId();
+        self::assertSame('Administratrice Socle', $read['noteBy'], 'La fiche rend le nom, pas l\'e-mail.');
+        self::assertSame($adminId, $this->storedNoteBy($id), 'La base garde l\'identifiant, jamais l\'e-mail (RGPD).');
+        self::assertStringNotContainsString('@', (string) $this->storedNoteBy($id));
+        self::assertStringNotContainsString(SocleFixtures::ADMIN_EMAIL, $client->request('GET', '/api/editor/nf525-alerts', $this->editor($client))->getContent());
+
+        // Utilisateur supprimé : libellé de repli, pas d'erreur.
+        $this->db()->executeStatement('UPDATE platform_nf525_alert SET note_by = ? WHERE id = ?', [Uuid::v4()->toRfc4122(), Uuid::fromString($id)->toBinary()]);
+        self::assertSame('utilisateur supprimé', $client->request('GET', '/api/editor/nf525-alerts/'.$id, $this->editor($client))->toArray()['noteBy']);
+        $this->db()->executeStatement('UPDATE platform_nf525_alert SET note_by = ? WHERE id = ?', [$adminId, Uuid::fromString($id)->toBinary()]);
         self::assertNotEmpty($read['noteAt']);
 
         $client->request('POST', '/api/editor/nf525-alerts/'.$id.'/note', $this->editor($client) + ['json' => ['note' => 'Seconde version.']]);
@@ -122,6 +131,22 @@ final class EditorNf525AlertTest extends SocleApiTestCase
 
         self::assertSame(422, $client->request('POST', $url, $this->editor($client) + ['json' => ['note' => 12]])->getStatusCode());
         self::assertSame(422, $client->request('POST', $url, $this->editor($client) + ['json' => new \stdClass()])->getStatusCode());
+    }
+
+    public function testNoteOfOnlyUnicodeWhitespaceClears(): void
+    {
+        $client = static::createClient();
+        $id = $this->alert('NF525-AAAAAAA1', 'open', [$this->establishmentId(SocleFixtures::ETAB_B_NOM)]);
+        $url = '/api/editor/nf525-alerts/'.$id.'/note';
+
+        $client->request('POST', $url, $this->editor($client) + ['json' => ['note' => 'à effacer']]);
+        self::assertSame('à effacer', $this->storedNote($id), 'Témoin : la note existe.');
+
+        // Espace insécable, espace fine insécable, espace cadratin, saut de ligne, espace de largeur nulle.
+        $blank = "\u{00A0}\u{202F}\u{2003} \n\u{200B}";
+        self::assertSame(200, $client->request('POST', $url, $this->editor($client) + ['json' => ['note' => $blank]])->getStatusCode());
+        self::assertNull($this->storedNote($id));
+        self::assertNull($this->storedNoteBy($id));
     }
 
     public function testNoteLeavesAnAuditEntry(): void
@@ -252,6 +277,18 @@ final class EditorNf525AlertTest extends SocleApiTestCase
         $note = $this->db()->fetchOne('SELECT note FROM platform_nf525_alert WHERE id = ?', [Uuid::fromString($id)->toBinary()]);
 
         return false === $note ? null : $note;
+    }
+
+    private function storedNoteBy(string $id): ?string
+    {
+        $by = $this->db()->fetchOne('SELECT note_by FROM platform_nf525_alert WHERE id = ?', [Uuid::fromString($id)->toBinary()]);
+
+        return false === $by ? null : $by;
+    }
+
+    private function adminId(): string
+    {
+        return Uuid::fromBinary((string) $this->db()->fetchOne('SELECT id FROM sec_utilisateur WHERE email = ?', [SocleFixtures::ADMIN_EMAIL]))->toRfc4122();
     }
 
     private function auditCount(): int
