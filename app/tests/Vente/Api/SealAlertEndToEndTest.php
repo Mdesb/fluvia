@@ -11,9 +11,14 @@ use App\Caisse\Enum\EtatCaisse;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Platform\Nf525\SealingRefusedException;
 use App\Platform\Nf525\SealKeyring;
 use App\Tests\Vente\VenteApiTestCase;
 use App\Vente\DataFixtures\VenteFixtures;
+use App\Vente\Enum\TypeOperationScellee;
+use App\Vente\Nf525\HashChainSignataire;
+use App\Vente\Nf525\OperationAScellerDto;
+use App\Vente\Nf525\ScellementHandler;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -266,5 +271,37 @@ final class SealAlertEndToEndTest extends VenteApiTestCase
         self::assertSame(['open', 'resolved'], $statuses);
         self::assertNotSame($all[0]['reference'], $all[1]['reference']);
         self::assertGreaterThan($bellsAfterFirstAlert, $this->bells(), 'la cloche sonne de nouveau');
+    }
+
+    public function testARuntimeExceptionInTheGuardsSurfacesAsIsWithoutAnyAlert(): void
+    {
+        $this->adminSurA();
+        $pointOfSale = $this->em()->getRepository(PointDeVente::class)->find(Uuid::fromString($this->idPointDeVente()));
+        self::assertNotNull($pointOfSale);
+        $real = $this->em();
+        // Une panne de lecture de l'ordre des clés (connexion) : ce n'est PAS un refus, rien ne doit l'avaler.
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturnCallback(static fn (string $class) => $real->getRepository($class));
+        $em->method('getConnection')->willThrowException(new \RuntimeException('panne-simulee-vente'));
+        $ring = new SealKeyring('NF525_SEAL_KEY', $this->activeKey());
+        $container = static::getContainer()->get(ScellementHandler::class);
+        self::assertInstanceOf(ScellementHandler::class, $container);
+        $handler = new ScellementHandler(
+            $em,
+            new HashChainSignataire($ring),
+            $ring,
+            (new \ReflectionProperty(ScellementHandler::class, 'alerts'))->getValue($container),
+        );
+
+        try {
+            $handler->sceller(new OperationAScellerDto($pointOfSale, TypeOperationScellee::Vente, 'Vente', Uuid::v4(), ['montant' => '10.00']));
+            self::fail('La panne aurait dû ressortir.');
+        } catch (SealingRefusedException $e) {
+            self::fail('Une panne ne doit pas devenir un refus : ' . $e->getMessage());
+        } catch (\RuntimeException $e) {
+            self::assertSame('panne-simulee-vente', $e->getMessage());
+        }
+
+        self::assertSame([], $this->alerts());
     }
 }

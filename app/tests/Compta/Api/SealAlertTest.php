@@ -209,4 +209,63 @@ final class SealAlertTest extends ComptaApiTestCase
         self::assertSame(3, $draft->getNumeroSequence());
         self::assertSame([], $this->alerts());
     }
+
+    public function testTheAlertIsResolvedOnTheNextSuccessfulSealOnceTheKeyIsRestored(): void
+    {
+        [, $chain] = $this->draftOnARealChain(2);
+        $this->resign($chain[1], self::FOREIGN_KEY);
+        $this->refuse($this->handler(), $this->draft());
+        $open = $this->alerts();
+        self::assertCount(1, $open);
+        self::assertSame('open', $open[0]['status']);
+        self::assertNull($open[0]['resolved_at']);
+
+        // Le geste de l'exploitant qui restaure sa clé : le dernier maillon est re-signé par la clé active.
+        $this->resign($chain[1], $this->activeKey());
+        $draft = $this->draft();
+        $this->handler()->sceller($draft);
+
+        self::assertSame(3, $draft->getNumeroSequence(), 'témoin : le scellement a bien eu lieu');
+        $alerts = $this->alerts();
+        self::assertCount(1, $alerts);
+        self::assertSame('resolved', $alerts[0]['status']);
+        self::assertNotNull($alerts[0]['resolved_at']);
+    }
+
+    public function testTwoSuccessiveRefusalsShareOneAlertWithACountOfTwo(): void
+    {
+        [, $chain] = $this->draftOnARealChain(2);
+        $this->resign($chain[1], self::FOREIGN_KEY);
+
+        $this->refuse($this->handler(), $this->draft());
+        $this->refuse($this->handler(), $this->draft());
+
+        $alerts = $this->alerts();
+        self::assertCount(1, $alerts);
+        self::assertSame(2, (int) $alerts[0]['refusal_count']);
+        self::assertSame('open', $alerts[0]['status']);
+    }
+
+    public function testARuntimeExceptionInTheGuardsSurfacesAsIsWithoutAnyAlert(): void
+    {
+        [$draft] = $this->draftOnARealChain(1);
+        $real = $this->em();
+        // Une panne de lecture de l'ordre des clés (connexion) : ce n'est PAS un refus, rien ne doit l'avaler.
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturnCallback(static fn (string $class) => $real->getRepository($class));
+        $em->method('getConnection')->willThrowException(new \RuntimeException('panne-simulee-compta'));
+        $recorder = (new \ReflectionProperty(ScellementEcritureHandler::class, 'alerts'))->getValue($this->handler());
+        $handler = new ScellementEcritureHandler($em, new SealKeyring(self::VARIABLE, $this->activeKey()), $recorder);
+
+        try {
+            $handler->sceller($draft);
+            self::fail('La panne aurait dû ressortir.');
+        } catch (SealingRefusedException $e) {
+            self::fail('Une panne ne doit pas devenir un refus : ' . $e->getMessage());
+        } catch (\RuntimeException $e) {
+            self::assertSame('panne-simulee-compta', $e->getMessage());
+        }
+
+        self::assertSame([], $this->alerts());
+    }
 }
