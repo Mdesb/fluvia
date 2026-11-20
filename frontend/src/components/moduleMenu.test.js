@@ -10,6 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { aUnDesDroits } from '../api/droits.js'
 import { MODULE_OF_MENU_ENTRY, MODULE_OF_SUBTAB, moduleAllowsEntry, moduleAllowsSubtab, isModuleActive } from './moduleMenu.js'
 
 const FRONT = new URL('../../', import.meta.url).pathname
@@ -118,4 +119,29 @@ test('un sous-onglet ou un appel de module ne dépend que de son module', () => 
   assert.equal(isModuleActive('musee', []), false)
   // Serveur muet : rien n'est caché, rien n'est coupé (la garde serveur reste le contrôle).
   assert.equal(isModuleActive('musee', undefined), true)
+})
+
+// ── NF525 (étape 13) : l'entrée « Alertes NF525 » ne s'ouvre qu'avec `securite.gerer` ────────────
+
+test('l’écran « alertes-nf525 » existe au menu, sous Administration, avec le seul droit securite.gerer', () => {
+  const shell = readFileSync(join(FRONT, 'src/components/AppShell.jsx'), 'utf8')
+  const nav = shell.slice(shell.indexOf('const NAV = ['))
+  // L'identifiant porte un tiret et un chiffre : la lecture générique du menu (`[a-z_]+`) ne le voit pas.
+  const entree = nav.match(/\{\s*id: 'alertes-nf525'([^{}]*)\}/)
+  assert.ok(entree, 'l’identifiant d’écran « alertes-nf525 » (cible de la cloche) doit exister dans le menu')
+  assert.deepEqual([...entree[1].matchAll(/'([a-z_*]+\.[a-z_*]+)'/g)].map((m) => m[1]), ['securite.gerer'])
+  assert.ok(nav.indexOf("id: 'alertes-nf525'") > nav.indexOf("section: 'Administration'"))
+  const app = readFileSync(join(FRONT, 'src/App.jsx'), 'utf8')
+  assert.match(app, /onglet === 'alertes-nf525' && aLeDroit\(droits, 'securite\.gerer'\)/)
+})
+
+test('l’entrée « alertes-nf525 » n’apparaît qu’avec securite.gerer, joker *.* compris', () => {
+  const perms = ['securite.gerer']
+  assert.equal(aUnDesDroits(['securite.gerer'], perms), true)
+  assert.equal(aUnDesDroits(['*.*'], perms), true, 'le joker de l’administrateur ouvre l’entrée')
+  assert.equal(aUnDesDroits(['securite.*'], perms), true)
+  assert.equal(aUnDesDroits(['securite.lire'], perms), false, 'lire ne suffit pas')
+  assert.equal(aUnDesDroits(['organisation.gerer', 'caisse.gerer'], perms), false)
+  assert.equal(aUnDesDroits([], perms), false)
+  assert.equal(moduleAllowsEntry('alertes-nf525', []), true, 'une entrée du cœur ne dépend d’aucun module')
 })

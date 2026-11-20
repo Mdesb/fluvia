@@ -25,6 +25,7 @@ import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
 import Support from './pages/Support.jsx'
 import Autorisations from './pages/Autorisations.jsx'
+import AlertesNf525 from './pages/AlertesNf525.jsx'
 import MentionsLegales from './pages/MentionsLegales.jsx'
 import Campagnes from './pages/Campagnes.jsx'
 import Pipeline from './pages/Pipeline.jsx'
@@ -542,7 +543,8 @@ export default function App() {
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}
       {onglet === 'support' && <Support droits={droits} etabActif={etabActif} me={me} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} etabActif={etabActif} />}
-      {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
+      {onglet === 'alertes-nf525' && aLeDroit(droits, 'securite.gerer') && <AlertesNf525 etabActif={etabActif} />}
+      {onglet === 'legal' &&<MentionsLegales etabActif={etabActif} droits={droits} />}
       {onglet === 'api' && <DocumentationApi />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'campagnes' && <Campagnes etabActif={etabActif} droits={droits} />}

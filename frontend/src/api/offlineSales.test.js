@@ -146,6 +146,21 @@ test('une vente en quarantaine reste visible, et ne bloque pas les suivantes par
   assert.equal(s.base.size, 5)
 })
 
+// NF525, étape 15 : le serveur copie le message générique du refus de scellement dans la raison de
+// quarantaine ; la file le garde et l'affiche (`OfflineCounter`) sans le réécrire.
+test('la raison de quarantaine d’un refus de scellement est conservée telle quelle', async () => {
+  const raison = 'Scellement refusé : la chaîne fiscale est bloquée. L’administrateur et l’éditeur sont prévenus. Référence de l’alerte : NF525-0A1B2C3D.'
+  const hl = file()
+  await hl.record(venteDe())
+  await hl.sync('e1', async (corps) => ({
+    inseres: [], doublons: [], correspondances: [], reportees: [],
+    quarantaine: corps.operations.map((o) => ({ cle: o.cleIdempotence, raison })),
+  }))
+  const [v] = await hl.pending('e1')
+  assert.equal(v.etat, 'quarantaine')
+  assert.equal(v.raison, raison)
+})
+
 test('un refus définitif du lot (422) bloque ses ventes au lieu de les renvoyer sans fin', async () => {
   const hl = file()
   await hl.record(venteDe())
