@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Vente\Api;
 
+use App\Caisse\Entity\PointDeVente;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Vente\VenteApiTestCase;
+use App\Vente\Nf525\FiscalArchiveChecker;
 use App\Vente\Nf525\FiscalArchiveSigner;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -170,6 +174,147 @@ final class FiscalArchiveTest extends VenteApiTestCase
         );
         $chaine = array_values(array_filter($rapport['checks'], static fn (array $c): bool => $c['check'] === 'chaine'))[0];
         self::assertStringContainsString('régression de clé', json_encode($chaine, \JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * #370 (Q-5) — une archive ENREGISTRÉE PAR LE SERVEUR dont le segment est en défaut ouvre l'alerte de la chaîne
+     * vivante de CE point de vente (origine vérification) ; une archive intacte ne ferme ni n'ouvre rien.
+     */
+    public function testAnAlteredRegisteredArchiveOpensTheAlertOfThatPointOfSaleAndAnIntactOneClosesNothing(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $archive = $this->archiver($client, $entete, $this->anneeCloturee($client, $entete));
+        $fichiers = $this->dezipper($this->telecharger($client, $entete, $archive['id']));
+        $pos = $this->idPointDeVente();
+
+        // Témoin : l'archive intacte n'ouvre rien.
+        $this->verifier($client, $entete, $archive['id']);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame([], $this->nf525Alerts());
+
+        // Une alerte de vérification vivante est ouverte à part : une archive intacte ne la ferme pas.
+        $this->openLiveAlert($pos);
+        self::assertSame('open', $this->nf525Alerts()[0]['status']);
+        $this->verifier($client, $entete, $archive['id']);
+        self::assertResponseStatusCodeSame(200);
+        $alerts = $this->nf525Alerts();
+        self::assertCount(1, $alerts);
+        self::assertSame('open', $alerts[0]['status'], 'une archive intacte ne ferme rien');
+        $this->em()->getConnection()->executeStatement('DELETE FROM platform_nf525_alert_establishment');
+        $this->em()->getConnection()->executeStatement('DELETE FROM platform_nf525_alert');
+
+        $this->falsifyChain($archive['id'], $fichiers);
+        // Hors périmètre : 404, rien n'est ouvert (témoin positif juste après, sous A).
+        $enteteB = ['auth_bearer' => $entete['auth_bearer'], 'headers' => [ContexteEtablissement::HEADER => $this->idEtablissement(SocleFixtures::ETAB_B_NOM)]];
+        $this->verifier($client, $enteteB, $archive['id']);
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame([], $this->nf525Alerts());
+        $this->verifier($client, $entete, $archive['id']);
+
+        self::assertResponseStatusCodeSame(409);
+        $alerts = $this->nf525Alerts();
+        self::assertCount(1, $alerts);
+        self::assertSame('sales:' . $pos, $alerts[0]['chain_key']);
+        self::assertSame('chain_broken', $alerts[0]['cause']);
+        self::assertSame('verification', $alerts[0]['origin']);
+        self::assertSame('open', $alerts[0]['status']);
+        self::assertStringContainsString((string) $this->annee(), (string) $alerts[0]['technical_detail']);
+        self::assertGreaterThan(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM platform_notification WHERE source = ?', ['nf525.chain_blocked']));
+    }
+
+    /** `verifyContent` reçoit un contenu d'utilisateur : même en défaut, il n'ouvre aucune alerte (R-5). */
+    public function testAUserSuppliedZipInDefaultOpensNoAlert(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $archive = $this->archiver($client, $entete, $this->anneeCloturee($client, $entete));
+        $fichiers = $this->dezipper($this->telecharger($client, $entete, $archive['id']));
+        $zip = $this->zipper($this->falsifiedFiles($fichiers));
+        $sha = hash('sha256', $zip);
+        /** @var FiscalArchiveSigner $signer */
+        $signer = static::getContainer()->get(FiscalArchiveSigner::class);
+        /** @var FiscalArchiveChecker $checker */
+        $checker = static::getContainer()->get(FiscalArchiveChecker::class);
+
+        $rapport = $checker->verifyContent($zip, $sha, $signer->sign($sha));
+
+        self::assertFalse($rapport['intact']);
+        self::assertSame(['chaine' => false], $this->etats($rapport, ['chaine']), 'témoin : le défaut est bien vu');
+        self::assertSame([], $this->nf525Alerts());
+    }
+
+    /** Un identifiant qui n'est pas un point de vente existant (ou pas un UUID) n'ouvre aucune alerte. */
+    public function testAnUnknownOrMalformedPointOfSaleInTheArchiveOpensNoAlert(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $archive = $this->archiver($client, $entete, $this->anneeCloturee($client, $entete));
+        $fichiers = $this->dezipper($this->telecharger($client, $entete, $archive['id']));
+        $pos = $this->idPointDeVente();
+
+        foreach ([(string) Uuid::v4(), 'pas-un-uuid'] as $foreign) {
+            $this->falsifyChain($archive['id'], $fichiers, $pos, $foreign);
+            $rapport = $this->verifier($client, $entete, $archive['id']);
+            self::assertResponseStatusCodeSame(409);
+            self::assertFalse($this->etats($rapport, ['chaine'])['chaine'], 'témoin : la chaîne de l\'archive est bien en défaut');
+            self::assertSame([], $this->nf525Alerts(), $foreign);
+        }
+    }
+
+    /** @param array<string, string> $fichiers @return array<string, string> */
+    private function falsifiedFiles(array $fichiers, ?string $replace = null, ?string $by = null): array
+    {
+        $csv = str_replace('""nombreVentes"":1', '""nombreVentes"":7', $fichiers['sealed_operations.csv']);
+        if ($replace !== null) {
+            $csv = str_replace($replace, (string) $by, $csv);
+        }
+        self::assertNotSame($fichiers['sealed_operations.csv'], $csv, 'La falsification a bien eu lieu.');
+        $fichiers['sealed_operations.csv'] = $csv;
+        $manifeste = json_decode($fichiers['manifest.json'], true);
+        foreach ($manifeste['fichiers'] as $i => $f) {
+            if ($f['nom'] === 'sealed_operations.csv') {
+                $manifeste['fichiers'][$i]['sha256'] = hash('sha256', $csv);
+            }
+        }
+        $fichiers['manifest.json'] = (string) json_encode($manifeste);
+
+        return $fichiers;
+    }
+
+    /**
+     * Refait l'archive avec un maillon falsifié (manifeste, empreinte et signature refaits avec la clé).
+     *
+     * @param array<string, string> $fichiers
+     */
+    private function falsifyChain(string $archiveId, array $fichiers, ?string $replace = null, ?string $by = null): void
+    {
+        $zip = $this->zipper($this->falsifiedFiles($fichiers, $replace, $by));
+        $sha = hash('sha256', $zip);
+        /** @var FiscalArchiveSigner $signer */
+        $signer = static::getContainer()->get(FiscalArchiveSigner::class);
+        $this->remplacer($archiveId, $zip, $sha, $signer->sign($sha));
+    }
+
+    /** Une alerte de vérification vivante, ouverte à part (le décor : sa propre mécanique a ses tests). */
+    private function openLiveAlert(string $pointOfSaleId): void
+    {
+        $pointOfSale = $this->em()->getRepository(PointDeVente::class)->find(Uuid::fromString($pointOfSaleId));
+        self::assertNotNull($pointOfSale);
+        /** @var SealAlertRecorder $recorder */
+        $recorder = static::getContainer()->get(SealAlertRecorder::class);
+        self::assertNotNull($recorder->recordVerification(SealChainRef::forSales($pointOfSale), false, 'décor'));
+    }
+
+    private function annee(): int
+    {
+        return (int) (new \DateTimeImmutable('last year'))->format('Y');
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function nf525Alerts(): array
+    {
+        return $this->em()->getConnection()->fetchAllAssociative('SELECT * FROM platform_nf525_alert');
     }
 
     /**
