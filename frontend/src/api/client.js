@@ -3253,6 +3253,15 @@ export const api = {
   // part est un accès que personne ne referme.
   editorSupportAccesses: () => request('/api/editor/support-accesses'),
 
+  // ── ALERTES NF525 (chaîne fiscale bloquée) ────────────────────────────────────────────────────
+  // Côté exploitant : lecture seule, sans détail technique (`securite.gerer`). `status` : `open` ou `resolved`.
+  nf525Alertes: (status) => request('/api/nf525-alerts', { query: status ? { status } : undefined }),
+  nf525Alerte: (id) => request(`/api/nf525-alerts/${encodeURIComponent(id)}`),
+  // Côté éditeur : détail technique et note. La note est le seul geste d'écriture (vide = efface).
+  editorNf525Alertes: (status) => request('/api/editor/nf525-alerts', { query: status ? { status } : undefined }),
+  editorNf525Note: (id, note) =>
+    request(`/api/editor/nf525-alerts/${encodeURIComponent(id)}/note`, { method: 'POST', body: { note }, ld: true }),
+
   // ── ACCÈS PARTENAIRES, CÔTÉ EXPLOITANT (`api.gerer`) ────────────────────────────────────────
   // Toujours pour l'établissement ACTIF (en-tête) : l'identifiant est celui de l'application.
   accesPartenaires: () => request('/api/partner-accesses'),
