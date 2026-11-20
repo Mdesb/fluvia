@@ -8,6 +8,8 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Audit\Service\JournalAudit;
 use App\Caisse\Entity\SessionCaisse;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Vente\Entity\Vente;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Nf525\SignataireOperation;
@@ -61,6 +63,8 @@ final class SynchroOperationsProcessor implements ProcessorInterface
         private readonly SignataireOperation $signataire,
         private readonly ContexteEtablissement $contexte,
         private readonly JournalAudit $journal,
+        // #370 — l'alerte NF525 ; null : aucune alerte (constructions manuelles).
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
@@ -114,8 +118,16 @@ final class SynchroOperationsProcessor implements ProcessorInterface
         $pdv = $session->getPointDeVente();
         if ($pdv !== null) {
             $rapport = $this->signataire->verifieChaine($this->scellement->chaine($pdv));
+            // Vérification vivante (D-I) : rompue, elle ouvre ou met à jour l'alerte ; intacte, elle ferme
+            // l'alerte d'origine « verification ». Le détail technique reste dans l'alerte, jamais dans le message
+            // (il part au poste de caisse, et la quarantaine le recopie).
+            $reference = $this->alerts?->recordVerification(
+                SealChainRef::forSales($pdv),
+                $rapport->intacte,
+                $rapport->intacte ? null : implode(' ; ', array_map(static fn (array $a): string => sprintf('n°%d : %s', $a['sequence'], $a['probleme']), \array_slice($rapport->anomalies, 0, 5))),
+            );
             if (!$rapport->intacte) {
-                throw new ConflictHttpException('Chaîne serveur rompue : ancrage refusé (alerte de contrôle NF525).');
+                throw new ConflictHttpException('Chaîne serveur rompue : ancrage refusé (alerte de contrôle NF525).' . ($reference !== null ? sprintf(' Référence de l\'alerte : %s.', $reference) : ''));
             }
         }
 

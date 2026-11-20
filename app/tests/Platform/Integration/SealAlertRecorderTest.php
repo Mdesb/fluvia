@@ -239,6 +239,29 @@ final class SealAlertRecorderTest extends SocleApiTestCase
         self::assertNotNull($row['resolved_at']);
     }
 
+    public function testAnIntactVerificationWithoutOpenAlertOpensNoSecondConnection(): void
+    {
+        // Chaque remontée hors ligne vérifie la chaîne : sans alerte ouverte, aucune seconde connexion.
+        $chain = SealChainRef::forSales($this->pointOfSale());
+        $recorder = $this->recorder($this->logger());
+
+        self::assertNull($recorder->recordVerification($chain, true));
+        self::assertSame(0, $this->connectionsOpened);
+
+        // Témoin : une alerte de refus ouverte ne déclenche pas non plus d'écriture ; une alerte de
+        // vérification, si.
+        $this->seedAlert($chain, SealAlertOrigin::Refusal);
+        $recorder->recordVerification($chain, true);
+        self::assertSame(0, $this->connectionsOpened);
+        self::assertSame('open', $this->alerts($chain)[0]['status']);
+
+        $other = SealChainRef::forSales($this->pointOfSale(label: 'Autre'));
+        $this->seedAlert($other, SealAlertOrigin::Verification);
+        $recorder->recordVerification($other, true);
+        self::assertSame(1, $this->connectionsOpened);
+        self::assertSame('resolved', $this->alerts($other)[0]['status']);
+    }
+
     public function testResolveOnSealLeavesAVerificationAlertUntouched(): void
     {
         $chain = SealChainRef::forSales($this->pointOfSale());

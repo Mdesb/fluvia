@@ -68,7 +68,11 @@ final class SealAlertRecorder
     {
         try {
             if ($intact) {
-                $this->store->resolve($chain->key(), SealAlertOrigin::Verification);
+                // Pré-lecture indexée sur la connexion de l'appelant : une vérification intacte sans alerte
+                // ouverte (le cas courant) n'ouvre pas de seconde connexion.
+                if ($this->hasOpenAlert($chain, SealAlertOrigin::Verification)) {
+                    $this->store->resolve($chain->key(), SealAlertOrigin::Verification);
+                }
 
                 return null;
             }
@@ -91,12 +95,7 @@ final class SealAlertRecorder
     public function resolveOnSeal(SealChainRef $chain): void
     {
         try {
-            $table = $this->em->getClassMetadata(Nf525Alert::class)->getTableName();
-            $open = $this->em->getConnection()->fetchOne(
-                sprintf('SELECT 1 FROM %s WHERE open_chain_key = :key AND origin = :origin LIMIT 1', $table),
-                ['key' => $chain->key(), 'origin' => SealAlertOrigin::Refusal->value],
-            );
-            if ($open === false) {
+            if (!$this->hasOpenAlert($chain, SealAlertOrigin::Refusal)) {
                 return;
             }
             $this->store->resolve($chain->key(), SealAlertOrigin::Refusal);
@@ -113,5 +112,15 @@ final class SealAlertRecorder
         } catch (\Throwable) {
             // Meilleur effort strict : une panne du journal ne doit jamais remplacer le 409.
         }
+    }
+
+    private function hasOpenAlert(SealChainRef $chain, SealAlertOrigin $origin): bool
+    {
+        $table = $this->em->getClassMetadata(Nf525Alert::class)->getTableName();
+
+        return $this->em->getConnection()->fetchOne(
+            sprintf('SELECT 1 FROM %s WHERE open_chain_key = :key AND origin = :origin LIMIT 1', $table),
+            ['key' => $chain->key(), 'origin' => $origin->value],
+        ) !== false;
     }
 }
