@@ -30,7 +30,7 @@
 - [x] Étape 13 — frontal : écran administrateur (G-5, G-4)
 - [x] Étape 14 — frontal : écran éditeur (G-6)
 - [x] Étape 15 — caisse épinglée (G-8)
-- [ ] Étape 16 — documentation, décision, clôture
+- [x] Étape 16 — documentation, décision, clôture (README « Trousseau NF525 », D135)
 
 ## Journal de Session
 

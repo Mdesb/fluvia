@@ -382,6 +382,30 @@ Code 0 et trois lignes `✓` : rien ne bloque. Code 1 : une ligne `✗` par cha�
 de déployer la règle d'ordre, ce passage dit si une chaîne réelle est déjà en régression (elle bloquerait la
 remontée hors ligne et le scellement dès le déploiement).
 
+**Quand un scellement est refusé : l'alerte NF525 (#370).** Un refus (clé inconnue, signature invalide,
+régression de clé, ordre illisible) ou une vérification qui trouve une chaîne rompue ouvre **une alerte par
+chaîne**, enregistrée par une connexion à part : elle survit à l'annulation de la vente.
+- **Qui est prévenu** : la cloche sonne **une fois**, à l'ouverture, chez les administrateurs
+  (`securite.gerer`) des établissements de la chaîne (pour la compta et la facturation : tous ceux du profil
+  exploitant). Aucun courriel (E-8).
+- **Ce que voit le caissier** : « Scellement refusé : la chaîne fiscale est bloquée. L'administrateur et
+  l'éditeur sont prévenus. Référence de l'alerte : NF525-XXXXXXXX. » Aucun détail technique, à la caisse
+  comme dans la quarantaine hors ligne. Si l'alerte n'a pas pu s'écrire (table absente pendant un
+  déploiement, verrou, panne), le refus part quand même, sans référence, et une ligne `critical` le dit au
+  journal du conteneur.
+- **Où la lire** : l'administrateur, menu *Administration → Alertes NF525* (lecture seule, sans détail
+  technique) ; l'éditeur, son écran *Alertes NF525* (toutes les alertes, détail technique, note), sous la
+  permission `editor.nf525_alerts`.
+- **Comment elle se ferme** : une alerte née d'un **refus** se ferme d'elle-même au premier scellement
+  réussi sur la chaîne ; une alerte née d'une **vérification** ne se ferme qu'à la prochaine vérification qui
+  retrouve la chaîne intacte. Un nouveau refus après fermeture ouvre une **nouvelle** alerte.
+- **La réparation reste ici** : la procédure de rotation ci-dessus, sur le serveur. Les écrans n'ont aucun
+  geste de réparation.
+- **À contrôler après le premier déploiement** : la migration `Version20261120100000` rattache
+  `editor.nf525_alerts` aux rôles par leur **nom** (« Éditeur — Direction », « Éditeur — Assistance »,
+  « Administrateur groupe ») ; un nom différent en base ne rattache rien, sans erreur. Vérifier que l'écran
+  éditeur s'ouvre avec un compte de la direction.
+
 **Clé réellement perdue (aucune sauvegarde).** Aucune procédure automatique : la chaîne concernée ne
 peut plus être prolongée, et c'est voulu. La sortie (par exemple un maillon de « rupture constatée »
 scellé avec la nouvelle clé, option B de l'enquête #361) est une décision de Maxime, à ne pas
