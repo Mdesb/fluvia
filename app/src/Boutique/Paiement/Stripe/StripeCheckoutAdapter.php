@@ -10,6 +10,7 @@ use App\Boutique\Paiement\NotifiedOnlinePaymentInterface;
 use App\Boutique\Paiement\OnlinePaymentContext;
 use App\Boutique\Paiement\PaiementEnLigneInterface;
 use App\Boutique\Paiement\ResultatRetourPaiementEnLigne;
+use App\Boutique\Paiement\SignedNotificationInterface;
 use App\Compta\Enum\TypeExploitant;
 use App\Vente\Enum\StatutTPE;
 use Psr\Log\LoggerInterface;
@@ -17,9 +18,9 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpClientException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Component\Uid\Uuid;
 
 /**
  * PSP CB DES EXPLOITANTS PRIVÉS — Stripe Checkout, page de paiement hébergée (#339).
@@ -38,23 +39,30 @@ use Symfony\Component\Uid\Uuid;
  * Vérification : comme pour PayFiP, l'issue vient d'un appel que NOUS faisons avec la clé secrète, pas
  * de ce que le navigateur ou le webhook transportent. Le webhook n'est qu'une invitation à demander.
  *
- * Configuration : STRIPE_SECRET_KEY (clé `sk_test_…` en préproduction), STRIPE_API_BASE facultatif.
+ * Notification : le webhook est signé (`Stripe-Signature`), vérifié par `verifyNotification()` AVANT toute
+ * lecture du corps ; sans STRIPE_WEBHOOK_SECRET, toute notification est refusée (la carte reste proposée).
+ *
+ * Configuration : STRIPE_SECRET_KEY (clé `sk_test_…` en préproduction), STRIPE_API_BASE et
+ * STRIPE_WEBHOOK_SECRET facultatifs.
  */
 #[AutoconfigureTag('boutique.paiement_en_ligne')]
-final class StripeCheckoutAdapter implements PaiementEnLigneInterface, ConfigurableOnlinePaymentInterface, NotifiedOnlinePaymentInterface
+final class StripeCheckoutAdapter implements PaiementEnLigneInterface, ConfigurableOnlinePaymentInterface, NotifiedOnlinePaymentInterface, SignedNotificationInterface
 {
     private const DEFAULT_API_BASE = 'https://api.stripe.com';
 
     private readonly string $secretKey;
     private readonly string $apiBase;
+    private readonly string $webhookSecret;
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
         #[Autowire(env: 'default::STRIPE_SECRET_KEY')] ?string $secretKey = null,
         #[Autowire(env: 'default::STRIPE_API_BASE')] ?string $apiBase = null,
+        #[Autowire(env: 'default::STRIPE_WEBHOOK_SECRET')] ?string $webhookSecret = null,
     ) {
         $this->secretKey = trim((string) $secretKey);
+        $this->webhookSecret = trim((string) $webhookSecret);
         $this->apiBase = rtrim(trim((string) $apiBase) ?: self::DEFAULT_API_BASE, '/');
     }
 
@@ -71,6 +79,16 @@ final class StripeCheckoutAdapter implements PaiementEnLigneInterface, Configura
     public function provider(): string
     {
         return 'stripe';
+    }
+
+    public function verifyNotification(Request $request): void
+    {
+        (new StripeSignatureChecker())->verify(
+            (string) $request->headers->get('Stripe-Signature', ''),
+            $request->getContent(),
+            $this->webhookSecret,
+            \time(),
+        );
     }
 
     /** Événement `checkout.session.*` : la référence est `data.object.id`. Le reste du corps n'est pas lu. */

@@ -332,10 +332,30 @@ il reste éteint et c'est le bouchon de démonstration qui répond — lui-même
 | `PAYFIP_PAYMENT_PAGE_URL` | Page de paiement. Défaut : `https://www.payfip.gouv.fr/tpa/paiementws.web`. | non |
 | `STRIPE_SECRET_KEY` | Clé secrète de l'exploitant (`sk_test_…` en préproduction). **Secret** : jamais dans un ticket, jamais en clair dans un journal. | oui (PSP CB) |
 | `STRIPE_API_BASE` | Défaut : `https://api.stripe.com`. | non |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du point de terminaison (`whsec_…`, chaîne entière). **Secret** : mêmes règles que la clé. | oui (PSP CB), voir ci-dessous |
 
 Côté Stripe, déclarer le webhook `https://<domaine>/api/boutique/paiement-en-ligne/notification/stripe`
 (événements `checkout.session.completed`, `checkout.session.expired`). La notification n'est qu'une
 invitation : l'issue est toujours redemandée au prestataire avec la clé secrète.
+
+**Signature du webhook Stripe (`STRIPE_WEBHOOK_SECRET`).** La route de notification est publique : elle
+ne traite une notification Stripe que si elle porte une signature valide et récente (5 minutes).
+
+1. Récupérer le secret : tableau de bord Stripe → Webhooks → le point de terminaison → « Reveal secret »
+   (valeur `whsec_…`, à recopier en entier, préfixe compris).
+2. Le poser dans `app/.env.local` sur le VPS, puis redémarrer PHP-FPM, comme les autres variables.
+3. **S'il manque** : toutes les notifications Stripe sont refusées (400, avertissement « secret de
+   signature des notifications non configuré » dans le journal). La carte reste proposée et la commande
+   est confirmée au retour de l'acheteur sur la boutique ; seul l'acheteur qui ferme son navigateur
+   avant le retour n'est plus rattrapé.
+4. **Témoin de mise en service** : envoyer un événement de test depuis le tableau de bord Stripe vers le
+   point de terminaison. La signature est bonne si la réponse n'est **pas** 400 : un événement de test ne
+   porte pas une de nos sessions, donc la réponse attendue est 404 « inconnu » (200 seulement pour un vrai
+   paiement de test). Un 400 signale un mauvais secret, un secret absent, une horloge du VPS décalée ou un
+   corps altéré en chemin (proxy) : le motif est dans le journal. Un non-400 confirme l'encodage et l'usage
+   du secret entier.
+5. **Rotation** : poser le nouveau secret chez Fluvia ; Stripe signe avec les deux secrets jusqu'à
+   l'expiration de l'ancien (jusqu'à 7 jours, au choix à la rotation), et une seule signature valide suffit.
 
 **Mise en service PayFiP** (guide DGFiP « PayFiP Régie Web service », V18.0 d'août 2019 ; l'édition de
 juin 2025 se demande au correspondant moyens de paiement de la DDFiP) :

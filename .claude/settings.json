@@ -85,7 +85,8 @@
       "WebFetch(domain:symfony.com)",
       "WebFetch(domain:www.php.net)",
       "WebFetch(domain:getcomposer.org)",
-      "WebFetch(domain:developer.mozilla.org)"
+      "WebFetch(domain:developer.mozilla.org)",
+      "WebFetch(domain:docs.stripe.com)"
     ]
   }
 }
