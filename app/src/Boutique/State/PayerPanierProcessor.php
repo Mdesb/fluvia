@@ -11,11 +11,11 @@ use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Enum\StatutPanier;
 use App\Boutique\Paiement\OnlinePaymentContext;
+use App\Boutique\Paiement\OnlinePaymentProfileResolver;
 use App\Boutique\Paiement\OnlinePaymentSettlement;
 use App\Boutique\Paiement\SelecteurPaiementEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Service\ConfirmerCommandeHandler;
-use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
 use App\Vente\Service\PanierCalculateur;
 use App\Vente\Enum\StatutVente;
@@ -44,6 +44,7 @@ final class PayerPanierProcessor implements ProcessorInterface
         private readonly SelecteurPaiementEnLigne $selecteur,
         private readonly PanierCalculateur $calculateur,
         private readonly OnlinePaymentSettlement $settlement,
+        private readonly OnlinePaymentProfileResolver $profileResolver,
         #[Autowire(env: 'default::BOUTIQUE_BASE_URL')] private readonly ?string $boutiqueBaseUrl = null,
     ) {
     }
@@ -92,14 +93,14 @@ final class PayerPanierProcessor implements ProcessorInterface
 
         $vente = $this->confirmerCommande->creerOuRecupererVente($data);
 
-        $profil = $this->resoudreProfil($data);
+        $profil = $this->profileResolver->forEstablishment($data->getEtablissement());
         $adaptateur = $this->selecteur->pour($profil);
         $montantCentimes = $this->calculateur->centimes($vente->getTotal());
         $initiation = $adaptateur->initierPaiement(
             $vente->getId(),
             $montantCentimes,
             $this->urlRetour($data),
-            new OnlinePaymentContext($vente->getNumero(), $this->adresseAcheteur($data)),
+            new OnlinePaymentContext($vente->getNumero(), $this->adresseAcheteur($data), $profil),
         );
 
         // Ce qu'on vient de confier au prestataire, mémorisé : le retour se confrontera à ces deux
@@ -166,19 +167,5 @@ final class PayerPanierProcessor implements ProcessorInterface
     private function adresseAcheteur(PanierEnLigne $panier): string
     {
         return (string) ($this->confirmerCommande->resoudreClient($panier)->getEmail() ?: $panier->getContactConnu());
-    }
-
-    private function resoudreProfil(PanierEnLigne $panier): ProfilExploitant
-    {
-        $etablissement = $panier->getEtablissement();
-        $profils = $this->em->getRepository(ProfilExploitant::class)->findAll();
-        foreach ($profils as $profil) {
-            \assert($profil instanceof ProfilExploitant);
-            if ($etablissement !== null && $profil->couvre($etablissement)) {
-                return $profil;
-            }
-        }
-
-        throw new UnprocessableEntityHttpException('Aucun profil exploitant (M6) configuré pour cet établissement (RG-M6-01).');
     }
 }

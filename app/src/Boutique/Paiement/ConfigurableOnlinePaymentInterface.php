@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Boutique\Paiement;
 
+use App\Compta\Entity\ProfilExploitant;
+
 /**
  * A REAL provider (#339): it only takes over from the demonstration stub of its regime once its
  * configuration is complete. Until then the selector keeps the stub — which refuses to run outside
@@ -12,5 +14,6 @@ namespace App\Boutique\Paiement;
  */
 interface ConfigurableOnlinePaymentInterface
 {
-    public function isConfigured(): bool;
+    /** Is this provider usable for THIS operator? (Stripe: its own account, else the global one; PayFiP: the global one.) */
+    public function isConfiguredFor(ProfilExploitant $profile): bool;
 }

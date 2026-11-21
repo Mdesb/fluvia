@@ -7,8 +7,11 @@ namespace App\Tests\Boutique\Unit;
 use App\Boutique\Paiement\InvalidNotificationSignatureException;
 use App\Boutique\Paiement\NotificationRejection;
 use App\Boutique\Paiement\OnlinePaymentContext;
+use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Enum\TypeExploitant;
 use App\Boutique\Paiement\SignedNotificationInterface;
 use App\Boutique\Paiement\Stripe\StripeCheckoutAdapter;
+use App\Tests\Boutique\Support\StripeUnitWiring;
 use App\Vente\Enum\StatutTPE;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -35,7 +38,23 @@ final class StripeCheckoutAdapterTest extends TestCase
             return $serveur($methode, $url, $options);
         });
 
-        return new StripeCheckoutAdapter($http, new NullLogger(), self::CLE);
+        return $this->adapterWith($http, self::CLE);
+    }
+
+    /** Adaptateur dont la seule source de compte est l'environnement (aucune clé d'exploitant en base : stub de dépôt vide). */
+    private function adapterWith(MockHttpClient $http, ?string $key = null, ?string $webhookSecret = null): StripeCheckoutAdapter
+    {
+        return new StripeCheckoutAdapter($http, new NullLogger(), StripeUnitWiring::resolver($this, $key, $webhookSecret));
+    }
+
+    private function profil(): ProfilExploitant
+    {
+        return (new ProfilExploitant())->setType(TypeExploitant::GroupePrive);
+    }
+
+    private function contexte(): OnlinePaymentContext
+    {
+        return new OnlinePaymentContext('SYS-T00001', '', $this->profil());
     }
 
     /** @param array<string, mixed> $corps */
@@ -44,13 +63,25 @@ final class StripeCheckoutAdapterTest extends TestCase
         return new MockResponse(json_encode($corps, \JSON_THROW_ON_ERROR), ['http_code' => $code, 'response_headers' => ['content-type' => 'application/json']]);
     }
 
+    public function testSansContexteLaVerificationNAtranRienEtNAppellePasStripe(): void
+    {
+        $appels = [];
+        $adaptateur = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'payment_status' => 'paid', 'status' => 'complete', 'amount_total' => 1250, 'currency' => 'eur']), $appels);
+
+        self::assertNull($adaptateur->verifierRetour('cs_test_abc', 1250, []), 'fail closed: no profile, no account to look in');
+        self::assertSame([], $appels, 'Stripe is not called');
+        // Témoin positif : avec le contexte, la même session payée est attestée.
+        self::assertSame(StatutTPE::Accepte, $adaptateur->verifierRetour('cs_test_abc', 1250, [], $this->contexte())?->statut);
+        self::assertCount(1, $appels);
+    }
+
     public function testLInitiationOuvreUneSessionCheckoutHebergee(): void
     {
         $appels = [];
         $adaptateur = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_abc']), $appels);
         $vente = Uuid::v4();
 
-        $initiation = $adaptateur->initierPaiement($vente, 1250, 'https://boutique.example.test/b/patinoire-b/retour-paiement', new OnlinePaymentContext('SYS-T00001', 'acheteur@example.test'));
+        $initiation = $adaptateur->initierPaiement($vente, 1250, 'https://boutique.example.test/b/patinoire-b/retour-paiement', new OnlinePaymentContext('SYS-T00001', 'acheteur@example.test', $this->profil()));
 
         self::assertSame('cs_test_abc', $initiation->referenceTransaction);
         self::assertSame('https://checkout.stripe.com/c/pay/cs_test_abc', $initiation->urlRedirection);
@@ -72,7 +103,7 @@ final class StripeCheckoutAdapterTest extends TestCase
     {
         $adaptateur = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'payment_status' => 'paid', 'status' => 'complete', 'amount_total' => 1250, 'currency' => 'eur']));
 
-        $resultat = $adaptateur->verifierRetour('cs_test_abc', 1250, ['statut' => 'refuse']);
+        $resultat = $adaptateur->verifierRetour('cs_test_abc', 1250, ['statut' => 'refuse'], $this->contexte());
 
         self::assertNotNull($resultat);
         self::assertSame(StatutTPE::Accepte, $resultat->statut);
@@ -82,27 +113,27 @@ final class StripeCheckoutAdapterTest extends TestCase
     public function testUneSessionOuverteOuExpireeNeConfirmeRien(): void
     {
         $ouverte = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'payment_status' => 'unpaid', 'status' => 'open', 'amount_total' => 1250, 'currency' => 'eur']));
-        self::assertSame(StatutTPE::Timeout, $ouverte->verifierRetour('cs_test_abc', 1250, ['statut' => 'accepte'])?->statut);
+        self::assertSame(StatutTPE::Timeout, $ouverte->verifierRetour('cs_test_abc', 1250, ['statut' => 'accepte'], $this->contexte())?->statut);
 
         $expiree = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'payment_status' => 'unpaid', 'status' => 'expired', 'amount_total' => 1250, 'currency' => 'eur']));
-        self::assertSame(StatutTPE::Annule, $expiree->verifierRetour('cs_test_abc', 1250, [])?->statut);
+        self::assertSame(StatutTPE::Annule, $expiree->verifierRetour('cs_test_abc', 1250, [], $this->contexte())?->statut);
     }
 
     public function testUnRetourFalsifieNAttesteRien(): void
     {
         $appels = [];
         $inconnue = $this->adaptateur(fn () => self::json(['error' => ['message' => 'No such checkout.session']], 404), $appels);
-        self::assertNull($inconnue->verifierRetour('cs_test_inventee', 1250, ['payment_status' => 'paid']));
+        self::assertNull($inconnue->verifierRetour('cs_test_inventee', 1250, ['payment_status' => 'paid'], $this->contexte()));
 
         // Une référence qui n'a pas la forme d'une session n'est même pas demandée à Stripe.
-        self::assertNull($inconnue->verifierRetour('../v1/charges', 1250, []));
+        self::assertNull($inconnue->verifierRetour('../v1/charges', 1250, [], $this->contexte()));
         self::assertCount(1, $appels);
 
         $autreSession = $this->adaptateur(fn () => self::json(['id' => 'cs_test_autre', 'payment_status' => 'paid', 'status' => 'complete', 'amount_total' => 1250, 'currency' => 'eur']));
-        self::assertNull($autreSession->verifierRetour('cs_test_abc', 1250, []));
+        self::assertNull($autreSession->verifierRetour('cs_test_abc', 1250, [], $this->contexte()));
 
         $autreDevise = $this->adaptateur(fn () => self::json(['id' => 'cs_test_abc', 'payment_status' => 'paid', 'status' => 'complete', 'amount_total' => 1250, 'currency' => 'usd']));
-        self::assertNull($autreDevise->verifierRetour('cs_test_abc', 1250, []));
+        self::assertNull($autreDevise->verifierRetour('cs_test_abc', 1250, [], $this->contexte()));
     }
 
     public function testLaNotificationNeDonneQuUneReference(): void
@@ -117,9 +148,9 @@ final class StripeCheckoutAdapterTest extends TestCase
 
     public function testSansCleSecreteLAdaptateurResteEteint(): void
     {
-        self::assertFalse((new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger()))->isConfigured());
-        self::assertFalse((new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), 'pk_test_publique'))->isConfigured(), 'une clé publique ne suffit pas');
-        self::assertTrue($this->adaptateur(fn () => self::json([]))->isConfigured());
+        self::assertFalse($this->adapterWith(new MockHttpClient())->isConfiguredFor($this->profil()));
+        self::assertFalse(($this->adapterWith(new MockHttpClient(), 'pk_test_publique'))->isConfiguredFor($this->profil()), 'une clé publique ne suffit pas');
+        self::assertTrue($this->adaptateur(fn () => self::json([]))->isConfiguredFor($this->profil()));
     }
 
     private function signedRequest(string $body, string $secret, int $t): Request
@@ -131,13 +162,13 @@ final class StripeCheckoutAdapterTest extends TestCase
 
     public function testTheAdapterIsASignedNotificationProvider(): void
     {
-        self::assertInstanceOf(SignedNotificationInterface::class, new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger()));
+        self::assertInstanceOf(SignedNotificationInterface::class, $this->adapterWith(new MockHttpClient()));
     }
 
     public function testVerifyNotificationAcceptsASignedBodyAndRefusesTheRest(): void
     {
         $secret = 'whsec_' . bin2hex(random_bytes(16));
-        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE, null, $secret);
+        $adaptateur = $this->adapterWith(new MockHttpClient(), self::CLE, $secret);
         $body = '{"type":"checkout.session.completed","data":{"object":{"id":"cs_test_abc"}}}';
 
         $adaptateur->verifyNotification($this->signedRequest($body, $secret, time()));
@@ -159,9 +190,9 @@ final class StripeCheckoutAdapterTest extends TestCase
     public function testWithoutWebhookSecretEveryNotificationIsRefusedButTheCardStaysOffered(): void
     {
         $secret = 'whsec_' . bin2hex(random_bytes(16));
-        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE);
+        $adaptateur = $this->adapterWith(new MockHttpClient(), self::CLE);
 
-        self::assertTrue($adaptateur->isConfigured(), 'the missing webhook secret does not switch the card off');
+        self::assertTrue($adaptateur->isConfiguredFor($this->profil()), 'the missing webhook secret does not switch the card off');
         try {
             $adaptateur->verifyNotification($this->signedRequest('{}', $secret, time()));
             self::fail('a rejection was expected');
@@ -174,7 +205,7 @@ final class StripeCheckoutAdapterTest extends TestCase
     public function testTheRejectionCarriesNoSecretHeaderOrBody(): void
     {
         $secret = 'whsec_' . bin2hex(random_bytes(16));
-        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE, null, $secret);
+        $adaptateur = $this->adapterWith(new MockHttpClient(), self::CLE, $secret);
         $body = '{"sensible":"corps-de-test"}';
         $header = (string) $this->signedRequest($body . 'x', $secret, time())->headers->get('Stripe-Signature');
 

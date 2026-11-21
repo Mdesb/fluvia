@@ -13,6 +13,7 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
 use App\Boutique\Paiement\PayFipOnlinePaymentAdapter;
 use App\Boutique\Paiement\Stripe\StripeCheckoutAdapter;
+use App\Tests\Boutique\Support\StripeUnitWiring;
 use App\Compta\PayFip\PayFipConfiguration;
 use App\Compta\PayFip\PayFipSoapClient;
 use App\Compta\Service\TraiterRetourPayFipHandler;
@@ -82,7 +83,7 @@ final class SelecteurPaiementEnLigneTest extends TestCase
             $this->createStub(EntityManagerInterface::class),
             new NullLogger(),
         );
-        $stripe = static fn (?string $cle): StripeCheckoutAdapter => new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), $cle);
+        $stripe = fn (?string $cle): StripeCheckoutAdapter => new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), StripeUnitWiring::resolver($this, $cle));
         $regie = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte);
         $dsp = (new ProfilExploitant())->setType(TypeExploitant::Dsp);
 

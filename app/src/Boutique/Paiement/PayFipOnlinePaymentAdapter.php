@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Boutique\Paiement;
 
 use App\Compta\Entity\BordereauPayFiP;
+use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\StatutPayFiP;
 use App\Compta\Enum\TypeExploitant;
 use App\Compta\PayFip\PayFipConfiguration;
@@ -60,7 +61,12 @@ final class PayFipOnlinePaymentAdapter implements PaiementEnLigneInterface, Conf
         return TypeExploitant::RegieDirecte;
     }
 
-    public function isConfigured(): bool
+    public function isConfiguredFor(ProfilExploitant $profile): bool
+    {
+        return $this->configuration->isConfigured();
+    }
+
+    public function acceptsNotifications(): bool
     {
         return $this->configuration->isConfigured();
     }
@@ -118,7 +124,7 @@ final class PayFipOnlinePaymentAdapter implements PaiementEnLigneInterface, Conf
         return new InitiationPaiementEnLigne($idOp, $this->client->paymentPageUrl($idOp));
     }
 
-    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour): ?ResultatRetourPaiementEnLigne
+    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour, ?OnlinePaymentContext $context = null): ?ResultatRetourPaiementEnLigne
     {
         $bordereau = $this->em->getRepository(BordereauPayFiP::class)->findOneBy(['referenceTransaction' => $referenceTransaction]);
         if (!$bordereau instanceof BordereauPayFiP) {
