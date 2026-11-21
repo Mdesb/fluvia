@@ -2087,6 +2087,16 @@ export const api = {
     request('/api/profil_exploitants', { method: 'POST', body: corps, ld: true }),
   majProfilExploitant: (id, corps) =>
     request(`/api/profil_exploitants/${id}`, { method: 'PATCH', body: corps }),
+  // LE COMPTE STRIPE D'UN EXPLOITANT (lot D3-B de #365). Ecriture seule : le serveur ne rend ni la cle ni le
+  // secret (G-6), seulement `hasSecretKey`, `hasWebhookSecret`, le mode et les dates. Lecture, ecriture et retrait
+  // ne sont ouverts que depuis l'etablissement principal du profil (droit `payment.configure`).
+  stripeConfigs: () => request('/api/stripe_account_configs', { query: { itemsPerPage: 20 } }),
+  creerStripeConfig: (corps) =>
+    request('/api/stripe_account_configs', { method: 'POST', body: corps, ld: true }),
+  majStripeConfig: (id, corps) =>
+    request(`/api/stripe_account_configs/${id}`, { method: 'PATCH', body: corps }),
+  retirerStripeConfig: (id) =>
+    request(`/api/stripe_account_configs/${id}`, { method: 'DELETE' }),
   // Le logo imprime en tete de la facture PDF (#345) -- multipart, meme idiome que le logo de vitrine.
   televerserLogoFacturation: (id, fichier) => {
     const corps = new FormData()
