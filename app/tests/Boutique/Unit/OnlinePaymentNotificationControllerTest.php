@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Boutique\Unit;
 
 use App\Boutique\Controller\OnlinePaymentNotificationController;
+use App\Boutique\Paiement\OnlinePaymentProfileResolver;
 use App\Boutique\Paiement\OnlinePaymentSettlement;
 use App\Boutique\Paiement\SelecteurPaiementEnLigne;
 use App\Boutique\Paiement\Stripe\StripeCheckoutAdapter;
+use App\Tests\Boutique\Support\StripeUnitWiring;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -35,12 +37,12 @@ final class OnlinePaymentNotificationControllerTest extends TestCase
                 $this->entries[] = [$level, (string) $message, $context];
             }
         };
-        $adapter = new StripeCheckoutAdapter(new MockHttpClient(), $logger, self::KEY, null, $webhookSecret);
+        $adapter = new StripeCheckoutAdapter(new MockHttpClient(), $logger, StripeUnitWiring::resolver($this, self::KEY, $webhookSecret, $logger));
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects(self::never())->method(self::anything());
         $settlement = (new \ReflectionClass(OnlinePaymentSettlement::class))->newInstanceWithoutConstructor();
 
-        return [new OnlinePaymentNotificationController(new SelecteurPaiementEnLigne([$adapter]), $settlement, $em, $logger), $logger];
+        return [new OnlinePaymentNotificationController(new SelecteurPaiementEnLigne([$adapter]), $settlement, new OnlinePaymentProfileResolver($em), $em, $logger), $logger];
     }
 
     private function dump(object $logger): string
