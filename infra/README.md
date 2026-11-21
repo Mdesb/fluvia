@@ -330,13 +330,49 @@ il reste éteint et c'est le bouchon de démonstration qui répond — lui-même
 | `PAYFIP_NOTIFICATION_URL` | `https://<domaine>/api/boutique/paiement-en-ligne/notification/payfip`. Le domaine doit être déclaré au correspondant DDFiP ; son certificat ne doit pas dépendre de SNI. | oui (PayFiP) |
 | `PAYFIP_SERVICE_URL` | Web service. Défaut : `https://www.payfip.gouv.fr/tpa/services/securite`. | non |
 | `PAYFIP_PAYMENT_PAGE_URL` | Page de paiement. Défaut : `https://www.payfip.gouv.fr/tpa/paiementws.web`. | non |
-| `STRIPE_SECRET_KEY` | Clé secrète de l'exploitant (`sk_test_…` en préproduction). **Secret** : jamais dans un ticket, jamais en clair dans un journal. | oui (PSP CB) |
+| `STRIPE_SECRET_KEY` | Clé de **repli** pour un exploitant qui n'a pas saisi la sienne (voir « Un compte Stripe par exploitant »), `sk_test_…` en préproduction. **Secret** : jamais dans un ticket, jamais en clair dans un journal. | oui (PSP CB) |
 | `STRIPE_API_BASE` | Défaut : `https://api.stripe.com`. | non |
-| `STRIPE_WEBHOOK_SECRET` | Secret de signature du point de terminaison (`whsec_…`, chaîne entière). **Secret** : mêmes règles que la clé. | oui (PSP CB), voir ci-dessous |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du point de terminaison **global** de repli (`whsec_…`, chaîne entière). **Secret** : mêmes règles que la clé. | oui (PSP CB), voir ci-dessous |
 
 Côté Stripe, déclarer le webhook `https://<domaine>/api/boutique/paiement-en-ligne/notification/stripe`
 (événements `checkout.session.completed`, `checkout.session.expired`). La notification n'est qu'une
 invitation : l'issue est toujours redemandée au prestataire avec la clé secrète.
+
+**Un compte Stripe par exploitant (D3-B de #365).** Chaque exploitant peut encaisser sur son propre
+compte Stripe : sa clé et son secret de webhook se saisissent à l'écran, jamais dans un fichier. Aucune
+valeur réelle n'a sa place dans ce dépôt (public) ni dans un ticket.
+
+1. **Clé maîtresse `STRIPE_KEYS_ENCRYPTION_KEY`.** Elle chiffre les clés des exploitants en base. Elle est
+   **générée par le déploiement** (`deploy-preprod.sh`, `deploy-prod.sh`) dans le fichier d'environnement du
+   VPS, jamais dans le dépôt, et **se sauvegarde avec les autres clés** : la perdre rend les clés des
+   exploitants illisibles (le paiement par carte de ces exploitants répond 503, sans repli sur la clé globale,
+   et leurs notifications sont refusées en 400) et il faut les ressaisir. Un déploiement **régénère** une clé
+   absente sans alerte : ne jamais supprimer cette ligne du fichier d'environnement. Absente ou mal formée,
+   la saisie d'une clé à l'écran est refusée (503).
+2. **Saisie par l'exploitant.** Écran Facturation, fiche du profil, section « Paiement par carte
+   (Stripe) » : réservée au droit `payment.configure` et à l'établissement principal du profil. Une régie
+   directe encaisse par PayFiP et n'a pas de clé Stripe. La clé et le secret ne sont jamais réaffichés.
+3. **Clé restreinte `rk_`.** Elle doit porter la permission **Write** sur la ressource *Checkout Sessions*
+   (Write inclut Read : Fluvia crée puis relit les sessions). Sans ce droit, Stripe refuse l'appel et le
+   paiement échoue ; aucune valeur ne fuit (fiche `docs/references/stripe-api-keys.md`). Une clé
+   d'organisation (`sk_org_…`) est refusée à la saisie.
+4. **Un webhook par exploitant chez Stripe.** Déclarer, dans le compte Stripe de l'exploitant,
+   `https://<domaine>/api/boutique/paiement-en-ligne/notification/stripe/<id du profil>` (adresse affichée
+   et copiable à l'écran ; événements `checkout.session.completed` et `checkout.session.expired`), puis
+   saisir à l'écran le secret `whsec_…` de ce point de terminaison. **À mesurer en préprod** : l'adresse
+   affichée est construite sur l'origine de la page ; derrière un proxy, vérifier que c'est bien celle que
+   Stripe appelle.
+5. **Repli global.** Un exploitant sans clé enregistrée utilise `STRIPE_SECRET_KEY` et l'adresse
+   historique `…/notification/stripe` (secret `STRIPE_WEBHOOK_SECRET`) : rien ne change pour lui. Une clé
+   enregistrée mais illisible ne retombe **jamais** sur la clé globale (503).
+6. **Témoin de mise en service.** Un événement de test **signé** envoyé à l'adresse d'un exploitant doit
+   rendre **404 « inconnu »**, et non 400 : il ne porte pas une de nos sessions. Un 400 signale un secret
+   absent ou faux, un identifiant de profil faux ou une horloge décalée. **À mesurer en préprod** : ce témoin
+   lève les deux déductions de la fiche `docs/references/stripe-webhooks.md` (encodage, clé `whsec_` entière).
+7. ⚠ **Ne pas retirer ni remplacer la clé d'un exploitant tant que des paiements par carte sont en
+   cours.** Une commande ouverte sur l'ancien compte ne pourra plus être vérifiée avec la nouvelle clé (ni
+   la clé globale) : le retour de l'acheteur et la notification seront refusés, l'acheteur aura payé et la
+   commande restera non confirmée. Attendre que les paiements en cours soient soldés.
 
 **Signature du webhook Stripe (`STRIPE_WEBHOOK_SECRET`).** La route de notification est publique : elle
 ne traite une notification Stripe que si elle porte une signature valide et récente (5 minutes).
