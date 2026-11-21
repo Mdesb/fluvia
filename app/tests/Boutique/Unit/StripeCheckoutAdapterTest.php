@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Boutique\Unit;
 
+use App\Boutique\Paiement\InvalidNotificationSignatureException;
+use App\Boutique\Paiement\NotificationRejection;
 use App\Boutique\Paiement\OnlinePaymentContext;
+use App\Boutique\Paiement\SignedNotificationInterface;
 use App\Boutique\Paiement\Stripe\StripeCheckoutAdapter;
 use App\Vente\Enum\StatutTPE;
 use PHPUnit\Framework\TestCase;
@@ -117,5 +120,76 @@ final class StripeCheckoutAdapterTest extends TestCase
         self::assertFalse((new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger()))->isConfigured());
         self::assertFalse((new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), 'pk_test_publique'))->isConfigured(), 'une clé publique ne suffit pas');
         self::assertTrue($this->adaptateur(fn () => self::json([]))->isConfigured());
+    }
+
+    private function signedRequest(string $body, string $secret, int $t): Request
+    {
+        $header = 't=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $body, $secret);
+
+        return new Request(content: $body, server: ['HTTP_STRIPE_SIGNATURE' => $header]);
+    }
+
+    public function testTheAdapterIsASignedNotificationProvider(): void
+    {
+        self::assertInstanceOf(SignedNotificationInterface::class, new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger()));
+    }
+
+    public function testVerifyNotificationAcceptsASignedBodyAndRefusesTheRest(): void
+    {
+        $secret = 'whsec_' . bin2hex(random_bytes(16));
+        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE, null, $secret);
+        $body = '{"type":"checkout.session.completed","data":{"object":{"id":"cs_test_abc"}}}';
+
+        $adaptateur->verifyNotification($this->signedRequest($body, $secret, time()));
+
+        $refus = function (Request $request) use ($adaptateur): NotificationRejection {
+            try {
+                $adaptateur->verifyNotification($request);
+            } catch (InvalidNotificationSignatureException $e) {
+                return $e->reason;
+            }
+            self::fail('a rejection was expected');
+        };
+        $header = (string) $this->signedRequest($body, $secret, time())->headers->get('Stripe-Signature');
+        self::assertSame(NotificationRejection::Invalid, $refus(new Request(content: $body . ' ', server: ['HTTP_STRIPE_SIGNATURE' => $header])));
+        self::assertSame(NotificationRejection::Missing, $refus(new Request(content: $body)));
+        self::assertSame(NotificationRejection::OutOfWindow, $refus($this->signedRequest($body, $secret, time() - 3600)));
+    }
+
+    public function testWithoutWebhookSecretEveryNotificationIsRefusedButTheCardStaysOffered(): void
+    {
+        $secret = 'whsec_' . bin2hex(random_bytes(16));
+        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE);
+
+        self::assertTrue($adaptateur->isConfigured(), 'the missing webhook secret does not switch the card off');
+        try {
+            $adaptateur->verifyNotification($this->signedRequest('{}', $secret, time()));
+            self::fail('a rejection was expected');
+        } catch (InvalidNotificationSignatureException $e) {
+            self::assertSame(NotificationRejection::NotConfigured, $e->reason);
+        }
+    }
+
+    /** The rejection carries the enum only: no secret, header or body in its message, trace or string form. */
+    public function testTheRejectionCarriesNoSecretHeaderOrBody(): void
+    {
+        $secret = 'whsec_' . bin2hex(random_bytes(16));
+        $adaptateur = new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), self::CLE, null, $secret);
+        $body = '{"sensible":"corps-de-test"}';
+        $header = (string) $this->signedRequest($body . 'x', $secret, time())->headers->get('Stripe-Signature');
+
+        $caught = null;
+        try {
+            $adaptateur->verifyNotification(new Request(content: $body, server: ['HTTP_STRIPE_SIGNATURE' => $header]));
+        } catch (InvalidNotificationSignatureException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'a rejection was expected');
+        foreach ([$secret, $header, $body] as $sensible) {
+            self::assertStringNotContainsString($sensible, $caught->getMessage());
+            self::assertStringNotContainsString($sensible, $caught->getTraceAsString());
+            self::assertStringNotContainsString($sensible, (string) $caught);
+        }
     }
 }
