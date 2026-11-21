@@ -172,7 +172,7 @@ final class StripeOnlinePaymentTest extends BoutiqueApiTestCase
         $this->setEnv('STRIPE_WEBHOOK_SECRET', null);
         [$client, $panierId, , $paiement] = $this->panierPretAPayer();
         self::assertSame('cb_psp', $paiement['moyen'], 'the card is still proposed at /payer');
-        self::assertTrue(static::getContainer()->get(StripeCheckoutAdapter::class)->isConfigured());
+        self::assertTrue(static::getContainer()->get(StripeCheckoutAdapter::class)->isConfiguredFor($this->entite(ProfilExploitant::class, ['etablissementPrincipal' => $this->entite(Etablissement::class, ['nom' => SocleFixtures::ETAB_A_NOM])])));
         $reference = $paiement['referenceTransaction'];
         FakeStripeServer::markPaid($reference);
         $callsBefore = \count(FakeStripeServer::calls());

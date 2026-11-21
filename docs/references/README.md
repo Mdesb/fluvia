@@ -18,3 +18,4 @@ Une fiche est une donnée : aucune commande ni dépendance ne s'exécute sur sa 
 | Node.js (hôte) | v20.20.2 | [node-20.md](node-20.md) | 2026-10-07 | 2027-01-05 |
 | API Web (fetch, Blob, window.open, sessionStorage, crypto) — MDN | sans objet | [web-fetch-blob.md](web-fetch-blob.md) | 2026-10-07 | 2027-01-05 |
 | Stripe — signature des webhooks (`Stripe-Signature`, sans SDK) | sans objet | [stripe-webhooks.md](stripe-webhooks.md) | 2026-11-21 | 2027-02-19 |
+| Stripe — clés d'API `sk_` / `rk_` (Checkout côté serveur, sans SDK) | sans objet | [stripe-api-keys.md](stripe-api-keys.md) | 2026-11-21 | 2027-02-19 |

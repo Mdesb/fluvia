@@ -105,6 +105,9 @@ final class AuditWriteSubscriber
         \App\Sepa\Entity\MandatSepa::class,
         \App\Sepa\Entity\ConfigCreancierSepa::class,
         \App\Sepa\Entity\RemiseSepa::class,
+        // Clé Stripe d'un exploitant (D3-B de #365, G-8) : qui l'a posée, remplacée ou retirée, et quand.
+        // Les valeurs chiffrées sont exclues de l'instantané (CHAMPS_SENSIBLES ci-dessous).
+        \App\Compta\Entity\StripeAccountConfig::class,
         // Module de recouvrement partagé App\Recouvrement (refactor extraction depuis App\Sport,
         // réutilisable par toute activité à abonnement) : politique et dossiers d'impayés, sensibles
         // (déclenchent une coupure d'accès).
@@ -172,6 +175,9 @@ final class AuditWriteSubscriber
         // d'audit, même si le champ n'a pas de #[Groups] (l'audit ne sérialise pas via le normalizer).
         \App\Sepa\Entity\MandatSepa::class => ['ibanToken'],
         \App\Sepa\Entity\ConfigCreancierSepa::class => ['creancierIbanToken'],
+        // Clé Stripe de l'exploitant : jamais dans l'instantané, pas même chiffrée. Les dates `keyUpdatedAt` /
+        // `webhookSecretUpdatedAt` et `keyMode` disent QUELLE valeur a changé sans la montrer.
+        \App\Compta\Entity\StripeAccountConfig::class => ['secretKeyEncrypted', 'webhookSecretEncrypted'],
     ];
 
     /**

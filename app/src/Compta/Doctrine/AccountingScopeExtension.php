@@ -29,6 +29,7 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\QualificationEquipement;
 use App\Compta\Entity\Rad;
 use App\Compta\Entity\RegieRecettes;
+use App\Compta\Entity\StripeAccountConfig;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Entity\VenteImpayeeRegie;
 use App\Securite\Entity\Utilisateur;
@@ -127,6 +128,9 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
         PeriodeComptable::class => 'profilExploitant',
         Rad::class => 'profilExploitant',
         RegieRecettes::class => 'profilExploitant',
+        // Clé Stripe de l'exploitant (D3-B de #365) : lue par le profil, donc visible sous son seul
+        // établissement PRINCIPAL (la clé engage les encaissements de tous ses établissements).
+        StripeAccountConfig::class => 'businessProfile',
         TauxTva::class => 'profilExploitant',
     ];
 

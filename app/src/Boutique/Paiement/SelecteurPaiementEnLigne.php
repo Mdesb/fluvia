@@ -48,7 +48,7 @@ final class SelecteurPaiementEnLigne
                 continue;
             }
             if ($adaptateur instanceof ConfigurableOnlinePaymentInterface) {
-                if ($adaptateur->isConfigured()) {
+                if ($adaptateur->isConfiguredFor($profil)) {
                     return $adaptateur;
                 }
                 continue;
@@ -64,15 +64,15 @@ final class SelecteurPaiementEnLigne
     }
 
     /**
-     * L'adaptateur qui reçoit les notifications de ce prestataire (`payfip`, `stripe`), s'il est
-     * configuré — `null` sinon : une notification pour un prestataire éteint n'a rien à réveiller.
+     * L'adaptateur qui reçoit les notifications de ce prestataire (`payfip`, `stripe`), s'il en accepte
+     * (`acceptsNotifications()`) — `null` sinon : une notification pour un prestataire éteint n'a rien à réveiller.
      */
     public function pourNotification(string $provider): ?NotifiedOnlinePaymentInterface
     {
         foreach ($this->liste() as $adaptateur) {
             if ($adaptateur instanceof NotifiedOnlinePaymentInterface
                 && $adaptateur->provider() === $provider
-                && (!$adaptateur instanceof ConfigurableOnlinePaymentInterface || $adaptateur->isConfigured())) {
+                && $adaptateur->acceptsNotifications()) {
                 return $adaptateur;
             }
         }

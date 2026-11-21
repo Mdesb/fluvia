@@ -20,6 +20,12 @@ interface NotifiedOnlinePaymentInterface
     /** The path segment of the notification URL: `/api/boutique/paiement-en-ligne/notification/{provider}`. */
     public function provider(): string;
 
+    /**
+     * Does this provider take notifications at all? PayFiP: only once configured. Stripe: always, the
+     * signature is the gate and it fails closed (a deployment with no key answers 400, not 404).
+     */
+    public function acceptsNotifications(): bool;
+
     /** The transaction reference the notification is about, or `null` if it carries none. */
     public function referenceFromNotification(Request $request): ?string;
 }

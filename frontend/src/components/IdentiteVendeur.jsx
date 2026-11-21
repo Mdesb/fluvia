@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
+import PaiementStripe from './PaiementStripe.jsx'
+import { peutConfigurerPaiement } from './paiementStripe.js'
 
 // L'IDENTITÉ LÉGALE DU VENDEUR — RÉCLAMÉE PAR UN RAPPORT, SAISISSABLE NULLE PART.
 //
@@ -72,7 +74,7 @@ const CHAMPS_ADRESSE = [
   { cle: 'pays', libelle: 'Pays (code ISO)', exemple: 'FR' },
 ]
 
-export default function IdentiteVendeur({ peutModifier }) {
+export default function IdentiteVendeur({ peutModifier, droits }) {
   const [profil, setProfil] = useState(null)
   const [valeurs, setValeurs] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -259,6 +261,11 @@ export default function IdentiteVendeur({ peutModifier }) {
           />
         </div>
       ) : null}
+
+      {/* PAIEMENT PAR CARTE (lot D3-B de #365) : sur la fiche du profil seulement, et avec le droit
+          `payment.configure`. Le serveur ne sert cette configuration que depuis l'établissement
+          principal du profil, qui est celui que cet écran affiche. */}
+      {profil?.id && peutConfigurerPaiement(droits) ? <PaiementStripe profil={profil} droits={droits} /> : null}
     </div>
   )
 }

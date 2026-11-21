@@ -34,7 +34,10 @@ interface PaiementEnLigneInterface
      * `$montantAttenduCentimes` est le montant mémorisé à l'initiation : un adaptateur qui signe le
      * montant le vérifie ici ; le processeur le revérifie de toute façon sur le résultat rendu.
      *
+     * `$context` porte le profil de l'exploitant de la commande (D3-B de #365) : un adaptateur dont le compte
+     * dépend de l'exploitant (Stripe) l'exige et rend `null` sans lui (échec fermé) ; les autres l'ignorent.
+     *
      * @param array<string, mixed> $donneesRetour ce que le retour transporte (reçu, signature, jeton…) — jamais une décision
      */
-    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour): ?ResultatRetourPaiementEnLigne;
+    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour, ?OnlinePaymentContext $context = null): ?ResultatRetourPaiementEnLigne;
 }

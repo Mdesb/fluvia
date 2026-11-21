@@ -442,7 +442,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
               Sans raison sociale ni SIREN, aucune facture ne part au format electronique — les
               conditions de reglement et les comptes par defaut sont des reglages de confort a cote.
               Ce qui bloque doit se voir en premier. */}
-          <IdentiteVendeur peutModifier={peutGerer} />
+          <IdentiteVendeur peutModifier={peutGerer} droits={droits} />
           <ParametresFacturation peutModifier={peutGerer} />
         </>
       ) : params.tab === 'factures' ? (

@@ -8,7 +8,6 @@ use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
 use App\Boutique\Service\ConfirmerCommandeHandler;
-use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
 use App\Vente\Enum\StatutTPE;
 use App\Vente\Enum\StatutVente;
@@ -40,6 +39,7 @@ final class OnlinePaymentSettlement
         private readonly EntityManagerInterface $em,
         private readonly ConfirmerCommandeHandler $confirmerCommande,
         private readonly SelecteurPaiementEnLigne $selecteur,
+        private readonly OnlinePaymentProfileResolver $profileResolver,
     ) {
     }
 
@@ -73,8 +73,8 @@ final class OnlinePaymentSettlement
         $suivi->recordPaymentCheck($maintenant);
         $this->em->flush();
 
-        $profil = $this->resoudreProfil($panier);
-        $resultat = $this->selecteur->pour($profil)->verifierRetour($reference, $montantInitie, $preuve);
+        $profil = $this->profileResolver->forEstablishment($panier->getEtablissement());
+        $resultat = $this->selecteur->pour($profil)->verifierRetour($reference, $montantInitie, $preuve, new OnlinePaymentContext($vente->getNumero(), '', $profil));
         if ($resultat === null) {
             // Rien n'atteste ce retour : ni reçu du bouchon, ni réponse concordante du prestataire.
             throw new UnprocessableEntityHttpException('Retour de paiement non vérifiable : aucune preuve du prestataire ne l\'accompagne.');
@@ -128,19 +128,5 @@ final class OnlinePaymentSettlement
         $this->em->createQuery('UPDATE ' . SuiviCommandeEnLigne::class . ' s SET s.paymentSettledAt = NULL WHERE s.id = :id')
             ->setParameter('id', $suivi->getId(), UuidType::NAME)
             ->execute();
-    }
-
-    public function resoudreProfil(PanierEnLigne $panier): ProfilExploitant
-    {
-        $etablissement = $panier->getEtablissement();
-        $profils = $this->em->getRepository(ProfilExploitant::class)->findAll();
-        foreach ($profils as $profil) {
-            \assert($profil instanceof ProfilExploitant);
-            if ($etablissement !== null && $profil->couvre($etablissement)) {
-                return $profil;
-            }
-        }
-
-        throw new UnprocessableEntityHttpException('Aucun profil exploitant (M6) configuré pour cet établissement.');
     }
 }

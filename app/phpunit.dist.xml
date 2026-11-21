@@ -22,6 +22,9 @@
         <server name="SHELL_VERBOSITY" value="-1" />
         <!-- Bouchon FranceConnect (#101) : ferme partout par defaut, ouvert pour les tests seulement. -->
         <server name="FRANCECONNECT_BOUCHON_AUTORISE" value="1" force="true" />
+        <!-- Cle maitresse des cles Stripe d'exploitant : valeur de test, non secrete (une cle de test publiee ne protege rien).
+             Facultative en production ; posee ici pour que les tests de chiffrement tournent. -->
+        <env name="STRIPE_KEYS_ENCRYPTION_KEY" value="dGVzdC1vbmx5LXN0cmlwZS1rZXlzLW1hc3Rlci1rZXk=" />
     </php>
 
     <testsuites>

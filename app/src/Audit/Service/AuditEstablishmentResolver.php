@@ -60,6 +60,7 @@ final readonly class AuditEstablishmentResolver
         \App\Caisse\Entity\MouvementCaisse::class => [['getSession', 'getEtablissement']],
         \App\Compta\Entity\BordereauVersement::class => [['getRegie', 'getProfilExploitant', 'getEtablissement']],
         \App\Compta\Entity\QualificationEquipement::class => [['getEspace', 'getEtablissement']],
+        \App\Compta\Entity\StripeAccountConfig::class => [['getBusinessProfile', 'getEtablissement']],
         \App\Membership\Entity\Resiliation::class => [['getAbonnement', 'getEtablissement']],
         \App\Offre\Entity\GrilleTarifaire::class => [['getSaison', 'getEtablissement']],
         \App\Acces\Entity\ListeRevocation::class => [['getControleur', 'getEtablissement']],

@@ -20,7 +20,7 @@ final class StripeSignatureChecker
     public const DEFAULT_TOLERANCE = 300;
 
     /** @throws InvalidNotificationSignatureException */
-    public function verify(string $header, string $body, string $secret, int $now, int $tolerance = self::DEFAULT_TOLERANCE): void
+    public function verify(string $header, string $body, #[\SensitiveParameter] string $secret, int $now, int $tolerance = self::DEFAULT_TOLERANCE): void
     {
         if ($secret === '') {
             throw new InvalidNotificationSignatureException(NotificationRejection::NotConfigured);

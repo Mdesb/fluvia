@@ -41,7 +41,7 @@ final class PspCbStubAdapter implements PaiementEnLigneInterface
      * montant (`StubPaymentReceiptSigner`). Un statut nu dans les données n'est pas lu — c'était le
      * défaut (audit 06/09, constat 1). Le vrai adaptateur vérifiera la signature du prestataire ici.
      */
-    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour): ?ResultatRetourPaiementEnLigne
+    public function verifierRetour(string $referenceTransaction, int $montantAttenduCentimes, array $donneesRetour, ?OnlinePaymentContext $context = null): ?ResultatRetourPaiementEnLigne
     {
         $statut = $this->signer->verify($referenceTransaction, $montantAttenduCentimes, $donneesRetour['recu'] ?? null);
         if ($statut === null) {
