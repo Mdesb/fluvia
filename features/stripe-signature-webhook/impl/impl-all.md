@@ -1,6 +1,6 @@
 # Suivi d'implémentation — <nom-fonctionnalite>
 
-**État :** plan <!-- discovery → spec → plan → build → review → done -->
+**État :** build <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/<nom>
 **Spec :** features/<nom>/specs/spec-<nom>.md
 **Plan :** features/<nom>/plans/plan-<nom>.md
