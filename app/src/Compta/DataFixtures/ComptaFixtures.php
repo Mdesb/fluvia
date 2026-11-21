@@ -59,10 +59,17 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
         $permVersement = $this->permissionNommee($manager, 'caisse', 'versement');
         $manager->persist($permVersement);
 
+        // `payment.configure` (D3-B de #365) : saisir la clé Stripe de l'exploitant. Accordé au seul rôle
+        // « Administrateur groupe » (le joker `*.*` de l'éditeur le donne sans rien faire). Même
+        // rattachement que `Version20261121110000`, qui le sème sur les bases existantes.
+        $permPaymentConfigure = $this->permissionNommee($manager, 'payment', 'configure');
+        $manager->persist($permPaymentConfigure);
+
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
         if ($roleAdmin instanceof Role) {
             $roleAdmin->addPermission($permComptaTout);
             $roleAdmin->addPermission($permVersement);
+            $roleAdmin->addPermission($permPaymentConfigure);
         }
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);

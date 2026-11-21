@@ -481,6 +481,12 @@ when@test:
         App\Tests\Boutique\Support\MailCollector:
             public: true
             tags: ['kernel.event_subscriber']
+        # Espion de journal : décore `logger`, retransmet tout et garde une copie. Prouve qu'un secret
+        # (clé Stripe d'un exploitant…) ne figure dans aucune ligne.
+        App\Tests\Support\LogSpy:
+            public: true
+            decorates: logger
+            arguments: ['@.inner']
         # Doublure du SERVICE PayFiP (#339) : notre client SOAP parle à un faux serveur qui répond comme
         # le guide DGFiP le décrit. Elle ne sert que si un test configure PayFiP (PAYFIP_NUMCLI…) ; sinon
         # l'adaptateur réel reste éteint et le bouchon de démonstration répond, comme avant.

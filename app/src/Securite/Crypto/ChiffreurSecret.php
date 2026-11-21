@@ -28,7 +28,7 @@ final class ChiffreurSecret
         $this->cle = $cle;
     }
 
-    public function chiffrer(string $clair): string
+    public function chiffrer(#[\SensitiveParameter] string $clair): string
     {
         $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $chiffre = sodium_crypto_secretbox($clair, $nonce, $this->cle);
@@ -36,7 +36,7 @@ final class ChiffreurSecret
         return base64_encode($nonce . $chiffre);
     }
 
-    public function dechiffrer(string $valeur): string
+    public function dechiffrer(#[\SensitiveParameter] string $valeur): string
     {
         $binaire = base64_decode($valeur, true);
         if ($binaire === false || \strlen($binaire) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
