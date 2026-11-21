@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Vente\Nf525;
 
+use App\Caisse\Entity\PointDeVente;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Vente\Enum\TypeOperationScellee;
 use App\Vente\Nf525\Entity\FiscalArchive;
 use App\Vente\Nf525\Entity\OperationScellee;
 use App\Vente\Service\PanierCalculateur;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Vérifie une archive fiscale (#342) **à partir de son seul contenu**, sans relire les tables actives :
@@ -27,6 +32,9 @@ final class FiscalArchiveChecker
         private readonly FiscalArchiveSigner $signer,
         private readonly SignataireOperation $signataire,
         private readonly PanierCalculateur $calculateur,
+        // #370 (Q-5) — l'alerte NF525 de la chaîne vivante ; null : aucune alerte (constructions manuelles).
+        private readonly ?SealAlertRecorder $alerts = null,
+        private readonly ?EntityManagerInterface $em = null,
     ) {
     }
 
@@ -35,13 +43,33 @@ final class FiscalArchiveChecker
      */
     public function verify(FiscalArchive $archive): array
     {
-        return $this->verifyContent($archive->getContent(), $archive->getSha256(), $archive->getSignature());
+        $broken = [];
+        $report = $this->inspect($archive->getContent(), $archive->getSha256(), $archive->getSignature(), $broken);
+        $this->openAlertsForBrokenChains($archive, $broken);
+
+        return $report;
     }
 
     /**
+     * ⚠ N'OUVRE JAMAIS D'ALERTE : le contenu vient de l'appelant (un ZIP quelconque), et un faux ZIP ne doit pas
+     * pouvoir ouvrir une alerte sur la chaîne d'un tiers (plan, R-5). Seule `verify(FiscalArchive)`, qui lit une
+     * archive enregistrée par le serveur, écrit une alerte.
+     *
      * @return array{intact: bool, checks: list<array{check: string, ok: bool, detail: string}>}
      */
     public function verifyContent(string $contenu, string $sha256Attendu, string $signature): array
+    {
+        $ignored = [];
+
+        return $this->inspect($contenu, $sha256Attendu, $signature, $ignored);
+    }
+
+    /**
+     * @param list<string> $broken identifiants complets des points de vente dont le segment est en défaut (sortie)
+     *
+     * @return array{intact: bool, checks: list<array{check: string, ok: bool, detail: string}>}
+     */
+    private function inspect(string $contenu, string $sha256Attendu, string $signature, array &$broken): array
     {
         $checks = [];
         $sha = hash('sha256', $contenu);
@@ -76,14 +104,17 @@ final class FiscalArchiveChecker
         $checks[] = $this->check('fichiers', $ecarts === [] && ($manifeste['fichiers'] ?? []) !== [],
             $ecarts === [] ? sprintf('%d fichiers conformes au manifeste.', \count($manifeste['fichiers'] ?? [])) : implode(' ; ', $ecarts));
 
-        $checks[] = $this->verifierChaine($this->csv($fichiers['sealed_operations.csv'] ?? ''));
+        $checks[] = $this->verifierChaine($this->csv($fichiers['sealed_operations.csv'] ?? ''), $broken);
         $checks[] = $this->verifierTotaux($this->csv($fichiers['sales.csv'] ?? ''), $this->csv($fichiers['period_closures.csv'] ?? ''));
 
         return $this->rapport($checks);
     }
 
-    /** @param list<array<string, string>> $operations */
-    private function verifierChaine(array $operations): array
+    /**
+     * @param list<array<string, string>> $operations
+     * @param list<string>                $broken      identifiants complets des points de vente en défaut (sortie)
+     */
+    private function verifierChaine(array $operations, array &$broken): array
     {
         $parPdv = [];
         foreach ($operations as $r) {
@@ -98,6 +129,7 @@ final class FiscalArchiveChecker
                 $type = TypeOperationScellee::tryFrom($r['type_operation']);
                 if (!\is_array($payload) || $type === null) {
                     $anomalies[] = sprintf('%s n°%s : maillon illisible', substr($pdv, 0, 8), $r['numero_sequence']);
+                    $broken[] = (string) $pdv;
                     continue;
                 }
                 $ops[] = (new OperationScellee())
@@ -121,11 +153,42 @@ final class FiscalArchiveChecker
             $total += $rapport->nbOperations;
             foreach ($rapport->anomalies as $a) {
                 $anomalies[] = sprintf('%s n°%d : %s', substr($pdv, 0, 8), $a['sequence'], $a['probleme']);
+                $broken[] = (string) $pdv;
             }
         }
 
         return $this->check('chaine', $anomalies === [],
             $anomalies === [] ? sprintf('%d maillons recalculés, chaîne continue.', $total) : implode(' ; ', \array_slice($anomalies, 0, 20)));
+    }
+
+    /**
+     * Q-5 : une archive en défaut ouvre l'alerte de la chaîne VIVANTE de CE point de vente (origine vérification) ;
+     * une archive intacte ne ferme rien (elle ne prouve rien sur la chaîne vivante). Les identifiants viennent du
+     * contenu de l'archive : chacun doit être un UUID, désigner un point de vente existant ET appartenir à
+     * l'établissement de l'archive, sinon il est ignoré (aucune alerte, aucune erreur).
+     *
+     * @param list<string> $broken
+     */
+    private function openAlertsForBrokenChains(FiscalArchive $archive, array $broken): void
+    {
+        $establishment = $archive->getEtablissement();
+        if ($this->alerts === null || $this->em === null || $establishment === null) {
+            return;
+        }
+        foreach (array_unique($broken) as $id) {
+            if (!Uuid::isValid($id)) {
+                continue;
+            }
+            $pointOfSale = $this->em->getRepository(PointDeVente::class)->find(Uuid::fromString($id));
+            if ($pointOfSale === null || !$pointOfSale->getEtablissement()?->getId()->equals($establishment->getId())) {
+                continue;
+            }
+            $this->alerts->recordVerification(
+                SealChainRef::forSales($pointOfSale),
+                false,
+                sprintf('Archive fiscale %d : le segment de chaîne de ce point de vente est en défaut.', $archive->getFiscalYear()),
+            );
+        }
     }
 
     /**

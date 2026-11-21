@@ -8,6 +8,7 @@ use App\Platform\Nf525\KeyRegression;
 use App\Platform\Nf525\KeyRun;
 use App\Platform\Nf525\SealCheck;
 use App\Platform\Nf525\SealingRefusedException;
+use App\Platform\Nf525\SealRefusalCause;
 use App\Platform\Nf525\SealKeyring;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -95,6 +96,22 @@ final class SealKeyringTest extends TestCase
         new SealKeyring('NF525_SEAL_KEY', '  ');
     }
 
+    public function testExtendingOverAWrongSignatureIsRefusedAsInvalidSignature(): void
+    {
+        $keyring = new SealKeyring('NF525_SEAL_KEY', self::KEY_B, self::KEY_A);
+        // Clé connue (retirée), mais signature fausse : pas « clé inconnue ».
+        $forged = str_repeat('0', 64);
+
+        try {
+            $keyring->assertCanExtend('empreinte-1', $forged, SealKeyring::keyIdOf(self::KEY_A), 'chaîne témoin');
+            self::fail('Le scellement aurait dû être refusé.');
+        } catch (SealingRefusedException $e) {
+            self::assertSame(SealRefusalCause::InvalidSignature, $e->cause());
+            self::assertSame(409, $e->getStatusCode());
+            self::assertStringContainsString('sa signature ne se vérifie avec aucune clé du trousseau', $e->technicalDetail());
+        }
+    }
+
     public function testExtendingAnUnverifiableChainIsRefusedAndAlerted(): void
     {
         $signedByA = (new SealKeyring('NF525_SEAL_KEY', self::KEY_A))->sign('empreinte-1');
@@ -113,8 +130,9 @@ final class SealKeyringTest extends TestCase
             $withoutA->assertCanExtend('empreinte-1', $signedByA, SealKeyring::keyIdOf(self::KEY_A), 'chaîne témoin');
             self::fail('Le scellement aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
-            self::assertStringContainsString('Scellement refusé', $e->getMessage());
-            self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', $e->getMessage());
+            self::assertSame(SealRefusalCause::UnknownKey, $e->cause());
+            self::assertStringContainsString('Scellement refusé', $e->technicalDetail());
+            self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', $e->technicalDetail());
             self::assertSame(409, $e->getStatusCode());
         }
 
@@ -179,12 +197,13 @@ final class SealKeyringTest extends TestCase
             self::fail('Le scellement aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
             self::assertSame(409, $e->getStatusCode());
-            self::assertStringContainsString('Scellement refusé', $e->getMessage());
-            self::assertStringContainsString('clé NEUVE', $e->getMessage());
-            self::assertStringContainsString('NF525_SEAL_KEY', $e->getMessage());
-            self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', $e->getMessage());
-            self::assertStringNotContainsString(self::KEY_A, $e->getMessage());
-            self::assertStringNotContainsString(self::KEY_B, $e->getMessage());
+            self::assertSame(SealRefusalCause::KeyRegression, $e->cause());
+            self::assertStringContainsString('Scellement refusé', $e->technicalDetail());
+            self::assertStringContainsString('clé NEUVE', $e->technicalDetail());
+            self::assertStringContainsString('NF525_SEAL_KEY', $e->technicalDetail());
+            self::assertStringContainsString('NF525_SEAL_RETIRED_KEYS', $e->technicalDetail());
+            self::assertStringNotContainsString(self::KEY_A, $e->technicalDetail());
+            self::assertStringNotContainsString(self::KEY_B, $e->technicalDetail());
         }
 
         self::assertCount(1, $logger->records);
@@ -209,7 +228,8 @@ final class SealKeyringTest extends TestCase
             $keyring->assertCanExtendInOrder($runs, 'chaîne témoin');
             self::fail('Le scellement aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
-            self::assertStringContainsString('dernier maillon est lui-même en régression', $e->getMessage());
+            self::assertSame(SealRefusalCause::KeyRegression, $e->cause());
+            self::assertStringContainsString('dernier maillon est lui-même en régression', $e->technicalDetail());
         }
 
         self::assertCount(1, $logger->records);
@@ -254,9 +274,9 @@ final class SealKeyringTest extends TestCase
             $keyring->assertCanExtendInOrder([new KeyRun($evil, 1, 3), new KeyRun($idB, 2, 2)], 'chaîne témoin');
             self::fail('Le scellement aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
-            self::assertStringNotContainsString('<script>', $e->getMessage());
-            self::assertStringNotContainsString("\n", $e->getMessage());
-            self::assertStringContainsString($idB, $e->getMessage());
+            self::assertStringNotContainsString('<script>', $e->technicalDetail());
+            self::assertStringNotContainsString("\n", $e->technicalDetail());
+            self::assertStringContainsString($idB, $e->technicalDetail());
         }
         self::assertStringNotContainsString('<script>', json_encode($logger->records, \JSON_THROW_ON_ERROR));
         self::assertStringNotContainsString('\\n', json_encode($logger->records, \JSON_THROW_ON_ERROR));

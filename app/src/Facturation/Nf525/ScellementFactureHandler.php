@@ -6,7 +6,10 @@ namespace App\Facturation\Nf525;
 
 use App\Facturation\Einvoicing\InvoiceIssuerSnapshot;
 use App\Facturation\Entity\Facture;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Platform\Nf525\SealCheck;
+use App\Platform\Nf525\SealingRefusedException;
 use App\Platform\Nf525\SealKeyOrderTracker;
 use App\Platform\Nf525\SealKeyRunQuery;
 use App\Platform\Nf525\SealKeyring;
@@ -44,44 +47,54 @@ final class ScellementFactureHandler
         #[Autowire(service: 'app.nf525.keyring.invoicing')]
         private readonly SealKeyring $keyring,
         private readonly InvoiceIssuerSnapshot $instantaneEmetteur,
+        // #370 — l'alerte NF525 ; null : aucun accès à la table d'alerte.
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
     /** Scelle le document (séquence/empreinte/signature). Ne flush pas : l'appelant maîtrise la transaction. */
     public function sceller(Facture $facture): Facture
     {
-        $precedente = $this->dernierMaillon($facture);
-
-        // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
-        if ($precedente !== null) {
-            $this->keyring->assertCanExtend(
-                $precedente->getEmpreinte(),
-                $precedente->getSignature(),
-                $precedente->getSealKeyId(),
-                sprintf('chaîne de facturation, document %s (maillon n° %d)', (string) $precedente->getNumero(), $precedente->getNumeroSequence()),
-            );
-        }
-
-        // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS (voir `ScellementEcritureHandler::sceller`). Intervalles lus sur
-        // la même connexion que `dernierMaillon`. ⚠ Les brouillons (séquence 0) sont exclus de la requête :
-        // une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
         // Garde de programmation : une facture sans profil identifié est un bug de l'appelant, pas une alerte
-        // fiscale (elle ne doit pas être maquillée en `unreadable_order`).
-        $profileId = $facture->getProfilExploitant()?->getId();
-        if ($profileId === null) {
+        // fiscale (elle ne doit pas être maquillée en `unreadable_order`). Avant le `try` : la référence de
+        // chaîne de l'alerte en a besoin.
+        $profile = $facture->getProfilExploitant();
+        if ($profile?->getId() === null) {
             throw new \LogicException('Scellement d\'une facture sans profil exploitant identifié : erreur de programmation.');
         }
-        $this->keyring->assertCanExtendInOrderFrom(
-            fn (): array => SealKeyRunQuery::forInvoicing(
-                $this->em->getConnection(),
-                $this->keyring,
-                (string) $profileId,
-            ),
-            'chaîne de facturation de l\'exploitant ' . (string) $profileId,
-        );
+        $chain = SealChainRef::forInvoicing($profile);
 
-        $empreintePrecedente = $precedente?->getEmpreinte();
-        $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
+        try {
+            $precedente = $this->dernierMaillon($facture);
+
+            // #361 — ÉCHEC FERMÉ : jamais de signature par-dessus un dernier maillon invérifiable.
+            if ($precedente !== null) {
+                $this->keyring->assertCanExtend(
+                    $precedente->getEmpreinte(),
+                    $precedente->getSignature(),
+                    $precedente->getSealKeyId(),
+                    sprintf('chaîne de facturation, document %s (maillon n° %d)', (string) $precedente->getNumero(), $precedente->getNumeroSequence()),
+                );
+            }
+
+            // #369 — ÉCHEC FERMÉ SUR L'ORDRE DES CLÉS (voir `ScellementEcritureHandler::sceller`). Intervalles lus sur
+            // la même connexion que `dernierMaillon`. ⚠ Les brouillons (séquence 0) sont exclus de la requête :
+            // une séquence ≤ 0 est invisible au refus par construction, seule la vérification la voit.
+            $this->keyring->assertCanExtendInOrderFrom(
+                fn (): array => SealKeyRunQuery::forInvoicing(
+                    $this->em->getConnection(),
+                    $this->keyring,
+                    (string) $profile->getId(),
+                ),
+                'chaîne de facturation de l\'exploitant ' . (string) $profile->getId(),
+            );
+
+            $empreintePrecedente = $precedente?->getEmpreinte();
+            $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
+        } catch (SealingRefusedException $e) {
+            throw $this->alerts?->recordRefusal($chain, $e) ?? $e;
+        }
+        $this->alerts?->resolveOnSeal($chain);
 
         // ⚠ L'INSTANTANÉ EST CONSERVÉ, PLUS RECONSTRUIT. Sans lui, la vérification relisait les
         // entités VIVANTES : un taux de TVA corrigé — geste légitime, un décret change les taux —

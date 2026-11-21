@@ -54,7 +54,7 @@ final class SealKeyRotationTest extends ComptaApiTestCase
             $withoutKeyring->sceller($nouvelle);
             self::fail('Sceller par-dessus une chaîne invérifiable aurait dû être refusé.');
         } catch (SealingRefusedException $e) {
-            self::assertStringContainsString('NF525_COMPTA_SEAL_RETIRED_KEYS', $e->getMessage());
+            self::assertStringContainsString('NF525_COMPTA_SEAL_RETIRED_KEYS', $e->technicalDetail());
         }
         self::assertSame(0, $nouvelle->getNumeroSequence(), 'rien n\'a été scellé');
 

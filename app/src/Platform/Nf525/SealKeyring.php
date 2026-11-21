@@ -179,6 +179,8 @@ final class SealKeyring
             ? sprintf('il a été signé par la clé d\'identifiant %s, absente du trousseau', self::safeId($lastKeyId))
             : 'sa signature ne se vérifie avec aucune clé du trousseau';
 
+        $refusalCause = $check === SealCheck::UnknownKey ? SealRefusalCause::UnknownKey : SealRefusalCause::InvalidSignature;
+
         // L'ALERTE. Niveau critique : c'est une chaîne fiscale qui ne peut plus être prolongée.
         // On journalise les IDENTIFIANTS, jamais les clés.
         $this->logger->critical('NF525 : scellement refusé, le dernier maillon de la chaîne ne se vérifie plus avec le trousseau.', [
@@ -190,7 +192,7 @@ final class SealKeyring
             'cles_retirees' => $this->retiredKeyIds(),
         ]);
 
-        throw new SealingRefusedException(sprintf(
+        throw new SealingRefusedException($refusalCause, sprintf(
             'Scellement refusé (NF525, %s) : le dernier maillon de la chaîne ne se vérifie pas — %s. '
             . 'Signer par-dessus rendrait la chaîne invérifiable. La clé de scellement %s a probablement '
             . 'changé : restaurez la clé qui a signé ce maillon, ou ajoutez-la au trousseau des clés '
@@ -277,7 +279,7 @@ final class SealKeyring
         ]);
 
         if ($block['reason'] === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT) {
-            throw new SealingRefusedException(sprintf(
+            throw new SealingRefusedException(SealRefusalCause::KeyRegression, sprintf(
                 'Scellement refusé (NF525, %s) : la chaîne a déjà quitté la clé de scellement active (identifiant %s, '
                 . 'variable %s) ; sceller avec elle ferait revenir la chaîne en arrière. Ne remettez pas une ancienne '
                 . 'clé : passez à une clé NEUVE (nouvelle valeur de %s, l\'ancienne active ajoutée à %s). '
@@ -291,7 +293,7 @@ final class SealKeyring
         }
 
         // Dernier maillon en régression : changer de clé n'y change rien, c'est la chaîne qu'il faut examiner.
-        throw new SealingRefusedException(sprintf(
+        throw new SealingRefusedException(SealRefusalCause::KeyRegression, sprintf(
             'Scellement refusé (NF525, %s) : le dernier maillon est lui-même en régression de clé (%s). Vérifiez la '
             . 'chaîne (…/verifier-chaine) et consultez l\'alerte critique du journal : un maillon a été forgé ou une '
             . 'rotation a été faite à l\'envers. Procédure : infra/README.md, « Trousseau NF525 ».',
@@ -332,7 +334,7 @@ final class SealKeyring
             'cles_retirees' => $this->retiredKeyIds(),
         ]);
 
-        throw new SealingRefusedException(sprintf(
+        throw new SealingRefusedException(SealRefusalCause::UnreadableOrder, sprintf(
             'Scellement refusé (NF525, %s) : l\'ordre des clés de la chaîne n\'a pas pu être établi (maillon de séquence '
             . 'impossible ou chaîne illisible). Signer par-dessus pourrait aggraver la chaîne : vérifiez-la '
             . '(…/verifier-chaine) et consultez l\'alerte critique du journal. Procédure : infra/README.md, « Trousseau NF525 ».',

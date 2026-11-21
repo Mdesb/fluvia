@@ -7,6 +7,7 @@ import BasculeSupport, { PanneauBascule } from './BasculeSupport.jsx'
 import { ecrireHash, lireHash } from '../api/url.js'
 import { useEtatUrl } from '../api/url.js'
 import AccesAssistance from './pages/AccesAssistance.jsx'
+import AlertesNf525 from './pages/AlertesNf525.jsx'
 import PartnerApi from './pages/PartnerApi.jsx'
 import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
@@ -160,7 +161,7 @@ export default function EditeurApp() {
   // mauvais groupe. `onglets` dit ce qui existe, cet ensemble dit ce qui appartient a l'editeur.
   // « Site vitrine » a passe une heure sous « OUTILS », entre l'agenda et l'assistance, faute
   // d'etre ici : rien n'echouait, le menu etait juste faux. Vu en ouvrant l'ecran.
-  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'site', 'acces-support', 'api-partenaires'])
+  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'site', 'acces-support', 'api-partenaires', 'alertes-nf525'])
 
   const onglets = [
     { id: 'abonnements', ic: 'subscriptions', label: 'Abonnements', perms: ['editor.read_subscription'] },
@@ -177,6 +178,8 @@ export default function EditeurApp() {
     { id: 'acces-support', ic: 'support-access', label: 'Accès support', perms: ['editor.support_access'] },
     // Les applications tierces et leurs clés. Les ACCORDS, eux, se donnent chez chaque établissement.
     { id: 'api-partenaires', ic: 'api', label: 'API partenaires', perms: ['editor.manage_partner_api'] },
+    // Les chaînes fiscales bloquées chez les clients : l'éditeur voit le détail technique et annote.
+    { id: 'alertes-nf525', ic: 'invoicing', label: 'Alertes NF525', perms: ['editor.nf525_alerts'] },
   ]
     // ⚠ HORS DE L'ÉDITEUR, CES ÉCRANS RENDENT 404. Quand un accès d'assistance ouvre le site d'un
     // client, l'établissement actif n'est plus l'éditeur et `EditorOnly` refuse les sept
@@ -326,6 +329,7 @@ export default function EditeurApp() {
             {onglet === 'reglements' && <Reglements onRefus={() => setRefuse(true)} />}
             {onglet === 'site' && <SiteVitrine />}
             {onglet === 'acces-support' && <AccesAssistance onRefus={() => setRefuse(true)} />}
+            {onglet === 'alertes-nf525' && <AlertesNf525 onRefus={() => setRefuse(true)} />}
             {onglet === 'api-partenaires' && <PartnerApi onRefus={() => setRefuse(true)} />}
             {/*
               Les deux écrans de l'application client, tels quels : leur API est cadrée sur

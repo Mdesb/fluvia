@@ -103,8 +103,11 @@ final class SealKeyOrderRefusalTest extends KernelTestCase
         } catch (SealingRefusedException $e) {
             self::assertSame(409, $e->getStatusCode());
             foreach (self::KEYS as $key) {
-                self::assertStringNotContainsString($key, $e->getMessage() . json_encode($logger->records, \JSON_THROW_ON_ERROR), 'jamais une clé');
+                self::assertStringNotContainsString($key, $e->technicalDetail() . json_encode($logger->records, \JSON_THROW_ON_ERROR), 'jamais une clé');
+                self::assertStringNotContainsString($key, $e->getMessage(), 'le message rendu ne contient jamais une clé');
+                self::assertStringNotContainsString(SealKeyring::keyIdOf($key), $e->getMessage(), 'ni un identifiant de clé');
             }
+            self::assertStringNotContainsString('NF525_', $e->getMessage());
 
             return [$e, $logger->records];
         }
@@ -147,7 +150,7 @@ final class SealKeyOrderRefusalTest extends KernelTestCase
         }
 
         [$e, $records] = $this->refused($pdv, $active, $retired);
-        self::assertSame($expected === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT, str_contains($e->getMessage(), 'NEUVE'), '« clé NEUVE » seulement quand la chaîne a quitté la clé active');
+        self::assertSame($expected === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT, str_contains($e->technicalDetail(), 'NEUVE'), '« clé NEUVE » seulement quand la chaîne a quitté la clé active');
         self::assertCount(1, $records);
         self::assertSame('critical', $records[0][0]);
         self::assertSame($expected, $records[0][2]['cause']);
@@ -184,7 +187,7 @@ final class SealKeyOrderRefusalTest extends KernelTestCase
         // Retour à A actif : refusé.
         $this->em->clear();
         [$e, $records] = $this->refused($pdv, 'A', ['B']);
-        self::assertStringContainsString('NEUVE', $e->getMessage());
+        self::assertStringContainsString('NEUVE', $e->technicalDetail());
         self::assertCount(1, $records);
     }
 
@@ -200,7 +203,7 @@ final class SealKeyOrderRefusalTest extends KernelTestCase
 
         $this->insertChain($pdv, ['A'], 0);
         [$e, $records] = $this->refused($pdv, 'A', []);
-        self::assertStringContainsString('n\'a pas pu être établi', $e->getMessage());
+        self::assertStringContainsString('n\'a pas pu être établi', $e->technicalDetail());
         self::assertCount(1, $records);
         self::assertSame('critical', $records[0][0]);
         self::assertSame('unreadable_order', $records[0][2]['cause']);

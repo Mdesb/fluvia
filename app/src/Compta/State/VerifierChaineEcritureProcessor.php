@@ -11,6 +11,8 @@ use ApiPlatform\State\ProviderInterface;
 use App\Compta\Entity\EcritureComptable;
 use App\Compta\Entity\Journal;
 use App\Compta\Nf525\ScellementEcritureHandler;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -31,6 +33,8 @@ final class VerifierChaineEcritureProcessor implements ProviderInterface
         private readonly ScellementEcritureHandler $scellement,
         private readonly RequestStack $requestStack,
         private readonly ContexteEtablissement $contexte,
+        // #370 — l'alerte NF525 ; null : aucune alerte (constructions manuelles).
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
@@ -75,6 +79,15 @@ final class VerifierChaineEcritureProcessor implements ProviderInterface
             ->getQuery()
             ->getResult();
         $rapport = $this->scellement->verifieChaine($ecritures);
+        // Vérification vivante (D-I), après le contrôle de périmètre ; la chaîne vient du journal résolu, jamais de la requête.
+        $profil = $journal->getProfilExploitant();
+        if ($profil !== null) {
+            $this->alerts?->recordVerification(
+                SealChainRef::forAccounting($profil, $journal),
+                $rapport['intacte'],
+                $rapport['intacte'] ? null : implode(' ; ', array_map(static fn (array $a): string => sprintf('n°%d : %s', $a['sequence'], $a['probleme']), \array_slice($rapport['anomalies'], 0, 5))),
+            );
+        }
 
         return new JsonResponse($rapport);
     }

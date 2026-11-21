@@ -1,12 +1,16 @@
 # Doctrine DBAL 4.4 — fiche de référence
 
 - Version du projet : 4.4.4 (source : app/composer.lock, ligne 1609)
-- Vérifiée le : 2026-10-07 · Revoir avant le : 2027-01-05
+- Vérifiée le : 2026-10-07, complétée le 2026-11-18 (seconde connexion) · Revoir avant le : 2027-01-05
 - Sources :
   - [officielle] https://www.doctrine-project.org/projects/doctrine-dbal/en/4.4/reference/transactions.html (lu le 2026-10-07)
   - [officielle] https://raw.githubusercontent.com/doctrine/dbal/4.4.4/UPGRADE.md (tag 4.4.4, lu le 2026-10-07)
   - [officielle] code source au tag 4.4.4 : `src/Connection.php`, `src/LockMode.php`, `src/Exception/{UniqueConstraintViolationException,ConstraintViolationException,RetryableException,DeadlockException,LockWaitTimeoutException}.php`, `src/Driver/API/MySQL/ExceptionConverter.php` (https://raw.githubusercontent.com/doctrine/dbal/4.4.4/…, lus le 2026-10-07)
-- Questions couvertes : `transactional()` imbriquée (points de sauvegarde ou compteur) ; sort de la transaction externe quand l'interne lève ; `executeStatement()` dans `transactional()` ; `UniqueConstraintViolationException`, `RetryableException`.
+  - [officielle] https://raw.githubusercontent.com/doctrine/dbal/4.4.4/src/DriverManager.php et `src/Connection.php` (tag 4.4.4, lus le 2026-11-18)
+  - [officielle] https://www.doctrine-project.org/projects/doctrine-dbal/en/4.4/reference/configuration.html (lu le 2026-11-18)
+  - [officielle] https://raw.githubusercontent.com/doctrine/DoctrineBundle/3.3.1/src/ConnectionFactory.php (doctrine/doctrine-bundle 3.3.1, app/composer.lock ; lu le 2026-11-18)
+  - [projet] app/config/packages/doctrine.yaml (`when@test` : `dbname_suffix: '_test%env(default::TEST_TOKEN)%'`), lu le 2026-11-18
+- Questions couvertes : `transactional()` imbriquée (points de sauvegarde ou compteur) ; sort de la transaction externe quand l'interne lève ; `executeStatement()` dans `transactional()` ; `UniqueConstraintViolationException`, `RetryableException` ; seconde `Connection` indépendante (2026-11-18).
 
 ## À utiliser
 
@@ -41,6 +45,22 @@
   [officielle] ExceptionConverter.php@4.4.4
 - `Doctrine\DBAL\LockMode` est un `enum` : `NONE`, `OPTIMISTIC`, `PESSIMISTIC_READ`, `PESSIMISTIC_WRITE`. [officielle] LockMode.php@4.4.4
 
+### Seconde `Connection` indépendante (ajout du 2026-11-18)
+- Signature 4.4.4 : `DriverManager::getConnection(#[SensitiveParameter] array $params, ?Configuration $config = null): Connection`. Corps : `$config ??= new Configuration()` ; pilote créé depuis `driver` ou `driverClass` puis enveloppé par chaque middleware de `$config->getMiddlewares()` ; `$wrapperClass = $params['wrapperClass'] ?? Connection::class` (doit hériter de `Connection`, sinon `InvalidWrapperClass`) ; `return new $wrapperClass($params, $driver, $config)`. [officielle] DriverManager.php@4.4.4
+- **Aucune clé `url`** n'est lue par `DriverManager` en 4.x (ni dans le docblock ni dans le corps) : c'est DoctrineBundle qui analyse l'URL (`parseDatabaseUrl`) et retire la clé `url` avant d'appeler DBAL. Les paramètres d'une connexion déjà construite par le bundle ne contiennent donc plus `url`, mais `host`, `dbname`, `user`, etc. [officielle] DriverManager.php@4.4.4 + ConnectionFactory.php@DoctrineBundle 3.3.1
+- `Connection::getParams(): array` renvoie `$this->params` tel que reçu par le constructeur ; il est marqué **`@internal`** (pas d'engagement de stabilité de DBAL). `getConfiguration(): Configuration` renvoie `$this->_config` (public, non interne). `getDriver(): Driver` est public. [officielle] Connection.php@4.4.4
+- **Connexion paresseuse** : le constructeur ne fait que stocker configuration et paramètres ; la connexion physique est ouverte par `connect()` (protégée) au premier besoin, via `$this->driver->connect($this->params)`, et mémorisée dans `$_conn`. Chaque objet `Connection` a donc SA propre connexion physique, donc sa propre session serveur et sa propre transaction. [officielle] Connection.php@4.4.4 (la page configuration.html ne traite pas ce point)
+- `close()` : `$_conn = null` et `transactionNestingLevel = 0` ; l'appel suivant qui a besoin de la base rouvre une connexion physique neuve (et rouvre une transaction si `autoCommit` est faux). [officielle] Connection.php@4.4.4
+- Indépendance transactionnelle : une transaction ouverte sur la seconde `Connection` est validée ou annulée par SES `commit()`/`rollBack()` ; un `rollBack()` de la connexion principale ne la touche pas, puisque ce sont deux sessions MariaDB distinctes. Déduction du code ci-dessus (une transaction est portée par une session) ; pas de phrase de la doc DBAL qui le dise telle quelle → le prouver par le test d'intégration du plan (écrire par la seconde, annuler la principale, relire).
+- Partage par `getConfiguration()` : passer la même `Configuration` réutilise ses middlewares (journalisation, profileur) et son `autoCommit` ; le pilote est reconstruit et ré-enveloppé à chaque `getConnection`. [officielle] DriverManager.php@4.4.4
+
+### DoctrineBundle 3.3.1 et `dbname_suffix` (environnement de test)
+- Config projet : `when@test: doctrine.dbal.dbname_suffix: '_test%env(default::TEST_TOKEN)%'` (app/config/packages/doctrine.yaml). Exemple observé le 2026-11-18 : base `app_testcloud1` pour le jeton `cloud1`. [projet]
+- `ConnectionFactory::createConnection()` : si `dbname_suffix` est présent (ou `charset` absent), le bundle construit une première connexion par `DriverManager::getConnection($params, $config)`, puis `$params = $this->addDatabaseSuffix($connection->getParams())`, puis `new $wrapperClass($params, $driver, $config)`. `addDatabaseSuffix()` fait `$params['dbname'] .= $params['dbname_suffix']` et **ne retire pas** la clé `dbname_suffix`. [officielle] ConnectionFactory.php@3.3.1
+- Conséquence : sur la connexion autowirée, `getParams()['dbname']` contient **déjà** le suffixe (ex. `app_testcloud1`) et `getParams()['dbname_suffix']` est encore là. `DriverManager::getConnection($main->getParams(), $main->getConfiguration())` vise donc la bonne base de test : DBAL ne relit pas `dbname_suffix` (le pilote `PDO\MySQL\Driver` 4.4.4 ne lit que `host`, `port`, `dbname`, `unix_socket`, `charset`, `user`, `password`, `driverOptions`, `persistent`). [officielle] ConnectionFactory.php@3.3.1 + code DBAL 4.4.4 `src/Driver/PDO/MySQL/Driver.php` (lu dans app/vendor, version du verrou)
+- Le bundle ajoute aussi `charset = utf8mb4` et `defaultTableOptions.collation = utf8mb4_unicode_ci` quand `charset` est absent : ces valeurs sont dans `getParams()` et donc reprises par la seconde connexion. [officielle] ConnectionFactory.php@3.3.1
+- Pas de `dama/doctrine-test-bundle` (connexion statique partagée) dans app/composer.lock au 2026-11-18 : rien ne fait partager une transaction de test entre les deux connexions. [projet]
+
 ## Obsolète ou retiré dans cette version — ne pas utiliser
 
 | Ancien | Remplacé par | Depuis | Source |
@@ -54,6 +74,11 @@
 | expressions SQL chaîne comme défaut date/heure | `CurrentDate`, `CurrentTime`, `CurrentTimestamp` | 4.4 | [officielle] UPGRADE.md@4.4.4 |
 
 ## Pièges connus
+- `getParams()` est `@internal` : son contenu peut changer sans dépréciation ; le figer par un test (la seconde connexion lit bien `SELECT DATABASE()` = base de la principale). [officielle] Connection.php@4.4.4
+- Ne JAMAIS repasser `getParams()` par `ConnectionFactory::createConnection()` du bundle : `dbname_suffix` étant resté dans les paramètres, le suffixe serait ajouté deux fois (`app_testcloud1_testcloud1`). `DriverManager::getConnection()` direct n'a pas ce défaut. [officielle] ConnectionFactory.php@3.3.1 (déduction du code)
+- `wrapperClass` : s'il figure dans `getParams()`, la seconde connexion est instanciée dans la même classe enveloppe. Le projet n'en déclare pas (doctrine.yaml, 2026-11-18). [officielle] DriverManager.php@4.4.4
+- `persistent` : s'il était activé, le comportement de deux connexions persistantes PDO sur le même DSN dans un même processus n'est PAS vérifié ici (doc PHP, hors périmètre) ; le projet ne le déclare pas dans doctrine.yaml (l'URL n'a pas été lue : fichier de secrets).
+- La seconde connexion n'est jamais fermée par le bundle : appeler `close()` après usage (sinon une session serveur de plus par requête PHP-FPM jusqu'à la fin du processus).
 - Capturer l'exception d'un `transactional()` interne et continuer = la transaction externe reste valide : les écritures de l'interne sont perdues SANS erreur visible plus haut. [officielle] transactions.html
 - Un doublon (`UniqueConstraintViolationException`) n'est PAS une `RetryableException` : `catch (RetryableException)` ne l'attrape pas. [officielle] fichiers @4.4.4
 - `executeStatement()` peut renvoyer une chaîne numérique (`int|string`) : ne pas comparer avec `===` à un entier sans conversion. [officielle] Connection.php@4.4.4

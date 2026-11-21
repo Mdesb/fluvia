@@ -151,11 +151,14 @@ final class SealKeyOrderTest extends ComptaApiTestCase
                 self::fail($label . ' : le scellement aurait dû être refusé.');
             } catch (SealingRefusedException $e) {
                 self::assertSame(409, $e->getStatusCode(), $label);
-                self::assertSame($expected === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT, str_contains($e->getMessage(), 'NEUVE'), $label . ' : « clé NEUVE » seulement quand la chaîne a quitté la clé active');
-                $message = $e->getMessage();
+                self::assertSame($expected === SealKeyOrder::BLOCK_ACTIVE_KEY_LEFT, str_contains($e->technicalDetail(), 'NEUVE'), $label . ' : « clé NEUVE » seulement quand la chaîne a quitté la clé active');
+                $message = $e->technicalDetail();
                 foreach ($keys as $key) {
                     self::assertStringNotContainsString($key, $message . json_encode($logger->records, \JSON_THROW_ON_ERROR), $label);
+                    self::assertStringNotContainsString($key, $e->getMessage(), $label . ' : le message rendu ne contient pas la clé');
+                    self::assertStringNotContainsString(SealKeyring::keyIdOf($key), $e->getMessage(), $label . ' : ni un identifiant de clé');
                 }
+                self::assertStringNotContainsString('NF525_', $e->getMessage(), $label);
             }
             self::assertSame(0, $draft->getNumeroSequence(), $label . ' : rien n\'est scellé');
             self::assertCount(1, $logger->records, $label);

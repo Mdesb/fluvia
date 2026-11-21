@@ -266,6 +266,9 @@ const NAV = [
       // bricole ici. ⚠ `./infra/ordonnanceur.sh --lister` dit l'etat de cette liste, qui bouge.
       { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       { id: 'autorisations', ic: 'escalations', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
+      // Alertes NF525 : la chaîne fiscale d'une caisse est bloquée. Lecture seule ; l'éditeur traite.
+      // Droit `securite.gerer`, le même que le serveur exige (`aLeDroit` honore le joker `*.*`).
+      { id: 'alertes-nf525', ic: 'escalations', label: 'Alertes NF525', perms: ['securite.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.

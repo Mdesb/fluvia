@@ -10,6 +10,8 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Nf525\ScellementFactureHandler;
 use App\Facturation\Service\ResolveurComptesFacturation;
+use App\Platform\Nf525\Alert\SealAlertRecorder;
+use App\Platform\Nf525\SealChainRef;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -33,6 +35,8 @@ final class VerifierChaineFactureProvider implements ProviderInterface
         private readonly ResolveurComptesFacturation $comptes,
         private readonly ContexteEtablissement $contexte,
         private readonly RequestStack $requestStack,
+        // #370 — l'alerte NF525 ; null : aucune alerte (constructions manuelles).
+        private readonly ?SealAlertRecorder $alerts = null,
     ) {
     }
 
@@ -82,6 +86,12 @@ final class VerifierChaineFactureProvider implements ProviderInterface
             ->getQuery()
             ->getResult();
         $rapport = $this->scellement->verifieChaine($factures);
+        // Vérification vivante (D-I), après la résolution du profil dans le périmètre de l'appelant.
+        $this->alerts?->recordVerification(
+            SealChainRef::forInvoicing($profil),
+            $rapport['intacte'],
+            $rapport['intacte'] ? null : implode(' ; ', array_map(static fn (array $a): string => sprintf('n°%d : %s', $a['sequence'], $a['probleme']), \array_slice($rapport['anomalies'], 0, 5))),
+        );
 
         return new JsonResponse($rapport);
     }

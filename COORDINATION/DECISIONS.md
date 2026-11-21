@@ -4037,3 +4037,38 @@ permet à qui écrit en base de forger des maillons postérieurs à son retrait.
 (seulement par `check-keys` et la vérification si elle apparaît). Une chaîne réellement en régression bloque la
 caisse de son point de vente jusqu'à correction. La signature du ZIP d'archive, qui accepte encore toute clé
 retirée, est **hors périmètre** (Issue à part).
+
+## D135 — NF525 : un scellement refusé ouvre une alerte par chaîne, écrite hors de la transaction de la vente (#370)
+
+**Décidé par Maxime le 18/11/2026 (spec `features/nf525-alerte-scellement/`, CP-1), plan validé le 18/11 (CP-2) ;
+rôles éditeur tranchés le 20/11.**
+
+**Le problème.** Un refus de scellement n'était qu'une ligne `critical` dans un journal que personne ne lit, et le
+caissier recevait un message technique (nom de variable, identifiants, procédure), recopié jusque dans la
+quarantaine hors ligne.
+
+**Ce qui est décidé.**
+- **Une alerte par chaîne bloquée** (une seule ouverte à la fois, garantie par la base), qui compte les refus et
+  les vérifications rompues ; la **cloche sonne à l'ouverture seulement**, chez les administrateurs des
+  établissements visés.
+- **L'alerte s'écrit par une seconde connexion** à la base, en transaction courte, pour survivre à l'annulation
+  de la vente. Au **meilleur effort** : une panne de l'alerte ne masque jamais le refus (409 sans référence).
+  Une panne de la cloche annule l'alerte, que le refus suivant retente.
+- **Le caissier lit un message générique** et la référence ; le détail n'est que dans l'alerte, visible de
+  l'éditeur seul.
+- **Fermeture** : au premier scellement réussi pour une alerte née d'un refus ; à la prochaine vérification
+  intacte pour une alerte née d'une vérification (un scellement ne regarde que la fin de la chaîne).
+- **L'éditeur** (Direction, Assistance, et l'Administrateur groupe comme pour tous les droits `editor.*`) voit
+  tout et pose une note, son seul geste. L'administrateur d'établissement lit sans détail technique.
+
+**Contreparties acceptées.**
+- La seconde connexion utilise `Connection::getParams()`, marqué `@internal` par DBAL 4.4 : confiné à une
+  classe et épinglé par un test sentinelle.
+- Un verrou tenu par la vente sur une ligne visée peut retarder le refus de quelques secondes (délai borné).
+- Une vérification déclenchée par un simple droit de lecture écrit en base (compteur) sur une chaîne
+  réellement rompue, sans limite de fréquence ; le volume de lignes reste borné par le dédoublonnage.
+- Une archive fiscale ancienne réellement rompue rouvre l'alerte vivante à chaque vérification de l'archive.
+- « Administrateur groupe » est un rôle client : l'accès éditeur repose alors sur le seul tenant éditeur
+  (`EditorOnly`).
+- La migration de la permission rattache les rôles par leur nom : un nom différent ne rattache rien, sans
+  erreur (à contrôler au déploiement, `infra/README.md`).
