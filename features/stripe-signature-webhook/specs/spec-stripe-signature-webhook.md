@@ -57,7 +57,7 @@ La décision D5-B ajoute une **défense en profondeur** : seule une notification
 - [x] Comportement sans secret → tranché par Maxime : refuser et signaler (G-4).
 - [x] Source de la doc Stripe → tranché par Maxime : docs.stripe.com ouvert au documentaliste.
 - [ ] *(non bloquant pour CP-1, bloquant pour le plan)* Format exact de `Stripe-Signature` et du message signé → la fiche les établira.
-- [ ] *(non bloquant, à mesurer au déploiement)* Que le proxy nginx de la préprod transmet le corps sans le modifier, et que l'horloge du VPS est synchronisée. Témoin : un événement de test signé, envoyé depuis le tableau de bord Stripe, rend 200.
+- [ ] *(non bloquant, à mesurer au déploiement)* Que le proxy nginx de la préprod transmet le corps sans le modifier, et que l'horloge du VPS est synchronisée. Témoin : un événement de test signé, envoyé depuis le tableau de bord Stripe, rend **404 « inconnu »** et non 400 : la signature est acceptée, mais la session de test ne correspond à aucune commande Fluvia. Un vrai paiement en mode test rend 200. *(Témoin corrigé le 21/11/2026, voir le journal de rétropropagation.)*
 
 ## Critères d'acceptation
 

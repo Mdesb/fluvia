@@ -29,7 +29,7 @@ Exemple officiel (sur une seule ligne en réalité) : `t=1798765432,v1=5257a869�
 
 - **Encodage de la signature : hexadécimal minuscule.** Ce n'est pas écrit, mais tous les `v1` de l'exemple font 64 caractères `[0-9a-f]`, soit les 32 octets d'un SHA-256 en hexadécimal. En PHP : `hash_hmac('sha256', $signedPayload, $secret)` (sortie hexadécimale par défaut, fiche `php-8.4.md`), comparée par `hash_equals`.
 - **Clé : la chaîne entière du secret, préfixe `whsec_` compris**, telle que le tableau de bord la donne (« Click **Reveal secret** and copy the value to use when you create a handler »). Les exemples de handler la passent telle quelle (`endpoint_secret = 'whsec_...'`).
-- **Témoin qui lève ces deux déductions :** un événement de test signé, envoyé depuis le tableau de bord Stripe vers la préprod, doit rendre 200. Une erreur d'encodage ou de clé donnerait 400 à coup sûr.
+- **Témoin qui lève ces deux déductions :** un événement de test signé, envoyé depuis le tableau de bord Stripe vers la préprod, doit rendre **404 « inconnu »** : la signature est acceptée, mais la session de test ne correspond à aucune commande Fluvia. Une erreur d'encodage ou de clé donnerait **400**. Un vrai paiement de test (mode test) rend 200.
 
 ## Tolérance et rejeu (verbatim)
 
