@@ -492,6 +492,20 @@ when@test:
                 $httpClient: !service
                     class: Symfony\Component\HttpClient\MockHttpClient
                     arguments: ['@App\Tests\Compta\Support\FakePayFipServer']
+        # Doublure de l'API STRIPE : l'adaptateur parle à un faux serveur. Inerte tant qu'un test ne pose pas
+        # STRIPE_SECRET_KEY (sans clé, l'adaptateur reste éteint). Même patron que FakePayFipServer.
+        App\Tests\Boutique\Support\FakeStripeServer:
+            public: true
+        # `autowire` et `autoconfigure` EXPLICITES : ce bloc `when@test` ne reprend pas les `_defaults` du fichier,
+        # et sans `autoconfigure` l'adaptateur perd son étiquette `boutique.paiement_en_ligne` (le sélecteur
+        # ne le voit plus, le bouchon répond à sa place).
+        App\Boutique\Paiement\Stripe\StripeCheckoutAdapter:
+            autowire: true
+            autoconfigure: true
+            arguments:
+                $httpClient: !service
+                    class: Symfony\Component\HttpClient\MockHttpClient
+                    arguments: ['@App\Tests\Boutique\Support\FakeStripeServer']
         # Collecteur `access.card_recharged` (CQ-1, tests d'atomicité recharge ⇄ vente, D7-bis) — même
         # patron que MailCollector ci-dessus.
         App\Tests\Acces\Support\CardRechargedEventCollector:
