@@ -10,6 +10,7 @@ use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Boutique\DataFixtures\BoutiqueFixtures;
 use App\Boutique\Entity\Vitrine;
+use App\Compta\Entity\ProfilExploitant;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
@@ -137,5 +138,19 @@ abstract class BoutiqueApiTestCase extends ApiTestCase
         $em = static::getContainer()->get('doctrine')->getManager();
 
         return $em;
+    }
+
+    /**
+     * Pose (ou retire) le numéro client PayFiP du profil dont l'établissement PRINCIPAL porte ce nom. Le profil
+     * se désigne par son établissement principal, jamais par SIREN : `BoutiqueFixtures` pose pour B un profil de
+     * même SIREN que `ComptaFixtures`, et un test qui désigne le profil par SIREN y est ambigu.
+     */
+    protected function setPayFipClientNumber(string $nomEtablissement, ?string $numero): ProfilExploitant
+    {
+        $profil = $this->entite(ProfilExploitant::class, ['etablissementPrincipal' => $this->entite(Etablissement::class, ['nom' => $nomEtablissement])]);
+        $profil->setPayfipClientNumber($numero);
+        $this->em()->flush();
+
+        return $profil;
     }
 }

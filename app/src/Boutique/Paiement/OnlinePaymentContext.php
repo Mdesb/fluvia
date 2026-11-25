@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Boutique\Paiement;
 
 use App\Compta\Entity\ProfilExploitant;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * What a real provider needs beyond the amount (#339): the order number it will print on its
@@ -18,6 +19,8 @@ final class OnlinePaymentContext
         public readonly string $orderNumber,
         public readonly string $payerEmail,
         public readonly ProfilExploitant $profile,
+        /** The sale being verified: a provider record is trusted only when it belongs to THIS sale. Null on initiation. */
+        public readonly ?Uuid $saleId = null,
     ) {
     }
 }

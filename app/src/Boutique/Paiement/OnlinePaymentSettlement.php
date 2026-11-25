@@ -8,6 +8,8 @@ use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
 use App\Boutique\Service\ConfirmerCommandeHandler;
+use App\Compta\Entity\BordereauPayFiP;
+use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\TypeExploitant;
 use App\Vente\Enum\StatutTPE;
 use App\Vente\Enum\StatutVente;
@@ -15,6 +17,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * RÉGLER UNE COMMANDE EN LIGNE, PAR QUELQUE PORTE QU'ON ARRIVE (#339).
@@ -74,7 +77,8 @@ final class OnlinePaymentSettlement
         $this->em->flush();
 
         $profil = $this->profileResolver->forEstablishment($panier->getEtablissement());
-        $resultat = $this->selecteur->pour($profil)->verifierRetour($reference, $montantInitie, $preuve, new OnlinePaymentContext($vente->getNumero(), '', $profil));
+        $adaptateur = $this->adapterFor($profil, $reference, $vente->getId());
+        $resultat = $adaptateur->verifierRetour($reference, $montantInitie, $preuve, new OnlinePaymentContext($vente->getNumero(), '', $profil, $vente->getId()));
         if ($resultat === null) {
             // Rien n'atteste ce retour : ni reçu du bouchon, ni réponse concordante du prestataire.
             throw new UnprocessableEntityHttpException('Retour de paiement non vérifiable : aucune preuve du prestataire ne l\'accompagne.');
@@ -98,7 +102,8 @@ final class OnlinePaymentSettlement
             return OnlinePaymentOutcome::confirmed($vente, false);
         }
 
-        $moyen = $profil->getType() === TypeExploitant::RegieDirecte ? 'payfip' : 'cb_psp';
+        // Le moyen est celui de l'adaptateur qui a VÉRIFIÉ, pas du type que le profil porte aujourd'hui.
+        $moyen = $adaptateur->cle() === TypeExploitant::RegieDirecte ? 'payfip' : 'cb_psp';
         try {
             $conflit = $this->confirmerCommande->confirmerApresPaiementReussi($panier, $vente, $moyen, $resultat->referenceTransaction);
         } catch (\Throwable $e) {
@@ -109,6 +114,30 @@ final class OnlinePaymentSettlement
         }
 
         return OnlinePaymentOutcome::confirmed($vente, $conflit);
+    }
+
+    /**
+     * Une opération PayFiP DÉJÀ INITIÉE (un bordereau existe pour la référence) se vérifie toujours par l'adaptateur PayFiP,
+     * quel que soit le numéro que le profil porte AUJOURD'HUI : l'effacer (ou le mal former) après l'initiation ne doit
+     * pas dérouter le retour vers le bouchon, ce qui laisserait la commande payée sans confirmation. L'adaptateur compare
+     * au numéro FIGÉ sur le bordereau et refuse (422) un bordereau qui n'en porte pas. Si PayFiP n'est plus configuré
+     * globalement, on retombe sur le choix ordinaire. Stripe et les autres régimes : inchangés.
+     */
+    private function adapterFor(ProfilExploitant $profil, string $reference, Uuid $saleId): PaiementEnLigneInterface
+    {
+        // Le bordereau doit être celui de CETTE commande (référence ET vente d'origine) et le profil de la commande une
+        // régie directe : un bordereau étranger à référence libre (`PayFipRetourProcessor`) ne détourne rien.
+        $bordereau = $profil->getType() === TypeExploitant::RegieDirecte
+            ? $this->em->getRepository(BordereauPayFiP::class)->findOneBy(['referenceTransaction' => $reference, 'venteOrigine' => $saleId], ['dateHeure' => 'ASC', 'id' => 'ASC'])
+            : null;
+        if ($bordereau instanceof BordereauPayFiP) {
+            $payfip = $this->selecteur->pourNotification('payfip');
+            if ($payfip instanceof PaiementEnLigneInterface) {
+                return $payfip;
+            }
+        }
+
+        return $this->selecteur->pour($profil);
     }
 
     private function prendreLeJeton(SuiviCommandeEnLigne $suivi, \DateTimeImmutable $maintenant): bool

@@ -112,6 +112,15 @@ class BordereauPayFiP
     #[Groups(['payfip:read'])]
     private ?string $entryMode = null;
 
+    /**
+     * NUMCLI envoyé à l'initiation, FIGÉ avec l'opération (D2-B de #365) : la vérification du retour et de la
+     * notification compare la réponse de PayFiP à CE numéro, jamais à celui que le profil porte aujourd'hui
+     * (changer le numéro d'une régie ne doit pas faire échouer un paiement en cours). `null` = bordereau créé
+     * hors initiation ou antérieur : il n'atteste rien. Pas de groupe de lecture : personne n'en a besoin.
+     */
+    #[ORM\Column(length: 6, nullable: true)]
+    private ?string $clientNumber = null;
+
     /** RESULTRANS rendu par PayFiP : P, V (payé), A (abandon), R, Z (refus). */
     #[ORM\Column(length: 1, nullable: true)]
     #[Groups(['payfip:read'])]
@@ -219,6 +228,11 @@ class BordereauPayFiP
         return $this->entryMode;
     }
 
+    public function getClientNumber(): ?string
+    {
+        return $this->clientNumber;
+    }
+
     public function getTransactionResult(): ?string
     {
         return $this->transactionResult;
@@ -235,11 +249,12 @@ class BordereauPayFiP
     }
 
     /** Ce qui a été confié à PayFiP à l'initiation. */
-    public function recordInitiation(string $debtReference, int $amountCents, string $entryMode): self
+    public function recordInitiation(string $debtReference, int $amountCents, string $entryMode, ?string $clientNumber): self
     {
         $this->debtReference = $debtReference;
         $this->amountCents = $amountCents;
         $this->entryMode = $entryMode;
+        $this->clientNumber = $clientNumber;
 
         return $this;
     }

@@ -26,12 +26,12 @@ final class PayFipSoapClientTest extends TestCase
 
     private static function configuration(string $mode = 'W'): PayFipConfiguration
     {
-        return new PayFipConfiguration('999123', $mode, 'https://boutique.example.test/notif');
+        return new PayFipConfiguration(entryMode: $mode, notificationUrl: 'https://boutique.example.test/notif');
     }
 
     private static function demande(string $mode = 'W', int $centimes = 1250): PayFipPaymentRequest
     {
-        return PayFipPaymentRequest::forOrder(self::configuration($mode), 'SYS-20261105-T00012', 'fallback', $centimes, 'acheteur@example.test', 'https://boutique.example.test/b/piscine/retour-paiement', new \DateTimeImmutable('2026-11-05 10:00', new \DateTimeZone('Europe/Paris')));
+        return PayFipPaymentRequest::forOrder(self::configuration($mode), '999123', 'SYS-20261105-T00012', 'fallback', $centimes, 'acheteur@example.test', 'https://boutique.example.test/b/piscine/retour-paiement', new \DateTimeImmutable('2026-11-05 10:00', new \DateTimeZone('Europe/Paris')));
     }
 
     public function testLEnveloppeEnvoyeeEstCelleDuServicePaiementSecurise(): void
@@ -146,7 +146,7 @@ final class PayFipSoapClientTest extends TestCase
     public function testLaDemandeRespecteLesFormatsDuGuide(): void
     {
         // REFDET : la ponctuation tombe ; trop court, on prend l'identifiant de repli.
-        $court = PayFipPaymentRequest::forOrder(self::configuration(), 'A-1', 'Fallback22chars0000000', 1000, 'a@example.test', 'https://x.example.test/r', new \DateTimeImmutable());
+        $court = PayFipPaymentRequest::forOrder(self::configuration(), '999123', 'A-1', 'Fallback22chars0000000', 1000, 'a@example.test', 'https://x.example.test/r', new \DateTimeImmutable());
         self::assertSame('Fallback22chars0000000', $court->debtReference);
 
         // En test (T) et en activation (X), PayFiP n'accepte que des euros ronds.
@@ -168,10 +168,34 @@ final class PayFipSoapClientTest extends TestCase
     public function testUneConfigurationIncompleteResteEteinte(): void
     {
         self::assertFalse((new PayFipConfiguration())->isConfigured());
-        self::assertFalse((new PayFipConfiguration('12345', 'W', 'https://a.example.test/n'))->isConfigured(), 'NUMCLI à 5 chiffres');
-        self::assertFalse((new PayFipConfiguration('123456', 'Q', 'https://a.example.test/n'))->isConfigured(), 'mode inconnu');
-        self::assertFalse((new PayFipConfiguration('123456', 'W', ''))->isConfigured(), 'sans URL de notification');
-        self::assertTrue((new PayFipConfiguration('123456', null, 'https://a.example.test/n'))->isConfigured());
-        self::assertSame('T', (new PayFipConfiguration('123456', null, 'https://a.example.test/n'))->entryMode(), 'mode par défaut : test, jamais le réel');
+        self::assertFalse((new PayFipConfiguration(entryMode: 'Q', notificationUrl: 'https://a.example.test/n'))->isConfigured(), 'mode inconnu');
+        self::assertFalse((new PayFipConfiguration(entryMode: 'W', notificationUrl: ''))->isConfigured(), 'sans URL de notification');
+        self::assertTrue((new PayFipConfiguration(entryMode: null, notificationUrl: 'https://a.example.test/n'))->isConfigured());
+        self::assertSame('T', (new PayFipConfiguration(entryMode: null, notificationUrl: 'https://a.example.test/n'))->entryMode(), 'mode par défaut : test, jamais le réel');
+    }
+
+    /** D2-B : la configuration globale n'a plus de numéro client ; mode + URL de notification suffisent (G-3). */
+    public function testLaConfigurationGlobaleSuffitAvecLeModeEtLURLDeNotification(): void
+    {
+        $configuration = new PayFipConfiguration(entryMode: 'W', notificationUrl: 'https://a.example.test/n');
+
+        self::assertTrue($configuration->isConfigured());
+        self::assertSame([], $configuration->missing());
+        self::assertFalse(method_exists($configuration, 'clientNumber'), 'plus de NUMCLI global');
+    }
+
+    /** Le cas « NUMCLI à 5 chiffres » vivait sur la configuration : il vit ici, au moment d'envoyer (dernière ligne de défense). */
+    public function testLaDemandeRefuseUnNumeroDeClientQuiNEstPasDeSixChiffres(): void
+    {
+        foreach (['12345', '1234567', '12345a', '', "123456\n"] as $mauvais) {
+            try {
+                PayFipPaymentRequest::forOrder(self::configuration(), $mauvais, 'SYS-20261105-T00012', 'fallback', 1200, 'acheteur@example.test', 'https://boutique.example.test/retour', new \DateTimeImmutable());
+                self::fail('numéro refusé : ' . $mauvais);
+            } catch (PayFipException $e) {
+                self::assertStringContainsString('numéro de client PayFiP', $e->getMessage());
+            }
+        }
+        // Témoin positif : six chiffres passent, et partent tels quels.
+        self::assertSame('654321', PayFipPaymentRequest::forOrder(self::configuration(), '654321', 'SYS-20261105-T00012', 'fallback', 1200, 'acheteur@example.test', 'https://boutique.example.test/retour', new \DateTimeImmutable())->clientNumber);
     }
 }

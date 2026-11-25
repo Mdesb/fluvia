@@ -16,13 +16,17 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * paiement en ligne PayFiP », read on 05/11/2026). Every value below can be overridden without a
  * release, precisely because the edition we could read is not the latest one.
  *
- * - PAYFIP_NUMCLI: the 6-digit client number the DDFiP gives the régie at adhesion (§3.1).
  * - PAYFIP_ENTRY_MODE: SAISIE — `T` test, `X` activation, `W` real payments (§3.5.2.1, §3.5.4).
  *   Defaults to `T`: an unset mode can never take real money.
  * - PAYFIP_NOTIFICATION_URL: absolute public URL of our notification endpoint (URLNOTIF). Its domain
  *   must be declared to the DDFiP, and must not rely on SNI (§2).
  * - PAYFIP_SERVICE_URL / PAYFIP_PAYMENT_PAGE_URL: the web service and the payment page. Defaults are
  *   the payfip.gouv.fr addresses (the tipi.budget.gouv.fr ones of the 2019 guide moved on 20/05/2021).
+ *
+ * THE CLIENT NUMBER (NUMCLI, §3.1) IS NOT HERE ANY MORE (D2-B of #365): each régie has its own, held by its
+ * `ProfilExploitant::$payfipClientNumber` and frozen on the `BordereauPayFiP` at initiation. What stays global
+ * is shared by every régie: the mode and the notification address. Consequence: while one régie is in test
+ * (T or X), no other can go real (W).
  *
  * Nothing here is a secret: PayFiP authenticates the régie by its client number and the declared
  * notification domain, not by a key. The configuration is complete or the adapter stays off.
@@ -36,20 +40,17 @@ final class PayFipConfiguration
     public const MODE_ACTIVATION = 'X';
     public const MODE_REAL = 'W';
 
-    private readonly string $clientNumber;
     private readonly string $entryMode;
     private readonly string $notificationUrl;
     private readonly string $serviceUrl;
     private readonly string $paymentPageUrl;
 
     public function __construct(
-        #[Autowire(env: 'default::PAYFIP_NUMCLI')] ?string $clientNumber = null,
         #[Autowire(env: 'default::PAYFIP_ENTRY_MODE')] ?string $entryMode = null,
         #[Autowire(env: 'default::PAYFIP_NOTIFICATION_URL')] ?string $notificationUrl = null,
         #[Autowire(env: 'default::PAYFIP_SERVICE_URL')] ?string $serviceUrl = null,
         #[Autowire(env: 'default::PAYFIP_PAYMENT_PAGE_URL')] ?string $paymentPageUrl = null,
     ) {
-        $this->clientNumber = trim((string) $clientNumber);
         $this->entryMode = strtoupper(trim((string) $entryMode)) ?: self::MODE_TEST;
         $this->notificationUrl = trim((string) $notificationUrl);
         $this->serviceUrl = trim((string) $serviceUrl) ?: self::DEFAULT_SERVICE_URL;
@@ -69,9 +70,6 @@ final class PayFipConfiguration
     public function missing(): array
     {
         $missing = [];
-        if (preg_match('/^\d{6}$/', $this->clientNumber) !== 1) {
-            $missing[] = 'PAYFIP_NUMCLI (6 chiffres)';
-        }
         if (!\in_array($this->entryMode, [self::MODE_TEST, self::MODE_ACTIVATION, self::MODE_REAL], true)) {
             $missing[] = 'PAYFIP_ENTRY_MODE (T, X ou W)';
         }
@@ -80,11 +78,6 @@ final class PayFipConfiguration
         }
 
         return $missing;
-    }
-
-    public function clientNumber(): string
-    {
-        return $this->clientNumber;
     }
 
     public function entryMode(): string

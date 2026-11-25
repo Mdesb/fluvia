@@ -211,8 +211,8 @@ services:
     App\Compta\Port\ProjectionPassageInterface: '@App\Compta\Adapter\ProjectionPassageDoctrineAdapter'
     # PayFiP (US-L4-03) : port historique du bouchon, encore utilisé par `PayFipBoutiqueAdapter` (le
     # bouchon de démonstration). Le raccordement réel (#339) passe par `App\Compta\PayFip\*` et
-    # `App\Boutique\Paiement\PayFipOnlinePaymentAdapter`, actif dès que PAYFIP_NUMCLI et
-    # PAYFIP_NOTIFICATION_URL sont renseignées (voir `PayFipConfiguration`).
+    # `App\Boutique\Paiement\PayFipOnlinePaymentAdapter`, actif pour une régie dès que
+    # PAYFIP_NOTIFICATION_URL est renseignée et que son profil porte un numéro client (voir `PayFipConfiguration`).
     App\Compta\Port\PayFipInterface: '@App\Compta\Adapter\PayFipStubAdapter'
     # e-reporting (US-L4-08) : canal PDP non nommé dans les sources (⚠ HYPOTHÈSE) — stub par défaut.
     App\Compta\Port\PdpInterface: '@App\Compta\Adapter\PdpStubAdapter'
@@ -488,7 +488,7 @@ when@test:
             decorates: logger
             arguments: ['@.inner']
         # Doublure du SERVICE PayFiP (#339) : notre client SOAP parle à un faux serveur qui répond comme
-        # le guide DGFiP le décrit. Elle ne sert que si un test configure PayFiP (PAYFIP_NUMCLI…) ; sinon
+        # le guide DGFiP le décrit. Elle ne sert que si un test configure PayFiP (PAYFIP_NOTIFICATION_URL…) ; sinon
         # l'adaptateur réel reste éteint et le bouchon de démonstration répond, comme avant.
         App\Tests\Compta\Support\FakePayFipServer:
             public: true
