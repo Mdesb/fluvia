@@ -2097,6 +2097,10 @@ export const api = {
     request(`/api/stripe_account_configs/${id}`, { method: 'PATCH', body: corps }),
   retirerStripeConfig: (id) =>
     request(`/api/stripe_account_configs/${id}`, { method: 'DELETE' }),
+  // LE NUMERO CLIENT PAYFIP DE LA REGIE (lot D2-B de #365). Pas un secret : le serveur le rend avec le profil.
+  // Ecriture dediee (droit `payment.configure`, etablissement principal, regie directe) ; `null` efface.
+  majNumeroClientPayFip: (id, corps) =>
+    request(`/api/profil_exploitants/${id}/payfip_client_number`, { method: 'PATCH', body: corps }),
   // Le logo imprime en tete de la facture PDF (#345) -- multipart, meme idiome que le logo de vitrine.
   televerserLogoFacturation: (id, fichier) => {
     const corps = new FormData()

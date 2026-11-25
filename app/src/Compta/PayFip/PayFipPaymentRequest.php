@@ -33,11 +33,14 @@ final class PayFipPaymentRequest
     }
 
     /**
+     * @param string $clientNumber NUMCLI of the régie that takes the money (6 digits): the one of the profile of the
+     *                             order, never a global one (D2-B of #365)
      * @param string $orderNumber  our order number (any punctuation is dropped: REFDET is alphanumeric)
      * @param string $fallbackId   used when the order number gives fewer than 6 or more than 30 characters
      */
     public static function forOrder(
         PayFipConfiguration $configuration,
+        string $clientNumber,
         string $orderNumber,
         string $fallbackId,
         int $amountCents,
@@ -51,7 +54,7 @@ final class PayFipPaymentRequest
         }
 
         $request = new self(
-            clientNumber: $configuration->clientNumber(),
+            clientNumber: $clientNumber,
             year: $now->setTimezone(new \DateTimeZone('Europe/Paris'))->format('Y'),
             debtReference: $reference,
             subject: 'Commande en ligne ' . $reference,
@@ -85,7 +88,7 @@ final class PayFipPaymentRequest
     private function assertValid(): void
     {
         $errors = [];
-        if (preg_match('/^\d{6}$/', $this->clientNumber) !== 1) {
+        if (preg_match('/^\d{6}\z/', $this->clientNumber) !== 1) {
             $errors[] = 'numéro de client PayFiP (6 chiffres)';
         }
         if (preg_match('/^[A-Za-z0-9]{6,30}$/', $this->debtReference) !== 1) {

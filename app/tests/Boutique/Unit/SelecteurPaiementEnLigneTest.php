@@ -72,26 +72,29 @@ final class SelecteurPaiementEnLigneTest extends TestCase
     /**
      * #339 — un vrai prestataire configuré passe devant le bouchon de son régime ; non configuré, il
      * s'efface, et le bouchon (qui refuse lui-même de servir hors préproduction) répond comme avant.
+     *
+     * D2-B : PayFiP réel exige les paramètres GLOBAUX (mode, URL de notification) ET un numéro client sur le
+     * profil de la régie. Les notifications ne dépendent que des paramètres globaux.
      */
     public function testUnPrestataireReelConfigurePasseDevantLeBouchonDeSonRegime(): void
     {
         $signer = new StubPaymentReceiptSigner('secret-de-test');
-        $payFipReel = fn (?string $numcli): PayFipOnlinePaymentAdapter => new PayFipOnlinePaymentAdapter(
-            new PayFipConfiguration($numcli, 'W', 'https://boutique.example.test/notif'),
+        $payFipReel = fn (string $notificationUrl): PayFipOnlinePaymentAdapter => new PayFipOnlinePaymentAdapter(
+            new PayFipConfiguration(entryMode: 'W', notificationUrl: $notificationUrl),
             new PayFipSoapClient(new MockHttpClient(), new PayFipConfiguration()),
             new TraiterRetourPayFipHandler($this->createStub(EntityManagerInterface::class)),
             $this->createStub(EntityManagerInterface::class),
             new NullLogger(),
         );
         $stripe = fn (?string $cle): StripeCheckoutAdapter => new StripeCheckoutAdapter(new MockHttpClient(), new NullLogger(), StripeUnitWiring::resolver($this, $cle));
-        $regie = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte);
+        $regie = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte)->setPayfipClientNumber('999123');
         $dsp = (new ProfilExploitant())->setType(TypeExploitant::Dsp);
 
         // L'ordre d'enregistrement ne décide de rien : bouchons d'abord, réels ensuite.
         $configures = new SelecteurPaiementEnLigne([
             new PayFipBoutiqueAdapter(new PayFipStubAdapter(), $signer),
             new PspCbStubAdapter($signer),
-            $payFipReel('999123'),
+            $payFipReel('https://boutique.example.test/notif'),
             $stripe('sk_test_' . 'CLE0000'),
         ]);
         self::assertInstanceOf(PayFipOnlinePaymentAdapter::class, $configures->pour($regie));
@@ -99,8 +102,9 @@ final class SelecteurPaiementEnLigneTest extends TestCase
         self::assertInstanceOf(PayFipOnlinePaymentAdapter::class, $configures->pourNotification('payfip'));
         self::assertInstanceOf(StripeCheckoutAdapter::class, $configures->pourNotification('stripe'));
 
+        // Paramètres globaux incomplets (URL de notification vide) : éteint, même avec un numéro sur le profil.
         $eteints = new SelecteurPaiementEnLigne([
-            $payFipReel(null),
+            $payFipReel(''),
             $stripe(null),
             new PayFipBoutiqueAdapter(new PayFipStubAdapter(), $signer),
             new PspCbStubAdapter($signer),
@@ -109,5 +113,14 @@ final class SelecteurPaiementEnLigneTest extends TestCase
         self::assertInstanceOf(PspCbStubAdapter::class, $eteints->pour($dsp));
         self::assertNull($eteints->pourNotification('payfip'), 'un prestataire éteint ne reçoit pas de notification');
         self::assertNull($eteints->pourNotification('inconnu'));
+
+        // Une régie SANS numéro n'a pas PayFiP réel : le bouchon répond. Mais la notification ne dépend pas du profil.
+        $sansNumero = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte);
+        self::assertInstanceOf(PayFipBoutiqueAdapter::class, $configures->pour($sansNumero));
+        self::assertInstanceOf(PayFipOnlinePaymentAdapter::class, $configures->pourNotification('payfip'));
+
+        // Numéro mal formé (posé par réflexion : le setter ne juge pas le format, la validation de l'API le fait) : idem.
+        $malForme = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte)->setPayfipClientNumber('12345');
+        self::assertInstanceOf(PayFipBoutiqueAdapter::class, $configures->pour($malForme));
     }
 }

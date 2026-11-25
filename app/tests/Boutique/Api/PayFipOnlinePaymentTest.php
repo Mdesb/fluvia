@@ -11,6 +11,7 @@ use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Compta\Entity\BordereauPayFiP;
 use App\Compta\Enum\StatutPayFiP;
+use App\DataFixtures\SocleFixtures;
 use App\Offre\Entity\Produit;
 use App\Tests\Boutique\BoutiqueApiTestCase;
 use App\Tests\Compta\Support\FakePayFipServer;
@@ -31,7 +32,6 @@ use PHPUnit\Framework\Attributes\DataProvider;
 final class PayFipOnlinePaymentTest extends BoutiqueApiTestCase
 {
     private const ENV = [
-        'PAYFIP_NUMCLI' => '999123',
         'PAYFIP_ENTRY_MODE' => 'W',
         'PAYFIP_NOTIFICATION_URL' => 'https://boutique.example.test/api/boutique/paiement-en-ligne/notification/payfip',
         'BOUTIQUE_BASE_URL' => 'https://boutique.example.test',
@@ -56,6 +56,8 @@ final class PayFipOnlinePaymentTest extends BoutiqueApiTestCase
         FakePayFipServer::reset();
 
         parent::setUp();
+        // D2-B : le NUMCLI vient du profil de la régie qui sert la commande, plus d'une variable globale.
+        $this->setPayFipClientNumber(SocleFixtures::ETAB_A_NOM, '999123');
     }
 
     protected function tearDown(): void
@@ -101,6 +103,7 @@ final class PayFipOnlinePaymentTest extends BoutiqueApiTestCase
         $bordereau = $this->bordereau($idOp);
         self::assertSame(StatutPayFiP::EnAttente, $bordereau->getStatutRetour());
         self::assertSame($envoye['refdet'], $bordereau->getDebtReference());
+        self::assertSame('999123', $bordereau->getClientNumber(), 'le NUMCLI envoyé est figé sur le bordereau (D2-B)');
         self::assertSame($paiement['montantCentimes'], $bordereau->getAmountCents());
         self::assertSame((string) $vente->getId(), (string) $bordereau->getVenteOrigine());
     }
