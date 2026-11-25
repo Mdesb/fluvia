@@ -40,7 +40,7 @@ Faits établis par la recherche (VERIFIED, fichiers relatifs à `app/`) :
   - Elle a un mode essai (`--dry-run`), qui compte les fiches et les entrées sans rien écrire, et une limite (`--limit`), comme `AppliquerConservationCommand`.
   - Elle est idempotente : un second passage ne caviarde plus rien et n'écrit pas de nouvelle trace.
   - Elle se lance une fois en préprod puis en prod, sous supervision.
-- **G-6 — Lecture inchangée.** L'écran du journal d'audit et l'export montrent les entrées caviardées avec le marqueur. Aucune autre lecture n'est modifiée.
+- **G-6 — Lecture inchangée.** L'API et l'écran du journal d'audit montrent les entrées caviardées avec le marqueur. L'export CSV, qui ne porte aucune valeur (id, date, auteur, action, cible, établissement), liste les mêmes entrées. Aucune autre lecture n'est modifiée. *(Rétropropagé le 25/11/2026 : l'export n'a jamais contenu de valeurs.)*
 - **G-7 — Documentation.**
   - Dans le registre des traitements, le paragraphe T7 doit décrire la réalité : caviardage des entrées antérieures, et rattrapage.
   - **La validation du registre (D5) et la durée de conservation de T7 restent à Maxime.** Le lot n'y touche pas ; il ne modifie que la phrase factuelle.

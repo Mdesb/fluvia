@@ -108,7 +108,7 @@
 | **Finalité** | Tracer les actions sensibles (droits, caisse, fiche client, RGPD) pour la sécurité et la preuve |
 | **Base légale** (art. 6) | Intérêt légitime / obligation de sécurité (art. 32) |
 | **Personnes concernées** | Utilisateurs de l'application (auteur) ; clients dont la fiche est modifiée |
-| **Catégories de données** | Auteur (courriel de l'utilisateur), date, action, cible, valeurs avant et après pour les champs scalaires. Mots de passe, secrets et IBAN exclus. **Depuis le 05/11/2026, l'anonymisation d'une fiche n'y recopie plus l'identité effacée.** Entité : `App\Audit\Entity\EntreeAudit` |
+| **Catégories de données** | Auteur (courriel de l'utilisateur), date, action, cible, valeurs avant et après pour les champs scalaires. Mots de passe, secrets et IBAN exclus. **L'anonymisation d'une fiche n'y recopie plus l'identité effacée (depuis le 05/11/2026), et, depuis #363, elle remplace aussi par `[caviardé]`, dans les entrées antérieures de cette fiche, ses champs d'identité (une entrée « caviardage » en garde la trace : combien d'entrées, sans donnée personnelle). Les fiches déjà anonymisées sont à traiter par une commande de rattrapage (passage en préprod puis en production : à consigner).** Entité : `App\Audit\Entity\EntreeAudit` |
 | **Destinataires** | Administrateurs habilités ; éditeur sur accès de support journalisé |
 | **Durée de conservation** | **À arbitrer** (voir « À valider ») : les entrées antérieures à une anonymisation peuvent contenir l'identité de la personne |
 | **Mesures** | Append-only ; cloisonnement par établissement |

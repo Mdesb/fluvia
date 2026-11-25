@@ -345,6 +345,45 @@ juin 2025 se demande au correspondant moyens de paiement de la DDFiP) :
 2. `PAYFIP_ENTRY_MODE=X` : paiement d'activation (carte puis prélèvement).
 3. Le lendemain : `PAYFIP_ENTRY_MODE=W`. Un mode T ou X en service ne débite rien.
 
+## Caviardage de l'audit des fiches déjà anonymisées — #363
+
+Depuis #363, anonymiser une fiche client remplace par `[caviardé]`, dans la même transaction, l'identité
+gardée par ses anciennes entrées du journal d'audit (création, modifications). Les fiches anonymisées
+**avant** ce correctif gardent la leur : `crm:rgpd:redact-audit` les traite. Tâche d'exploitation, lancée
+à la main, **non planifiée** : une fois en préprod, une fois en production, sous supervision de Maxime.
+
+Elle ne touche que les fiches au statut `anonymise`, et que leurs entrées `App\Crm\Entity\Client` : aucune
+autre fiche, aucune autre entité, rien de NF525. La réécriture d'une entrée d'audit est irréversible.
+
+Forme des commandes (remplacer `<commande>` par `crm:rgpd:redact-audit …`) :
+
+- **préprod** : `docker compose exec php php bin/console <commande>`
+- **production** : `docker compose -f infra/compose.prod.yaml --env-file infra/.env.prod exec -T php php bin/console <commande>`
+
+1. **Mesurer** : `<commande> --dry-run --limit=100000`. Relever le nombre de fiches et d'entrées. Le mode
+   essai respecte `--limit` : sans `--limit` élevé, il s'arrête à 500 fiches, et il affiche alors
+   « limite atteinte : il peut en rester ».
+2. **Sauvegarder** la base (dump, voir « Sauvegardes ») avant le premier passage réel : l'opération réécrit
+   des lignes d'audit.
+3. **Passer** : `<commande> --limit=500`, à répéter tant que le compteur n'est pas à 0. `--limit` borne les
+   fiches réellement caviardées, pas les fiches examinées. Une fiche et sa trace partent dans une même
+   transaction.
+4. **Contrôler** : un nouveau passage doit rendre `0 fiche(s), 0 entrée(s)` et n'écrire aucune ligne.
+5. **Ordre** : préprod d'abord, puis production. Chaque fiche caviardée laisse une entrée
+   `crm.rgpd.caviardage` (nombre d'entrées, aucune donnée personnelle), signée `tache:crm:rgpd:redact-audit`.
+6. La commande est **sûre à relancer** (idempotente) : une fiche déjà propre n'est ni réécrite ni tracée.
+   **Ne jamais lancer deux exécutions en même temps** : elles se disputeraient les mêmes lignes d'audit.
+
+Avant le premier déploiement, mesurer `SELECT COUNT(*) FROM audit_entree` : la migration crée l'index
+`idx_audit_cible (cible_type, cible_id)` sur cette table (verrou de métadonnées court, durée du `CREATE
+INDEX` proportionnelle au nombre de lignes).
+
+**Limite connue, épuration (`POST /api/rgpd/purge`).** Jusqu'à 500 fiches s'anonymisent en un seul `flush`
+(une seule transaction) ; les entrées d'audit caviardées restent en mémoire jusqu'à ce `flush`, à raison de
+10 Ko par entrée (mesuré : 602 entrées, 6 Mo). Avec `memory_limit = 512M`, cela tient tant que les fiches
+sélectionnées portent en moyenne moins d'environ 100 entrées. Au-delà, sélectionner moins de fiches par
+épuration (la commande de rattrapage, elle, flushe fiche par fiche et n'a pas ce risque).
+
 ## Points de vigilance
 
 - **Données** : jamais de données clients réelles en préprod (RGPD). Dump anonymisé
