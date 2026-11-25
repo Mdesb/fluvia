@@ -1,6 +1,6 @@
 # Suivi d'implémentation — <nom-fonctionnalite>
 
-**État :** discovery <!-- discovery → spec → plan → build → review → done -->
+**État :** spec <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/rgpd-caviardage-audit
 **Spec :** features/rgpd-caviardage-audit/specs/spec-rgpd-caviardage-audit.md
 **Plan :** features/rgpd-caviardage-audit/plans/plan-rgpd-caviardage-audit.md
