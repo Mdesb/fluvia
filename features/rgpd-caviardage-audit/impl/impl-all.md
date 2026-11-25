@@ -1,13 +1,13 @@
 # Suivi d'implémentation — <nom-fonctionnalite>
 
-**État :** spec <!-- discovery → spec → plan → build → review → done -->
+**État :** plan <!-- discovery → spec → plan → build → review → done -->
 **Branche :** feature/rgpd-caviardage-audit
 **Spec :** features/rgpd-caviardage-audit/specs/spec-rgpd-caviardage-audit.md
 **Plan :** features/rgpd-caviardage-audit/plans/plan-rgpd-caviardage-audit.md
 
 ## Checkpoints
 
-- [ ] **CP-1** — spec validée par l'humain (date + qui)
+- [x] **CP-1** — spec validée par Maxime, 2026-11-25
 - [ ] **CP-2** — plan validé par l'humain (date + qui)
 - [ ] **CP-3** — revue avant merge (date + qui)
 

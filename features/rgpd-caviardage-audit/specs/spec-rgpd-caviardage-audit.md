@@ -1,6 +1,6 @@
 # Spec — rgpd-caviardage-audit
 
-**Statut :** en revue <!-- brouillon → en revue → validée (CP-1) -->
+**Statut :** validée (CP-1, Maxime, 2026-11-25) <!-- brouillon → en revue → validée (CP-1) -->
 **Auteur :** Claude (session cloud), pour Maxime
 **Date :** 2026-11-25
 **Issue :** Mdesb/fluvia#363. Elle met en œuvre la décision « D2 → A », retenue mais non codée dans la PR #353.
