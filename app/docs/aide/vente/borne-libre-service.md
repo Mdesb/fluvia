@@ -1,7 +1,7 @@
 ---
 titre: "Mettre en service une borne automatique de vente"
 categorie: caisse-vente
-publicCible: administrateur
+publicCible: agent
 portee: global
 moduleLie: vente
 statut: publie
