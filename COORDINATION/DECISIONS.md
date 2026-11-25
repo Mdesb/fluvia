@@ -4015,3 +4015,27 @@ passe à `skipped`, motif `module_disabled`, et **ne repart pas d'elle-même** q
 daté (« aquagym samedi ») republié des jours plus tard sur le fil public d'un client serait faux, et un doublon paru
 ne se rattrape pas. La republier est un geste humain : un nouveau message. À l'inverse, une relance de paiement
 laissée en attente pendant l'extinction part au premier passage après le rallumage.
+
+## D136 — Un compte de paiement en ligne par exploitant : clé Stripe chiffrée, numéro PayFiP sur la fiche, routage sous `payment.configure` (#365, lots D5-B, D3-B, D2-B)
+
+**Date :** 21–25/11/2026. **Décideur :** Maxime. **PR :** #375, #376, #377.
+
+**Décisions.**
+- La notification Stripe exige une signature `Stripe-Signature` valide ; sans secret posé, tout est refusé et le paiement se confirme au retour de l'acheteur (D5-B).
+- Chaque exploitant privé peut porter sa clé Stripe et son secret de webhook, chiffrés (clé maîtresse `STRIPE_KEYS_ENCRYPTION_KEY` facultative pour l'application, générée au déploiement) ; repli sur la clé globale s'il n'a rien saisi ; une adresse de notification par exploitant (D3-B).
+- Le numéro client PayFiP (6 chiffres, non secret) se porte sur la fiche de chaque régie et se fige à l'initiation ; plus de `PAYFIP_NUMCLI` global ; mode et adresse de notification PayFiP restent communs (D2-B).
+- Nouveau droit `payment.configure`, au seul rôle « Administrateur groupe », exigé pour saisir une clé ou un numéro, et — faille antérieure fermée — pour changer le principal, les rattachés ou le type d'un exploitant, ou créer un profil sur un établissement déjà couvert. Configuration lue et écrite depuis l'établissement principal seulement.
+
+**Pourquoi.** Chaque exploitant encaisse pour lui-même : un compte partagé, ou un rattachement modifiable par un gestionnaire compta, ferait partir l'argent d'un établissement sur le compte d'un autre.
+
+**Contrepartie acceptée.** Retirer ou remplacer une clé Stripe pendant des paiements en cours les laisse non confirmés (documenté ; l'empreinte de clé à l'initiation reste hors lot). Tant qu'une régie est en test PayFiP, aucune autre ne peut passer en réel. Un gestionnaire `compta.gerer` ne peut plus réorganiser seul les établissements d'un exploitant.
+
+## D137 — RGPD : l'anonymisation caviarde l'audit antérieur de la fiche client (#363, met en œuvre D2 → A de #353)
+
+**Date :** 25/11/2026. **Décideur :** Maxime. **PR :** #378.
+
+**Décision.** À l'anonymisation (demande, purge, conservation), chaque valeur d'identité des entrées d'audit antérieures de la fiche client devient « [caviardé] », dans la même transaction, avec une trace sans donnée personnelle. Périmètre : la fiche client seule. Une commande de rattrapage idempotente traite les fiches déjà anonymisées.
+
+**Pourquoi.** Une anonymisation qui laisse l'identité lisible dans l'historique n'efface rien.
+
+**Contrepartie acceptée.** Exception assumée à l'append-only applicatif de l'audit. Restent hors lot : le champ `auteur` quand l'usager a modifié lui-même sa fiche, l'audit de son utilisateur, de sa famille, de ses bénéficiaires et de son compte client, et le journal des fusions. La durée de conservation de l'audit et la validation du registre (D5 de #353) restent à décider.
