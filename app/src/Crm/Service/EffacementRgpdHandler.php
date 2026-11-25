@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\Service;
 
+use App\Audit\Service\ClientAuditRedactor;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\DemandeRGPD;
 use App\Crm\Enum\PrivacyRequestOrigin;
@@ -24,11 +25,15 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * et la purge à échéance (`anonymiseWithoutRequest`) y passent toutes : jusqu'au #344, la tâche de
  * conservation recopiait l'anonymisation à la main (#207), et deux copies d'un effacement finissent
  * toujours par effacer des champs différents.
+ *
+ * Elle caviarde aussi l'identité que les entrées d'audit ANTÉRIEURES de la fiche ont gardée (#363) :
+ * `ClientAuditRedactor`, dans la même transaction que l'anonymisation (le `flush` de l'appelant).
  */
 final class EffacementRgpdHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly ClientAuditRedactor $auditRedactor,
     ) {
     }
 
@@ -46,7 +51,7 @@ final class EffacementRgpdHandler
             throw new ConflictHttpException('Demande RGPD sans client associé.');
         }
 
-        $this->anonymiser($client, 'rgpd:anonymisation');
+        $this->anonymiser($client, 'rgpd:anonymisation', null);
 
         $demande->setStatut(StatutDemandeRgpd::Realisee);
         $demande->setDateTraitement(new \DateTimeImmutable());
@@ -74,7 +79,12 @@ final class EffacementRgpdHandler
         $demande = new DemandeRGPD(TypeDemandeRgpd::Anonymisation);
         $demande->setClient($client);
         $demande->setOrigin($origin);
-        $this->anonymiser($client, $origin === PrivacyRequestOrigin::Purge ? 'rgpd:epuration' : 'rgpd:conservation-echue');
+        $this->anonymiser(
+            $client,
+            $origin === PrivacyRequestOrigin::Purge ? 'rgpd:epuration' : 'rgpd:conservation-echue',
+            // La tâche de conservation n'a pas d'utilisateur : même signature que sa trace de conservation.
+            $origin === PrivacyRequestOrigin::Retention ? 'tache:crm:rgpd:appliquer-conservation' : null,
+        );
         $demande->setStatut(StatutDemandeRgpd::Realisee);
         $demande->setDateTraitement(new \DateTimeImmutable());
         $demande->setTraitePar($administrateur);
@@ -83,8 +93,13 @@ final class EffacementRgpdHandler
         return $demande;
     }
 
-    /** Purge les champs nominatifs, conserve statut/agrégats pour l'historique comptable/statistique. */
-    private function anonymiser(Client $client, string $trace): void
+    /**
+     * Purge les champs nominatifs, conserve statut/agrégats pour l'historique comptable/statistique,
+     * puis caviarde l'audit antérieur de la fiche (ne flushe pas : une seule transaction, celle de l'appelant).
+     *
+     * @param string|null $author signataire de la trace de caviardage ; `null` = l'utilisateur courant
+     */
+    private function anonymiser(Client $client, string $trace, ?string $author): void
     {
         $client->setCivilite(null);
         $client->setNom(null);
@@ -102,5 +117,7 @@ final class EffacementRgpdHandler
         $client->setStatut(StatutClient::Anonymise);
         $client->setDateMaj(new \DateTimeImmutable());
         $client->setMajPar($trace);
+
+        $this->auditRedactor->redact($client, $author);
     }
 }
