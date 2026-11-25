@@ -27,6 +27,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'audit_entree')]
 #[ORM\Index(name: 'idx_audit_date', columns: ['date_heure'])]
+#[ORM\Index(name: 'idx_audit_cible', columns: ['cible_type', 'cible_id'])]
 #[ApiResource(
     shortName: 'EntreeAudit',
     operations: [
