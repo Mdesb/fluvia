@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
+import PaiementPayFip from './PaiementPayFip.jsx'
 import PaiementStripe from './PaiementStripe.jsx'
+import { profilEligiblePayFip } from './paiementPayFip.js'
 import { peutConfigurerPaiement } from './paiementStripe.js'
 
 // L'IDENTITÉ LÉGALE DU VENDEUR — RÉCLAMÉE PAR UN RAPPORT, SAISISSABLE NULLE PART.
@@ -266,6 +268,10 @@ export default function IdentiteVendeur({ peutModifier, droits }) {
           `payment.configure`. Le serveur ne sert cette configuration que depuis l'établissement
           principal du profil, qui est celui que cet écran affiche. */}
       {profil?.id && peutConfigurerPaiement(droits) ? <PaiementStripe profil={profil} droits={droits} /> : null}
+
+      {/* PAIEMENT PAR PAYFIP (lot D2-B de #365) : le pendant de la section Stripe pour une régie directe. Même
+          droit, même établissement principal ; le numéro client se saisit ici, plus dans l'environnement. */}
+      {profil?.id && peutConfigurerPaiement(droits) && profilEligiblePayFip(profil.type) ? <PaiementPayFip profil={profil} droits={droits} /> : null}
     </div>
   )
 }

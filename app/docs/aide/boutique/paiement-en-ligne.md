@@ -43,13 +43,15 @@ Finances publiques (DDFiP), qui fait signer la convention d'adhésion de la rég
 
 | Ce qu'on vous donne ou vous demande | À quoi ça sert |
 | --- | --- |
-| Le **numéro de client PayFiP** (6 chiffres) | Identifie la régie à chaque paiement. |
+| Le **numéro de client PayFiP** (6 chiffres) | Identifie la régie à chaque paiement. Il se **saisit sur la fiche de la régie** : écran Facturation, section « Paiement par PayFiP » (droit « configurer le paiement », depuis l'établissement principal de la régie). Sans lui, la régie n'a pas PayFiP réel. |
 | Le **nom de domaine** de la boutique, à déclarer | PayFiP n'avertit que les domaines déclarés (prise en compte sous 24 heures). |
 | Un **paiement de test**, puis un **paiement d'activation** | Obligatoires avant l'ouverture. En test et en activation, PayFiP n'accepte que des **montants en euros ronds** (centimes à 00), et un montant différent à chaque essai. |
 
-Ces valeurs sont saisies par l'équipe technique dans la configuration du serveur (voir la note
+Le nom de domaine et le mode sont saisis par l'équipe technique dans la configuration du serveur (voir la note
 d'exploitation `infra/README.md`, « Paiement en ligne ») : le mode **T** sert aux paiements de test, **X**
 au paiement d'activation, **W** aux paiements réels, à partir du lendemain de l'activation.
+
+Le **mode** et l'**adresse de notification** sont **communs à toutes les régies** de la plateforme : tant qu'une régie est en test ou en activation, aucune autre ne peut passer en réel. Changer ou effacer le numéro d'une régie ne gêne pas les paiements déjà ouverts : ils se règlent avec le numéro d'origine.
 
 ⚠ En mode test ou activation, PayFiP ne débite rien : ne laissez jamais ces modes en service une fois la
 boutique ouverte au public.

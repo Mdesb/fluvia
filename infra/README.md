@@ -325,14 +325,35 @@ il reste éteint et c'est le bouchon de démonstration qui répond — lui-même
 | Variable | Valeur | Obligatoire |
 | --- | --- | --- |
 | `BOUTIQUE_BASE_URL` | URL publique de la boutique, sans `/` final. Le retour de paiement est `<BOUTIQUE_BASE_URL>/b/<vitrine>/retour-paiement`. | oui, pour tout prestataire réel |
-| `PAYFIP_NUMCLI` | Numéro de client PayFiP de la régie (6 chiffres), donné par la DDFiP. | oui (PayFiP) |
-| `PAYFIP_ENTRY_MODE` | `T` paiements de test, `X` paiement d'activation, `W` paiements réels. Défaut : `T`. | non |
-| `PAYFIP_NOTIFICATION_URL` | `https://<domaine>/api/boutique/paiement-en-ligne/notification/payfip`. Le domaine doit être déclaré au correspondant DDFiP ; son certificat ne doit pas dépendre de SNI. | oui (PayFiP) |
+| `PAYFIP_ENTRY_MODE` | `T` paiements de test, `X` paiement d'activation, `W` paiements réels. Défaut : `T`. **Commun à toutes les régies.** | non |
+| `PAYFIP_NOTIFICATION_URL` | `https://<domaine>/api/boutique/paiement-en-ligne/notification/payfip`. Le domaine doit être déclaré au correspondant DDFiP ; son certificat ne doit pas dépendre de SNI. **Commune à toutes les régies.** | oui (PayFiP) |
 | `PAYFIP_SERVICE_URL` | Web service. Défaut : `https://www.payfip.gouv.fr/tpa/services/securite`. | non |
 | `PAYFIP_PAYMENT_PAGE_URL` | Page de paiement. Défaut : `https://www.payfip.gouv.fr/tpa/paiementws.web`. | non |
 | `STRIPE_SECRET_KEY` | Clé de **repli** pour un exploitant qui n'a pas saisi la sienne (voir « Un compte Stripe par exploitant »), `sk_test_…` en préproduction. **Secret** : jamais dans un ticket, jamais en clair dans un journal. | oui (PSP CB) |
 | `STRIPE_API_BASE` | Défaut : `https://api.stripe.com`. | non |
 | `STRIPE_WEBHOOK_SECRET` | Secret de signature du point de terminaison **global** de repli (`whsec_…`, chaîne entière). **Secret** : mêmes règles que la clé. | oui (PSP CB), voir ci-dessous |
+
+**Un numéro client PayFiP par régie (D2-B de #365).** Le numéro de client (NUMCLI, 6 chiffres, donné par le
+correspondant moyens de paiement de la DDFiP) n'est plus une variable d'environnement : il se saisit sur la
+fiche de la régie (écran Facturation, section « Paiement par PayFiP »), avec le droit `payment.configure`
+(celui de la clé Stripe), **depuis l'établissement principal** de la régie. Ce n'est pas un secret : il est
+stocké en clair, tracé dans l'audit (ancienne et nouvelle valeur), et lu avec le profil.
+
+1. **Une régie sans numéro n'a pas PayFiP réel** : le bouchon de démonstration répond, refusé hors préproduction.
+2. **Le mode (`PAYFIP_ENTRY_MODE`) et l'adresse de notification (`PAYFIP_NOTIFICATION_URL`) restent communs à
+   toutes les régies.** Conséquence : tant qu'une régie est en test (T) ou en activation (X), une autre ne
+   peut pas passer en réel (W). À rouvrir avec la 2e collectivité.
+3. **Question à poser à la DDFiP avant la 2e collectivité** : une même adresse de notification est-elle
+   acceptée pour plusieurs numéros de client ?
+4. **Changer ou effacer un numéro n'affecte pas les paiements en cours** : le numéro envoyé est figé sur le bordereau de
+   l'opération, et le retour comme la notification se vérifient, par PayFiP, contre ce numéro figé, même si la régie
+   n'a plus de numéro entre-temps. Une nouvelle
+   opération part avec le nouveau numéro. Un bordereau sans numéro figé (créé hors initiation) n'atteste rien.
+5. **En exploitation, retirer `PAYFIP_NUMCLI` de `app/.env.local`** : cette variable n'est plus lue (aucune erreur si elle
+   reste). Saisir le numéro de chaque régie sur sa fiche.
+6. **Rattacher ou détacher un établissement d'une régie, changer son type, ou créer un profil qui couvre un
+   établissement déjà couvert, exige `payment.configure`** (en plus de `compta.gerer`) : le périmètre et le type du
+   profil décident vers quel numéro PayFiP et quelle clé Stripe vont les encaissements en ligne.
 
 Côté Stripe, déclarer le webhook `https://<domaine>/api/boutique/paiement-en-ligne/notification/stripe`
 (événements `checkout.session.completed`, `checkout.session.expired`). La notification n'est qu'une
